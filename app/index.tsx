@@ -1,3 +1,4 @@
+import ActivitySection from "@/components/home/ActivitySection";
 import BalanceSection from "@/components/home/BalanceSection";
 import React from "react";
 import { StatusBar, StyleSheet, View } from "react-native";
@@ -14,8 +15,9 @@ export default function Home() {
     <>
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={styles.container} edges={["top"]}>
-        <View className="bg-light-main-container flex-1 p-4">
+        <View className="bg-light-main-container flex-1 p-4 gap-4">
           <BalanceSection />
+          <ActivitySection />
         </View>
       </SafeAreaView>
     </>
