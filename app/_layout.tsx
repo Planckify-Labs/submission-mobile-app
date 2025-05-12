@@ -1,5 +1,5 @@
-import '../pollyfills';
 import { Stack } from "expo-router";
+import "../pollyfills";
 
 export default function RootLayout() {
   return <Stack />;
