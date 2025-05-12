@@ -1,4 +1,6 @@
-import { Text, View } from "react-native";
+import React from "react";
+import { StatusBar, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { english, generateMnemonic, generatePrivateKey } from "viem/accounts";
 
 export default function Home() {
@@ -8,10 +10,22 @@ export default function Home() {
   const mnemonic = generateMnemonic(english);
   console.log({ mnemonic });
   return (
-    <View>
-      <Text>Hello</Text>
-      <Text>{privateKey}</Text>
-      <Text>{mnemonic}</Text>
-    </View>
+    <>
+      <StatusBar barStyle="dark-content" />
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View>
+          <Text>Hello</Text>
+          <Text>{privateKey}</Text>
+          <Text>{mnemonic}</Text>
+        </View>
+      </SafeAreaView>
+    </>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+});
