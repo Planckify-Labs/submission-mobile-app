@@ -2,7 +2,14 @@ import ActivitySection from "@/components/home/ActivitySection";
 import BalanceSection from "@/components/home/BalanceSection";
 import PaymentSection from "@/components/home/PaymentSection";
 import React from "react";
-import { StatusBar, StyleSheet, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { english, generateMnemonic, generatePrivateKey } from "viem/accounts";
 
@@ -16,10 +23,21 @@ export default function Home() {
     <>
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={styles.container} edges={["top"]}>
-        <View className="bg-light-main-container flex-1 p-4 gap-4">
-          <BalanceSection />
-          <ActivitySection />
-          <PaymentSection />
+        <ScrollView
+          className="bg-light-main-container flex-1"
+          contentContainerStyle={{ gap: 16 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="flex-1 gap-4 p-4 pb-24">
+            <BalanceSection />
+            <ActivitySection />
+            <PaymentSection />
+          </View>
+        </ScrollView>
+        <View className="absolute bottom-2 justify-center items-center w-full">
+          <Pressable className="bg-light-primary-red px-10 py-4 rounded-full">
+            <Text className="text-light font-bold text-2xl">Scan To Pay</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     </>
