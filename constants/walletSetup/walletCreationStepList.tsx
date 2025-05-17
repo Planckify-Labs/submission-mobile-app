@@ -25,13 +25,13 @@ export const createWalletSteps = (
     title: "Let's Set Up Your Wallet",
     content: (
       <>
-        <View className="bg-light rounded-xl p-4 mb-6 shadow-sm">
+        <View className="bg-light flex-1 rounded-xl p-4 mb-6 shadow-sm">
           <View className="flex-row items-center mb-4">
             <Shield color="#c71c4b" size={24} className="mr-2" />
             <Text className="text-light-matte-black font-medium">TakumiPay Wallet Setup</Text>
           </View>
           <Text className="text-light-matte-black mb-4">
-            TakumiPay gives you your own decentralized wallet — a private vault for your tokens and digital assets.
+            TakumiPay provides you with a self-custodial wallet — a private vault for your tokens and digital assets.
           </Text>
           
           <Text className="text-light-matte-black mb-4">
@@ -103,49 +103,69 @@ export const createWalletSteps = (
     title: "Your Secret Recovery Phrase",
     content: (
       <>
-        <View className="bg-light rounded-xl p-4 mb-6 shadow-sm">
-          <Text className="text-light-matte-black mb-4">
+          <Text className="bg-light rounded-xl p-5 mb-6 text-light-matte-black text-base font-medium">
             Your secret recovery phrase is the only way to recover your wallet if you lose your device. Without it, there's no way to access your funds.
           </Text>
+        <View className="bg-light- rounded-xl p-5- mb-6 shadow-sm-">
           
-          <View className="flex-row flex-wrap gap-2 mb-4">
+          <View style={{ 
+            display: 'flex', 
+            flexDirection: 'row', 
+            flexWrap: 'wrap', 
+            justifyContent: 'space-between' 
+          }}>
             {mnemonic.map((word, index) => (
-              <View key={index} className="bg-light-main-container rounded-md py-2 px-3 w-[30%]">
-                <Text className="text-light-matte-black">{index + 1}. {word}</Text>
+              <View 
+                key={index} 
+                className='bg-light'
+                style={{
+                  borderRadius: 12,
+                  padding: 16,
+                  width: '30%',
+                  alignItems: 'center',
+                  marginBottom: 16
+                }}
+              >
+                <View className='w-8 h-8 aspect-square rounded-full bg-light-primary-red/10 items-center justify-center mb-2'>
+                  <Text className='text-light-primary-red font-bold'>{index + 1}</Text>
+                </View>
+                <Text className='font-bold'>
+                  {word}
+                </Text>
               </View>
             ))}
           </View>
           
           <Pressable 
-            className="flex-row items-center justify-center mb-4 bg-light-main-container border border-gray-300 py-2 rounded-md"
+            className="flex-row items-center justify-center mb-5 bg-light gap-2 p-4 rounded-xl"
             onPress={() => {
               Clipboard.setStringAsync(mnemonic.join(' '));
               Alert.alert("Copied", "Secret phrase copied to clipboard");
             }}
           >
-            <Copy size={16} color="#c71c4b" className="mr-2" />
-            <Text className="text-light-matte-black">Copy to Clipboard</Text>
+            <Copy size={18} color="#c71c4b" className="mr-2" />
+            <Text className="text-light-matte-black font-bold">Copy Seed Phrase</Text>
           </Pressable>
         </View>
         
-        <View className="bg-light-primary-red/10 border border-light-primary-red/20 rounded-xl p-4 mb-6 flex-row gap-2">
-          <Info size={20} color="#c71c4b" className="mr-2" />
-          <Text className="text-light-matte-black flex-1">
-            Never share this phrase with anyone. TakumiPay will never ask for it
-          </Text>
+        <View className="bg-light-primary-red/10 rounded-xl p-4 mb-6">
+          <View className="flex-row items-start gap-2">
+            <Info size={22} color="#c71c4b" className="mr-3 mt-0.5" />
+            <Text className="text-light-matte-black flex-1 font-medium">
+              Never share this phrase with anyone. TakumiPay will never ask for it.
+            </Text>
+          </View>
         </View>
         
         <Pressable 
-          className="flex-row items-center mb-4" 
+          className="flex-row items-center mb-6 p-2" 
           onPress={() => setIsChecked(!isChecked)}
         >
-          <View className={`w-6 h-6 border rounded mr-2 ${isChecked ? 'bg-light-primary-red border-light-primary-red' : 'border-gray-400'} items-center justify-center`}>
-            {isChecked && <Text className="text-light">
-              <Check size={16} color="white" strokeWidth={3} />
-              </Text>}
+          <View className={`w-8 h-8 aspect-square rounded-lg mr-3 ${isChecked ? 'bg-light-primary-red' : 'border-2 border-gray-400'} items-center justify-center`}>
+            {isChecked && <Check size={18} color="white" strokeWidth={3} />}
           </View>
-          <Text className="text-light-matte-black">
-            I have written it down on paper or stored in an encrypted note app
+          <Text className="text-light-matte-black font-medium flex-1">
+            I have written down my secret phrase in a secure location
           </Text>
         </Pressable>
       </>
