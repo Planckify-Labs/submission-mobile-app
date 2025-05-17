@@ -12,14 +12,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { english, generateMnemonic, generatePrivateKey } from "viem/accounts";
 
 export default function Home() {
-  const privateKey = generatePrivateKey();
-  console.log({ privateKey });
-
-  const mnemonic = generateMnemonic(english);
-  console.log({ mnemonic });
   return (
     <>
       <StatusBar barStyle="dark-content" />
