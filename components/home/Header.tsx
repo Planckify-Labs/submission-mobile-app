@@ -1,5 +1,6 @@
+import { Link } from "expo-router";
 import { ShieldAlert, UserRound } from "lucide-react-native";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 export default function Header() {
   return (
@@ -11,9 +12,18 @@ export default function Header() {
           never share your private key or seed phrases
         </Text>
       </View>
-      <View className="rounded-full bg-light p-1 aspect-square w-[45px] items-center justify-center">
-        <UserRound color="#20222c" size={30} />
-      </View>
+      <Pressable
+        style={({ pressed }) => [
+          pressed && { backgroundColor: "rgba(199, 28, 75, 0.15)" },
+        ]}
+        className="rounded-full bg-light items-center justify-center aspect-square w-[45px]"
+      >
+        <Link href="/user">
+          <View className="items-center justify-center  p-1 aspect-square h-full w-full">
+            <UserRound color="#20222c" size={30} />
+          </View>
+        </Link>
+      </Pressable>
     </View>
   );
 }
