@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import SeedPhraseGrid from "../common/SeedPhraseGrid";
 
-export default function ImportWallet() {
+export default function ImportSeedPhrase() {
   const [seedPhraseArray, setSeedPhraseArray] = useState<string[]>(
     Array(12).fill(""),
   );
@@ -58,7 +58,7 @@ export default function ImportWallet() {
     }
 
     Alert.alert("Success", "Wallet imported successfully", [
-      { text: "OK", onPress: () => router.push("/") },
+      { text: "OK", onPress: () => router.replace("/") },
     ]);
   };
 

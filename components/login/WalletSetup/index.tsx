@@ -10,38 +10,42 @@ export default function WalletSetup() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isChecked, setIsChecked] = useState(false);
   const [mnemonic, setMnemonic] = useState<string[]>([]);
-  const [selectedWords, setSelectedWords] = useState<{[key: number]: string}>({});
-  const [wordOptions, setWordOptions] = useState<{[key: number]: string[]}>({});
-  
+  const [selectedWords, setSelectedWords] = useState<{ [key: number]: string }>(
+    {},
+  );
+  const [wordOptions, setWordOptions] = useState<{ [key: number]: string[] }>(
+    {},
+  );
+
   const verificationIndices = [1, 3, 7, 11];
-  
+
   useEffect(() => {
-    const generatedMnemonic = generateMnemonic(english).split(' ');
+    const generatedMnemonic = generateMnemonic(english).split(" ");
     setMnemonic(generatedMnemonic);
-    
-    const options: {[key: number]: string[]} = {};
-    verificationIndices.forEach(index => {
+
+    const options: { [key: number]: string[] } = {};
+    verificationIndices.forEach((index) => {
       options[index] = getWordOptions(generatedMnemonic, index);
     });
     setWordOptions(options);
   }, []);
-  
+
   const getWordOptions = (mnemonicWords: string[], wordIndex: number) => {
     const correctWord = mnemonicWords[wordIndex];
     if (!correctWord) return [];
-    
+
     const otherWords = mnemonicWords
       .filter((_, i) => i !== wordIndex)
       .sort(() => 0.5 - Math.random())
       .slice(0, 2);
-    
+
     return [correctWord, ...otherWords].sort(() => 0.5 - Math.random());
   };
-  
+
   const handleSelectWord = useCallback((wordIndex: number, word: string) => {
-    setSelectedWords(prev => ({
+    setSelectedWords((prev) => ({
       ...prev,
-      [wordIndex]: word
+      [wordIndex]: word,
     }));
   }, []);
 
@@ -53,14 +57,14 @@ export default function WalletSetup() {
     verificationIndices,
     wordOptions,
     selectedWords,
-    handleSelectWord
+    handleSelectWord,
   );
 
   const handleBackPress = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    } else {
+    if (currentStep === 0) {
       router.back();
+    } else {
+      setCurrentStep(currentStep - 1);
     }
   };
 

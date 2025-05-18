@@ -1,28 +1,17 @@
-import ImportWallet from "@/components/login/ImportWallet";
-import WalletSetup from "@/components/login/WalletSetup";
+import { router } from "expo-router";
 import { ChevronRight, Key, Shield, Wallet } from "lucide-react-native";
-import React, { useState } from "react";
+import React from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Login() {
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
-
-  if (selectedOption === "setup") {
-    return <WalletSetup />;
-  }
-
-  if (selectedOption === "import") {
-    return <ImportWallet />;
-  }
-
   return (
     <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <View style={StyleSheet.absoluteFill} className="overflow-hidden">
           <View className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-light-primary-red/10" />
-          <View className="absolute top-40-left-40 w-80 h-80 rounded-full bg-light-primary-red/5" />
-          <View className="absolute -bottom-10 -right-10 w-40 h-40 rounded-full bg-light-primary-red/8" />
+          <View className="absolute top-40 -left-40 w-80 h-80 rounded-full bg-light-primary-red/5" />
+          <View className="absolute -bottom-10 -right-14 w-40 h-40 rounded-full bg-light-primary-red/10" />
         </View>
 
         <View className="flex-1 p-6 pt-12">
@@ -48,7 +37,7 @@ export default function Login() {
 
             <Pressable
               className="bg-light-primary-red mb-3 py-4 px-5 rounded-xl flex-row items-center justify-between"
-              onPress={() => setSelectedOption("setup")}
+              onPress={() => router.push("/wallet-setup")}
             >
               <View className="flex-row items-center">
                 <Shield color="#fff" size={22} className="mr-3" />
@@ -88,7 +77,7 @@ export default function Login() {
             <View className="flex-row gap-3">
               <Pressable
                 className="flex-1 border border-light-matte-black/10 p-4 rounded-xl"
-                onPress={() => setSelectedOption("import")}
+                onPress={() => router.push("/import-seed-phrase")}
               >
                 <View className="items-center">
                   <View className="bg-light-primary-red/10 p-2 rounded-lg mb-2">
@@ -102,7 +91,7 @@ export default function Login() {
 
               <Pressable
                 className="flex-1 border border-light-matte-black/10 p-4 rounded-xl"
-                onPress={() => console.log("Import private key")}
+                onPress={() => router.push("/import-private-key")}
               >
                 <View className="items-center">
                   <View className="bg-light-primary-red/10 p-2 rounded-lg mb-2">
