@@ -10,11 +10,11 @@ import {
   Eye,
   EyeOff,
   PlusIcon,
-  Wallet,
 } from "lucide-react-native";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   Text,
   Vibration,
@@ -41,8 +41,12 @@ export default function BalanceSection() {
     <View className="bg-light rounded-2xl w-full p-5 shadow-sm">
       <View className="flex-row items-center justify-between mb-5">
         <View className="flex-row items-center">
-          <View className="bg-light-primary-red/10 p-2 rounded-full mr-2">
-            <Wallet size={18} color="#c71c4b" />
+          <View className="bg-light-primary-red/10 w-8 relative p-2- aspect-square rounded-md mr-2">
+            <Image
+              source={require("@/assets/images/takumipay-no-bg.png")}
+              style={{ width: 20, height: 18 }}
+              className="absolute bottom-[5px] left-1"
+            />
           </View>
           <Text className="font-bold text-light-matte-black text-base">
             TakumiPay

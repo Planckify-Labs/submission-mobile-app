@@ -1,7 +1,14 @@
 import { router } from "expo-router";
 import { ChevronRight, Key, Shield, Wallet } from "lucide-react-native";
 import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Login() {
@@ -16,10 +23,12 @@ export default function Login() {
 
         <View className="flex-1 p-6 pt-12">
           <View className="items-center mb-16">
-            <View className="bg-light shadow-lg- p-5 rounded-3xl mb-6">
-              <View className="bg-light-primary-red/10 p-4 rounded-2xl">
-                <Wallet color="#c71c4b" size={48} />
-              </View>
+            <View className="bg-light shadow-lg- py-5 justify-center items-center aspect-square rounded-3xl mb-6">
+              <Image
+                source={require("@/assets/images/takumipay-no-bg.png")}
+                style={{ width: 65, height: 60 }}
+                className="object-contain w-full"
+              />
             </View>
 
             <Text className="text-light-matte-black text-4xl font-bold text-center mb-2">
