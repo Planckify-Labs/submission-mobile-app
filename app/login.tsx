@@ -1,3 +1,4 @@
+import ImportWallet from "@/components/login/ImportWallet";
 import WalletSetup from "@/components/login/WalletSetup";
 import { ChevronRight, Key, Shield, Wallet } from "lucide-react-native";
 import React, { useState } from "react";
@@ -11,15 +12,19 @@ export default function Login() {
     return <WalletSetup />;
   }
 
+  if (selectedOption === "import") {
+    return <ImportWallet />;
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <View style={StyleSheet.absoluteFill} className="overflow-hidden">
           <View className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-light-primary-red/10" />
-          <View className="absolute top-40 -left-40 w-80 h-80 rounded-full bg-light-primary-red/5" />
+          <View className="absolute top-40-left-40 w-80 h-80 rounded-full bg-light-primary-red/5" />
           <View className="absolute -bottom-10 -right-10 w-40 h-40 rounded-full bg-light-primary-red/8" />
         </View>
-        
+
         <View className="flex-1 p-6 pt-12">
           <View className="items-center mb-16">
             <View className="bg-light shadow-lg- p-5 rounded-3xl mb-6">
@@ -27,7 +32,7 @@ export default function Login() {
                 <Wallet color="#c71c4b" size={48} />
               </View>
             </View>
-            
+
             <Text className="text-light-matte-black text-4xl font-bold text-center mb-2">
               TakumiPay
             </Text>
@@ -40,7 +45,7 @@ export default function Login() {
             <Text className="text-light-matte-black/80 font-medium mb-4">
               GET STARTED
             </Text>
-            
+
             <Pressable
               className="bg-light-primary-red mb-3 py-4 px-5 rounded-xl flex-row items-center justify-between"
               onPress={() => setSelectedOption("setup")}
@@ -58,7 +63,7 @@ export default function Login() {
               </View>
               <ChevronRight color="#fff" size={20} />
             </Pressable>
-            
+
             <Pressable
               className="bg-light border border-light-matte-black/10 py-4 px-5 rounded-xl flex-row items-center justify-between"
               onPress={() => console.log("Login with Google")}
@@ -79,20 +84,22 @@ export default function Login() {
             <Text className="text-light-matte-black/80 font-medium mb-4">
               IMPORT EXISTING WALLET
             </Text>
-            
+
             <View className="flex-row gap-3">
               <Pressable
                 className="flex-1 border border-light-matte-black/10 p-4 rounded-xl"
-                onPress={() => console.log("Enter seed phrase")}
+                onPress={() => setSelectedOption("import")}
               >
                 <View className="items-center">
                   <View className="bg-light-primary-red/10 p-2 rounded-lg mb-2">
                     <Key color="#c71c4b" size={20} />
                   </View>
-                  <Text className="text-light-matte-black font-medium text-sm">Seed Phrase</Text>
+                  <Text className="text-light-matte-black font-medium text-sm">
+                    Seed Phrase
+                  </Text>
                 </View>
               </Pressable>
-              
+
               <Pressable
                 className="flex-1 border border-light-matte-black/10 p-4 rounded-xl"
                 onPress={() => console.log("Import private key")}
@@ -101,15 +108,18 @@ export default function Login() {
                   <View className="bg-light-primary-red/10 p-2 rounded-lg mb-2">
                     <Wallet color="#c71c4b" size={20} />
                   </View>
-                  <Text className="text-light-matte-black font-medium text-sm">Private Key</Text>
+                  <Text className="text-light-matte-black font-medium text-sm">
+                    Private Key
+                  </Text>
                 </View>
               </Pressable>
             </View>
           </View>
-          
+
           <View className="items-center mt-auto">
             <Text className="text-light-matte-black/50 text-xs text-center max-w-80">
-              By continuing, you agree to our Terms of Service and Privacy Policy
+              By continuing, you agree to our Terms of Service and Privacy
+              Policy
             </Text>
           </View>
         </View>
@@ -117,5 +127,3 @@ export default function Login() {
     </SafeAreaView>
   );
 }
-
-
