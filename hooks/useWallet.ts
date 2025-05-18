@@ -65,7 +65,6 @@ export function useWallet() {
     [wallets, saveWallets],
   );
 
-  // Remove a wallet
   const removeWallet = useCallback(
     async (index: number) => {
       if (index < 0 || index >= wallets.length) return false;
@@ -73,7 +72,6 @@ export function useWallet() {
       const updatedWallets = wallets.filter((_, i) => i !== index);
       const success = await saveWallets(updatedWallets);
 
-      // Adjust active wallet index if needed
       if (success && activeWalletIndex >= updatedWallets.length) {
         setActiveWalletIndex(Math.max(0, updatedWallets.length - 1));
       }
@@ -83,7 +81,6 @@ export function useWallet() {
     [wallets, activeWalletIndex, saveWallets],
   );
 
-  // Change active wallet
   const setActiveWallet = useCallback(
     (index: number) => {
       if (index >= 0 && index < wallets.length) {
@@ -95,7 +92,6 @@ export function useWallet() {
     [wallets],
   );
 
-  // Load wallets on mount
   useEffect(() => {
     loadWallets();
   }, [loadWallets]);
