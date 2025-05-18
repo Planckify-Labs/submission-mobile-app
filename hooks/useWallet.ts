@@ -1,3 +1,4 @@
+import { Chain, supportedChains } from "@/constants/configs/chainConfig";
 import { type TWallet, mockWallets } from "@/constants/walletData";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useState } from "react";
@@ -7,8 +8,46 @@ export function useWallet() {
   const [wallets, setWallets] = useState<TWallet[]>([]);
   const [activeWalletIndex, setActiveWalletIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeChain, setActiveChain] = useState<Chain>(supportedChains[0]);
 
   const activeWallet = wallets[activeWalletIndex] || ({} as TWallet);
+
+  const loadActiveChain = useCallback(async () => {
+    try {
+      const storedChainId = await SecureStore.getItemAsync("active_chain_id");
+      if (storedChainId) {
+        const chainId = parseInt(storedChainId, 10);
+        const chain = supportedChains.find((c: Chain) => c.id === chainId);
+        if (chain) {
+          setActiveChain(chain);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load active chain:", error);
+    }
+  }, []);
+
+  const saveActiveChain = useCallback(async (chain: Chain) => {
+    try {
+      await SecureStore.setItemAsync("active_chain_id", chain.id.toString());
+      setActiveChain(chain);
+      return true;
+    } catch (error) {
+      console.error("Failed to save active chain:", error);
+      return false;
+    }
+  }, []);
+
+  const changeActiveChain = useCallback(
+    async (chainId: number) => {
+      const chain = supportedChains.find((c: Chain) => c.id === chainId);
+      if (chain) {
+        return await saveActiveChain(chain);
+      }
+      return false;
+    },
+    [saveActiveChain],
+  );
 
   const loadWallets = useCallback(async () => {
     try {
@@ -47,7 +86,7 @@ export function useWallet() {
       const updatedWallets = [...wallets, wallet];
       const success = await saveWallets(updatedWallets);
       if (success) {
-        setActiveWalletIndex(updatedWallets.length - 1); // Set new wallet as active
+        setActiveWalletIndex(updatedWallets.length - 1);
       }
       return success;
     },
@@ -94,7 +133,8 @@ export function useWallet() {
 
   useEffect(() => {
     loadWallets();
-  }, [loadWallets]);
+    loadActiveChain();
+  }, [loadWallets, loadActiveChain]);
 
   return {
     wallets,
@@ -106,5 +146,8 @@ export function useWallet() {
     updateWallet,
     removeWallet,
     setActiveWallet,
+    activeChain,
+    supportedChains,
+    changeActiveChain,
   };
 }

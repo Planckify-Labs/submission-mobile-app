@@ -3,7 +3,7 @@ export interface TWallet {
   address: string;
   privateKey: string;
   seedPhrase?: string;
-  balance: string;
+  balance: string; // Just the numeric value, e.g. "1.245"
   source: "Created" | "Imported" | "Social";
   type: "PrivateKey" | "SeedPhrase" | "Social";
   socialAccount?: {
@@ -20,7 +20,7 @@ export const mockWallets: TWallet[] = [
     privateKey: "0x1234...5678",
     seedPhrase:
       "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12",
-    balance: "1.245 ETH",
+    balance: "1.245",
     source: "Created",
     type: "SeedPhrase",
   },
@@ -28,7 +28,7 @@ export const mockWallets: TWallet[] = [
     name: "Imported Wallet",
     address: "0x3Dc6EC5fF357EB292A9089F1BC13559C9C93B33E",
     privateKey: "0xabcd...efgh",
-    balance: "0.5 ETH",
+    balance: "0.5",
     source: "Imported",
     type: "PrivateKey",
   },
@@ -36,7 +36,7 @@ export const mockWallets: TWallet[] = [
     name: "Social Wallet",
     address: "0x8901C7BEe5A847d9B3935a5CD0B3985F8248E6C2",
     privateKey: "0xijkl...mnop",
-    balance: "0.1 ETH",
+    balance: "0.1",
     source: "Social",
     type: "Social",
     socialAccount: {
