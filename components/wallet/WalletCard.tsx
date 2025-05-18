@@ -1,5 +1,6 @@
 import Chip from "@/components/common/Chip";
 import { type TWallet } from "@/constants/walletData";
+import { useWallet } from "@/hooks/useWallet";
 import { Check, Wallet as WalletIcon } from "lucide-react-native";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
@@ -15,6 +16,8 @@ export default function WalletCard({
   isActive,
   onPress,
 }: WalletCardProps) {
+  const { activeChain } = useWallet();
+
   return (
     <Pressable
       className={`p-4 rounded-xl mb-2 flex-row justify-between items-center ${
@@ -38,8 +41,11 @@ export default function WalletCard({
         </View>
       </View>
       <View className="flex-row items-center">
-        <Text className="text-light-matte-black font-medium mr-2">
+        <Text className="text-light-matte-black font-medium mr-1">
           {wallet.balance}
+        </Text>
+        <Text className="text-light-matte-black/70 mr-2">
+          {activeChain.nativeCurrency.symbol}
         </Text>
         {isActive && (
           <View className="w-5 h-5 rounded-full items-center justify-center">
