@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { ChevronRight, Key, Shield, Wallet } from "lucide-react-native";
+import { ChevronRight, CirclePlus, Key, Wallet } from "lucide-react-native";
 import React from "react";
 import {
   Image,
@@ -45,11 +45,11 @@ export default function Login() {
             </Text>
 
             <Pressable
-              className="bg-light-primary-red mb-3 py-4 px-5 rounded-xl flex-row items-center justify-between"
+              className="bg-light-primary-red mb-3 py-4 px-5 pl-6 rounded-xl flex-row items-center justify-between"
               onPress={() => router.push("/wallet-setup")}
             >
-              <View className="flex-row items-center">
-                <Shield color="#fff" size={22} className="mr-3" />
+              <View className="flex-row items-center gap-3">
+                <CirclePlus color="#fff" size={30} className="mr-3" />
                 <View>
                   <Text className="text-light font-bold text-lg">
                     Create New Wallet
@@ -67,8 +67,11 @@ export default function Login() {
               onPress={() => console.log("Login with Google")}
             >
               <View className="flex-row items-center">
-                <View className="w-8 h-8 bg-light-primary-red/10 rounded-full items-center justify-center mr-3">
-                  <Text className="text-light-primary-red font-bold">G</Text>
+                <View className="w-11 h-11 bg-light-primary-red/10 rounded-full items-center justify-center mr-3">
+                  <Image
+                    source={require("@/assets/images/google-takumipay.png")}
+                    style={{ width: 20, height: 20 }}
+                  />
                 </View>
                 <Text className="text-light-matte-black font-medium">
                   Continue with Google
