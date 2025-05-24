@@ -3,7 +3,7 @@ import { type TWallet } from "@/constants/walletData";
 import { useWallet } from "@/hooks/useWallet";
 import { Check, Wallet as WalletIcon } from "lucide-react-native";
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 
 type WalletCardProps = {
   wallet: TWallet;
@@ -16,40 +16,63 @@ export default function WalletCard({
   isActive,
   onPress,
 }: WalletCardProps) {
+  const { width } = useWindowDimensions();
   const { activeChain } = useWallet();
+  const isSmallScreen = width < 360;
+  const isVerySmallScreen = width < 320;
+  const tokenSymbol = activeChain?.chain.nativeCurrency?.symbol || "ETH";
 
   return (
     <Pressable
-      className={`p-4 rounded-xl mb-2 flex-row justify-between items-center ${
+      className={`p-3 rounded-xl mb-2 flex-row items-center ${
         isActive ? "bg-light-primary-red/10" : "bg-light-main-container"
       }`}
       onPress={onPress}
     >
-      <View className="flex-row items-center">
-        <WalletIcon size={20} color="#c71c4b" className="mr-3" />
-        <View>
-          <Text className="text-light-matte-black font-bold">
+      <View className="flex-row items-center flex-1 mr-2">
+        <WalletIcon
+          size={isSmallScreen ? 16 : 18}
+          color="#c71c4b"
+          className="mr-2"
+        />
+        <View className="flex-1">
+          <Text className="text-light-matte-black font-bold text-sm">
             {wallet.name}
           </Text>
-          <View className="flex-row items-center">
-            <Text className="text-light-matte-black/70">
-              {wallet.address.substring(0, 8)}...
-              {wallet.address.substring(wallet.address.length - 6)}
+          <View className="flex-row items-center flex-wrap">
+            <Text className="text-light-matte-black/70 text-xs">
+              {wallet.address.substring(0, 4)}...
+              {wallet.address.substring(wallet.address.length - 4)}
             </Text>
-            <Chip label={wallet.type} size="small" style={{ marginLeft: 8 }} />
+            <Chip label={wallet.type} size="small" style={{ marginLeft: 4 }} />
           </View>
         </View>
       </View>
-      <View className="flex-row items-center">
-        <Text className="text-light-matte-black font-medium mr-1">
-          {wallet.balance}
-        </Text>
-        <Text className="text-light-matte-black/70 mr-2">
-          {activeChain.chain.nativeCurrency.symbol}
-        </Text>
+
+      <View className="items-end">
+        {isVerySmallScreen ? (
+          <>
+            <Text className="text-light-matte-black font-medium text-sm">
+              {wallet.balance}
+            </Text>
+            <Text className="text-light-matte-black/70 text-xs">
+              {tokenSymbol}
+            </Text>
+          </>
+        ) : (
+          <View className="flex-row items-center">
+            <Text className="text-light-matte-black font-medium text-sm">
+              {wallet.balance}
+            </Text>
+            <Text className="text-light-matte-black/70 text-xs ml-1">
+              {tokenSymbol}
+            </Text>
+          </View>
+        )}
+
         {isActive && (
-          <View className="w-5 h-5 rounded-full items-center justify-center">
-            <Check size={14} color="#c71c4b" strokeWidth={3} />
+          <View className="mt-1 w-5 h-5 rounded-full bg-light-primary-red/10 items-center justify-center self-end">
+            <Check size={12} color="#c71c4b" strokeWidth={3} />
           </View>
         )}
       </View>
