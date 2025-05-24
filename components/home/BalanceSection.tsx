@@ -115,29 +115,29 @@ export default function BalanceSection() {
         </View>
       </View>
 
-      <View className="flex-row gap-4">
-        <View className="flex-1 gap-3 flex-row grow">
-          <Pressable className="grow bg-light-main-container rounded-xl py-3 px-3 flex-row items-center">
+      <View className="flex-row gap-4 flex-wrap">
+        <View className="flex-1 min-w-[100px] gap-3 flex-row flex-wrap">
+          <Pressable className="flex-1 min-w-[120px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center">
             <View className="bg-light-primary-red/10 rounded-full p-1.5 mr-2">
               <PlusIcon size={20} color="#c71c4b" />
             </View>
-            <Text className="text-light-matte-black text-sm font-medium">
+            <Text className="text-light-matte-black text-[10px] font-medium">
               Top Up
             </Text>
           </Pressable>
 
-          <Pressable className="grow bg-light-main-container rounded-xl py-3 px-3 flex-row items-center">
+          <Pressable className="flex-1 min-w-[100px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center">
             <View className="bg-light-primary-red/10 rounded-full p-1.5 mr-2">
               <ArrowBigDown size={20} color="#c71c4b" />
             </View>
-            <Text className="text-light-matte-black text-sm font-medium">
+            <Text className="text-light-matte-black text-[10px] font-medium">
               Withdraw
             </Text>
           </Pressable>
         </View>
 
-        <View className="flex-row gap-3">
-          <View className="items-center">
+        <View className="flex-row gap-3 flex-wrap justify-center">
+          <View className="items-center m-1">
             <Pressable className="bg-light-matte-black rounded-full items-center justify-center w-12 h-12 mb-1">
               <ArrowDownToLine size={20} color="#fff" />
             </Pressable>
@@ -146,7 +146,7 @@ export default function BalanceSection() {
             </Text>
           </View>
 
-          <View className="items-center">
+          <View className="items-center m-1">
             <Pressable className="bg-light-matte-black rounded-full items-center justify-center w-12 h-12 mb-1">
               <ArrowUpToLine size={20} color="#fff" />
             </Pressable>
