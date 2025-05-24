@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function Home() {
   return (
     <>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" backgroundColor="#f5f6f9" />
       <SafeAreaView style={styles.container} edges={["top"]}>
         <ScrollView
           className="bg-light-main-container flex-1"
