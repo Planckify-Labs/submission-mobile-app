@@ -1,4 +1,4 @@
-import { Chain, supportedChains } from "@/constants/configs/chainConfig";
+import { ChainConfig, supportedChains } from "@/constants/configs/chainConfig";
 import { type TWallet, mockWallets } from "@/constants/walletData";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useState } from "react";
@@ -8,7 +8,9 @@ export function useWallet() {
   const [wallets, setWallets] = useState<TWallet[]>([]);
   const [activeWalletIndex, setActiveWalletIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeChain, setActiveChain] = useState<Chain>(supportedChains[0]);
+  const [activeChain, setActiveChain] = useState<ChainConfig>(
+    supportedChains[0],
+  );
 
   const activeWallet = wallets[activeWalletIndex] || ({} as TWallet);
 
@@ -17,7 +19,9 @@ export function useWallet() {
       const storedChainId = await SecureStore.getItemAsync("active_chain_id");
       if (storedChainId) {
         const chainId = parseInt(storedChainId, 10);
-        const chain = supportedChains.find((c: Chain) => c.id === chainId);
+        const chain = supportedChains.find(
+          (c: ChainConfig) => c.chain.id === chainId,
+        );
         if (chain) {
           setActiveChain(chain);
         }
@@ -27,9 +31,12 @@ export function useWallet() {
     }
   }, []);
 
-  const saveActiveChain = useCallback(async (chain: Chain) => {
+  const saveActiveChain = useCallback(async (chain: ChainConfig) => {
     try {
-      await SecureStore.setItemAsync("active_chain_id", chain.id.toString());
+      await SecureStore.setItemAsync(
+        "active_chain_id",
+        chain.chain.id.toString(),
+      );
       setActiveChain(chain);
       return true;
     } catch (error) {
@@ -40,7 +47,9 @@ export function useWallet() {
 
   const changeActiveChain = useCallback(
     async (chainId: number) => {
-      const chain = supportedChains.find((c: Chain) => c.id === chainId);
+      const chain = supportedChains.find(
+        (c: ChainConfig) => c.chain.id === chainId,
+      );
       if (chain) {
         return await saveActiveChain(chain);
       }

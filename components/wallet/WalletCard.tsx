@@ -45,7 +45,7 @@ export default function WalletCard({
           {wallet.balance}
         </Text>
         <Text className="text-light-matte-black/70 mr-2">
-          {activeChain.nativeCurrency.symbol}
+          {activeChain.chain.nativeCurrency.symbol}
         </Text>
         {isActive && (
           <View className="w-5 h-5 rounded-full items-center justify-center">

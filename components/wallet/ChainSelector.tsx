@@ -27,7 +27,7 @@ export default function ChainSelector() {
           />
         )}
         <Text className="text-light-matte-black font-medium mr-2">
-          {activeChain.name}
+          {activeChain.chain.name}
         </Text>
         <ChevronDown size={16} color="#c71c4b" />
       </Pressable>
@@ -49,13 +49,13 @@ export default function ChainSelector() {
             <ScrollView className="flex-1">
               {supportedChains.map((chain) => (
                 <Pressable
-                  key={chain.id}
+                  key={chain.chain.id}
                   className={`flex-row items-center p-4 mb-2 rounded-xl ${
-                    activeChain.id === chain.id
+                    activeChain.chain.id === chain.chain.id
                       ? "bg-light-primary-red/10"
                       : "bg-light-main-container"
                   }`}
-                  onPress={() => handleChainSelect(chain.id)}
+                  onPress={() => handleChainSelect(chain.chain.id)}
                 >
                   {chain.iconUrl && (
                     <Image
@@ -67,10 +67,10 @@ export default function ChainSelector() {
 
                   <View className="flex-1">
                     <Text className="text-light-matte-black font-bold">
-                      {chain.name}
+                      {chain.chain.name}
                     </Text>
                     <Text className="text-light-matte-black/70 text-sm">
-                      {chain.nativeCurrency.symbol}
+                      {chain.chain.nativeCurrency.symbol}
                     </Text>
                   </View>
 
@@ -82,7 +82,7 @@ export default function ChainSelector() {
                     </View>
                   )}
 
-                  {activeChain.id === chain.id && (
+                  {activeChain.chain.id === chain.chain.id && (
                     <View className="w-6 h-6 rounded-full bg-light-primary-red/10 items-center justify-center">
                       <Check size={14} color="#c71c4b" strokeWidth={3} />
                     </View>

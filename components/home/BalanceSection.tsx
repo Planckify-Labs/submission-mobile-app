@@ -25,7 +25,7 @@ export default function BalanceSection() {
   const { activeWallet, activeChain, isLoading } = useWallet();
   const [isShowBalance, setShowBalance] = useState(true);
   const [selectedToken, setSelectedToken] = useState(
-    activeChain?.nativeCurrency?.symbol || "ETH",
+    activeChain?.chain.nativeCurrency?.symbol || "ETH",
   );
 
   if (isLoading) {
@@ -75,7 +75,9 @@ export default function BalanceSection() {
       <View className="bg-light-main-container/50 p-4 rounded-xl mb-6">
         <View className="flex-row items-center justify-between mb-1">
           <Pressable
-            onPress={() => setSelectedToken(activeChain.nativeCurrency.symbol)}
+            onPress={() =>
+              setSelectedToken(activeChain.chain.nativeCurrency.symbol)
+            }
             className="flex-row items-center"
           >
             <Text className="text-light-matte-black font-medium text-sm mr-1">
