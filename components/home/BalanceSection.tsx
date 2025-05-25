@@ -15,7 +15,6 @@ import {
 } from "lucide-react-native";
 import React, { useCallback, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Dimensions,
   Image,
@@ -28,6 +27,7 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
+import BalanceSectionSkeleton from "./BalanceSectionSkeleton";
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;
@@ -112,12 +112,7 @@ export default function BalanceSection() {
   ).current;
 
   if (isLoading) {
-    return (
-      <View className="bg-light rounded-2xl w-full p-6 items-center justify-center shadow-sm">
-        <ActivityIndicator size="small" color="#c71c4b" />
-        <Text className="text-light-matte-black mt-2">Loading wallet...</Text>
-      </View>
-    );
+    return <BalanceSectionSkeleton />;
   }
 
   return (
