@@ -1,5 +1,6 @@
 import Chip from "@/components/common/Chip";
-import { type TWallet, useWallet } from "@/hooks/useWallet";
+import type { TWallet } from "@/constants/types/walletTypes";
+import { useWallet } from "@/hooks/useWallet";
 import { Check, Wallet as WalletIcon } from "lucide-react-native";
 import React, { memo, useMemo } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";

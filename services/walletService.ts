@@ -1,4 +1,4 @@
-import { TWallet } from "@/hooks/useWallet";
+import { TWallet } from "@/constants/types/walletTypes";
 import * as SecureStore from "expo-secure-store";
 import {
   type HDAccount,
@@ -28,7 +28,6 @@ export async function saveWalletsToStorage(
   try {
     const walletsForStorage = wallets.map((wallet) => {
       const { account, ...walletWithoutAccount } = wallet;
-
       return {
         ...walletWithoutAccount,
         account: { address: wallet.address },
@@ -73,12 +72,11 @@ export function getAccountForWallet(
   }
 }
 
-export function clearAccountCache(address?: string): void {
-  if (address) {
-    delete accountCache[address];
-  } else {
-    Object.keys(accountCache).forEach((key) => {
-      delete accountCache[key];
-    });
-  }
+/**
+ * Clear account cache for testing or memory management
+ */
+export function clearAccountCache(): void {
+  Object.keys(accountCache).forEach((key) => {
+    delete accountCache[key];
+  });
 }

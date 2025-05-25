@@ -1,4 +1,4 @@
-import { type TWallet } from "@/hooks/useWallet";
+import { TWallet, WalletCreationParams } from "@/constants/types/walletTypes";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 
 export function isValidPrivateKey(privateKey: string): boolean {
@@ -11,14 +11,15 @@ export function isValidMnemonic(mnemonic: string): boolean {
   return words.length === 12 || words.length === 24;
 }
 
+export function formatPrivateKey(privateKey: string): string {
+  return privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
+}
+
 export function createWalletFromPrivateKey(
   privateKey: string,
   name?: string,
 ): TWallet {
-  const formattedKey = privateKey.startsWith("0x")
-    ? privateKey
-    : `0x${privateKey}`;
-
+  const formattedKey = formatPrivateKey(privateKey);
   const account = privateKeyToAccount(formattedKey as `0x${string}`);
 
   return {
@@ -47,4 +48,34 @@ export function createWalletFromMnemonic(
     source: "Created",
     type: "SeedPhrase",
   };
+}
+
+export function createWalletFromParams(
+  params: WalletCreationParams,
+): TWallet | null {
+  if (params.source === "PrivateKey" && params.privateKey) {
+    return createWalletFromPrivateKey(params.privateKey, params.name);
+  }
+
+  if (params.source === "SeedPhrase" && params.seedPhrase) {
+    return createWalletFromMnemonic(params.seedPhrase, params.name);
+  }
+
+  if (params.source === "social" && params.account) {
+    return {
+      account: { address: params.account.address },
+      address: params.account.address,
+      name: params.name || "Social Wallet",
+      balance: "0",
+      source: "Social",
+      type: "Social",
+      socialAccount: {
+        provider: params.provider || "Unknown",
+        email: params.socialAccount?.email || "",
+        name: params.socialAccount?.name || "",
+      },
+    };
+  }
+
+  return null;
 }
