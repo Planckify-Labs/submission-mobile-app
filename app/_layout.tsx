@@ -12,7 +12,7 @@ LogBox.ignoreLogs([
 ]);
 
 // Configure React Query with performance in mind
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60 * 1000,
