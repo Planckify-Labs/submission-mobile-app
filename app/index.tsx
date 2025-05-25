@@ -5,7 +5,7 @@ import PaymentSection from "@/components/home/PaymentSection";
 import { useWallet } from "@/hooks/useWallet";
 import { router } from "expo-router";
 import { QrCode } from "lucide-react-native";
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect } from "react";
 import {
   Pressable,
   ScrollView,
@@ -17,13 +17,81 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Home() {
-  const { wallets, isLoading } = useWallet();
+  const {
+    wallets,
+    isLoading,
+    activeWallet,
+    activeChain,
+    getClientForActiveWallet,
+    getPublicClientForActiveChain,
+  } = useWallet();
+
+  const readBlockchainData = useCallback(async () => {
+    try {
+      const publicClient = getPublicClientForActiveChain();
+
+      const blockNumber = await publicClient.getBlockNumber();
+      console.log("Current block number:", blockNumber);
+
+      console.log(
+        "Connected to chain:",
+        activeChain.chain.name,
+        "(ID:",
+        activeChain.chain.id,
+        ")",
+      );
+
+      if (activeWallet?.address) {
+        const balance = await publicClient.getBalance({
+          address: activeWallet.address as `0x${string}`,
+        });
+        console.log(
+          "Wallet balance:",
+          balance.toString(),
+          activeChain.chain.nativeCurrency.symbol,
+        );
+      }
+    } catch (error) {
+      console.error("Error reading blockchain data:", error);
+    }
+  }, [getPublicClientForActiveChain, activeChain, activeWallet]);
+
+  const prepareTransaction = useCallback(async () => {
+    try {
+      const walletClient = getClientForActiveWallet();
+      if (!walletClient) {
+        console.log("No wallet client available");
+        return;
+      }
+
+      console.log("Wallet client ready for", activeWallet.address);
+      console.log("Could send transaction with:", walletClient.account);
+
+      const txParams = {
+        to: "0x0000000000000000000000000000000000000000",
+        value: 0n,
+        data: "0x",
+      };
+
+      console.log("Transaction prepared:", txParams);
+      console.log(
+        "To send this transaction, you would call walletClient.sendTransaction(txParams)",
+      );
+    } catch (error) {
+      console.error("Error preparing transaction:", error);
+    }
+  }, [getClientForActiveWallet, activeWallet]);
 
   useEffect(() => {
     if (!isLoading && wallets.length === 0) {
       router.replace("/login");
     }
-  }, [isLoading, wallets]);
+
+    if (!isLoading && wallets.length > 0) {
+      readBlockchainData();
+      prepareTransaction();
+    }
+  }, [isLoading, wallets, readBlockchainData, prepareTransaction]);
 
   if (isLoading) {
     return null;

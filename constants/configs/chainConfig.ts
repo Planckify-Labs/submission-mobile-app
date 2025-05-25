@@ -1,5 +1,5 @@
 import {
-  type Chain as ViemChain,
+  type Chain as TChain,
   bsc,
   goerli,
   mainnet,
@@ -8,7 +8,7 @@ import {
 } from "viem/chains";
 
 export interface ChainConfig {
-  chain: ViemChain;
+  chain: TChain;
   iconUrl?: string;
   isTestnet?: boolean;
 }

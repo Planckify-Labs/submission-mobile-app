@@ -3,11 +3,13 @@ import { ChainConfig, supportedChains } from "@/constants/configs/chainConfig";
 import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
 import { TWallet, WalletCreationParams } from "@/constants/types/walletTypes";
 import * as walletService from "@/services/walletService";
+import { getPublicClient, getWalletClient } from "@/utils/clients";
 import { createWalletFromParams } from "@/utils/walletUtils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useMemo } from "react";
 import { Alert, InteractionManager } from "react-native";
+import { Account, PublicClient, WalletClient } from "viem";
 
 export function useWallet() {
   const { deferredTask } = usePerformance();
@@ -203,6 +205,19 @@ export function useWallet() {
     queryClient.invalidateQueries({ queryKey: [QKEY_Wallets.activeChain] });
   }, [queryClient]);
 
+  const getClientForActiveWallet = useCallback((): WalletClient | null => {
+    if (!activeWallet?.address) return null;
+
+    const account = walletService.getAccountForWallet(activeWallet);
+    if (!account) return null;
+
+    return getWalletClient(account as Account, activeChain.chain);
+  }, [activeWallet, activeChain]);
+
+  const getPublicClientForActiveChain = useCallback((): PublicClient => {
+    return getPublicClient(activeChain.chain);
+  }, [activeChain]);
+
   useEffect(() => {
     InteractionManager.runAfterInteractions(() => {
       loadWallets();
@@ -231,5 +246,7 @@ export function useWallet() {
     removeWallet,
     changeActiveChain,
     getWalletAccount,
+    getClientForActiveWallet,
+    getPublicClientForActiveChain,
   };
 }
