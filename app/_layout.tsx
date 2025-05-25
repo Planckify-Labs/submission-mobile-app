@@ -33,6 +33,7 @@ export default function RootLayout() {
             headerShown: false,
             animation: "ios_from_left",
             contentStyle: { backgroundColor: "#f5f6f9" },
+            animationDuration: 700,
           }}
         />
       </PerformanceProvider>

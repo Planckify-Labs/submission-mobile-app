@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   ScrollView,
   StatusBar,
   Text,
@@ -34,15 +35,23 @@ const LazyLoadingPlaceholder = () => (
 export default function Wallet() {
   const { width } = useWindowDimensions();
   const isSmallScreen = width < 360;
+  const [refreshing, setRefreshing] = useState(false);
   const {
     wallets,
     activeWallet,
     activeWalletIndex,
     isLoading,
     setActiveWallet,
+    loadWallets,
   } = useWallet();
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const { isReady, deferredTask } = usePerformance();
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadWallets();
+    setRefreshing(false);
+  }, [loadWallets]);
 
   const handleToggleWalletInfo = useCallback(async () => {
     if (!showWalletInfo) {
@@ -63,18 +72,25 @@ export default function Wallet() {
     }
   }, [isLoading, wallets, isReady, router]);
 
+  const handleWalletSwitch = useCallback(
+    async (index: number) => {
+      await deferredTask(() => {
+        setActiveWallet(index);
+        setShowWalletInfo(false);
+      }, "Switching wallet");
+    },
+    [setActiveWallet, deferredTask, setShowWalletInfo],
+  );
+
   const renderWalletItem = useCallback(
     ({ item, index }: { item: TWallet; index: number }) => (
       <WalletCard
         wallet={item}
         isActive={index === activeWalletIndex}
-        onPress={() => {
-          setActiveWallet(index);
-          setShowWalletInfo(false);
-        }}
+        onPress={() => handleWalletSwitch(index)}
       />
     ),
-    [activeWalletIndex, setActiveWallet],
+    [activeWalletIndex, handleWalletSwitch],
   );
 
   const getItemLayout = useCallback(
@@ -115,6 +131,13 @@ export default function Wallet() {
           className="flex-1"
           contentContainerStyle={{ padding: isSmallScreen ? 12 : 16 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#c71c4b"]}
+            />
+          }
         >
           <Text
             className={`text-light-matte-black ${isSmallScreen ? "text-xl" : "text-2xl"} font-bold mb-4`}
@@ -137,6 +160,7 @@ export default function Wallet() {
               maxToRenderPerBatch={4}
               windowSize={5}
               scrollEnabled={false}
+              updateCellsBatchingPeriod={50}
               ListFooterComponent={
                 <Pressable
                   className="flex-row items-center justify-center p-3 border border-dashed border-light-matte-black/20 rounded-xl mt-2"
