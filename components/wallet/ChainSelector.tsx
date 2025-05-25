@@ -155,7 +155,7 @@ const ChainSelector = memo(function ChainSelector() {
             className="mr-2"
           />
         )}
-        <Text className="text-light-matte-black font-medium mr-2">
+        <Text className="text-light-matte-black text-xs font-medium mr-2">
           {activeChain.chain.name}
         </Text>
         <ChevronDown size={16} color="#c71c4b" />
