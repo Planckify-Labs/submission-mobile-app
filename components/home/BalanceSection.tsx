@@ -2,6 +2,7 @@ import ChainSelector from "@/components/wallet/ChainSelector";
 import { takumipayLogoBase64 } from "@/constants/takumipay";
 import { useWallet } from "@/hooks/useWallet";
 import { copyToClipboard } from "@/utils/authUtils";
+import { useRouter } from "expo-router";
 import {
   ArrowBigDown,
   ArrowDownToLine,
@@ -42,6 +43,7 @@ export default function BalanceSection() {
     useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+  const router = useRouter();
 
   const openModal = useCallback(() => {
     setModalVisible(true);
@@ -230,14 +232,17 @@ export default function BalanceSection() {
               </Text>
             </Pressable>
 
-            <View className="items-center m-1">
-              <Pressable className="bg-light-matte-black rounded-full items-center justify-center w-12 h-12 mb-1">
+            <Pressable
+              className="items-center m-1"
+              onPress={() => router.push("/send")}
+            >
+              <View className="bg-light-matte-black rounded-full items-center justify-center w-12 h-12 mb-1">
                 <ArrowUpToLine size={20} color="#fff" />
-              </Pressable>
+              </View>
               <Text className="text-xs text-light-matte-black font-medium">
                 Send
               </Text>
-            </View>
+            </Pressable>
           </View>
         </View>
       </View>
