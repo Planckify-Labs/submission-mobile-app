@@ -1,54 +1,124 @@
 import { usePerformance } from "@/components/providers/PerformanceProvider";
 import { ChainConfig, supportedChains } from "@/constants/configs/chainConfig";
+import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
 import { TWallet, WalletCreationParams } from "@/constants/types/walletTypes";
 import * as walletService from "@/services/walletService";
 import { createWalletFromParams } from "@/utils/walletUtils";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Alert, InteractionManager } from "react-native";
 
 export function useWallet() {
-  const [wallets, setWallets] = useState<TWallet[]>([]);
-  const [activeWalletIndex, setActiveWalletIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeChain, setActiveChain] = useState<ChainConfig>(
-    supportedChains[0],
-  );
   const { deferredTask } = usePerformance();
+  const queryClient = useQueryClient();
+
+  const { data: wallets = [], isLoading } = useQuery({
+    queryKey: [QKEY_Wallets.wallets],
+    queryFn: async () => {
+      return await deferredTask(async () => {
+        return await walletService.loadWalletsFromStorage();
+      }, "Loading wallets");
+    },
+  });
+
+  const { data: activeWalletIndex = 0 } = useQuery({
+    queryKey: [QKEY_Wallets.activeWalletIndex],
+    queryFn: async () => {
+      try {
+        const storedIndex = await SecureStore.getItemAsync(
+          "active_wallet_index",
+        );
+        return storedIndex ? parseInt(storedIndex, 10) : 0;
+      } catch (error) {
+        console.error("Failed to load active wallet index:", error);
+        return 0;
+      }
+    },
+    initialData: 0,
+  });
+
+  const { data: activeChain = supportedChains[0] } = useQuery({
+    queryKey: [QKEY_Wallets.activeChain],
+    queryFn: async () => {
+      try {
+        const storedChain = await SecureStore.getItemAsync("active_chain");
+        if (storedChain) {
+          return JSON.parse(storedChain) as ChainConfig;
+        }
+        return supportedChains[0];
+      } catch (error) {
+        console.error("Failed to load active chain:", error);
+        return supportedChains[0];
+      }
+    },
+    initialData: supportedChains[0],
+  });
 
   const activeWallet = useMemo(
     () => wallets[activeWalletIndex] || ({} as TWallet),
     [wallets, activeWalletIndex],
   );
 
-  const loadWallets = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      await deferredTask(async () => {
-        const loadedWallets = await walletService.loadWalletsFromStorage();
-        setWallets(loadedWallets);
-      }, "Loading wallets");
-    } catch (error) {
-      console.error("Failed to load wallets:", error);
-      Alert.alert("Error", "Failed to load wallet information");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [deferredTask]);
-
-  const saveWallets = useCallback(async (updatedWallets: TWallet[]) => {
-    try {
+  const saveWalletsMutation = useMutation({
+    mutationFn: async (updatedWallets: TWallet[]) => {
       const success = await walletService.saveWalletsToStorage(updatedWallets);
-      if (success) {
-        setWallets(updatedWallets);
-      }
-      return success;
-    } catch (error) {
+      if (!success) throw new Error("Failed to save wallets");
+      return updatedWallets;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData([QKEY_Wallets.wallets], data);
+    },
+    onError: (error) => {
       console.error("Failed to save wallets:", error);
       Alert.alert("Error", "Failed to save wallet information");
-      return false;
-    }
-  }, []);
+    },
+  });
+
+  const setActiveWalletMutation = useMutation({
+    mutationFn: async (index: number) => {
+      await SecureStore.setItemAsync("active_wallet_index", index.toString());
+      return index;
+    },
+    onSuccess: (index) => {
+      queryClient.setQueryData([QKEY_Wallets.activeWalletIndex], index);
+    },
+    onError: (error) => {
+      console.error("Failed to save active wallet index:", error);
+    },
+  });
+
+  const setActiveChainMutation = useMutation({
+    mutationFn: async (chain: ChainConfig) => {
+      await SecureStore.setItemAsync("active_chain", JSON.stringify(chain));
+      return chain;
+    },
+    onSuccess: (chain) => {
+      queryClient.setQueryData([QKEY_Wallets.activeChain], chain);
+    },
+    onError: (error) => {
+      console.error("Failed to save active chain:", error);
+    },
+  });
+
+  const saveWallets = useCallback(
+    async (updatedWallets: TWallet[]) => {
+      try {
+        await saveWalletsMutation.mutateAsync(updatedWallets);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [saveWalletsMutation],
+  );
+
+  const setActiveWallet = useCallback(
+    (index: number) => {
+      setActiveWalletMutation.mutate(index);
+    },
+    [setActiveWalletMutation],
+  );
 
   const addWallet = useCallback(
     async (walletData: WalletCreationParams) => {
@@ -59,12 +129,12 @@ export function useWallet() {
         const updatedWallets = [...wallets, wallet];
         const success = await saveWallets(updatedWallets);
         if (success) {
-          setActiveWalletIndex(updatedWallets.length - 1);
+          setActiveWallet(updatedWallets.length - 1);
         }
         return success;
       }, "Adding wallet");
     },
-    [wallets, saveWallets, deferredTask],
+    [wallets, saveWallets, deferredTask, setActiveWallet],
   );
 
   const updateWallet = useCallback(
@@ -86,17 +156,31 @@ export function useWallet() {
       const success = await saveWallets(updatedWallets);
 
       if (success && activeWalletIndex >= updatedWallets.length) {
-        setActiveWalletIndex(Math.max(0, updatedWallets.length - 1));
+        setActiveWallet(Math.max(0, updatedWallets.length - 1));
       }
 
       return success;
     },
-    [wallets, activeWalletIndex, saveWallets],
+    [wallets, activeWalletIndex, saveWallets, setActiveWallet],
   );
 
-  const setActiveWallet = useCallback((index: number) => {
-    setActiveWalletIndex(index);
-  }, []);
+  const changeActiveChain = useCallback(
+    async (chainId: number) => {
+      const chain = supportedChains.find(
+        (c: ChainConfig) => c.chain.id === chainId,
+      );
+      if (chain) {
+        try {
+          await setActiveChainMutation.mutateAsync(chain);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      return false;
+    },
+    [setActiveChainMutation],
+  );
 
   const getWalletAccount = useCallback(
     async (walletIndex: number) => {
@@ -111,83 +195,41 @@ export function useWallet() {
     [wallets, deferredTask],
   );
 
-  const saveActiveChain = useCallback(async (chain: ChainConfig) => {
-    try {
-      await SecureStore.setItemAsync("active_chain", JSON.stringify(chain));
-      setActiveChain(chain);
-      return true;
-    } catch (error) {
-      console.error("Failed to save active chain:", error);
-      return false;
-    }
-  }, []);
+  const loadWallets = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: [QKEY_Wallets.wallets] });
+  }, [queryClient]);
 
-  const changeActiveChain = useCallback(
-    async (chainId: number) => {
-      const chain = supportedChains.find(
-        (c: ChainConfig) => c.chain.id === chainId,
-      );
-      if (chain) {
-        return await saveActiveChain(chain);
-      }
-      return false;
-    },
-    [saveActiveChain],
-  );
-
-  const loadActiveChain = useCallback(async () => {
-    try {
-      const storedChain = await SecureStore.getItemAsync("active_chain");
-      if (storedChain) {
-        const parsedChain = JSON.parse(storedChain) as ChainConfig;
-        setActiveChain(parsedChain);
-      }
-    } catch (error) {
-      console.error("Failed to load active chain:", error);
-    }
-  }, []);
+  const loadActiveChain = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: [QKEY_Wallets.activeChain] });
+  }, [queryClient]);
 
   useEffect(() => {
     InteractionManager.runAfterInteractions(() => {
       loadWallets();
       loadActiveChain();
+      queryClient.invalidateQueries({
+        queryKey: [QKEY_Wallets.activeWalletIndex],
+      });
     });
 
     return () => {
       walletService.clearAccountCache();
     };
-  }, [loadWallets, loadActiveChain]);
+  }, [loadWallets, loadActiveChain, queryClient]);
 
-  return useMemo(
-    () => ({
-      wallets,
-      activeWallet,
-      activeWalletIndex,
-      isLoading,
-      activeChain,
-      setActiveWallet,
-      loadWallets,
-      saveWallets,
-      addWallet,
-      updateWallet,
-      removeWallet,
-      changeActiveChain,
-      getWalletAccount,
-    }),
-    [
-      wallets,
-      activeWallet,
-      activeWalletIndex,
-      isLoading,
-      activeChain,
-      setActiveWallet,
-      loadWallets,
-      saveWallets,
-      addWallet,
-      updateWallet,
-      removeWallet,
-      changeActiveChain,
-      getWalletAccount,
-    ],
-  );
+  return {
+    wallets,
+    activeWallet,
+    activeWalletIndex,
+    isLoading,
+    activeChain,
+    setActiveWallet,
+    loadWallets,
+    saveWallets,
+    addWallet,
+    updateWallet,
+    removeWallet,
+    changeActiveChain,
+    getWalletAccount,
+  };
 }
