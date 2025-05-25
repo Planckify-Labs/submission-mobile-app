@@ -70,7 +70,7 @@ export default function Wallet() {
     if (isReady && !isLoading && wallets.length === 0) {
       router.replace("/login");
     }
-  }, [isLoading, wallets, isReady, router]);
+  }, [isLoading, wallets, isReady]);
 
   const handleWalletSwitch = useCallback(
     async (index: number) => {
@@ -79,7 +79,7 @@ export default function Wallet() {
         setShowWalletInfo(false);
       }, "Switching wallet");
     },
-    [setActiveWallet, deferredTask, setShowWalletInfo],
+    [setActiveWallet, deferredTask],
   );
 
   const renderWalletItem = useCallback(
