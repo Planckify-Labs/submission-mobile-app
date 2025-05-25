@@ -65,8 +65,8 @@ export default function BalanceSection() {
           className="flex-row items-center ml-auto gap-2"
         >
           <Text className="text-light-matte-black/60 text-xs">
-            {activeWallet.address.substring(0, 6)}...
-            {activeWallet.address.substring(activeWallet.address.length - 4)}
+            {activeWallet?.address?.substring(0, 6)}...
+            {activeWallet?.address?.substring(activeWallet.address.length - 4)}
           </Text>
           <Copy size={12} color="#c71c4b" className="ml-1" />
         </Pressable>

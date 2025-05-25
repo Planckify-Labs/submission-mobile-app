@@ -1,8 +1,31 @@
+import { usePerformance } from "@/components/providers/PerformanceProvider";
 import { ChainConfig, supportedChains } from "@/constants/configs/chainConfig";
-import { type TWallet, mockWallets } from "@/constants/walletData";
+import * as walletService from "@/services/walletService";
 import * as SecureStore from "expo-secure-store";
-import { useCallback, useEffect, useState } from "react";
-import { Alert } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, InteractionManager } from "react-native";
+import {
+  type HDAccount,
+  type PrivateKeyAccount,
+  mnemonicToAccount,
+  privateKeyToAccount,
+} from "viem/accounts";
+
+export interface TWallet {
+  name: string;
+  address: string;
+  balance: string;
+  source: "Created" | "Imported" | "Social";
+  type: "PrivateKey" | "SeedPhrase" | "Social";
+  account: HDAccount | PrivateKeyAccount | any;
+  privateKey?: string;
+  seedPhrase?: string;
+  socialAccount?: {
+    provider: string;
+    email: string;
+    name: string;
+  };
+}
 
 export function useWallet() {
   const [wallets, setWallets] = useState<TWallet[]>([]);
@@ -11,8 +34,12 @@ export function useWallet() {
   const [activeChain, setActiveChain] = useState<ChainConfig>(
     supportedChains[0],
   );
+  const { deferredTask } = usePerformance();
 
-  const activeWallet = wallets[activeWalletIndex] || ({} as TWallet);
+  const activeWallet = useMemo(
+    () => wallets[activeWalletIndex] || ({} as TWallet),
+    [wallets, activeWalletIndex],
+  );
 
   const loadActiveChain = useCallback(async () => {
     try {
@@ -61,28 +88,26 @@ export function useWallet() {
   const loadWallets = useCallback(async () => {
     try {
       setIsLoading(true);
-      const walletsData = await SecureStore.getItemAsync("user_wallets");
-      if (walletsData) {
-        setWallets(JSON.parse(walletsData));
-      } else {
-        setWallets(mockWallets);
-      }
+
+      await deferredTask(async () => {
+        const loadedWallets = await walletService.loadWalletsFromStorage();
+        setWallets(loadedWallets);
+      }, "Loading wallets");
     } catch (error) {
       console.error("Failed to load wallets:", error);
       Alert.alert("Error", "Failed to load wallet information");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [deferredTask]);
 
   const saveWallets = useCallback(async (updatedWallets: TWallet[]) => {
     try {
-      await SecureStore.setItemAsync(
-        "user_wallets",
-        JSON.stringify(updatedWallets),
-      );
-      setWallets(updatedWallets);
-      return true;
+      const success = await walletService.saveWalletsToStorage(updatedWallets);
+      if (success) {
+        setWallets(updatedWallets);
+      }
+      return success;
     } catch (error) {
       console.error("Failed to save wallets:", error);
       Alert.alert("Error", "Failed to save wallet information");
@@ -91,15 +116,76 @@ export function useWallet() {
   }, []);
 
   const addWallet = useCallback(
-    async (wallet: TWallet) => {
-      const updatedWallets = [...wallets, wallet];
-      const success = await saveWallets(updatedWallets);
-      if (success) {
-        setActiveWalletIndex(updatedWallets.length - 1);
-      }
-      return success;
+    async (walletData: {
+      source: "social" | "SeedPhrase" | "PrivateKey";
+      privateKey?: string;
+      seedPhrase?: string;
+      name?: string;
+      provider?: string;
+      socialAccount?: { email: string; name: string };
+      account?: any;
+    }) => {
+      return await deferredTask(async () => {
+        let wallet: TWallet;
+
+        if (walletData.source === "PrivateKey" && walletData.privateKey) {
+          const formattedKey = walletData.privateKey.startsWith("0x")
+            ? walletData.privateKey
+            : `0x${walletData.privateKey}`;
+
+          const account = privateKeyToAccount(formattedKey as `0x${string}`);
+
+          wallet = {
+            account: { address: account.address },
+            address: account.address,
+            privateKey: formattedKey,
+            name: walletData.name || "Imported Wallet",
+            balance: "0",
+            source: "Imported",
+            type: "PrivateKey",
+          };
+        } else if (
+          walletData.source === "SeedPhrase" &&
+          walletData.seedPhrase
+        ) {
+          const account = mnemonicToAccount(walletData.seedPhrase);
+
+          wallet = {
+            account: { address: account.address },
+            address: account.address,
+            seedPhrase: walletData.seedPhrase,
+            name: walletData.name || "Seed Phrase Wallet",
+            balance: "0",
+            source: "Created",
+            type: "SeedPhrase",
+          };
+        } else if (walletData.source === "social" && walletData.account) {
+          wallet = {
+            account: { address: walletData.account.address },
+            address: walletData.account.address,
+            name: walletData.name || "Social Wallet",
+            balance: "0",
+            source: "Social",
+            type: "Social",
+            socialAccount: {
+              provider: walletData.provider || "Unknown",
+              email: walletData.socialAccount?.email || "",
+              name: walletData.socialAccount?.name || "",
+            },
+          };
+        } else {
+          return false;
+        }
+
+        const updatedWallets = [...wallets, wallet];
+        const success = await saveWallets(updatedWallets);
+        if (success) {
+          setActiveWalletIndex(updatedWallets.length - 1);
+        }
+        return success;
+      }, "Adding wallet");
     },
-    [wallets, saveWallets],
+    [wallets, saveWallets, deferredTask],
   );
 
   const updateWallet = useCallback(
@@ -129,34 +215,64 @@ export function useWallet() {
     [wallets, activeWalletIndex, saveWallets],
   );
 
-  const setActiveWallet = useCallback(
-    (index: number) => {
-      if (index >= 0 && index < wallets.length) {
-        setActiveWalletIndex(index);
-        return true;
-      }
-      return false;
+  const setActiveWallet = useCallback((index: number) => {
+    setActiveWalletIndex(index);
+  }, []);
+
+  const getWalletAccount = useCallback(
+    async (walletIndex: number) => {
+      if (walletIndex < 0 || walletIndex >= wallets.length) return null;
+
+      const wallet = wallets[walletIndex];
+
+      return await deferredTask(() => {
+        return walletService.getAccountForWallet(wallet);
+      }, "Getting wallet account");
     },
-    [wallets],
+    [wallets, deferredTask],
   );
 
   useEffect(() => {
-    loadWallets();
-    loadActiveChain();
+    InteractionManager.runAfterInteractions(() => {
+      loadWallets();
+      loadActiveChain();
+    });
+
+    return () => {
+      walletService.clearAccountCache();
+    };
   }, [loadWallets, loadActiveChain]);
 
-  return {
-    wallets,
-    activeWallet,
-    activeWalletIndex,
-    isLoading,
-    loadWallets,
-    addWallet,
-    updateWallet,
-    removeWallet,
-    setActiveWallet,
-    activeChain,
-    supportedChains,
-    changeActiveChain,
-  };
+  return useMemo(
+    () => ({
+      wallets,
+      activeWallet,
+      activeWalletIndex,
+      isLoading,
+      activeChain,
+      setActiveWallet,
+      loadWallets,
+      saveWallets,
+      addWallet,
+      updateWallet,
+      removeWallet,
+      changeActiveChain,
+      getWalletAccount,
+    }),
+    [
+      wallets,
+      activeWallet,
+      activeWalletIndex,
+      isLoading,
+      activeChain,
+      setActiveWallet,
+      loadWallets,
+      saveWallets,
+      addWallet,
+      updateWallet,
+      removeWallet,
+      changeActiveChain,
+      getWalletAccount,
+    ],
+  );
 }

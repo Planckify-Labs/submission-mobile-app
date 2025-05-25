@@ -7,15 +7,18 @@
     "icon": "./assets/images/icon.png",
     "scheme": "takumipaymobileapp",
     "userInterfaceStyle": "automatic",
+    "jsEngine": "hermes",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "jsEngine": "hermes"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "jsEngine": "hermes",
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -37,7 +40,9 @@
       "expo-secure-store"
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "tsconfigPaths": true
     }
   }
 }
+

@@ -1,3 +1,4 @@
+import { useWallet } from "@/hooks/useWallet";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { ArrowLeft, Clipboard as ClipboardIcon } from "lucide-react-native";
@@ -19,6 +20,9 @@ export default function ImportSeedPhrase() {
   );
   const [currentWordIndex, setCurrentWordIndex] = useState<number | null>(null);
   const [currentWord, setCurrentWord] = useState<string>("");
+  const [walletName, setWalletName] = useState<string>("");
+
+  const { addWallet } = useWallet();
 
   const handleWordChange = (index: number, word: string) => {
     const newArray = [...seedPhraseArray];
@@ -47,19 +51,30 @@ export default function ImportSeedPhrase() {
   };
 
   const handleImport = () => {
-    const filledWords = seedPhraseArray.filter((word) => word.trim() !== "");
+    const seedPhrase = seedPhraseArray.join(" ").trim();
+    const words = seedPhrase.split(/\s+/);
 
-    if (filledWords.length !== 12 && filledWords.length !== 24) {
+    if (words.length !== 12 && words.length !== 24) {
       Alert.alert(
         "Invalid Seed Phrase",
-        "Please enter all words of your seed phrase",
+        "Please enter a valid 12 or 24-word seed phrase",
       );
       return;
     }
 
-    Alert.alert("Success", "Wallet imported successfully", [
-      { text: "OK", onPress: () => router.replace("/") },
-    ]);
+    addWallet({
+      source: "SeedPhrase",
+      seedPhrase: seedPhrase,
+      name: walletName || undefined,
+    }).then((success) => {
+      if (success) {
+        Alert.alert("Success", "Wallet imported successfully", [
+          { text: "OK", onPress: () => router.replace("/") },
+        ]);
+      } else {
+        Alert.alert("Error", "Failed to import wallet");
+      }
+    });
   };
 
   return (

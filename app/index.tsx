@@ -2,8 +2,10 @@ import ActivitySection from "@/components/home/ActivitySection";
 import BalanceSection from "@/components/home/BalanceSection";
 import Header from "@/components/home/Header";
 import PaymentSection from "@/components/home/PaymentSection";
+import { useWallet } from "@/hooks/useWallet";
+import { router } from "expo-router";
 import { QrCode } from "lucide-react-native";
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Pressable,
   ScrollView,
@@ -15,6 +17,22 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Home() {
+  const { wallets, isLoading } = useWallet();
+
+  useEffect(() => {
+    if (!isLoading && wallets.length === 0) {
+      router.replace("/login");
+    }
+  }, [isLoading, wallets]);
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (wallets.length === 0) {
+    return null;
+  }
+
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#f5f6f9" />
@@ -45,6 +63,6 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#f5f6f9",
   },
 });

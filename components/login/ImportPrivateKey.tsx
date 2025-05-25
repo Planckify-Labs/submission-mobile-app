@@ -1,3 +1,4 @@
+import { useWallet } from "@/hooks/useWallet";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import {
@@ -20,6 +21,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function ImportPrivateKey() {
   const [privateKey, setPrivateKey] = useState<string>("");
   const [showPrivateKey, setShowPrivateKey] = useState<boolean>(false);
+  const [walletName, setWalletName] = useState<string>("");
+  const { addWallet } = useWallet();
 
   const handlePasteFromClipboard = async () => {
     try {
@@ -45,9 +48,19 @@ export default function ImportPrivateKey() {
       return;
     }
 
-    Alert.alert("Success", "Wallet imported successfully", [
-      { text: "OK", onPress: () => router.replace("/") },
-    ]);
+    addWallet({
+      source: "PrivateKey",
+      privateKey: privateKey,
+      name: walletName || undefined,
+    }).then((success) => {
+      if (success) {
+        Alert.alert("Success", "Wallet imported successfully", [
+          { text: "OK", onPress: () => router.replace("/") },
+        ]);
+      } else {
+        Alert.alert("Error", "Failed to import wallet");
+      }
+    });
   };
 
   return (

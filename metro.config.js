@@ -3,4 +3,21 @@ const { withNativeWind } = require("nativewind/metro");
 
 const config = getDefaultConfig(__dirname);
 
+// Enable RAM bundle format for better performance
+config.transformer = {
+  ...config.transformer,
+  getTransformOptions: async () => ({
+    transform: {
+      experimentalImportSupport: false,
+      inlineRequires: true, // Enable inline requires for better startup performance
+    },
+  }),
+};
+
+// Optimize asset loading
+config.resolver = {
+  ...config.resolver,
+  assetExts: [...config.resolver.assetExts, 'db', 'json', 'png', 'jpg'],
+};
+
 module.exports = withNativeWind(config, { input: "./global.css" });

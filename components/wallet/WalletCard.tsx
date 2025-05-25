@@ -1,8 +1,7 @@
 import Chip from "@/components/common/Chip";
-import { type TWallet } from "@/constants/walletData";
-import { useWallet } from "@/hooks/useWallet";
+import { type TWallet, useWallet } from "@/hooks/useWallet";
 import { Check, Wallet as WalletIcon } from "lucide-react-native";
-import React from "react";
+import React, { memo, useMemo } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 
 type WalletCardProps = {
@@ -11,7 +10,7 @@ type WalletCardProps = {
   onPress: () => void;
 };
 
-export default function WalletCard({
+const WalletCard = memo(function WalletCard({
   wallet,
   isActive,
   onPress,
@@ -20,7 +19,16 @@ export default function WalletCard({
   const { activeChain } = useWallet();
   const isSmallScreen = width < 360;
   const isVerySmallScreen = width < 320;
-  const tokenSymbol = activeChain?.chain.nativeCurrency?.symbol || "ETH";
+
+  const tokenSymbol = useMemo(
+    () => activeChain?.chain.nativeCurrency?.symbol || "ETH",
+    [activeChain],
+  );
+
+  const formattedAddress = useMemo(() => {
+    if (!wallet.address) return "...";
+    return `${wallet.address.substring(0, 4)}...${wallet.address.substring(wallet.address.length - 4)}`;
+  }, [wallet.address]);
 
   return (
     <Pressable
@@ -41,8 +49,7 @@ export default function WalletCard({
           </Text>
           <View className="flex-row items-center flex-wrap">
             <Text className="text-light-matte-black/70 text-xs">
-              {wallet.address.substring(0, 4)}...
-              {wallet.address.substring(wallet.address.length - 4)}
+              {formattedAddress}
             </Text>
             <Chip label={wallet.type} size="small" style={{ marginLeft: 4 }} />
           </View>
@@ -78,4 +85,6 @@ export default function WalletCard({
       </View>
     </Pressable>
   );
-}
+});
+
+export default WalletCard;

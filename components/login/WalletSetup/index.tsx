@@ -1,7 +1,8 @@
 import { createWalletSteps } from "@/constants/walletSetup/walletCreationStepList";
+import { useWallet } from "@/hooks/useWallet";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { StatusBar } from "react-native";
+import { Alert, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { english, generateMnemonic } from "viem/accounts";
 import WalletSetupSteps from "./WalletSetupSteps";
@@ -49,6 +50,34 @@ export default function WalletSetup() {
     }));
   }, []);
 
+  const { addWallet } = useWallet();
+
+  const finalizeWalletSetup = useCallback(async () => {
+    const mnemonicString = mnemonic.join(" ");
+
+    try {
+      const success = await addWallet({
+        source: "SeedPhrase",
+        seedPhrase: mnemonicString,
+        name: "My Wallet",
+      });
+
+      if (success) {
+        setTimeout(() => {
+          router.replace("/");
+        }, 500);
+      } else {
+        Alert.alert("Error", "Failed to create wallet");
+      }
+    } catch (error) {
+      console.error("Wallet creation error:", error);
+      Alert.alert(
+        "Error",
+        "An unexpected error occurred while creating the wallet",
+      );
+    }
+  }, [mnemonic, addWallet]);
+
   const steps = createWalletSteps(
     mnemonic,
     setCurrentStep,
@@ -59,6 +88,15 @@ export default function WalletSetup() {
     selectedWords,
     handleSelectWord,
   );
+
+  if (steps.length > 0) {
+    const lastStepIndex = steps.length - 1;
+    const lastStep = steps[lastStepIndex];
+    steps[lastStepIndex] = {
+      ...lastStep,
+      onButtonPress: finalizeWalletSetup,
+    };
+  }
 
   const handleBackPress = () => {
     if (currentStep === 0) {

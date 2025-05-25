@@ -1,15 +1,16 @@
 import Chip from "@/components/common/Chip";
 import SecurityWarning from "@/components/common/SecurityWarning";
+import { usePerformance } from "@/components/providers/PerformanceProvider";
 import AddressDisplay from "@/components/wallet/AddressDisplay";
 import WalletCard from "@/components/wallet/WalletCard";
-import WalletInfoDisplay from "@/components/wallet/WalletInfoDisplay";
-import { useWallet } from "@/hooks/useWallet";
+import { TWallet, useWallet } from "@/hooks/useWallet";
 import { authenticateUser, copyToClipboard } from "@/utils/authUtils";
 import { router } from "expo-router";
 import { Plus } from "lucide-react-native";
-import React, { useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
   ScrollView,
   StatusBar,
@@ -18,6 +19,16 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const LazyWalletInfoDisplay = lazy(
+  () => import("@/components/wallet/WalletInfoDisplay"),
+);
+
+const LazyLoadingPlaceholder = () => (
+  <View className="bg-light-main-container p-4 rounded-xl mb-4">
+    <ActivityIndicator size="small" color="#c71c4b" />
+  </View>
+);
 
 export default function Wallet() {
   const { width } = useWindowDimensions();
@@ -30,11 +41,12 @@ export default function Wallet() {
     setActiveWallet,
   } = useWallet();
   const [showWalletInfo, setShowWalletInfo] = useState(false);
+  const { isReady, deferredTask } = usePerformance();
 
-  const handleToggleWalletInfo = async () => {
+  const handleToggleWalletInfo = useCallback(async () => {
     if (!showWalletInfo) {
-      const isAuthenticated = await authenticateUser(
-        "Authenticate to view wallet information",
+      const isAuthenticated = await deferredTask(() =>
+        authenticateUser("Authenticate to view wallet information"),
       );
       if (isAuthenticated) {
         setShowWalletInfo(true);
@@ -42,7 +54,41 @@ export default function Wallet() {
     } else {
       setShowWalletInfo(false);
     }
-  };
+  }, [showWalletInfo, deferredTask]);
+
+  useEffect(() => {
+    if (isReady && !isLoading && wallets.length === 0) {
+      router.replace("/login");
+    }
+  }, [isLoading, wallets, isReady, router]);
+
+  const renderWalletItem = useCallback(
+    ({ item, index }: { item: TWallet; index: number }) => (
+      <WalletCard
+        wallet={item}
+        isActive={index === activeWalletIndex}
+        onPress={() => {
+          setActiveWallet(index);
+          setShowWalletInfo(false);
+        }}
+      />
+    ),
+    [activeWalletIndex, setActiveWallet],
+  );
+
+  const getItemLayout = useCallback(
+    (data: any, index: number) => ({
+      length: 60,
+      offset: 60 * index,
+      index,
+    }),
+    [],
+  );
+
+  const keyExtractor = useCallback(
+    (item: TWallet, index: number) => item.address || `wallet-${index}`,
+    [],
+  );
 
   if (isLoading) {
     return (
@@ -54,6 +100,10 @@ export default function Wallet() {
         <Text className="text-light-matte-black mt-4">Loading wallets...</Text>
       </SafeAreaView>
     );
+  }
+
+  if (wallets.length === 0) {
+    return null;
   }
 
   return (
@@ -76,31 +126,32 @@ export default function Wallet() {
               Your Wallets
             </Text>
 
-            {wallets.map((wallet, index) => (
-              <WalletCard
-                key={index}
-                wallet={wallet}
-                isActive={index === activeWalletIndex}
-                onPress={() => {
-                  setActiveWallet(index);
-                  setShowWalletInfo(false);
-                }}
-              />
-            ))}
-
-            <Pressable
-              className="flex-row items-center justify-center p-3 border border-dashed border-light-matte-black/20 rounded-xl mt-2"
-              onPress={() => router.push("/login")}
-            >
-              <Plus
-                size={isSmallScreen ? 16 : 18}
-                color="#c71c4b"
-                className="mr-2"
-              />
-              <Text className="text-light-primary-red font-medium">
-                Add New Wallet
-              </Text>
-            </Pressable>
+            <FlatList
+              data={wallets}
+              renderItem={renderWalletItem}
+              keyExtractor={keyExtractor}
+              getItemLayout={getItemLayout}
+              removeClippedSubviews={true}
+              initialNumToRender={4}
+              maxToRenderPerBatch={4}
+              windowSize={5}
+              scrollEnabled={false}
+              ListFooterComponent={
+                <Pressable
+                  className="flex-row items-center justify-center p-3 border border-dashed border-light-matte-black/20 rounded-xl mt-2"
+                  onPress={() => router.push("/login")}
+                >
+                  <Plus
+                    size={isSmallScreen ? 16 : 18}
+                    color="#c71c4b"
+                    className="mr-2"
+                  />
+                  <Text className="text-light-primary-red font-medium">
+                    Add New Wallet
+                  </Text>
+                </Pressable>
+              }
+            />
           </View>
 
           <View className="bg-light rounded-xl p-4 mb-4 shadow-sm">
@@ -116,12 +167,14 @@ export default function Wallet() {
               onCopy={() => copyToClipboard(activeWallet.address, "Address")}
             />
 
-            <WalletInfoDisplay
-              wallet={activeWallet}
-              showWalletInfo={showWalletInfo}
-              onToggleVisibility={handleToggleWalletInfo}
-              onCopy={copyToClipboard}
-            />
+            <Suspense fallback={<LazyLoadingPlaceholder />}>
+              <LazyWalletInfoDisplay
+                wallet={activeWallet}
+                showWalletInfo={showWalletInfo}
+                onToggleVisibility={handleToggleWalletInfo}
+                onCopy={copyToClipboard}
+              />
+            </Suspense>
 
             {activeWallet.type !== "Social" && <SecurityWarning />}
           </View>
