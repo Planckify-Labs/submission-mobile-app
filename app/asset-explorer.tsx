@@ -1,6 +1,7 @@
 import { SAMPLE_ASSETS } from "@/constants/dummyData/assets";
 import { useWallet } from "@/hooks/useWallet";
-import React, { useCallback, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, StatusBar, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -18,10 +19,12 @@ import UserAssetItem from "@/components/asset-explorer/UserAssetItem";
 import WalletInfo from "@/components/asset-explorer/WalletInfo";
 import { TCryptoAsset } from "@/constants/types/assetTypes";
 import {
+  adaptAssetForNetwork,
   addAsset,
   addCustomToken,
   addMultipleAssets,
   filterAssets,
+  getNetworkSpecificAssets,
   isAssetAdded,
   removeAsset,
 } from "@/utils/assetUtils";
@@ -46,7 +49,7 @@ type TabType = "your-assets" | "available-assets";
 
 export default function AssetExplorer() {
   const [userAssets, setUserAssets] = useState<TCryptoAsset[]>([]);
-  const [availableAssets] = useState<TCryptoAsset[]>(SAMPLE_ASSETS);
+  const [availableAssets, setAvailableAssets] = useState<TCryptoAsset[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<TCryptoAsset[]>([]);
   const [currentAsset, setCurrentAsset] = useState<TCryptoAsset | null>(null);
 
@@ -68,6 +71,55 @@ export default function AssetExplorer() {
 
   const { wallets, activeWalletIndex } = useWallet();
   const activeWallet = wallets[activeWalletIndex];
+
+  useEffect(() => {
+    if (activeWallet?.address) {
+      loadUserAssets();
+    }
+  }, [activeWallet?.address, activeNetwork]);
+
+  useEffect(() => {
+    if (activeWallet?.address) {
+      saveUserAssets();
+    }
+  }, [userAssets, activeWallet?.address, activeNetwork]);
+
+  const getStorageKey = useCallback(() => {
+    return `wallet_assets_${activeWallet?.address}_${activeNetwork}`;
+  }, [activeWallet?.address, activeNetwork]);
+
+  const loadUserAssets = useCallback(async () => {
+    try {
+      const storageKey = getStorageKey();
+      const storedAssets = await AsyncStorage.getItem(storageKey);
+
+      if (storedAssets) {
+        setUserAssets(JSON.parse(storedAssets));
+      } else {
+        setUserAssets([]);
+      }
+    } catch (error) {
+      console.error("Failed to load assets:", error);
+    }
+  }, [getStorageKey]);
+
+  const saveUserAssets = useCallback(async () => {
+    try {
+      const storageKey = getStorageKey();
+      await AsyncStorage.setItem(storageKey, JSON.stringify(userAssets));
+    } catch (error) {
+      console.error("Failed to save assets:", error);
+    }
+  }, [userAssets, getStorageKey]);
+
+  useEffect(() => {
+    const networkAssets = getNetworkSpecificAssets(
+      SAMPLE_ASSETS,
+      activeNetwork,
+      ALL_NETWORKS,
+    );
+    setAvailableAssets(networkAssets);
+  }, [activeNetwork]);
 
   const filteredAvailableAssets = filterAssets(availableAssets, searchQuery);
   const filteredUserAssets = filterAssets(userAssets, searchQuery);
@@ -194,29 +246,32 @@ export default function AssetExplorer() {
 
   const renderAvailableAssetItem = useCallback(
     ({ item }: { item: TCryptoAsset }) => {
-      const isAdded = isAssetAdded(userAssets, item.id);
-      const isSelected = isAssetSelected(selectedAssets, item.id);
+      const adaptedItem = adaptAssetForNetwork(
+        item,
+        activeNetwork,
+        ALL_NETWORKS,
+      );
+      const isAdded = isAssetAdded(userAssets, adaptedItem.id);
+      const isSelected = isAssetSelected(selectedAssets, adaptedItem.id);
 
       return (
         <AssetItem
-          item={item}
+          item={adaptedItem}
           isAdded={isAdded}
           isSelected={isSelected}
           selectionMode={selectionMode}
           onPress={() => {
             if (selectionMode) {
-              handleToggleAssetSelection(item);
-            } else if (!isAdded) {
-              setCurrentAsset(item);
+              handleToggleAssetSelection(adaptedItem);
+            } else {
+              setCurrentAsset(adaptedItem);
               setWalletSelectorVisible(true);
             }
           }}
-          onLongPress={() => handleAssetLongPress(item)}
+          onLongPress={() => handleAssetLongPress(adaptedItem)}
           onAddPress={() => {
-            if (!isAdded) {
-              setCurrentAsset(item);
-              setWalletSelectorVisible(true);
-            }
+            setCurrentAsset(adaptedItem);
+            setWalletSelectorVisible(true);
           }}
         />
       );
@@ -227,6 +282,7 @@ export default function AssetExplorer() {
       selectionMode,
       handleToggleAssetSelection,
       handleAssetLongPress,
+      activeNetwork,
     ],
   );
 
@@ -318,6 +374,7 @@ export default function AssetExplorer() {
         asset={currentAsset}
         assets={selectionMode ? selectedAssets : undefined}
         wallets={wallets}
+        activeNetwork={activeNetwork}
         onClose={() => {
           setWalletSelectorVisible(false);
           setCurrentAsset(null);

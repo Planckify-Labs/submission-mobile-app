@@ -9,6 +9,8 @@ export type TCryptoAsset = {
   address?: string;
   isCustom?: boolean;
   contractAddress?: string;
+  networkSpecific?: boolean;
+  supportedNetworks?: string[];
 };
 
 export type TExtendedCryptoAsset = TCryptoAsset & {
@@ -50,6 +52,7 @@ export type TAssetWalletSelectorModalProps = {
   wallets: import("./walletTypes").TWallet[];
   asset: TCryptoAsset | null;
   assets?: TCryptoAsset[];
+  activeNetwork: string;
   onConfirm: (
     walletIndices: number[],
     asset: TCryptoAsset | null,

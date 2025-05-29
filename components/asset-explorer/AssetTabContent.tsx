@@ -11,8 +11,6 @@ const AssetListContent = ({
   setActiveTab,
   renderUserAssetItem,
   renderAvailableAssetItem,
-  selectionMode,
-  isAssetAdded,
 }: AssetListContentProps) => {
   if (activeTab === "your-assets") {
     return (
@@ -54,9 +52,7 @@ const AssetListContent = ({
   } else {
     return (
       <FlatList
-        data={filteredAvailableAssets.filter(
-          (asset) => !selectionMode || !isAssetAdded(asset.id),
-        )}
+        data={filteredAvailableAssets}
         renderItem={renderAvailableAssetItem}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}

@@ -2,6 +2,8 @@ import {
   TCryptoAsset,
   TExtendedCryptoAsset,
 } from "@/constants/types/assetTypes";
+import { TNetwork } from "@/constants/types/networkTypes";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert } from "react-native";
 
 export function isAssetAdded(
@@ -96,4 +98,91 @@ export function filterAssets(
       asset.name.toLowerCase().includes(query) ||
       asset.symbol.toLowerCase().includes(query),
   );
+}
+
+// New function to load assets for a specific wallet and network
+export async function loadWalletAssets(
+  walletAddress: string,
+  networkId: string,
+): Promise<TCryptoAsset[]> {
+  try {
+    const storageKey = `wallet_assets_${walletAddress}_${networkId}`;
+    const storedAssets = await AsyncStorage.getItem(storageKey);
+
+    if (storedAssets) {
+      return JSON.parse(storedAssets);
+    }
+    return [];
+  } catch (error) {
+    console.error("Failed to load wallet assets:", error);
+    return [];
+  }
+}
+
+// New function to save assets for a specific wallet and network
+export async function saveWalletAssets(
+  walletAddress: string,
+  networkId: string,
+  assets: TCryptoAsset[],
+): Promise<boolean> {
+  try {
+    const storageKey = `wallet_assets_${walletAddress}_${networkId}`;
+    await AsyncStorage.setItem(storageKey, JSON.stringify(assets));
+    return true;
+  } catch (error) {
+    console.error("Failed to save wallet assets:", error);
+    return false;
+  }
+}
+
+// Function to get network-specific assets
+export function getNetworkSpecificAssets(
+  allAssets: TCryptoAsset[],
+  networkId: string,
+  networks: TNetwork[],
+): TCryptoAsset[] {
+  const network = networks.find((n) => n.id === networkId);
+  if (!network) return allAssets;
+
+  const networkTokenMap: Record<string, string[]> = {
+    ethereum: ["ETH", "USDT", "USDC", "DAI", "LINK", "UNI", "AAVE"],
+    polygon: ["MATIC", "USDT", "USDC", "DAI", "AAVE"],
+    binance: ["BNB", "USDT", "USDC", "CAKE", "BUSD"],
+    solana: ["SOL", "USDT", "USDC"],
+    avalanche: ["AVAX", "USDT", "USDC", "DAI"],
+    arbitrum: ["ETH", "ARB", "USDT", "USDC", "DAI"],
+    optimism: ["ETH", "OP", "USDT", "USDC", "DAI"],
+    base: ["ETH", "USDC", "DAI"],
+    fantom: ["FTM", "USDT", "USDC", "DAI"],
+    cronos: ["CRO", "USDT", "USDC"],
+  };
+
+  const relevantTokens = networkTokenMap[networkId] || [];
+
+  if (relevantTokens.length === 0) {
+    return allAssets;
+  }
+
+  return allAssets.filter((asset) => relevantTokens.includes(asset.symbol));
+}
+
+export function adaptAssetForNetwork(
+  asset: TCryptoAsset,
+  networkId: string,
+  networks: TNetwork[],
+): TCryptoAsset {
+  const network = networks.find((n) => n.id === networkId);
+  if (!network) return asset;
+
+  if (
+    ["arbitrum", "optimism", "base"].includes(networkId) &&
+    asset.symbol !== "ETH"
+  ) {
+    return {
+      ...asset,
+      name: `${network.name} ${asset.name}`,
+    };
+  }
+
+  return asset;
 }

@@ -1,5 +1,6 @@
+import { useWallet } from "@/hooks/useWallet";
 import { MoveDiagonal } from "lucide-react-native";
-import React from "react";
+import React, { useEffect } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 type Network = {
@@ -23,6 +24,33 @@ const NetworkRadioButtons = ({
   selectNetwork,
   openNetworkModal,
 }: NetworkButtonsProps) => {
+  const { activeChain } = useWallet();
+
+  const getNetworkIdFromChainId = (chainId: number): string => {
+    const chainToNetworkMap: Record<number, string> = {
+      1: "ethereum",
+      137: "polygon",
+      56: "binance",
+      43114: "avalanche",
+      42161: "arbitrum",
+      10: "optimism",
+      8453: "base",
+      250: "fantom",
+      25: "cronos",
+    };
+
+    return chainToNetworkMap[chainId] || "ethereum";
+  };
+
+  useEffect(() => {
+    if (activeChain?.chain?.id) {
+      const networkId = getNetworkIdFromChainId(activeChain.chain.id);
+      if (networks.some((network) => network.id === networkId)) {
+        selectNetwork(networkId);
+      }
+    }
+  }, [activeChain?.chain?.id]);
+
   return (
     <View className="absolute bottom-4 left-2 right-2 flex-row justify-center bg-light rounded-full overflow-hidden border-4 border-light-matte-black">
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
