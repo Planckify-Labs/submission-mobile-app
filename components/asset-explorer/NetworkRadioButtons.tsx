@@ -17,7 +17,7 @@ type NetworkButtonsProps = {
   openNetworkModal: () => void;
 };
 
-const NetworkButtons = ({
+const NetworkRadioButtons = ({
   networks,
   activeNetwork,
   selectNetwork,
@@ -68,4 +68,4 @@ const NetworkButtons = ({
   );
 };
 
-export default NetworkButtons;
+export default NetworkRadioButtons;

@@ -2,7 +2,7 @@ import { TAssetCategoryTabsProps } from "@/constants/types/assetTypes";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 
-const AssetCategoryTabs = ({
+const MyAssetsAndExploreAssetTabs = ({
   activeTab,
   setActiveTab,
   selectionMode,
@@ -24,7 +24,7 @@ const AssetCategoryTabs = ({
               : "text-light-matte-black"
           }`}
         >
-          Your Assets
+          My Assets
         </Text>
       </Pressable>
       <Pressable
@@ -40,11 +40,11 @@ const AssetCategoryTabs = ({
               : "text-light-matte-black"
           }`}
         >
-          Available Assets
+          Explore Assets
         </Text>
       </Pressable>
     </View>
   );
 };
 
-export default AssetCategoryTabs;
+export default MyAssetsAndExploreAssetTabs;

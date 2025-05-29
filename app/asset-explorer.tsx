@@ -6,11 +6,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import AddTokenForm from "@/components/asset-explorer/AddTokenForm";
 import AssetExplorerHeader from "@/components/asset-explorer/AssetExplorerHeader";
-import AssetExplorerTabs from "@/components/asset-explorer/AssetExplorerTabs";
 import AssetItem from "@/components/asset-explorer/AssetItem";
 import TabContent from "@/components/asset-explorer/AssetTabContent";
 import AssetWalletSelectorModal from "@/components/asset-explorer/AssetWalletSelectorModal";
-import NetworkButtons from "@/components/asset-explorer/NetworkButtons";
+import AssetExplorerTabs from "@/components/asset-explorer/MyAssetsAndExploreAssetTabs";
+import NetworkRadioButtons from "@/components/asset-explorer/NetworkRadioButtons";
 import NetworkSelectorModal from "@/components/asset-explorer/NetworkSelectorModal";
 import SearchBar from "@/components/asset-explorer/SearchBar";
 import UserAssetItem from "@/components/asset-explorer/UserAssetItem";
@@ -290,7 +290,7 @@ export default function AssetExplorer() {
           />
 
           {!selectionMode && (
-            <NetworkButtons
+            <NetworkRadioButtons
               networks={networks}
               activeNetwork={activeNetwork}
               selectNetwork={handleSelectNetwork}
