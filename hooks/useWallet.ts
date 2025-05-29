@@ -128,6 +128,20 @@ export function useWallet() {
         const wallet = createWalletFromParams(walletData);
         if (!wallet) return false;
 
+        const walletExists = wallets.some(
+          (existingWallet) =>
+            existingWallet.address.toLowerCase() ===
+            wallet.address.toLowerCase(),
+        );
+
+        if (walletExists) {
+          Alert.alert(
+            "Duplicate Wallet",
+            "This wallet has already been imported.",
+          );
+          return false;
+        }
+
         const updatedWallets = [...wallets, wallet];
         const success = await saveWallets(updatedWallets);
         if (success) {
