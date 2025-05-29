@@ -9,13 +9,30 @@ import {
 
 const accountCache: Record<string, HDAccount | PrivateKeyAccount> = {};
 
+let cachedWallets: TWallet[] | null = null;
+
+const WALLET_INDEX_KEY = "wallet_index";
+const WALLET_PREFIX = "wallet_";
+
 export async function loadWalletsFromStorage(): Promise<TWallet[]> {
   try {
-    const walletsData = await SecureStore.getItemAsync("user_wallets");
-    if (!walletsData) return [];
+    if (cachedWallets) return [...cachedWallets];
 
-    const parsedWallets = JSON.parse(walletsData);
-    return parsedWallets;
+    const indexListData = await SecureStore.getItemAsync(WALLET_INDEX_KEY);
+    if (!indexListData) return [];
+
+    const walletAddresses = JSON.parse(indexListData) as string[];
+
+    const walletPromises = walletAddresses.map(async (address) => {
+      const walletKey = `${WALLET_PREFIX}${address}`;
+      const walletData = await SecureStore.getItemAsync(walletKey);
+      return walletData ? JSON.parse(walletData) : null;
+    });
+
+    const results = await Promise.all(walletPromises);
+    cachedWallets = results.filter(Boolean) as TWallet[];
+
+    return [...cachedWallets];
   } catch (error) {
     console.error("Failed to load wallets:", error);
     return [];
@@ -26,21 +43,33 @@ export async function saveWalletsToStorage(
   wallets: TWallet[],
 ): Promise<boolean> {
   try {
-    const walletsForStorage = wallets.map((wallet) => {
+    cachedWallets = [...wallets];
+
+    const walletAddresses = wallets.map((wallet) => wallet.address);
+    await SecureStore.setItemAsync(
+      WALLET_INDEX_KEY,
+      JSON.stringify(walletAddresses),
+    );
+
+    const savePromises = wallets.map(async (wallet) => {
       const { account, ...walletWithoutAccount } = wallet;
-      return {
+      const walletForStorage = {
         ...walletWithoutAccount,
         account: { address: wallet.address },
       };
+
+      const walletKey = `${WALLET_PREFIX}${wallet.address}`;
+      return SecureStore.setItemAsync(
+        walletKey,
+        JSON.stringify(walletForStorage),
+      );
     });
 
-    await SecureStore.setItemAsync(
-      "user_wallets",
-      JSON.stringify(walletsForStorage),
-    );
+    await Promise.all(savePromises);
     return true;
   } catch (error) {
     console.error("Failed to save wallets:", error);
+    cachedWallets = null;
     return false;
   }
 }
@@ -72,11 +101,12 @@ export function getAccountForWallet(
   }
 }
 
-/**
- * Clear account cache for testing or memory management
- */
 export function clearAccountCache(): void {
   Object.keys(accountCache).forEach((key) => {
     delete accountCache[key];
   });
+}
+
+export function clearWalletCache() {
+  cachedWallets = null;
 }
