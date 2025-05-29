@@ -100,7 +100,10 @@ const NetworkSelectorModal = ({
                   onChangeText={handleSearchChange}
                 />
 
-                <ScrollView className="max-h-[500px]">
+                <ScrollView
+                  className="max-h-[500px]"
+                  showsVerticalScrollIndicator={false}
+                >
                   {networks.map((item) => (
                     <View
                       key={item.id}
