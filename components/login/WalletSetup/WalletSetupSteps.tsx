@@ -1,68 +1,110 @@
+import { TWalletSetupStepsProps } from "@/constants/types/walletTypes";
 import { ArrowLeft } from "lucide-react-native";
-import React from "react";
+import React, { memo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
-type WalletSetupStep = {
-  title: string;
-  content: React.ReactNode;
-  buttonText: string;
-  onButtonPress: () => void;
-};
-
-type WalletSetupStepsProps = {
-  currentStep: number;
-  steps: WalletSetupStep[];
-  onBackPress: () => void;
-};
-
-export default function WalletSetupSteps({
+const WalletSetupSteps = memo(function WalletSetupSteps({
   currentStep,
   steps,
   onBackPress,
-}: WalletSetupStepsProps) {
-  const currentStepData = steps[currentStep];
+  disableBackButton = false,
+}: TWalletSetupStepsProps) {
+  if (steps.length === 0) {
+    return null;
+  }
+
+  const currentStepContent = steps[currentStep];
 
   return (
     <View className="flex-1">
-      <ScrollView 
+      <ScrollView
         horizontal={false}
-        showsVerticalScrollIndicator={false} 
-        className="flex-1 p-6">
-        <View className="flex-row gap-2 mb-6">
-          {steps.map((_, index) => (
-            <View
-              key={index}
-              className={`h-1 flex-1 ${
-                index <= currentStep ? "bg-light-primary-red" : "bg-gray-300"
-              } rounded-full`}
-            />
-          ))}
-        </View>
+        showsVerticalScrollIndicator={false}
+        className="flex-1 p-6"
+      >
+        <StepProgressIndicator
+          totalStepCount={steps.length}
+          activeStepIndex={currentStep}
+        />
 
-        <Pressable onPress={onBackPress} className="mb-6">
-          <ArrowLeft color="#c71c4b" size={24} />
-        </Pressable>
+        <NavigationBackButton
+          onPress={onBackPress}
+          isDisabled={disableBackButton}
+        />
 
         <View className="flex-1">
           <Text className="text-light-matte-black text-3xl font-bold mb-4">
-            {currentStepData.title}
+            {currentStepContent.title}
           </Text>
 
-          {currentStepData.content}
+          {currentStepContent.content}
         </View>
       </ScrollView>
-      
-      <View className="px-6 pb-6">
-        <Pressable
-          className="bg-light-primary-red py-4 rounded-full items-center shadow-sm"
-          onPress={currentStepData.onButtonPress}
-        >
-          <Text className="text-light font-bold text-lg">
-            {currentStepData.buttonText}
-          </Text>
-        </Pressable>
-      </View>
+
+      <StepActionButton
+        buttonText={currentStepContent.buttonText}
+        onPress={currentStepContent.onButtonPress}
+        isDisabled={disableBackButton}
+      />
     </View>
   );
-}
+});
 
+const StepProgressIndicator = ({
+  totalStepCount,
+  activeStepIndex,
+}: {
+  totalStepCount: number;
+  activeStepIndex: number;
+}) => (
+  <View className="flex-row gap-2 mb-6">
+    {Array.from({ length: totalStepCount }).map((_, stepIndex) => (
+      <View
+        key={stepIndex}
+        className={`h-1 flex-1 ${
+          stepIndex <= activeStepIndex ? "bg-light-primary-red" : "bg-gray-300"
+        } rounded-full`}
+      />
+    ))}
+  </View>
+);
+
+const NavigationBackButton = ({
+  onPress,
+  isDisabled,
+}: {
+  onPress: () => void;
+  isDisabled: boolean;
+}) => (
+  <Pressable
+    onPress={onPress}
+    className={`mb-6 ${isDisabled ? "opacity-30" : ""}`}
+    disabled={isDisabled}
+  >
+    <ArrowLeft color="#c71c4b" size={24} />
+  </Pressable>
+);
+
+const StepActionButton = ({
+  buttonText,
+  onPress,
+  isDisabled,
+}: {
+  buttonText: string;
+  onPress: () => void;
+  isDisabled: boolean;
+}) => (
+  <View className="p-6 bg-light-main-container">
+    <Pressable
+      onPress={onPress}
+      disabled={isDisabled}
+      className={`bg-light-primary-red py-4 rounded-full items-center ${
+        isDisabled ? "opacity-70" : ""
+      }`}
+    >
+      <Text className="text-light font-bold text-lg">{buttonText}</Text>
+    </Pressable>
+  </View>
+);
+
+export default WalletSetupSteps;

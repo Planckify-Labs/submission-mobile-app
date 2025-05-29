@@ -17,7 +17,7 @@ export interface TWallet {
   };
 }
 
-export interface WalletCreationParams {
+export interface TWalletCreationParams {
   source: "social" | "SeedPhrase" | "PrivateKey";
   privateKey?: string;
   seedPhrase?: string;
@@ -26,3 +26,27 @@ export interface WalletCreationParams {
   socialAccount?: { email: string; name: string };
   account?: any;
 }
+
+export const WALLET_SETUP_PROGRESS_KEY = "walletSetupProgress";
+
+export type TSelectedWords = { [key: number]: string };
+export type TWordOptions = { [key: number]: string[] };
+export type TSetupProgress = {
+  step: number;
+  mnemonic: string[];
+  selectedWords: TSelectedWords;
+};
+
+export type TWalletSetupStep = {
+  title: string;
+  content: React.ReactNode;
+  buttonText: string;
+  onButtonPress: () => void;
+};
+
+export type TWalletSetupStepsProps = {
+  currentStep: number;
+  steps: TWalletSetupStep[];
+  onBackPress: () => void;
+  disableBackButton?: boolean;
+};
