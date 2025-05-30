@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TakumiPay - Your Crypto, Your Digital Goods",
-    "slug": "takumipay",
+    "slug": "takumipay-mobile-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/takumipay-logo.png",
