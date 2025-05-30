@@ -208,7 +208,10 @@ export default function BalanceSection() {
               </Text>
             </Pressable>
 
-            <Pressable className="flex-1 min-w-[100px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center">
+            <Pressable
+              onPress={() => router.push("/withdraw")}
+              className="flex-1 min-w-[100px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center"
+            >
               <View className="bg-light-primary-red/10 rounded-full p-1.5 mr-2">
                 <ArrowBigDown size={20} color="#c71c4b" />
               </View>
