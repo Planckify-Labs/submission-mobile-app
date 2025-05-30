@@ -14,6 +14,7 @@ type Network = {
 type NetworkButtonsProps = {
   networks: Network[];
   activeNetwork: string;
+  activeTab: "your-assets" | "available-assets";
   selectNetwork: (networkId: string) => void;
   openNetworkModal: () => void;
 };
@@ -21,10 +22,24 @@ type NetworkButtonsProps = {
 const NetworkRadioButtons = ({
   networks,
   activeNetwork,
+  activeTab,
   selectNetwork,
   openNetworkModal,
 }: NetworkButtonsProps) => {
   const { activeChain } = useWallet();
+  
+  // Get accent color based on active tab
+  const getAccentColor = () => {
+    return activeTab === "your-assets" ? "bg-light-primary-red" : "bg-light-matte-black";
+  };
+  
+  const getBorderColor = () => {
+    return activeTab === "your-assets" ? "border-light-primary-red" : "border-light-matte-black";
+  };
+  
+  const getAccentTextColor = () => {
+    return "text-white";
+  };
 
   const getNetworkIdFromChainId = (chainId: number): string => {
     const chainToNetworkMap: Record<number, string> = {
@@ -51,8 +66,12 @@ const NetworkRadioButtons = ({
     }
   }, [activeChain?.chain?.id]);
 
+  const accentColor = getAccentColor();
+  const borderColor = getBorderColor();
+  const accentTextColor = getAccentTextColor();
+
   return (
-    <View className="absolute bottom-4 left-2 right-2 flex-row justify-center bg-light rounded-full overflow-hidden border-4 border-light-matte-black">
+    <View className={`absolute bottom-4 left-2 right-2 flex-row justify-center bg-light rounded-full overflow-hidden border-4 ${borderColor}`}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View className="flex-row p-1 pr-10 gap-2">
           {networks.map((network) => (
@@ -61,7 +80,7 @@ const NetworkRadioButtons = ({
               onPress={() => selectNetwork(network.id)}
               className={`px-3 py-2 rounded-full mx-1- flex-row items-center ${
                 activeNetwork === network.id
-                  ? "bg-light-matte-black"
+                  ? accentColor
                   : "bg-light-main-container"
               }`}
             >
@@ -69,13 +88,15 @@ const NetworkRadioButtons = ({
                 className={`w-3 h-3 rounded-full mr-2 ${
                   activeNetwork === network.id
                     ? "bg-white"
-                    : "bg-light-matte-black"
+                    : activeTab === "your-assets" 
+                      ? "bg-light-primary-red/70" 
+                      : "bg-light-matte-black/70"
                 }`}
               />
               <Text
                 className={`${
                   activeNetwork === network.id
-                    ? "text-white"
+                    ? accentTextColor
                     : "text-light-matte-black"
                 } font-medium text-xs`}
               >
@@ -86,7 +107,7 @@ const NetworkRadioButtons = ({
         </View>
       </ScrollView>
       <Pressable
-        className="absolute bottom-[1px] top-[1px] right-[1px] aspect-square bg-light-matte-black rounded-full items-center justify-center"
+        className={`absolute bottom-[1px] top-[1px] right-[1px] aspect-square ${accentColor} rounded-full items-center justify-center`}
         onPress={() => openNetworkModal()}
         accessibilityLabel="Open network selection"
       >

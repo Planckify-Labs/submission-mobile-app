@@ -29,7 +29,7 @@ const MyAssetsAndExploreAssetTabs = ({
       </Pressable>
       <Pressable
         className={`flex-1 py-3 items-center ${
-          activeTab === "available-assets" ? "bg-light-primary-red" : "bg-light"
+          activeTab === "available-assets" ? "bg-light-matte-black" : "bg-light"
         }`}
         onPress={() => setActiveTab("available-assets")}
       >

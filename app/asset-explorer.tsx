@@ -349,6 +349,7 @@ export default function AssetExplorer() {
             <NetworkRadioButtons
               networks={networks}
               activeNetwork={activeNetwork}
+              activeTab={activeTab}
               selectNetwork={handleSelectNetwork}
               openNetworkModal={openNetworkModal}
             />
