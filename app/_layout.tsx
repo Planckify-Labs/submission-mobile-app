@@ -1,17 +1,18 @@
 import { PerformanceProvider } from "@/components/providers/PerformanceProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { SplashScreen, Stack, router } from "expo-router";
+import { useEffect } from "react";
 import { LogBox } from "react-native";
 import "../global.css";
 import "../pollyfills";
 
-// Ignore specific warnings that might affect performance
+SplashScreen.preventAutoHideAsync();
+
 LogBox.ignoreLogs([
   "VirtualizedLists should never be nested",
   "Sending `onAnimatedValueUpdate` with no listeners registered",
 ]);
 
-// Configure React Query with performance in mind
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -24,10 +25,38 @@ export const queryClient = new QueryClient({
   },
 });
 
+function InitializeApp() {
+  const { wallets, isLoading, loadWallets } =
+    require("@/hooks/useWallet").useWallet();
+
+  useEffect(() => {
+    async function prepare() {
+      try {
+        await loadWallets();
+
+        if (!isLoading && wallets.length === 0) {
+          router.replace("/login");
+        }
+      } catch (e) {
+        console.warn("Error loading wallet data:", e);
+      } finally {
+        setTimeout(() => {
+          SplashScreen.hideAsync();
+        }, 100);
+      }
+    }
+
+    prepare();
+  }, [isLoading, wallets.length, loadWallets]);
+
+  return null;
+}
+
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <PerformanceProvider>
+        <InitializeApp />
         <Stack
           screenOptions={{
             headerShown: false,
