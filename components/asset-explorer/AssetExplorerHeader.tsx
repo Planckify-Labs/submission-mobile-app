@@ -18,7 +18,7 @@ const AssetExplorerHeader = ({
   return (
     <View className="flex-row justify-between items-center mb-4">
       <Text className="text-2xl font-bold text-light-matte-black">
-        {selectionMode ? "Select Assets" : "Assets"}
+        {selectionMode ? "Select Assets" : "Asset Explorer"}
       </Text>
 
       {selectionMode && (
