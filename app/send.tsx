@@ -3,7 +3,7 @@ import ChainSelector from "@/components/wallet/ChainSelector";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useWallet } from "@/hooks/useWallet";
 import * as Clipboard from "expo-clipboard";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import {
   ArrowLeft,
   ChevronDown,
@@ -50,6 +50,8 @@ export default function SendScreen() {
     "Preparing transaction...",
   );
 
+  const { recipientAddress } = useLocalSearchParams();
+
   const spinValue = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -91,7 +93,11 @@ export default function SendScreen() {
 
   useEffect(() => {
     fetchBalance();
-  }, [fetchBalance]);
+
+    if (recipientAddress) {
+      setRecipient(recipientAddress as string);
+    }
+  }, [fetchBalance, recipientAddress]);
 
   const handlePasteAddress = async () => {
     const text = await Clipboard.getStringAsync();

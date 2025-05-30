@@ -30,7 +30,7 @@
     "plugins": [
       "expo-router",
       [
-        "expo-splash-screen",
+        "expo-camera",
         {
           "image": "./assets/images/takumipay-logo.png",
           "imageWidth": 100,
