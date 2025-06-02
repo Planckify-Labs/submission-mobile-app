@@ -196,7 +196,7 @@ export default function BalanceSection() {
 
         <View className="flex-row gap-4 flex-wrap">
           <View className="flex-1 min-w-[100px] gap-3 flex-row flex-wrap">
-            <Pressable className="flex-1 min-w-[120px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center">
+            <Pressable className="hidden flex-1 min-w-[120px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center">
               <View className="bg-light-primary-red/10 rounded-full p-1.5 mr-2">
                 <PlusIcon size={20} color="#c71c4b" />
               </View>
