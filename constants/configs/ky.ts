@@ -24,10 +24,6 @@ export const api = ky.create({
   },
   retry: {
     limit: 2,
-    methods: ["get", "post", "put", "patch", "delete"],
-  },
-  fetch: (input, init) => {
-    const { signal, ...restInit } = init || {};
-    return fetch(input, restInit);
+    methods: ["get"],
   },
 });
