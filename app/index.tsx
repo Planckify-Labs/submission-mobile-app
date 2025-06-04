@@ -2,6 +2,7 @@ import ActivitySection from "@/components/home/ActivitySection";
 import BalanceSection from "@/components/home/BalanceSection";
 import Header from "@/components/home/Header";
 import PaymentSection from "@/components/home/PaymentSection";
+import { BlurView } from "expo-blur";
 import { router } from "expo-router";
 import { QrCode } from "lucide-react-native";
 import React from "react";
@@ -33,13 +34,19 @@ export default function Home() {
           </View>
         </ScrollView>
         <View className="absolute bottom-2 justify-center items-center w-full">
-          <Pressable
-            onPress={() => router.push("/scan-to-pay")}
-            className="bg-light-primary-red px-10 py-4 rounded-full flex-row items-center gap-2"
+          <BlurView
+            intensity={20}
+            experimentalBlurMethod="dimezisBlurView"
+            className="overflow-hidden rounded-full"
           >
-            <QrCode size={22} color="#fff" />
-            <Text className="text-light font-bold text-2xl">Scan To Pay</Text>
-          </Pressable>
+            <Pressable
+              onPress={() => router.push("/scan-to-pay")}
+              className="bg-light-primary-red/40 px-10 py-4 rounded-full flex-row items-center gap-2"
+            >
+              <QrCode size={22} color="#fff" />
+              <Text className="text-light font-bold text-2xl">Scan To Pay</Text>
+            </Pressable>
+          </BlurView>
         </View>
       </SafeAreaView>
     </>
