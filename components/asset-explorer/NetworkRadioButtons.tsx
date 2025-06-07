@@ -1,7 +1,9 @@
+import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useWallet } from "@/hooks/useWallet";
 import { MoveDiagonal } from "lucide-react-native";
 import React, { useEffect } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import NetworkRadioButtonLoadingSkeletons from "./NetworkRadioButtonLoadingSkeletons";
 
 type Network = {
   id: string;
@@ -27,8 +29,20 @@ const NetworkRadioButtons = ({
   openNetworkModal,
 }: NetworkButtonsProps) => {
   const { activeChain } = useWallet();
+  const { data: blockchains, isLoading } = useBlockchains({ isActive: true });
 
-  // Get accent color based on active tab
+  const blockchainNetworks = React.useMemo(() => {
+    if (!blockchains) return [];
+
+    return blockchains.map((blockchain) => ({
+      id: blockchain.chainId.toString(),
+      name: blockchain.name,
+      symbol: "ETH",
+      color: "#627EEA",
+      isPinned: true,
+    }));
+  }, [blockchains]);
+
   const getAccentColor = () => {
     return activeTab === "my-assets"
       ? "bg-light-primary-red"
@@ -80,36 +94,42 @@ const NetworkRadioButtons = ({
     >
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View className="flex-row p-1 pr-10 gap-2">
-          {networks.map((network) => (
-            <Pressable
-              key={network.id}
-              onPress={() => selectNetwork(network.id)}
-              className={`px-3 py-2 rounded-full mx-1- flex-row items-center ${
-                activeNetwork === network.id
-                  ? accentColor
-                  : "bg-light-main-container"
-              }`}
-            >
-              <View
-                className={`w-3 h-3 rounded-full mr-2 ${
-                  activeNetwork === network.id
-                    ? "bg-white"
-                    : activeTab === "my-assets"
-                      ? "bg-light-primary-red/70"
-                      : "bg-light-matte-black/70"
-                }`}
-              />
-              <Text
-                className={`${
-                  activeNetwork === network.id
-                    ? accentTextColor
-                    : "text-light-matte-black"
-                } font-medium text-xs`}
-              >
-                {network.name}
-              </Text>
-            </Pressable>
-          ))}
+          {isLoading ? (
+            <NetworkRadioButtonLoadingSkeletons />
+          ) : (
+            (blockchainNetworks.length > 0 ? blockchainNetworks : networks).map(
+              (network) => (
+                <Pressable
+                  key={network.id}
+                  onPress={() => selectNetwork(network.id)}
+                  className={`px-3 py-2 rounded-full mx-1- flex-row items-center ${
+                    activeNetwork === network.id
+                      ? accentColor
+                      : "bg-light-main-container"
+                  }`}
+                >
+                  <View
+                    className={`w-3 h-3 rounded-full mr-2 ${
+                      activeNetwork === network.id
+                        ? "bg-white"
+                        : activeTab === "my-assets"
+                          ? "bg-light-primary-red/70"
+                          : "bg-light-matte-black/70"
+                    }`}
+                  />
+                  <Text
+                    className={`${
+                      activeNetwork === network.id
+                        ? accentTextColor
+                        : "text-light-matte-black"
+                    } font-medium text-xs`}
+                  >
+                    {network.name}
+                  </Text>
+                </Pressable>
+              ),
+            )
+          )}
         </View>
       </ScrollView>
       <Pressable
