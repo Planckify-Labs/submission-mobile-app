@@ -10,6 +10,19 @@ export interface TToken {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  isNativeCurrency: boolean;
 }
 
 export type TokenListResponse = TToken[];
+
+export interface TTokenSearchParams {
+  symbol?: string;
+  name?: string;
+  blockchainId?: string;
+  contractAddress?: string;
+  isStablecoin?: boolean;
+  isActive?: boolean;
+  take?: number;
+  cursor?: string;
+  isNativeCurrency?: boolean;
+}

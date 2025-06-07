@@ -1,5 +1,5 @@
 import { tokenApi } from "@/api/endpoints/tokens";
-import type { TToken } from "@/api/types/token";
+import type { TToken, TTokenSearchParams } from "@/api/types/token";
 import { useQuery } from "@tanstack/react-query";
 
 export const BLOCKCHAIN_IDS = {
@@ -8,15 +8,7 @@ export const BLOCKCHAIN_IDS = {
   POLYGON: "01JWN873AXDMDTY264P248RNEP",
 } as const;
 
-interface TUseTokensOptions {
-  blockchainId?: string;
-  symbol?: string;
-  name?: string;
-  isStablecoin?: boolean;
-  isActive?: boolean;
-}
-
-export const useTokens = (options?: TUseTokensOptions) => {
+export const useTokens = (options?: TTokenSearchParams) => {
   return useQuery<TToken[]>({
     queryKey: ["tokens", options],
     queryFn: async () => {

@@ -1,16 +1,5 @@
-import type { TokenListResponse } from "@/api/types/token";
+import type { TokenListResponse, TTokenSearchParams } from "@/api/types/token";
 import { api } from "@/constants/configs/ky";
-
-interface TTokenSearchParams {
-  symbol?: string;
-  name?: string;
-  blockchainId?: string;
-  contractAddress?: string;
-  isStablecoin?: boolean;
-  isActive?: boolean;
-  take?: number;
-  cursor?: string;
-}
 
 export const tokenApi = {
   getTokenList: async () => {
