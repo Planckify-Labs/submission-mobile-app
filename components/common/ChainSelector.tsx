@@ -18,7 +18,7 @@ import {
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;
 
-const ChainSelector = memo(function ChainSelector() {
+const ChainSelector = memo(() => {
   const { activeChain, changeActiveChain } = useWallet();
   const [modalVisible, setModalVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;

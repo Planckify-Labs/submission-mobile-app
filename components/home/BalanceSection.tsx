@@ -1,4 +1,4 @@
-import ChainSelector from "@/components/wallet/ChainSelector";
+import ChainSelector from "@/components/common/ChainSelector";
 import { useWallet } from "@/hooks/useWallet";
 import { copyToClipboard } from "@/utils/authUtils";
 import { useRouter } from "expo-router";

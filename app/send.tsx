@@ -1,5 +1,5 @@
+import ChainSelector from "@/components/common/ChainSelector";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
-import ChainSelector from "@/components/wallet/ChainSelector";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useWallet } from "@/hooks/useWallet";
 import * as Clipboard from "expo-clipboard";
