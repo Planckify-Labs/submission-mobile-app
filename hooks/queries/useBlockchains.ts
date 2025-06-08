@@ -41,3 +41,19 @@ export const useBlockchains = (options?: TUseBlockchainsOptions) => {
     gcTime: 30 * 60 * 1000,
   });
 };
+
+export const useNativeTokens = (options?: TUseBlockchainsOptions) => {
+  const { data: blockchains, isLoading, error } = useBlockchains(options);
+
+  const nativeTokens =
+    blockchains?.flatMap(
+      (blockchain) =>
+        blockchain.tokens?.filter((token) => token.isNativeCurrency) || [],
+    ) || [];
+
+  return {
+    data: nativeTokens,
+    isLoading,
+    error,
+  };
+};

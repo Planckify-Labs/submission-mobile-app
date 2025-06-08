@@ -1,3 +1,5 @@
+import { TToken } from "./token";
+
 export type TBlockchain = {
   id: string;
   name: string;
@@ -8,6 +10,7 @@ export type TBlockchain = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  tokens?: TToken[];
 };
 
 export interface TUseBlockchainsWithStorageOptions {
