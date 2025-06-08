@@ -14,7 +14,7 @@ export type TNetworkSelectorModalProps = {
   activeNetworkId?: string;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  onSelectNetwork?: (networkId: string) => void;
+  onSelectNetwork?: (networkId: string, blockchainId?: string) => void;
   toggleNetworkPin: (networkId: string) => void;
   closeModal: () => void;
   fadeAnim: Animated.Value;
