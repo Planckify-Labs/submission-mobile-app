@@ -1,5 +1,7 @@
 import { takumipayLogoBase64 } from "@/constants/takumipay";
+import { TWallet } from "@/constants/types/walletTypes";
 import { copyToClipboard } from "@/utils/authUtils";
+import { router } from "expo-router";
 import { Copy } from "lucide-react-native";
 import React from "react";
 import {
@@ -11,14 +13,12 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
+import Chip from "../common/Chip";
 
 type ReceivePaymentModalProps = {
   modalVisible: boolean;
   closeModal: () => void;
-  activeWallet: {
-    address: string;
-    name?: string;
-  };
+  activeWallet: TWallet;
   activeChain: {
     chain: {
       name: string;
@@ -132,17 +132,7 @@ export default function RecievePaymentModal({
                   <Text className="text-light-matte-black/70 text-xs font-medium">
                     WALLET ADDRESS
                   </Text>
-                  <Pressable
-                    onPress={() =>
-                      copyToClipboard(activeWallet.address, "Address")
-                    }
-                    className="flex-row items-center"
-                  >
-                    <Text className="text-light-primary-red text-xs mr-1">
-                      COPY
-                    </Text>
-                    <Copy size={12} color="#c71c4b" />
-                  </Pressable>
+                  <Chip label={activeWallet?.source} size="small" />
                 </View>
                 <Text
                   className="text-light-matte-black text-sm font-medium"
@@ -154,25 +144,12 @@ export default function RecievePaymentModal({
               </View>
             </View>
 
-            <View className="bg-white p-4 rounded-2xl shadow-sm mb-6">
-              <View className="flex-row items-center">
-                <View className="bg-yellow-500/20 p-2 rounded-full mr-3">
-                  <Text className="text-yellow-700 font-bold">⚠️</Text>
-                </View>
-                <Text className="text-light-matte-black/80 text-sm flex-1">
-                  Send only{" "}
-                  <Text className="font-bold">{activeChain.chain.name}</Text>{" "}
-                  assets to this address. Other assets may be lost permanently.
-                </Text>
-              </View>
-            </View>
-
             <View className="flex-row gap-4">
               <Pressable
                 className="flex-1 bg-light-main-container p-4 rounded-xl"
                 onPress={() => copyToClipboard(activeWallet.address, "Address")}
               >
-                <View className="flex-row items-center justify-center">
+                <View className="flex-row items-center justify-center gap-2">
                   <Copy size={18} color="#c71c4b" className="mr-2" />
                   <Text className="text-light-matte-black font-medium">
                     Copy Address
@@ -182,9 +159,13 @@ export default function RecievePaymentModal({
 
               <Pressable
                 className="flex-1 bg-light-primary-red p-4 rounded-xl"
-                onPress={closeModal}
+                onPress={() => {
+                  router.push("/scan-to-pay");
+                }}
               >
-                <Text className="text-white font-bold text-center">Done</Text>
+                <Text className="text-white font-bold text-center">
+                  Scan QR
+                </Text>
               </Pressable>
             </View>
           </View>
