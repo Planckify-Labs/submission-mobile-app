@@ -211,7 +211,7 @@ export const createWalletSteps = (
     content: (
       <>
         <View className="items-center mb-6">
-          <View className="bg-light-primary-red- w-20- h-20- rounded-3xl items-center justify-center mb-5">
+          <View className="rounded-3xl items-center justify-center mb-5">
             <Check size={142} color="#c71c4b" strokeWidth={3} />
           </View>
 
@@ -223,13 +223,13 @@ export const createWalletSteps = (
           </Text>
 
           <View className="w-full bg-light rounded-xl overflow-hidden mb-6">
-            <View className="bg-light-primary-red/10 p-4 border-b border-light-primary-red/10">
+            <View className="bg-light-primary-red/10 p-4">
               <Text className="text-light-matte-black font-bold">
                 Next Steps
               </Text>
             </View>
 
-            <Pressable className="p-4 border-b border-gray-100 flex-row items-center">
+            <Pressable className="p-4 flex-row items-center">
               <View className="w-8 h-8 rounded-full bg-light-primary-red/10 items-center justify-center mr-3">
                 <Wallet size={16} color="#c71c4b" />
               </View>
@@ -239,7 +239,7 @@ export const createWalletSteps = (
               <ChevronRight size={16} color="#c71c4b" />
             </Pressable>
 
-            <Pressable className="p-4 border-b border-gray-100 flex-row items-center">
+            <Pressable className="p-4 flex-row items-center">
               <View className="w-8 h-8 rounded-full bg-light-primary-red/10 items-center justify-center mr-3">
                 <ArrowLeftRight size={16} color="#c71c4b" />
               </View>
