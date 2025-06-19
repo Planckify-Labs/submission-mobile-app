@@ -171,7 +171,7 @@ export default function Withdraw() {
     <>
       <StatusBar barStyle="dark-content" />
       <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
-        <View className="flex-1 p-6">
+        <View className="flex-1 p-6 pb-0">
           <View className="flex-row items-center mb-6">
             <Pressable onPress={() => router.back()} className="mr-4">
               <ArrowLeft color="#c71c4b" size={24} />
