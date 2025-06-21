@@ -1,10 +1,10 @@
-import PaymentHeader from "@/components/payment/PaymentHeader";
-import PaymentSectionContainer from "@/components/payment/PaymentSectionContainer";
-import PromotionBanner from "@/components/payment/PromotionBanner";
-import SearchBar from "@/components/payment/SearchBar";
+import PromotionBanner from "@/components/service/PromotionBanner";
+import SearchBar from "@/components/service/SearchBar";
+import ServiceHeader from "@/components/service/ServiceHeader";
+import ServiceSectionContainer from "@/components/service/ServiceSectionContainer";
 import {
   type ListItemData as ListItem,
-  createPaymentListData,
+  createPaymentListData as createServiceListData,
 } from "@/constants/dummyData/paymentScreen";
 import React, { useRef, useState } from "react";
 import {
@@ -25,11 +25,11 @@ export default function ServiceScreen() {
     extrapolate: "clamp",
   });
 
-  const listData = createPaymentListData(searchQuery, setSearchQuery);
+  const serviceList = createServiceListData(searchQuery, setSearchQuery);
 
   const renderListItem = ({ item }: ListRenderItemInfo<ListItem>) => {
     if (item.type === "header") {
-      return <PaymentHeader title="Payments" />;
+      return <ServiceHeader title="Payments" />;
     } else if (item.type === "searchBar") {
       return (
         <SearchBar
@@ -48,7 +48,7 @@ export default function ServiceScreen() {
         />
       );
     } else {
-      return <PaymentSectionContainer section={item.data} />;
+      return <ServiceSectionContainer section={item.data} />;
     }
   };
 
@@ -57,7 +57,7 @@ export default function ServiceScreen() {
       <StatusBar barStyle="dark-content" />
       <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
         <FlatList
-          data={listData}
+          data={serviceList}
           renderItem={renderListItem}
           keyExtractor={(item, index) =>
             item.type === "section" ? item.data.id : `${item.type}-${index}`

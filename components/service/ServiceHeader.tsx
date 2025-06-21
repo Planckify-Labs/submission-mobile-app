@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react-native";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 
-export default function PaymentHeader({ title }: { title: string }) {
+export default function ServiceHeader({ title }: { title: string }) {
   return (
     <View className="flex-row items-center p-4">
       <Pressable onPress={() => router.back()} className="mr-4">

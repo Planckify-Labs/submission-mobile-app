@@ -8,7 +8,7 @@ interface PaymentSectionContainerProps {
   section: SectionData;
 }
 
-export default function PaymentSectionContainer({
+export default function ServiceSectionContainer({
   section,
 }: PaymentSectionContainerProps) {
   const handleViewAll = () => {

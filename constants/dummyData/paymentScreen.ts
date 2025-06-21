@@ -1,4 +1,4 @@
-import { TPromotionBannerProps } from "@/components/payment/PromotionBanner";
+import { TPromotionBannerProps } from "@/components/service/PromotionBanner";
 import { Href } from "expo-router";
 
 export type ProductItem = {
