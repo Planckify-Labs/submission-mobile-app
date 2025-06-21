@@ -1,7 +1,13 @@
 import { router } from "expo-router";
 import { ArrowLeft, Info } from "lucide-react-native";
 import React, { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import OptimizedImage from "../common/OptimizedImage";
 
 export default function ItemWithoutInput() {
@@ -133,15 +139,16 @@ export default function ItemWithoutInput() {
           </View>
         </View>
 
-        <Pressable
+        <TouchableOpacity
+          activeOpacity={0.7}
           className={`bg-light-primary-red py-4 rounded-full items-center ${!selectedItemVariant ? "opacity-50" : ""}`}
           disabled={!selectedItemVariant}
-          onPress={() => selectedItemVariant && router.push("/payment")}
+          onPress={() => selectedItemVariant && router.push("/service")}
         >
           <Text className="text-light font-bold text-lg">
             Continue to Payment
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
