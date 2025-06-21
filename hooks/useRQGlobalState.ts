@@ -18,6 +18,13 @@ export default function useRQGlobalState<T>({
   const { data } = useQuery({
     queryKey,
     initialData: () => initialData,
+    queryFn: async () => {
+      const cachedData = queryClient.getQueryData(queryKey);
+      if (cachedData) {
+        return cachedData as T;
+      }
+      return initialData as T;
+    },
   });
 
   const { mutate } = useMutation({
