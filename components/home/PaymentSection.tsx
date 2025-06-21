@@ -9,7 +9,7 @@ export default function PaymentSection() {
       <View className="flex-row px-[22px]-">
         <Text className="text-light-matte-black text-sm">Payments</Text>
         <Pressable
-          onPress={() => router.push("/payment")}
+          onPress={() => router.push("/service")}
           className="flex-row items-center justify-center border-2 ml-auto border-light-primary-red bg-light-primary-red/10 gap-2 rounded-full px-4 py-1"
         >
           <Text className="text-light-matte-black text-sm font-bold">

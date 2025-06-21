@@ -148,14 +148,14 @@ export default function SendScreen() {
       return false;
     }
 
-    const amountInWei = parseUnits(amount, 18);
-    if (amountInWei > balance) {
-      Alert.alert(
-        "Insufficient Balance",
-        `You don't have enough ${activeChain.chain.nativeCurrency.symbol} to complete this transaction.`,
-      );
-      return false;
-    }
+    // const amountInWei = parseUnits(amount, 18);
+    // if (amountInWei > balance) {
+    //   Alert.alert(
+    //     "Insufficient Balance",
+    //     `You don't have enough ${activeChain.chain.nativeCurrency.symbol} to complete this transaction.`,
+    //   );
+    //   return false;
+    // }
 
     return true;
   }, [amount, balance, recipient, activeChain.chain.nativeCurrency.symbol]);

@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function PaymentScreen() {
+export default function ServiceScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const scrollY = useRef(new Animated.Value(0)).current;
 
