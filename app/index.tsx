@@ -2,6 +2,7 @@ import ActivitySection from "@/components/home/ActivitySection";
 import BalanceSection from "@/components/home/BalanceSection";
 import Header from "@/components/home/Header";
 import PaymentSection from "@/components/home/PaymentSection";
+import PinnedTokens from "@/components/home/PinnedTokens";
 import { BlurView } from "expo-blur";
 import { router } from "expo-router";
 import { QrCode } from "lucide-react-native";
@@ -26,9 +27,10 @@ export default function Home() {
           contentContainerStyle={{ gap: 16 }}
           showsVerticalScrollIndicator={false}
         >
-          <View className="flex-1 gap-4 p-4 pb-24">
+          <View className="flex-1 gap-4 py-4 pb-24">
             <Header />
             <BalanceSection />
+            <PinnedTokens />
             <ActivitySection />
             <PaymentSection />
           </View>

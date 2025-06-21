@@ -4,7 +4,7 @@ import { Pressable, Text, View } from "react-native";
 
 export default function Header() {
   return (
-    <View className="flex-row gap-4 w-full">
+    <View className="flex-row px-4 gap-4 w-full">
       <View className="rounded-full bg-light p-2 px-4 gap-2 flex-1 flex-row items-center">
         <ShieldAlert color="#c71c4b" size={20} />
         <View className="border-l h-full max-h-7" />
