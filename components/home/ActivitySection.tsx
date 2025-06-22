@@ -1,19 +1,24 @@
+import { router } from "expo-router";
 import { MoveRight, Send } from "lucide-react-native";
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 
 export default function ActivitySection() {
   return (
     <View className="px-4">
       <View className="bg-light rounded-[14px] w-full p-[22px] gap-4">
         <View className="flex-row">
-          <Text className="text-light-matte-black text-sm">Send & Recieve</Text>
-          <Pressable className="flex-row items-center justify-center border-2 ml-auto border-light-primary-red bg-light-primary-red/10 gap-2 rounded-full px-4 py-1">
+          <Text className="text-light-matte-black text-sm">Activities</Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push("/activities")}
+            className="flex-row items-center justify-center border-2 ml-auto border-light-primary-red bg-light-primary-red/10 gap-2 rounded-full px-4 py-1"
+          >
             <Text className="text-light-matte-black text-sm font-bold">
               View All
             </Text>
             <MoveRight size={20} color="#c71c4b" />
-          </Pressable>
+          </TouchableOpacity>
         </View>
         <View className="flex-row justify-between">
           {Array.from({ length: 4 }).map((_, i) => (
