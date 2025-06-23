@@ -1,7 +1,7 @@
 import * as ExpoClipboard from "expo-clipboard";
 import { openBrowserAsync } from "expo-web-browser";
 import { Copy, ExternalLink, ShoppingBag } from "lucide-react-native";
-import React from "react";
+import React, { useCallback } from "react";
 import {
   Alert,
   Image,
@@ -12,19 +12,19 @@ import {
 } from "react-native";
 import Chip from "../common/Chip";
 
-export default function PurchaseCard() {
+const PurchaseCard = React.memo(() => {
   const itemImage = "https://via.placeholder.com/60";
   const transactionHash = "0x1234abcd5678efgh9012ijkl";
   const blockchain = "Ethereum Mainnet";
 
-  const copyToClipboard = () => {
+  const copyToClipboard = useCallback(() => {
     ExpoClipboard.setStringAsync(transactionHash);
     Alert.alert("Copied!", "Transaction hash copied to clipboard.");
-  };
+  }, [transactionHash]);
 
-  const openBlockExplorer = () => {
+  const openBlockExplorer = useCallback(() => {
     openBrowserAsync(`https://etherscan.io/tx/${transactionHash}`);
-  };
+  }, [transactionHash]);
 
   return (
     <View className="bg-white rounded-xl shadow-sm w-full p-5 gap-3">
@@ -101,4 +101,8 @@ export default function PurchaseCard() {
       </View>
     </View>
   );
-}
+});
+
+PurchaseCard.displayName = "PurchaseCard";
+
+export default PurchaseCard;

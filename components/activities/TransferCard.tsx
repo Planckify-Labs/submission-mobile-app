@@ -1,24 +1,24 @@
 import * as ExpoClipboard from "expo-clipboard";
 import { openBrowserAsync } from "expo-web-browser";
 import { Copy, ExternalLink, Send } from "lucide-react-native";
-import React from "react";
+import React, { useCallback } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
 import Chip from "../common/Chip";
 
-export default function TransferCard() {
+const TransferCard = React.memo(() => {
   const transactionHash = "0xabcdef1234567890";
   const recipient = "0xrecipientAddress0987";
   const spender = "0xspenderAddress1234";
   const blockchain = "Ethereum Mainnet";
 
-  const copyToClipboard = (label: string, value: string) => {
+  const copyToClipboard = useCallback((label: string, value: string) => {
     ExpoClipboard.setStringAsync(value);
     Alert.alert("Copied!", `${label} copied to clipboard.`);
-  };
+  }, []);
 
-  const openBlockExplorer = () => {
+  const openBlockExplorer = useCallback(() => {
     openBrowserAsync(`https://etherscan.io/tx/${transactionHash}`);
-  };
+  }, [transactionHash]);
 
   return (
     <View className="bg-white rounded-xl shadow-sm w-full p-5 gap-3">
@@ -41,7 +41,6 @@ export default function TransferCard() {
         </View>
       </View>
 
-      {/* Transaction Hash */}
       <View className="gap-1">
         <Text className="text-light-matte-black text-xs">Transaction Hash</Text>
         <View className="flex-row items-center gap-2">
@@ -62,7 +61,6 @@ export default function TransferCard() {
         </View>
       </View>
 
-      {/* Amount */}
       <View className="pt-1">
         <Text className="text-light-matte-black text-xs">Amount</Text>
         <Text className="text-light-primary-red font-bold text-md">
@@ -71,7 +69,6 @@ export default function TransferCard() {
         <Text className="text-light-matte-black text-sm">Rp.61,000</Text>
       </View>
 
-      {/* Recipient */}
       <View className="pt-1">
         <Text className="text-light-matte-black text-xs">Recipient</Text>
         <Text className="text-light-matte-black/80 text-sm" numberOfLines={1}>
@@ -79,7 +76,6 @@ export default function TransferCard() {
         </Text>
       </View>
 
-      {/* Spender */}
       <View className="pt-1">
         <Text className="text-light-matte-black text-xs">Spender</Text>
         <Text className="text-light-matte-black/80 text-sm" numberOfLines={1}>
@@ -93,4 +89,8 @@ export default function TransferCard() {
       </View>
     </View>
   );
-}
+});
+
+TransferCard.displayName = "TransferCard";
+
+export default TransferCard;

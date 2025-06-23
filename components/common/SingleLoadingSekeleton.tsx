@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Animated, Easing, StyleSheet, View, ViewStyle } from "react-native";
 
 type SingleLoadingSkeletonProps = {
@@ -16,9 +22,52 @@ export default function SingleLoadingSekeleton({
 }: SingleLoadingSkeletonProps) {
   const animatedValue = useRef(new Animated.Value(0)).current;
   const [containerWidth, setContainerWidth] = useState(0);
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  const containerStyle = useMemo(
+    () => ({
+      width: width as any,
+      height: height as any,
+      borderRadius,
+    }),
+    [width, height, borderRadius],
+  );
+
+  const translateX = useMemo(
+    () =>
+      animatedValue.interpolate({
+        inputRange: [0, 1],
+        outputRange:
+          containerWidth > 0
+            ? [-containerWidth / 2, containerWidth / 2]
+            : [-50, 50],
+      }),
+    [animatedValue, containerWidth],
+  );
+
+  const animatedViewStyle = useMemo(
+    () => [
+      StyleSheet.absoluteFill,
+      {
+        width: containerWidth * 2,
+        backgroundColor: "rgba(255, 255, 255, 0.5)",
+        height: "100%" as const,
+        transform: [{ translateX }],
+      } as any,
+    ],
+    [containerWidth, translateX],
+  );
+
+  const onLayout = useCallback((event: any) => {
+    setContainerWidth(event.nativeEvent.layout.width);
+  }, []);
 
   useEffect(() => {
-    Animated.loop(
+    if (animationRef.current) {
+      animationRef.current.stop();
+    }
+
+    animationRef.current = Animated.loop(
       Animated.sequence([
         Animated.timing(animatedValue, {
           toValue: 1,
@@ -33,39 +82,21 @@ export default function SingleLoadingSekeleton({
           useNativeDriver: true,
         }),
       ]),
-    ).start();
-  }, [animatedValue]);
+    );
 
-  const translateX = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange:
-      containerWidth > 0
-        ? [-containerWidth / 2, containerWidth / 2]
-        : [-50, 50],
-  });
+    animationRef.current.start();
 
-  const containerStyle = {
-    width: width as any,
-    height: height as any,
-    borderRadius,
-  };
+    return () => {
+      if (animationRef.current) {
+        animationRef.current.stop();
+        animationRef.current = null;
+      }
+    };
+  }, []);
 
   return (
-    <View
-      style={[styles.container, containerStyle, style]}
-      onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)}
-    >
-      <Animated.View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            width: containerWidth * 2,
-            backgroundColor: "rgba(255, 255, 255, 0.5)",
-            height: "100%",
-            transform: [{ translateX }],
-          },
-        ]}
-      />
+    <View style={[styles.container, containerStyle, style]} onLayout={onLayout}>
+      <Animated.View style={animatedViewStyle} />
     </View>
   );
 }
