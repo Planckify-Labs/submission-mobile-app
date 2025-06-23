@@ -1,5 +1,5 @@
+import SearchBar from "@/components/common/SearchBar";
 import PromotionBanner from "@/components/service/PromotionBanner";
-import SearchBar from "@/components/service/SearchBar";
 import ServiceHeader from "@/components/service/ServiceHeader";
 import ServiceSectionContainer from "@/components/service/ServiceSectionContainer";
 import {
@@ -36,6 +36,8 @@ export default function ServiceScreen() {
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           searchBarOpacity={searchBarOpacity}
+          variant="borderedMinimal"
+          placeholder="search services..."
         />
       );
     } else if (item.type === "banner") {

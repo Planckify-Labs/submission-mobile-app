@@ -1,20 +1,21 @@
-import { Search, X } from "lucide-react-native";
-import React from "react";
-import { Pressable, TextInput, View } from "react-native";
+import SearchBar from "@/components/common/SearchBar";
+import React, { useState } from "react";
+import { View } from "react-native";
 
-export default function ActivityHeader() {
+export default function ActivityHeader({
+  placeholder,
+}: { placeholder: string }) {
+  const [searchQuery, setSearchQuery] = useState("");
+
   return (
-    <View className="flex-row items-center justify-between px-4">
-      <View className="flex-row items-center px-3 border-4 rounded-full">
-        <Search size={18} color="#20222c" />
-        <TextInput
-          className="flex-1 py-3 px-2 text-light-matte-black"
-          placeholder="search transactions..."
-        />
-        <Pressable>
-          <X size={18} color="#20222c" />
-        </Pressable>
-      </View>
+    <View className="flex-row items-center justify-between">
+      <SearchBar
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        variant="borderedMinimal"
+        placeholder={placeholder}
+        className="px-4 mt-2 mb-0 w-full"
+      />
     </View>
   );
 }

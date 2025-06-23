@@ -48,7 +48,7 @@ export default function ActivitiesScreen() {
         className="flex-1 bg-light-main-container relative"
         edges={["top"]}
       >
-        <ActivityHeader />
+        <ActivityHeader placeholder={`search ${activeActivity}...`} />
         {renderActivityList()}
 
         <BlurView
