@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Animated, Easing, StyleSheet, View, ViewStyle } from "react-native";
 
 type SingleLoadingSkeletonProps = {
@@ -21,7 +15,6 @@ export default function SingleLoadingSekeleton({
   style,
 }: SingleLoadingSkeletonProps) {
   const animatedValue = useRef(new Animated.Value(0)).current;
-  const [containerWidth, setContainerWidth] = useState(0);
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
   const containerStyle = useMemo(
@@ -33,34 +26,16 @@ export default function SingleLoadingSekeleton({
     [width, height, borderRadius],
   );
 
-  const translateX = useMemo(
-    () =>
-      animatedValue.interpolate({
-        inputRange: [0, 1],
-        outputRange:
-          containerWidth > 0
-            ? [-containerWidth / 2, containerWidth / 2]
-            : [-50, 50],
-      }),
-    [animatedValue, containerWidth],
-  );
-
   const animatedViewStyle = useMemo(
     () => [
       StyleSheet.absoluteFill,
       {
-        width: containerWidth * 2,
         backgroundColor: "rgba(255, 255, 255, 0.5)",
-        height: "100%" as const,
-        transform: [{ translateX }],
+        opacity: animatedValue,
       } as any,
     ],
-    [containerWidth, translateX],
+    [animatedValue],
   );
-
-  const onLayout = useCallback((event: any) => {
-    setContainerWidth(event.nativeEvent.layout.width);
-  }, []);
 
   useEffect(() => {
     if (animationRef.current) {
@@ -71,14 +46,14 @@ export default function SingleLoadingSekeleton({
       Animated.sequence([
         Animated.timing(animatedValue, {
           toValue: 1,
-          duration: 1200,
-          easing: Easing.bezier(0.4, 0.0, 0.6, 1),
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(animatedValue, {
           toValue: 0,
-          duration: 1200,
-          easing: Easing.bezier(0.4, 0.0, 0.6, 1),
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
       ]),
@@ -95,7 +70,7 @@ export default function SingleLoadingSekeleton({
   }, []);
 
   return (
-    <View style={[styles.container, containerStyle, style]} onLayout={onLayout}>
+    <View style={[styles.container, containerStyle, style]}>
       <Animated.View style={animatedViewStyle} />
     </View>
   );
