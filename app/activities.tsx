@@ -5,8 +5,20 @@ import TransferCard from "@/components/activities/TransferCard";
 import TransferCardSkeleton from "@/components/activities/TransferCardSkeleton";
 import { FlashList } from "@shopify/flash-list";
 import { BlurView } from "expo-blur";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { StatusBar, Text, TouchableOpacity, View } from "react-native";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  Animated,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const PURCHASE_DATA = Array.from({ length: 60 }).map((_, i) => ({
@@ -83,6 +95,13 @@ export default function ActivitiesScreen() {
 
     return () => clearTimeout(timer);
   }, []);
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  const searchBarOpacity = scrollY.interpolate({
+    inputRange: [50, 150],
+    outputRange: [1, 0.2],
+    extrapolate: "clamp",
+  });
 
   const ActivityList = useMemo(() => {
     const data = isLoading
@@ -102,6 +121,11 @@ export default function ActivitiesScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={CONTENT_CONTAINER_STYLE}
         removeClippedSubviews={true}
+        className="pt-20"
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false },
+        )}
       />
     );
   }, [isLoading, activeActivity, keyExtractor, renderItem]);
@@ -149,8 +173,11 @@ export default function ActivitiesScreen() {
         className="flex-1 bg-light-main-container relative"
         edges={["top"]}
       >
-        <View className="flex-1">
-          <ActivityHeader placeholder={searchPlaceholder} />
+        <View className="flex-1 relative">
+          <ActivityHeader
+            placeholder={searchPlaceholder}
+            searchBarOpacity={searchBarOpacity}
+          />
           {ActivityList}
         </View>
         {TabButtons}
