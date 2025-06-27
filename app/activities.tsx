@@ -21,11 +21,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const PURCHASE_DATA = Array.from({ length: 60 }).map((_, i) => ({
+const PURCHASE_DATA = Array.from({ length: 15 }).map((_, i) => ({
   id: `purchase-${i}`,
 }));
 
-const TRANSFER_DATA = Array.from({ length: 60 }).map((_, i) => ({
+const TRANSFER_DATA = Array.from({ length: 15 }).map((_, i) => ({
   id: `transfer-${i}`,
 }));
 
@@ -35,8 +35,7 @@ const SKELETON_DATA = Array.from({ length: 5 }).map((_, index) => ({
 
 const CONTENT_CONTAINER_STYLE = {
   paddingHorizontal: 16,
-  paddingTop: 8,
-  paddingBottom: 96,
+  paddingVertical: 70,
 };
 
 const ItemSeparator = React.memo(() => <View className="h-4" />);
@@ -114,14 +113,13 @@ export default function ActivitiesScreen() {
     return (
       <FlashList
         data={data}
-        estimatedItemSize={60}
+        estimatedItemSize={30}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ItemSeparatorComponent={SeparatorComponent}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={CONTENT_CONTAINER_STYLE}
         removeClippedSubviews={true}
-        className="pt-20"
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false },

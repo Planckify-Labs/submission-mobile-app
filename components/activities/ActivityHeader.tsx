@@ -12,13 +12,13 @@ export default function ActivityHeader({
   const [searchQuery, setSearchQuery] = useState("");
 
   return (
-    <View className="flex-row items-center justify-between absolute top-2 left-0 right-0 z-50">
+    <View className="flex-row items-center justify-between absolute left-0 right-0 z-50">
       <SearchBar
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         variant="borderedMinimal"
         placeholder={placeholder}
-        className="px-4 mt-2 mb-0 w-full"
+        className="px-4 mt-0 mb-0 w-full"
         searchBarOpacity={searchBarOpacity}
       />
     </View>
