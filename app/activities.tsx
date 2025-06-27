@@ -48,25 +48,18 @@ export default function ActivitiesScreen() {
   >("purchase");
   const [isLoading, setIsLoading] = useState(true);
 
-  const renderItem = useCallback(
-    ({ item }: { item: any }) => {
-      if (isLoading) {
-        return activeActivity === "purchase" ? (
-          <PurchaseCardSkeleton />
-        ) : (
-          <TransferCardSkeleton />
-        );
-      }
+  const renderItem = useCallback(() => {
+    if (isLoading) {
       return activeActivity === "purchase" ? (
-        <PurchaseCard />
+        <PurchaseCardSkeleton />
       ) : (
-        <TransferCard />
+        <TransferCardSkeleton />
       );
-    },
-    [activeActivity, isLoading],
-  );
+    }
+    return activeActivity === "purchase" ? <PurchaseCard /> : <TransferCard />;
+  }, [activeActivity, isLoading]);
 
-  const keyExtractor = useCallback((item: any) => item.id, []);
+  const keyExtractor = useCallback((item: { id: string }) => item.id, []);
 
   const searchPlaceholder = useMemo(
     () => `search ${activeActivity}...`,
