@@ -1,3 +1,4 @@
+import { exchangeRateApi } from "@/api/endpoints/exchange-rates";
 import ChainSelector from "@/components/common/ChainSelector";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
@@ -21,8 +22,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { formatUnits } from "viem";
 
 const SUPPORTED_TOKENS = [
-  { symbol: "ETH", name: "Ethereum", balance: "1.2345" },
   { symbol: "USDT", name: "Tether USD", balance: "500.00" },
+  { symbol: "ETH", name: "Ethereum", balance: "1.2345" },
   { symbol: "USDC", name: "USD Coin", balance: "750.00" },
   { symbol: "LINK", name: "Chainlink", balance: "25.75" },
   { symbol: "DAI", name: "Dai Stablecoin", balance: "1000.00" },
@@ -45,16 +46,42 @@ export default function PaymentScreen() {
   const [selectedToken, setSelectedToken] = useState(SUPPORTED_TOKENS[0]);
   const [transactionStatus, setTransactionStatus] = useState("");
   const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+  const [isLoadingRate, setIsLoadingRate] = useState(true);
 
   const { variantId } = useLocalSearchParams<{
     variantId: string;
   }>();
 
-  const { data: variantData, isLoading: isLoadingVariant } = useProductVariantById(variantId);
+  const { data: variantData, isLoading: isLoadingVariant } =
+    useProductVariantById(variantId);
 
-  const tokenAmountNeeded = variantData?.ProductPrice?.[0]?.sellPrice
-    ? (parseFloat(variantData.ProductPrice[0].sellPrice) / 16000000).toFixed(4)
-    : "0.0000";
+  useEffect(() => {
+    const fetchExchangeRate = async () => {
+      setIsLoadingRate(true);
+      try {
+        const response = await exchangeRateApi.getLatestExchangeRate({
+          fromCurrency: "USDT",
+          toCurrency: "IDR",
+        });
+        setExchangeRate(response.rate);
+      } catch (error) {
+        console.error("Error fetching exchange rate:", error);
+        Alert.alert("Error", "Failed to fetch exchange rate");
+      } finally {
+        setIsLoadingRate(false);
+      }
+    };
+
+    fetchExchangeRate();
+  }, []);
+
+  const tokenAmountNeeded =
+    variantData?.ProductPrice?.[0]?.sellPrice && exchangeRate
+      ? (
+          parseFloat(variantData.ProductPrice[0].sellPrice) / exchangeRate
+        ).toFixed(4)
+      : "0.0000";
 
   useEffect(() => {
     const fetchBalance = async () => {
@@ -123,7 +150,11 @@ export default function PaymentScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [variantData?.ProductPrice?.[0]?.sellPrice, tokenAmountNeeded, selectedToken]);
+  }, [
+    variantData?.ProductPrice?.[0]?.sellPrice,
+    tokenAmountNeeded,
+    selectedToken,
+  ]);
 
   const handlePaymentConfirmation = () => {
     setPinModalVisible(true);
@@ -148,7 +179,7 @@ export default function PaymentScreen() {
             </Text>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} className="mb-4">
+          <ScrollView showsVerticalScrollIndicator={false}>
             <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
               <Text className="text-light-matte-black font-bold text-lg mb-3">
                 Purchase Summary
@@ -160,10 +191,16 @@ export default function PaymentScreen() {
                     <Text className="text-2xl">📦</Text>
                   </View>
                   <View className="flex-1">
-                    <Text className="text-light-matte-black font-bold text-base" numberOfLines={1}>
+                    <Text
+                      className="text-light-matte-black font-bold text-base"
+                      numberOfLines={1}
+                    >
                       {variantData?.name || "Loading..."}
                     </Text>
-                    <Text className="text-light-matte-black/60 text-sm" numberOfLines={2}>
+                    <Text
+                      className="text-light-matte-black/60 text-sm"
+                      numberOfLines={2}
+                    >
                       {variantData?.description || "Loading..."}
                     </Text>
                   </View>
@@ -171,7 +208,9 @@ export default function PaymentScreen() {
 
                 <View className="bg-white rounded-lg p-3 shadow-sm">
                   <View className="flex-row items-center justify-between mb-1">
-                    <Text className="text-light-matte-black/70 text-sm">Price</Text>
+                    <Text className="text-light-matte-black/70 text-sm">
+                      Price
+                    </Text>
                     <Text className="text-light-primary-red font-bold text-base">
                       {variantData?.ProductPrice?.[0]?.sellPrice
                         ? `Rp${parseInt(variantData.ProductPrice[0].sellPrice).toLocaleString("id-ID")}`
@@ -208,7 +247,9 @@ export default function PaymentScreen() {
                       Rate
                     </Text>
                     <Text className="text-light-matte-black text-sm">
-                      1 {selectedToken.symbol} ≈ Rp16,000,000
+                      {isLoadingRate
+                        ? "Loading..."
+                        : `1 ${selectedToken.symbol} ≈ Rp${exchangeRate?.toLocaleString("id-ID") || "0"}`}
                     </Text>
                   </View>
 
@@ -299,10 +340,13 @@ export default function PaymentScreen() {
                   <ChevronDown size={20} color="#c71c4b" />
                 </Pressable>
 
-                {parseFloat(selectedToken.balance) < parseFloat(tokenAmountNeeded) && (
+                {parseFloat(selectedToken.balance) <
+                  parseFloat(tokenAmountNeeded) && (
                   <View className="mt-2 bg-light-primary-red/10 p-3 rounded-lg">
                     <Text className="text-light-primary-red text-sm">
-                      Insufficient {selectedToken.symbol} balance. You need {tokenAmountNeeded} {selectedToken.symbol} for this transaction.
+                      Insufficient {selectedToken.symbol} balance. You need{" "}
+                      {tokenAmountNeeded} {selectedToken.symbol} for this
+                      transaction.
                     </Text>
                   </View>
                 )}
@@ -312,14 +356,19 @@ export default function PaymentScreen() {
 
           <TouchableOpacity
             activeOpacity={0.7}
-            className="bg-light-primary-red p-5 rounded-full shadow-md"
+            className="bg-light-primary-red p-4 rounded-full shadow-md"
             onPress={handlePaymentConfirmation}
-            disabled={isLoading || isLoadingVariant || parseFloat(selectedToken.balance) < parseFloat(tokenAmountNeeded)}
+            disabled={
+              isLoading ||
+              isLoadingVariant ||
+              parseFloat(selectedToken.balance) < parseFloat(tokenAmountNeeded)
+            }
           >
             <Text className="text-white font-bold text-center text-lg">
-              {isLoading || isLoadingVariant 
-                ? "Loading..." 
-                : parseFloat(selectedToken.balance) < parseFloat(tokenAmountNeeded)
+              {isLoading || isLoadingVariant
+                ? "Loading..."
+                : parseFloat(selectedToken.balance) <
+                    parseFloat(tokenAmountNeeded)
                   ? "Insufficient Balance"
                   : "Confirm & Pay"}
             </Text>
