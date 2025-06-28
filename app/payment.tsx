@@ -338,7 +338,7 @@ export default function PaymentScreen() {
     <>
       <StatusBar barStyle="dark-content" />
       <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
-        <View className="flex-1 px-5 py-2">
+        <View className="flex-1 px-5 pt-2">
           <View className="flex-row items-center mb-6">
             <Pressable onPress={() => router.back()} className="mr-4">
               <ArrowLeft color="#c71c4b" size={24} />
@@ -351,7 +351,7 @@ export default function PaymentScreen() {
           <ScrollView showsVerticalScrollIndicator={false}>
             <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
               <Text className="text-light-matte-black font-bold text-lg mb-3">
-                Purchase Summary
+                Purchase Details
               </Text>
 
               <View className="bg-light-main-container/50 rounded-xl p-3 mb-4">
@@ -525,26 +525,17 @@ export default function PaymentScreen() {
                 )}
               </View>
             </View>
-          </ScrollView>
-
-          <TouchableOpacity
-            activeOpacity={0.7}
-            className={`p-4 rounded-full shadow-md ${
-              buttonDisabled
-                ? "bg-light-matte-black/20"
-                : "bg-light-primary-red"
-            }`}
-            onPress={handlePaymentConfirmation}
-            disabled={buttonDisabled}
-          >
-            <Text
-              className={`font-bold text-center text-lg ${
-                buttonDisabled ? "text-light-matte-black/40" : "text-white"
-              }`}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              className="p-4 rounded-full shadow-md bg-light-primary-red mb-4"
+              onPress={handlePaymentConfirmation}
+              disabled={buttonDisabled}
             >
-              {getButtonText()}
-            </Text>
-          </TouchableOpacity>
+              <Text className="font-bold text-center text-lg text-white">
+                Checkout
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
 
           <PinConfirmationModal
             visible={pinModalVisible}
