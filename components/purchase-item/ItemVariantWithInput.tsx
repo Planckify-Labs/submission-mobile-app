@@ -67,7 +67,7 @@ export default function ItemWithInput({ productId }: ItemVariantWithInputProps) 
                 <TextInput
                   value={inputValue}
                   onChangeText={setInputValue}
-                  placeholder={`${product.inputDescription}`}
+                  placeholder="e.g. 081234567890"
                   keyboardType={getKeyboardType(product.inputType)}
                   className="text-light-matte-black font-medium text-lg"
                   autoCapitalize="none"
