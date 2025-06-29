@@ -50,7 +50,6 @@ export default function ActivitiesScreen() {
   const [activeActivity, setActiveActivity] = useState<
     "purchase" | "transfers"
   >("purchase");
-  const [isLoading, setIsLoading] = useState(true);
   const [isPurchaseLoading, setIsPurchaseLoading] = useState(true);
   const [isTransferLoading, setIsTransferLoading] = useState(true);
   const horizontalScrollRef = useRef<FlatList>(null);
@@ -111,14 +110,9 @@ export default function ActivitiesScreen() {
       setIsTransferLoading(false);
     }, 12000);
 
-    const loadingTimer = setTimeout(() => {
-      setIsLoading(false);
-    }, 12000);
-
     return () => {
       clearTimeout(purchaseTimer);
       clearTimeout(transferTimer);
-      clearTimeout(loadingTimer);
     };
   }, []);
 
