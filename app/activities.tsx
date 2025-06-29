@@ -1,21 +1,19 @@
+import type { TTransaction } from "@/api/types/transaction";
 import ActivityHeader from "@/components/activities/ActivityHeader";
 import PurchaseCard from "@/components/activities/PurchaseCard";
 import PurchaseCardSkeleton from "@/components/activities/PurchaseCardSkeleton";
 import TransferCard from "@/components/activities/TransferCard";
 import TransferCardSkeleton from "@/components/activities/TransferCardSkeleton";
+import { useTransactionSearch } from "@/hooks/queries/useTransactions";
+import { useWallet } from "@/hooks/useWallet";
 import { FlashList } from "@shopify/flash-list";
 import { BlurView } from "expo-blur";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
   FlatList,
+  RefreshControl,
   StatusBar,
   Text,
   TouchableOpacity,
@@ -23,13 +21,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const PURCHASE_DATA = Array.from({ length: 15 }).map((_, i) => ({
-  id: `purchase-${i}`,
-}));
-
-const TRANSFER_DATA = Array.from({ length: 15 }).map((_, i) => ({
-  id: `transfer-${i}`,
-}));
+type ListItem = TTransaction | { id: string };
 
 const SKELETON_DATA = Array.from({ length: 5 }).map((_, index) => ({
   id: `skeleton-${index}`,
@@ -46,13 +38,36 @@ const SkeletonSeparator = React.memo(() => <View className="h-4" />);
 
 const { width } = Dimensions.get("window");
 
+const EmptyState = React.memo(
+  ({ type }: { type: "purchase" | "transfers" }) => (
+    <View className="flex-1 items-center justify-center px-4">
+      <Text className="text-light-matte-black/50 text-lg text-center font-medium mb-2">
+        No {type} history
+      </Text>
+      <Text className="text-light-matte-black/30 text-center">
+        {type === "purchase"
+          ? "You haven't made any purchases yet"
+          : "You haven't made any transfers yet"}
+      </Text>
+    </View>
+  ),
+);
+
 export default function ActivitiesScreen() {
   const [activeActivity, setActiveActivity] = useState<
     "purchase" | "transfers"
   >("purchase");
-  const [isPurchaseLoading, setIsPurchaseLoading] = useState(true);
-  const [isTransferLoading, setIsTransferLoading] = useState(true);
   const horizontalScrollRef = useRef<FlatList>(null);
+  const { activeWallet } = useWallet();
+
+  const {
+    data: transactions,
+    isLoading: isTransactionsLoading,
+    refetch,
+  } = useTransactionSearch({
+    senderAddress: activeWallet?.address,
+    type: activeActivity === "purchase" ? "PAYMENT" : "TRANSFER",
+  });
 
   const tabIndicatorPosition = useRef(
     new Animated.Value(activeActivity === "purchase" ? 1 : 0),
@@ -64,15 +79,30 @@ export default function ActivitiesScreen() {
 
   const currentTabIndex = useRef(activeActivity === "purchase" ? 1 : 0);
 
-  const renderPurchaseItem = useCallback(() => {
-    return isPurchaseLoading ? <PurchaseCardSkeleton /> : <PurchaseCard />;
-  }, [isPurchaseLoading]);
+  const renderPurchaseItem = useCallback(
+    ({ item }: { item: ListItem }) => {
+      if (isTransactionsLoading) return <PurchaseCardSkeleton />;
+      if (!("type" in item)) return null;
+      return <PurchaseCard transaction={item} />;
+    },
+    [isTransactionsLoading],
+  );
 
-  const renderTransferItem = useCallback(() => {
-    return isTransferLoading ? <TransferCardSkeleton /> : <TransferCard />;
-  }, [isTransferLoading]);
+  const renderTransferItem = useCallback(
+    ({ item }: { item: ListItem }) => {
+      if (isTransactionsLoading) return <TransferCardSkeleton />;
+      if (!("type" in item)) return null;
+      return <TransferCard transaction={item} />;
+    },
+    [isTransactionsLoading],
+  );
 
-  const keyExtractor = useCallback((item: { id: string }) => item.id, []);
+  const keyExtractor = useCallback((item: ListItem) => {
+    if ("type" in item) {
+      return item.id;
+    }
+    return item.id;
+  }, []);
 
   const searchPlaceholder = useMemo(
     () => `search ${activeActivity}...`,
@@ -101,21 +131,6 @@ export default function ActivitiesScreen() {
     [activeActivity, tabIndicatorPosition],
   );
 
-  useEffect(() => {
-    const purchaseTimer = setTimeout(() => {
-      setIsPurchaseLoading(false);
-    }, 12000);
-
-    const transferTimer = setTimeout(() => {
-      setIsTransferLoading(false);
-    }, 12000);
-
-    return () => {
-      clearTimeout(purchaseTimer);
-      clearTimeout(transferTimer);
-    };
-  }, []);
-
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const searchBarOpacity = scrollY.interpolate({
@@ -124,53 +139,108 @@ export default function ActivitiesScreen() {
     extrapolate: "clamp",
   });
 
+  const filteredTransactions = useMemo(() => {
+    if (!transactions || isTransactionsLoading) return [];
+    return transactions;
+  }, [transactions, isTransactionsLoading]);
+
+  const shouldShowEmptyState = useMemo(() => {
+    return !isTransactionsLoading && filteredTransactions.length === 0;
+  }, [isTransactionsLoading, filteredTransactions.length]);
+
   const PurchaseList = useMemo(() => {
-    const data = isPurchaseLoading ? SKELETON_DATA : PURCHASE_DATA;
-    const SeparatorComponent = isPurchaseLoading
+    const data = isTransactionsLoading ? SKELETON_DATA : filteredTransactions;
+    const SeparatorComponent = isTransactionsLoading
       ? SkeletonSeparator
       : ItemSeparator;
 
+    const contentStyle = {
+      ...CONTENT_CONTAINER_STYLE,
+      ...(shouldShowEmptyState ? { flex: 1 } : {}),
+    };
+
     return (
-      <FlashList
+      <FlashList<ListItem>
         data={data}
-        estimatedItemSize={30}
+        estimatedItemSize={200}
         keyExtractor={keyExtractor}
         renderItem={renderPurchaseItem}
         ItemSeparatorComponent={SeparatorComponent}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={CONTENT_CONTAINER_STYLE}
+        contentContainerStyle={contentStyle}
+        ListEmptyComponent={
+          shouldShowEmptyState ? <EmptyState type="purchase" /> : null
+        }
         removeClippedSubviews={true}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false },
         )}
+        refreshControl={
+          <RefreshControl
+            refreshing={isTransactionsLoading}
+            onRefresh={refetch}
+            tintColor="#c71c4b"
+            colors={["#c71c4b"]}
+          />
+        }
       />
     );
-  }, [isPurchaseLoading, keyExtractor, renderPurchaseItem]);
+  }, [
+    isTransactionsLoading,
+    filteredTransactions,
+    keyExtractor,
+    renderPurchaseItem,
+    shouldShowEmptyState,
+    refetch,
+  ]);
 
   const TransferList = useMemo(() => {
-    const data = isTransferLoading ? SKELETON_DATA : TRANSFER_DATA;
-    const SeparatorComponent = isTransferLoading
+    const data = isTransactionsLoading ? SKELETON_DATA : filteredTransactions;
+    const SeparatorComponent = isTransactionsLoading
       ? SkeletonSeparator
       : ItemSeparator;
 
+    const contentStyle = {
+      ...CONTENT_CONTAINER_STYLE,
+      ...(shouldShowEmptyState ? { flex: 1 } : {}),
+    };
+
     return (
-      <FlashList
+      <FlashList<ListItem>
         data={data}
-        estimatedItemSize={30}
+        estimatedItemSize={200}
         keyExtractor={keyExtractor}
         renderItem={renderTransferItem}
         ItemSeparatorComponent={SeparatorComponent}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={CONTENT_CONTAINER_STYLE}
+        contentContainerStyle={contentStyle}
+        ListEmptyComponent={
+          shouldShowEmptyState ? <EmptyState type="transfers" /> : null
+        }
         removeClippedSubviews={true}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false },
         )}
+        refreshControl={
+          <RefreshControl
+            refreshing={isTransactionsLoading}
+            onRefresh={refetch}
+            tintColor="#c71c4b"
+            colors={["#c71c4b"]}
+          />
+        }
       />
     );
-  }, [isTransferLoading, keyExtractor, renderTransferItem]);
+  }, [
+    isTransactionsLoading,
+    filteredTransactions,
+    keyExtractor,
+    renderTransferItem,
+    shouldShowEmptyState,
+    refetch,
+  ]);
 
   const renderTabContent = useCallback(
     ({ index }: { index: number }) => {

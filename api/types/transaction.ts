@@ -1,4 +1,4 @@
-export type TTransactionType = "SEND" | "RECEIVE" | "PAYMENT";
+export type TTransactionType = "TRANSFER" | "PAYMENT";
 
 export type TTransactionStatus = "PENDING" | "COMPLETED" | "FAILED";
 
