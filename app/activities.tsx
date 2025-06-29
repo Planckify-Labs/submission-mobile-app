@@ -14,6 +14,8 @@ import React, {
 } from "react";
 import {
   Animated,
+  Dimensions,
+  FlatList,
   StatusBar,
   Text,
   TouchableOpacity,
@@ -42,22 +44,34 @@ const ItemSeparator = React.memo(() => <View className="h-4" />);
 
 const SkeletonSeparator = React.memo(() => <View className="h-4" />);
 
+const { width } = Dimensions.get("window");
+
 export default function ActivitiesScreen() {
   const [activeActivity, setActiveActivity] = useState<
     "purchase" | "transfers"
   >("purchase");
   const [isLoading, setIsLoading] = useState(true);
+  const [isPurchaseLoading, setIsPurchaseLoading] = useState(true);
+  const [isTransferLoading, setIsTransferLoading] = useState(true);
+  const horizontalScrollRef = useRef<FlatList>(null);
 
-  const renderItem = useCallback(() => {
-    if (isLoading) {
-      return activeActivity === "purchase" ? (
-        <PurchaseCardSkeleton />
-      ) : (
-        <TransferCardSkeleton />
-      );
-    }
-    return activeActivity === "purchase" ? <PurchaseCard /> : <TransferCard />;
-  }, [activeActivity, isLoading]);
+  const tabIndicatorPosition = useRef(
+    new Animated.Value(activeActivity === "purchase" ? 1 : 0),
+  ).current;
+
+  const horizontalScrollX = useRef(
+    new Animated.Value(activeActivity === "purchase" ? width : 0),
+  ).current;
+
+  const currentTabIndex = useRef(activeActivity === "purchase" ? 1 : 0);
+
+  const renderPurchaseItem = useCallback(() => {
+    return isPurchaseLoading ? <PurchaseCardSkeleton /> : <PurchaseCard />;
+  }, [isPurchaseLoading]);
+
+  const renderTransferItem = useCallback(() => {
+    return isTransferLoading ? <TransferCardSkeleton /> : <TransferCard />;
+  }, [isTransferLoading]);
 
   const keyExtractor = useCallback((item: { id: string }) => item.id, []);
 
@@ -69,24 +83,45 @@ export default function ActivitiesScreen() {
   const handleTabChange = useCallback(
     (newTab: "purchase" | "transfers") => {
       if (newTab !== activeActivity) {
-        setIsLoading(true);
         setActiveActivity(newTab);
 
-        setTimeout(() => {
-          setIsLoading(false);
-        }, 12000);
+        Animated.spring(tabIndicatorPosition, {
+          toValue: newTab === "purchase" ? 1 : 0,
+          tension: 70,
+          friction: 10,
+          useNativeDriver: true,
+        }).start();
+
+        const indexToScroll = newTab === "purchase" ? 1 : 0;
+        horizontalScrollRef.current?.scrollToIndex({
+          index: indexToScroll,
+          animated: true,
+        });
       }
     },
-    [activeActivity],
+    [activeActivity, tabIndicatorPosition],
   );
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const purchaseTimer = setTimeout(() => {
+      setIsPurchaseLoading(false);
+    }, 12000);
+
+    const transferTimer = setTimeout(() => {
+      setIsTransferLoading(false);
+    }, 12000);
+
+    const loadingTimer = setTimeout(() => {
       setIsLoading(false);
     }, 12000);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(purchaseTimer);
+      clearTimeout(transferTimer);
+      clearTimeout(loadingTimer);
+    };
   }, []);
+
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const searchBarOpacity = scrollY.interpolate({
@@ -95,20 +130,18 @@ export default function ActivitiesScreen() {
     extrapolate: "clamp",
   });
 
-  const ActivityList = useMemo(() => {
-    const data = isLoading
-      ? SKELETON_DATA
-      : activeActivity === "purchase"
-        ? PURCHASE_DATA
-        : TRANSFER_DATA;
-    const SeparatorComponent = isLoading ? SkeletonSeparator : ItemSeparator;
+  const PurchaseList = useMemo(() => {
+    const data = isPurchaseLoading ? SKELETON_DATA : PURCHASE_DATA;
+    const SeparatorComponent = isPurchaseLoading
+      ? SkeletonSeparator
+      : ItemSeparator;
 
     return (
       <FlashList
         data={data}
         estimatedItemSize={30}
         keyExtractor={keyExtractor}
-        renderItem={renderItem}
+        renderItem={renderPurchaseItem}
         ItemSeparatorComponent={SeparatorComponent}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={CONTENT_CONTAINER_STYLE}
@@ -119,7 +152,67 @@ export default function ActivitiesScreen() {
         )}
       />
     );
-  }, [isLoading, activeActivity, keyExtractor, renderItem]);
+  }, [isPurchaseLoading, keyExtractor, renderPurchaseItem]);
+
+  const TransferList = useMemo(() => {
+    const data = isTransferLoading ? SKELETON_DATA : TRANSFER_DATA;
+    const SeparatorComponent = isTransferLoading
+      ? SkeletonSeparator
+      : ItemSeparator;
+
+    return (
+      <FlashList
+        data={data}
+        estimatedItemSize={30}
+        keyExtractor={keyExtractor}
+        renderItem={renderTransferItem}
+        ItemSeparatorComponent={SeparatorComponent}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={CONTENT_CONTAINER_STYLE}
+        removeClippedSubviews={true}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false },
+        )}
+      />
+    );
+  }, [isTransferLoading, keyExtractor, renderTransferItem]);
+
+  const renderTabContent = useCallback(
+    ({ index }: { index: number }) => {
+      return (
+        <View style={{ width }}>
+          {index === 0 ? TransferList : PurchaseList}
+        </View>
+      );
+    },
+    [TransferList, PurchaseList],
+  );
+
+  const handleHorizontalScroll = useCallback(
+    (event: any) => {
+      const contentOffsetX = event.nativeEvent.contentOffset.x;
+      const newIndex = Math.round(contentOffsetX / width);
+
+      if (currentTabIndex.current !== newIndex) {
+        currentTabIndex.current = newIndex;
+        setActiveActivity(newIndex === 0 ? "transfers" : "purchase");
+
+        Animated.spring(tabIndicatorPosition, {
+          toValue: newIndex,
+          tension: 70,
+          friction: 10,
+          useNativeDriver: true,
+        }).start();
+      }
+    },
+    [tabIndicatorPosition],
+  );
+
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { x: horizontalScrollX } } }],
+    { useNativeDriver: false },
+  );
 
   const TabButtons = useMemo(
     () => (
@@ -128,11 +221,11 @@ export default function ActivitiesScreen() {
         experimentalBlurMethod="dimezisBlurView"
         className="overflow-hidden rounded-full absolute bottom-4 left-0 right-0 mx-4 border-4 border-light-main-container/80"
       >
-        <View className="bg-mainborder-light-main-container/10 w-full flex-row items-center justify-evenly">
+        <View className="bg-mainborder-light-main-container/10 w-full flex-row items-center justify-evenly relative">
           <TouchableOpacity
             onPress={() => handleTabChange("transfers")}
             activeOpacity={0.7}
-            className={`px-8 border-b-4 ${activeActivity !== "purchase" ? "border-light-primary-red/75" : "border-light-matte-black/10"} py-2 items-center justify-center grow`}
+            className="px-8 py-2 items-center justify-center grow"
           >
             <Text
               className={`${activeActivity !== "purchase" ? "text-light-primary-red/75" : "text-light-matte-black/50"} text-center font-bold`}
@@ -143,7 +236,7 @@ export default function ActivitiesScreen() {
           <TouchableOpacity
             onPress={() => handleTabChange("purchase")}
             activeOpacity={0.7}
-            className={`px-8 border-b-4 ${activeActivity === "purchase" ? "border-light-primary-red/75" : "border-light-matte-black/10"} py-2 items-center justify-center grow`}
+            className="px-8 py-2 items-center justify-center grow"
           >
             <Text
               className={`${activeActivity === "purchase" ? "text-light-primary-red/75" : "text-light-matte-black/50"} text-center font-bold`}
@@ -151,10 +244,26 @@ export default function ActivitiesScreen() {
               Purchase
             </Text>
           </TouchableOpacity>
+
+          <Animated.View
+            className="absolute bottom-0 h-1 bg-light-primary-red/75 left-0 right-0 rounded-t-md"
+            style={{
+              width: "50%",
+              transform: [
+                {
+                  translateX: horizontalScrollX.interpolate({
+                    inputRange: [0, width],
+                    outputRange: [0, width / 2],
+                    extrapolate: "clamp",
+                  }),
+                },
+              ],
+            }}
+          />
         </View>
       </BlurView>
     ),
-    [activeActivity, handleTabChange],
+    [activeActivity, handleTabChange, horizontalScrollX],
   );
 
   return (
@@ -169,7 +278,24 @@ export default function ActivitiesScreen() {
             placeholder={searchPlaceholder}
             searchBarOpacity={searchBarOpacity}
           />
-          {ActivityList}
+          <FlatList
+            ref={horizontalScrollRef}
+            data={[{ id: "transfers" }, { id: "purchase" }]}
+            renderItem={renderTabContent}
+            keyExtractor={(item) => item.id}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={activeActivity === "purchase" ? 1 : 0}
+            getItemLayout={(_, index) => ({
+              length: width,
+              offset: width * index,
+              index,
+            })}
+            onMomentumScrollEnd={handleHorizontalScroll}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+          />
         </View>
         {TabButtons}
       </SafeAreaView>
