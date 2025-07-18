@@ -1,19 +1,65 @@
-import { useProductById } from "@/hooks/queries/useProducts";
+import OptionSelectorModal from "@/components/common/OptionSelectorModal";
+import {
+  useProductById,
+  useProductInputFields,
+} from "@/hooks/queries/useProducts";
+import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { router } from "expo-router";
-import { ArrowLeft, ChevronRight, Info } from "lucide-react-native";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Info,
+} from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
-import { Image, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import ItemVariantWithInputSkeleton from "./ItemVariantWithInputSkeleton";
 
 interface ItemVariantWithInputProps {
   productId?: string;
 }
 
-export default function ItemWithInput({ productId }: ItemVariantWithInputProps) {
+type TInputField = {
+  key: string;
+  type: string;
+  alias: string;
+  options?: string[];
+};
+
+export default function ItemWithInput({
+  productId,
+}: ItemVariantWithInputProps) {
   const isMounted = useRef(true);
-  const { data: product, isLoading, error } = useProductById(productId || "");
-  const [selectedItemVariant, setSelectedItemVariant] = useState<string | null>(null);
-  const [inputValue, setInputValue] = useState("");
+  const {
+    data: product,
+    isLoading: isProductLoading,
+    error: productError,
+  } = useProductById(productId || "");
+  const { data: inputFields, isLoading: isInputFieldsLoading } =
+    useProductInputFields(productId || "");
+  const isLoading = isProductLoading || isInputFieldsLoading;
+  const error = productError;
+
+  const [selectedItemVariant, setSelectedItemVariant] = useState<string | null>(
+    null,
+  );
+  const { data: inputValues, setNewData: setInputValues } = useRQGlobalState<
+    Record<string, string>
+  >({
+    queryKey: ["product-input-values", productId],
+    initialData: {},
+  });
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [activeField, setActiveField] = useState<TInputField | null>(null);
 
   useEffect(() => {
     return () => {
@@ -21,13 +67,119 @@ export default function ItemWithInput({ productId }: ItemVariantWithInputProps) 
     };
   }, []);
 
-  const getKeyboardType = (inputType: string | null) => {
-    switch (inputType?.toUpperCase()) {
+  useEffect(() => {
+    if (inputFields?.forms && inputValues) {
+      const initialValues = { ...inputValues };
+      let needsUpdate = false;
+
+      inputFields.forms.forEach((field) => {
+        if (initialValues[field.key] === undefined) {
+          initialValues[field.key] = "";
+          needsUpdate = true;
+        }
+      });
+
+      if (needsUpdate) {
+        setInputValues(initialValues);
+      }
+    }
+  }, [inputFields, inputValues, setInputValues]);
+
+  const getKeyboardType = (inputType: string) => {
+    switch (inputType.toUpperCase()) {
       case "NUMBER":
+      case "NUMERIC":
         return "number-pad";
+      case "EMAIL":
+        return "email-address";
+      case "PHONE":
+        return "phone-pad";
       default:
         return "default";
     }
+  };
+
+  const handleInputChange = (key: string, value: string) => {
+    if (inputValues) {
+      setInputValues({
+        ...inputValues,
+        [key]: value,
+      });
+    }
+  };
+
+  const openOptionModal = (field: TInputField) => {
+    setActiveField(field);
+    setModalVisible(true);
+  };
+
+  const handleOptionSelect = (option: string) => {
+    if (activeField && inputValues) {
+      handleInputChange(activeField.key, option);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+  };
+
+  const renderInputField = (field: TInputField) => {
+    if (!inputValues) return null;
+
+    if (
+      field.type.toLowerCase() === "option" &&
+      field.options &&
+      field.options.length > 0
+    ) {
+      return (
+        <View className="mb-4">
+          <Text className="text-light-matte-black/70 mb-2">{field.alias}</Text>
+          <TouchableOpacity
+            className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between"
+            onPress={() => openOptionModal(field)}
+            activeOpacity={0.7}
+          >
+            <View className="flex-1">
+              <Text className="text-light-matte-black font-medium text-lg">
+                {inputValues[field.key] || `${field.alias.toLowerCase()}`}
+              </Text>
+              <Text className="text-light-matte-black/60 text-xs">
+                {product?.category?.name}
+              </Text>
+            </View>
+            <ChevronDown color="#333" size={20} />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View className="mb-4">
+        <Text className="text-light-matte-black/70 mb-2">{field.alias}</Text>
+        <View className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between">
+          <View className="flex-1">
+            <TextInput
+              value={inputValues[field.key] || ""}
+              onChangeText={(value) => handleInputChange(field.key, value)}
+              placeholder={`${field.alias.toLowerCase()}`}
+              keyboardType={getKeyboardType(field.type)}
+              className="text-light-matte-black font-medium text-lg"
+              autoCapitalize="none"
+            />
+            <Text className="text-light-matte-black/60 text-xs">
+              {product?.category?.name}
+            </Text>
+          </View>
+          <View className="flex-row items-center">
+            <Image
+              source={{ uri: product?.imageUrl }}
+              className="w-8 h-8 mr-2"
+              style={{ resizeMode: "contain" }}
+            />
+          </View>
+        </View>
+      </View>
+    );
   };
 
   if (isLoading) {
@@ -48,135 +200,157 @@ export default function ItemWithInput({ productId }: ItemVariantWithInputProps) 
   }
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
-      <View className="flex-1 p-6">
-        <View className="flex-row items-center mb-6">
-          <Pressable onPress={() => router.back()} className="mr-4">
-            <ArrowLeft color="#c71c4b" size={24} />
-          </Pressable>
-          <Text className="text-light-matte-black text-xl font-bold">
-            {product.name}
-          </Text>
-        </View>
-
-        <View className="bg-light rounded-xl py-5 mb-6 shadow-sm">
-          <View className="mb-6 px-5">
-            <Text className="text-light-matte-black/70 mb-2">{product.inputDescription || "Input Value"}</Text>
-            <View className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between">
-              <View className="flex-1">
-                <TextInput
-                  value={inputValue}
-                  onChangeText={setInputValue}
-                  placeholder="e.g. 081234567890"
-                  keyboardType={getKeyboardType(product.inputType)}
-                  className="text-light-matte-black font-medium text-lg"
-                  autoCapitalize="none"
-                />
-                <Text className="text-light-matte-black/60 text-xs">
-                  {product.category?.name}
-                </Text>
-              </View>
-              <View className="flex-row items-center">
-                <Image
-                  source={{ uri: product.imageUrl }}
-                  className="w-8 h-8 mr-2"
-                  style={{ resizeMode: "contain" }}
-                />
-              </View>
-            </View>
-          </View>
-
-          <View className="bg-light-primary-red/10 p-4 mx-5 rounded-xl mb-6">
-            <View className="flex-row items-center gap-2">
-              <Info size={18} color="#c71c4b" className="mr-2" />
-              <Text className="text-light-matte-black/80 text-sm flex-1">
-                Have a postpaid number? Click here
-              </Text>
-              <ChevronRight size={16} color="#c71c4b" />
-            </View>
-          </View>
-
-          <View>
-            <Text className="text-light-matte-black/70 mx-5 mb-3">
-              Recently used numbers
+    <>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View className="flex-1 p-6">
+          <View className="flex-row items-center mb-6">
+            <Pressable onPress={() => router.back()} className="mr-4">
+              <ArrowLeft color="#c71c4b" size={24} />
+            </Pressable>
+            <Text className="text-light-matte-black text-xl font-bold">
+              {product.name}
             </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              className="mb-2"
-            >
-              <View className="mx-5 flex-row gap-2">
-                {["085930970697", "088975163714", "081234567890"].map(
-                  (number) => (
-                    <TouchableOpacity
-                      key={number}
-                      className="bg-light-main-container border border-light-matte-black/10 rounded-xl p-3 mr-3"
-                      onPress={() => setInputValue(number)}
-                      activeOpacity={0.5}
-                    >
-                      <Text className="text-light-matte-black">{number}</Text>
-                    </TouchableOpacity>
-                  ),
-                )}
-              </View>
-            </ScrollView>
           </View>
-        </View>
 
-        <View className="bg-light rounded-xl p-5 mb-6 shadow-sm">
-          <Text className="text-light-matte-black font-bold text-lg mb-4">
-            Options
-          </Text>
+          <View className="bg-light rounded-xl py-5 mb-6 shadow-sm">
+            <View className="px-5">
+              {inputFields?.forms.map((field) => (
+                <React.Fragment key={field.key}>
+                  {renderInputField(field as TInputField)}
+                </React.Fragment>
+              ))}
+            </View>
 
-          <View className="flex-row flex-wrap gap-2">
-            {product.variants.map((variant) => {
-              const price = variant.ProductPrice[0]?.sellPrice || "N/A";
-              return (
-                <Pressable
-                  key={variant.id}
-                  className={`bg-light-main-container border flex-1 min-w-[45%] ${
-                    selectedItemVariant === variant.id
-                      ? "border-light-primary-red bg-light-primary-red/5"
-                      : "border-light-matte-black/10"
-                  } rounded-xl p-3`}
-                  onPress={() => setSelectedItemVariant(variant.id)}
-                >
-                  <View className="flex-row justify-between items-center mb-1">
-                    <Text className="text-light-matte-black font-bold text-sm flex-1 mr-2">
-                      {variant.name}
+            {inputFields?.forms.some(
+              (field) => field.type.toLowerCase() !== "option",
+            ) && (
+              <>
+                <View className="bg-light-primary-red/10 p-4 mx-5 rounded-xl mb-6">
+                  <View className="flex-row items-center gap-2">
+                    <Info size={18} color="#c71c4b" className="mr-2" />
+                    <Text className="text-light-matte-black/80 text-sm flex-1">
+                      Have a postpaid number? Click here
                     </Text>
-                    <View className="bg-light-matte-black/10 px-2 py-1 rounded-full">
-                      <Text className="text-light-matte-black/70 text-[10px]">
-                        30 days
+                    <ChevronRight size={16} color="#c71c4b" />
+                  </View>
+                </View>
+
+                <View>
+                  <Text className="text-light-matte-black/70 mx-5 mb-3">
+                    Recently used numbers
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    className="mb-2"
+                  >
+                    <View className="mx-5 flex-row gap-2">
+                      {["085930970697", "088975163714", "081234567890"].map(
+                        (number) => (
+                          <TouchableOpacity
+                            key={number}
+                            className="bg-light-main-container border border-light-matte-black/10 rounded-xl p-3 mr-3"
+                            onPress={() => {
+                              const textField = inputFields?.forms.find(
+                                (f) => f.type.toLowerCase() !== "option",
+                              );
+                              if (textField) {
+                                handleInputChange(textField.key, number);
+                              }
+                            }}
+                            activeOpacity={0.5}
+                          >
+                            <Text className="text-light-matte-black">
+                              {number}
+                            </Text>
+                          </TouchableOpacity>
+                        ),
+                      )}
+                    </View>
+                  </ScrollView>
+                </View>
+              </>
+            )}
+          </View>
+
+          <View className="bg-light rounded-xl p-5 mb-6 shadow-sm">
+            <Text className="text-light-matte-black font-bold text-lg mb-4">
+              Options
+            </Text>
+
+            <View className="flex-row flex-wrap gap-2">
+              {product.variants.map((variant) => {
+                const price = variant.ProductPrice[0]?.sellPrice || "N/A";
+                return (
+                  <TouchableOpacity
+                    key={variant.id}
+                    className={`bg-light-main-container border flex-1 min-w-[45%] ${
+                      selectedItemVariant === variant.id
+                        ? "border-light-primary-red bg-light-primary-red/5"
+                        : "border-light-matte-black/10"
+                    } rounded-xl p-3`}
+                    onPress={() => setSelectedItemVariant(variant.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View className="flex-row justify-between items-center mb-1">
+                      <Text className="text-light-matte-black font-bold text-sm flex-1 mr-2">
+                        {variant.name}
                       </Text>
                     </View>
-                  </View>
-                  <Text className="text-light-primary-red font-bold text-base">
-                    Rp{parseInt(price).toLocaleString("id-ID")}
-                  </Text>
-                  <Text className="text-light-matte-black/70 text-[10px] mt-1">
-                    {variant.description}
-                  </Text>
-                </Pressable>
-              );
-            })}
+                    <Text className="text-light-primary-red font-bold text-base">
+                      Rp{parseInt(price).toLocaleString("id-ID")}
+                    </Text>
+                    <Text className="text-light-matte-black/70 text-[10px] mt-1">
+                      {variant.description}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
-        </View>
-        <Pressable
-          className={`bg-light-primary-red py-4 rounded-full items-center ${!selectedItemVariant ? "opacity-50" : ""}`}
-          disabled={!selectedItemVariant}
-          onPress={() => selectedItemVariant && router.push({
-            pathname: "/payment",
-            params: {
-              variantId: selectedItemVariant
+          <TouchableOpacity
+            className={`bg-light-primary-red py-4 rounded-full items-center ${
+              !selectedItemVariant ||
+              !inputValues ||
+              Object.values(inputValues).some((value) => !value)
+                ? "opacity-50"
+                : ""
+            }`}
+            disabled={
+              !selectedItemVariant ||
+              !inputValues ||
+              Object.values(inputValues).some((value) => !value)
             }
-          })}
-        >
-          <Text className="text-light font-bold text-lg">
-            Continue to Payment
-          </Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+            onPress={() =>
+              selectedItemVariant &&
+              inputValues &&
+              router.push({
+                pathname: "/payment",
+                params: {
+                  variantId: selectedItemVariant,
+                  ...inputValues,
+                },
+              })
+            }
+            activeOpacity={0.7}
+          >
+            <Text className="text-light font-bold text-lg">
+              Continue to Payment
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      <OptionSelectorModal
+        visible={modalVisible}
+        onClose={handleCloseModal}
+        onSelect={handleOptionSelect}
+        title={activeField?.alias || "Select Option"}
+        options={activeField?.options || []}
+        selectedOption={
+          activeField && inputValues ? inputValues[activeField.key] : undefined
+        }
+      />
+    </>
   );
 }

@@ -69,6 +69,7 @@ export type TProductInputField = {
   key: string;
   type: string;
   alias: string;
+  options?: string[];
 };
 
 export type TProductInputFields = {

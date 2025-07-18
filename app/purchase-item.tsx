@@ -2,7 +2,10 @@ import ItemWithInput from "@/components/purchase-item/ItemVariantWithInput";
 import ItemVariantWithInputSkeleton from "@/components/purchase-item/ItemVariantWithInputSkeleton";
 import ItemWithoutInput from "@/components/purchase-item/ItemVariantWithoutInput";
 import ItemVariantWithoutInputSkeleton from "@/components/purchase-item/ItemVariantWithoutInputSkeleton";
-import { useProductById } from "@/hooks/queries/useProducts";
+import {
+  useProductById,
+  useProductInputFields,
+} from "@/hooks/queries/useProducts";
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { StatusBar, Text, View } from "react-native";
@@ -11,13 +14,23 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function PurchaseItemScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
   const [hasInput, setHasInput] = useState<boolean | null>(null);
-  const { data: product, isLoading, error } = useProductById(productId);
-  
+  const {
+    data: product,
+    isLoading: isProductLoading,
+    error: productError,
+  } = useProductById(productId);
+  const { data: inputFields, isLoading: isInputFieldsLoading } =
+    useProductInputFields(productId);
+
+  const isLoading = isProductLoading || isInputFieldsLoading;
+  const error = productError;
+
   useEffect(() => {
-    if (product && Object.keys(product).length > 0) {
-      setHasInput(!!product.inputType);
+    if (inputFields && product) {
+      // Check if the product has input fields
+      setHasInput(inputFields.forms.length > 0);
     }
-  }, [product]);
+  }, [product, inputFields]);
 
   if (isLoading) {
     return (
