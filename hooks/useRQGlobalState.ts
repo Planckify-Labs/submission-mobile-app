@@ -12,7 +12,7 @@ type TUseRQGlobalState<T> = {
 };
 
 export default function useRQGlobalState<T>({
-  initialData,
+  initialData = {} as T,
   queryKey,
 }: TUseRQGlobalState<T>) {
   const { data } = useQuery({
