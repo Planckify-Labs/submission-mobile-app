@@ -1,3 +1,5 @@
+import { queryClient } from "@/app/_layout";
+import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { Check, X } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
@@ -19,6 +21,8 @@ interface OptionSelectorModalProps {
   title: string;
   options: string[];
   selectedOption?: string;
+  stateKey?: string;
+  clearOnClose?: boolean;
 }
 
 const OptionSelectorModal: React.FC<OptionSelectorModalProps> = ({
@@ -27,11 +31,33 @@ const OptionSelectorModal: React.FC<OptionSelectorModalProps> = ({
   onSelect,
   title,
   options,
-  selectedOption,
+  selectedOption: propSelectedOption,
+  stateKey,
+  clearOnClose = false,
 }) => {
   const fadeAnim = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const translateY = useRef(new Animated.Value(visible ? 0 : 300)).current;
   const hasAnimatedIn = useRef(visible);
+
+  const { data: globalSelectedOption, setNewData: setGlobalSelectedOption } =
+    useRQGlobalState<string | undefined>({
+      queryKey: stateKey
+        ? ["option-selector", stateKey]
+        : ["option-selector-temp"],
+      initialData: propSelectedOption,
+    });
+
+  const selectedOption = stateKey ? globalSelectedOption : propSelectedOption;
+
+  useEffect(() => {
+    return () => {
+      if (stateKey) {
+        queryClient.removeQueries({
+          queryKey: ["option-selector", stateKey],
+        });
+      }
+    };
+  }, [stateKey]);
 
   const animateOpenModal = useCallback(() => {
     fadeAnim.setValue(0);
@@ -65,8 +91,16 @@ const OptionSelectorModal: React.FC<OptionSelectorModalProps> = ({
         duration: 250,
         useNativeDriver: true,
       }),
-    ]).start(onClose);
-  }, [fadeAnim, translateY, onClose]);
+    ]).start(() => {
+      onClose();
+
+      if (clearOnClose && stateKey) {
+        queryClient.removeQueries({
+          queryKey: ["option-selector", stateKey],
+        });
+      }
+    });
+  }, [fadeAnim, translateY, onClose, clearOnClose, stateKey]);
 
   const panResponderConfig = useMemo(
     () => ({
@@ -103,6 +137,10 @@ const OptionSelectorModal: React.FC<OptionSelectorModalProps> = ({
   }, [visible, animateOpenModal, fadeAnim, translateY]);
 
   const handleSelect = (option: string) => {
+    if (stateKey) {
+      setGlobalSelectedOption(option);
+    }
+
     onSelect(option);
     animateCloseModal();
   };

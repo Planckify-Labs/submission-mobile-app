@@ -1,3 +1,4 @@
+import { queryClient } from "@/app/_layout";
 import OptionSelectorModal from "@/components/common/OptionSelectorModal";
 import {
   useProductById,
@@ -85,6 +86,18 @@ export default function ItemWithInput({
     };
   }, []);
 
+  const clearInputValuesRef = useRef(setInputValues);
+
+  useEffect(() => {
+    clearInputValuesRef.current = setInputValues;
+  }, [setInputValues]);
+
+  useEffect(() => {
+    return () => {
+      clearInputValuesRef.current({});
+    };
+  }, []);
+
   useEffect(() => {
     if (inputFields?.forms && inputValues) {
       const initialValues = { ...inputValues };
@@ -102,6 +115,18 @@ export default function ItemWithInput({
       }
     }
   }, [inputFields, inputValues, setInputValues]);
+
+  useEffect(() => {
+    return () => {
+      if (productId && inputFields?.forms) {
+        inputFields.forms.forEach((field) => {
+          queryClient.removeQueries({
+            queryKey: ["option-selector", `${productId}-${field.key}`],
+          });
+        });
+      }
+    };
+  }, [productId, inputFields?.forms]);
 
   const getKeyboardType = (inputType: string) => {
     switch (inputType.toUpperCase()) {
@@ -177,7 +202,6 @@ export default function ItemWithInput({
         <View className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between">
           <View className="flex-1">
             <TextInput
-              value={inputValues[field.key] || ""}
               onChangeText={(value) => handleInputChange(field.key, value)}
               placeholder={`${field.alias.toLowerCase()}`}
               keyboardType={getKeyboardType(field.type)}
@@ -217,12 +241,31 @@ export default function ItemWithInput({
             inputValues &&
             Object.values(inputValues).every((value) => !!value)
           ) {
+            const params = {
+              variantId: variant.id,
+              ...inputValues,
+            };
+
             router.push({
               pathname: "/payment",
-              params: {
-                variantId: variant.id,
-                ...inputValues,
-              },
+              params,
+            });
+
+            requestAnimationFrame(() => {
+              if (isMounted.current) {
+                setInputValues({});
+
+                if (productId && inputFields?.forms) {
+                  inputFields.forms.forEach((field) => {
+                    queryClient.removeQueries({
+                      queryKey: [
+                        "option-selector",
+                        `${productId}-${field.key}`,
+                      ],
+                    });
+                  });
+                }
+              }
             });
           }
         }}
@@ -282,6 +325,24 @@ export default function ItemWithInput({
     }
   };
 
+  const handleGoBack = () => {
+    router.back();
+
+    requestAnimationFrame(() => {
+      if (isMounted.current) {
+        setInputValues({});
+
+        if (productId && inputFields?.forms) {
+          inputFields.forms.forEach((field) => {
+            queryClient.removeQueries({
+              queryKey: ["option-selector", `${productId}-${field.key}`],
+            });
+          });
+        }
+      }
+    });
+  };
+
   if (isLoading) {
     return <ItemVariantWithInputSkeleton />;
   }
@@ -309,7 +370,7 @@ export default function ItemWithInput({
       >
         <View className="flex-1 p-6">
           <View className="flex-row items-center mb-6">
-            <Pressable onPress={() => router.back()} className="mr-4">
+            <Pressable onPress={handleGoBack} className="mr-4">
               <ArrowLeft color="#c71c4b" size={24} />
             </Pressable>
             <Text className="text-light-matte-black text-xl font-bold">
@@ -447,6 +508,8 @@ export default function ItemWithInput({
         selectedOption={
           activeField && inputValues ? inputValues[activeField.key] : undefined
         }
+        stateKey={activeField ? `${productId}-${activeField.key}` : undefined}
+        clearOnClose={false}
       />
     </>
   );
