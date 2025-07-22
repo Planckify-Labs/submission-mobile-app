@@ -134,10 +134,21 @@ const SignMessageModal: React.FC<TSignMessageModalProps> = ({
   };
 
   useEffect(() => {
-    if (visible && !hasAnimatedIn.current) {
-      setRememberChoice(false);
+    if (visible) {
       setTimeLeft(300);
-      animateOpenModal();
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (visible) {
+      if (!hasAnimatedIn.current) {
+        setRememberChoice(false);
+        animateOpenModal();
+      }
+
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
 
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
@@ -149,7 +160,7 @@ const SignMessageModal: React.FC<TSignMessageModalProps> = ({
           return prev - 1;
         });
       }, 1000);
-    } else if (!visible) {
+    } else {
       fadeAnim.setValue(0);
       translateY.setValue(300);
       hasAnimatedIn.current = false;
@@ -269,7 +280,7 @@ const SignMessageModal: React.FC<TSignMessageModalProps> = ({
               )}
 
               <TouchableOpacity
-                className="flex-row items-center mb-4"
+                className="flex-row items-center mb-4 hidden"
                 onPress={() => setRememberChoice(!rememberChoice)}
               >
                 <View
