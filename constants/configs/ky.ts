@@ -1,3 +1,4 @@
+import { getAccessToken } from "@/hooks/queries/useAuth";
 import ky from "ky";
 
 interface ApiError {
@@ -12,9 +13,14 @@ export const api = ky.create({
   timeout: 30000,
   hooks: {
     beforeRequest: [
-      (request) => {
+      async (request) => {
         console.log("Making API request to:", request.url);
         request.headers.set("Accept", "application/json");
+
+        const token = await getAccessToken();
+        if (token) {
+          request.headers.set("Authorization", `Bearer ${token}`);
+        }
       },
     ],
     afterResponse: [

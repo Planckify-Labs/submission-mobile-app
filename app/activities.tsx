@@ -4,11 +4,20 @@ import PurchaseCard from "@/components/activities/PurchaseCard";
 import PurchaseCardSkeleton from "@/components/activities/PurchaseCardSkeleton";
 import TransferCard from "@/components/activities/TransferCard";
 import TransferCardSkeleton from "@/components/activities/TransferCardSkeleton";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useTransactionSearch } from "@/hooks/queries/useTransactions";
 import { useWallet } from "@/hooks/useWallet";
 import { FlashList } from "@shopify/flash-list";
 import { BlurView } from "expo-blur";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import { useRouter } from "expo-router";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Animated,
   Dimensions,
@@ -54,11 +63,19 @@ const EmptyState = React.memo(
 );
 
 export default function ActivitiesScreen() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading: isAuthLoading } = useIsAuthenticated();
   const [activeActivity, setActiveActivity] = useState<
     "purchase" | "transfers"
   >("purchase");
   const horizontalScrollRef = useRef<FlatList>(null);
   const { activeWallet } = useWallet();
+
+  useEffect(() => {
+    if (isAuthenticated === false && !isAuthLoading) {
+      router.replace("/auth");
+    }
+  }, [isAuthenticated, isAuthLoading, router]);
 
   const {
     data: transactions,
@@ -333,36 +350,44 @@ export default function ActivitiesScreen() {
   return (
     <>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView
-        className="flex-1 bg-light-main-container relative"
-        edges={["top"]}
-      >
-        <View className="flex-1 relative">
-          <ActivityHeader
-            placeholder={searchPlaceholder}
-            searchBarOpacity={searchBarOpacity}
-          />
-          <FlatList
-            ref={horizontalScrollRef}
-            data={[{ id: "transfers" }, { id: "purchase" }]}
-            renderItem={renderTabContent}
-            keyExtractor={(item) => item.id}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            initialScrollIndex={activeActivity === "purchase" ? 1 : 0}
-            getItemLayout={(_, index) => ({
-              length: width,
-              offset: width * index,
-              index,
-            })}
-            onMomentumScrollEnd={handleHorizontalScroll}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-          />
-        </View>
-        {TabButtons}
-      </SafeAreaView>
+      {!isAuthenticated ? (
+        <LoadinngSpinnerPopup
+          visible={true}
+          title="Authentication"
+          message="Checking authentication..."
+        />
+      ) : (
+        <SafeAreaView
+          className="flex-1 bg-light-main-container relative"
+          edges={["top"]}
+        >
+          <View className="flex-1 relative">
+            <ActivityHeader
+              placeholder={searchPlaceholder}
+              searchBarOpacity={searchBarOpacity}
+            />
+            <FlatList
+              ref={horizontalScrollRef}
+              data={[{ id: "transfers" }, { id: "purchase" }]}
+              renderItem={renderTabContent}
+              keyExtractor={(item) => item.id}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={activeActivity === "purchase" ? 1 : 0}
+              getItemLayout={(_, index) => ({
+                length: width,
+                offset: width * index,
+                index,
+              })}
+              onMomentumScrollEnd={handleHorizontalScroll}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+            />
+          </View>
+          {TabButtons}
+        </SafeAreaView>
+      )}
     </>
   );
 }
