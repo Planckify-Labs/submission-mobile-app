@@ -173,7 +173,6 @@ export default function ActivitiesScreen() {
 
     const contentStyle = {
       ...CONTENT_CONTAINER_STYLE,
-      ...(shouldShowEmptyState ? { flex: 1 } : {}),
     };
 
     return (
@@ -220,7 +219,6 @@ export default function ActivitiesScreen() {
 
     const contentStyle = {
       ...CONTENT_CONTAINER_STYLE,
-      ...(shouldShowEmptyState ? { flex: 1 } : {}),
     };
 
     return (

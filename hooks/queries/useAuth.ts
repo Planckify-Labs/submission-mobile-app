@@ -1,7 +1,7 @@
 import { api } from "@/constants/configs/ky";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface TNonceResponse {
   nonce: string;
@@ -170,12 +170,19 @@ export const useIsAuthenticated = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { refreshAccessToken } = useRefreshToken();
+  const refreshAccessTokenRef = useRef(refreshAccessToken);
+
+  // Update the ref when refreshAccessToken changes
+  useEffect(() => {
+    refreshAccessTokenRef.current = refreshAccessToken;
+  }, [refreshAccessToken]);
 
   useEffect(() => {
     const checkAuthentication = async () => {
       try {
         setIsLoading(true);
         const accessToken = await getAccessToken();
+        console.log("accessToken", accessToken);
         const refreshToken = await getRefreshToken();
 
         if (!accessToken && !refreshToken) {
@@ -184,7 +191,7 @@ export const useIsAuthenticated = () => {
         }
 
         if (!accessToken && refreshToken) {
-          const refreshed = await refreshAccessToken();
+          const refreshed = await refreshAccessTokenRef.current();
           setIsAuthenticated(refreshed);
           return;
         }
@@ -199,7 +206,7 @@ export const useIsAuthenticated = () => {
     };
 
     checkAuthentication();
-  }, [refreshAccessToken]);
+  }, []); // Remove refreshAccessToken from dependencies
 
   const logout = useCallback(async () => {
     await clearTokens();
