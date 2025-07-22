@@ -172,7 +172,6 @@ export const useIsAuthenticated = () => {
   const { refreshAccessToken } = useRefreshToken();
   const refreshAccessTokenRef = useRef(refreshAccessToken);
 
-  // Update the ref when refreshAccessToken changes
   useEffect(() => {
     refreshAccessTokenRef.current = refreshAccessToken;
   }, [refreshAccessToken]);
@@ -206,7 +205,7 @@ export const useIsAuthenticated = () => {
     };
 
     checkAuthentication();
-  }, []); // Remove refreshAccessToken from dependencies
+  }, []);
 
   const logout = useCallback(async () => {
     await clearTokens();
