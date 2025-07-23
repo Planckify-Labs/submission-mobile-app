@@ -43,6 +43,7 @@ export default function Wallet() {
     isLoading,
     setActiveWallet,
     loadWallets,
+    renameWallet,
   } = useWallet();
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const { isReady, deferredTask } = usePerformance();
@@ -88,13 +89,18 @@ export default function Wallet() {
         wallet={item}
         isActive={index === activeWalletIndex}
         onPress={() => handleWalletSwitch(index)}
+        allowRename={true}
+        onRename={async (newName: string) => {
+          await renameWallet(index, newName);
+          loadWallets();
+        }}
       />
     ),
-    [activeWalletIndex, handleWalletSwitch],
+    [activeWalletIndex, handleWalletSwitch, renameWallet, loadWallets],
   );
 
   const getItemLayout = useCallback(
-    (data: any, index: number) => ({
+    (_: any, index: number) => ({
       length: 60,
       offset: 60 * index,
       index,

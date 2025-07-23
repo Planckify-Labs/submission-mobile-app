@@ -232,6 +232,15 @@ export function useWallet() {
     return getPublicClient(activeChain.chain);
   }, [activeChain]);
 
+  const renameWallet = useCallback(
+    async (index: number, newName: string) => {
+      if (index < 0 || index >= wallets.length) return false;
+      const updatedWallet = { ...wallets[index], name: newName };
+      return await updateWallet(index, updatedWallet);
+    },
+    [wallets, updateWallet],
+  );
+
   useEffect(() => {
     InteractionManager.runAfterInteractions(() => {
       loadWallets();
@@ -262,5 +271,6 @@ export function useWallet() {
     getWalletAccount,
     getClientForActiveWallet,
     getPublicClientForActiveChain,
+    renameWallet,
   };
 }
