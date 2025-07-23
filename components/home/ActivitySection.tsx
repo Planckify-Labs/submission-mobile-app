@@ -1,6 +1,7 @@
 import { TTransaction } from "@/api/types/transaction";
 import { useTransactionSearch } from "@/hooks/queries/useTransactions";
 import { useWallet } from "@/hooks/useWallet";
+import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight, Send } from "lucide-react-native";
 import React from "react";
@@ -52,20 +53,31 @@ export default function ActivitySection() {
             <Text className="text-light-matte-black text-sm font-bold">
               View All
             </Text>
+
             <MoveRight size={20} color="#c71c4b" />
           </TouchableOpacity>
         </View>
-        <View
-          className={`flex-row ${paymentHistory && paymentHistory.length < 4 ? "justify-start gap-4" : "justify-between"}`}
-        >
-          {(paymentHistory?.length ?? 0) >= 4
-            ? paymentHistory
-                ?.slice(0, 4)
-                .map((payment) => purchaseHistoryButton(payment))
-            : paymentHistory?.map((payment) => purchaseHistoryButton(payment))}
+        <View>
+          <FlashList
+            data={paymentHistory?.slice(0, 4) || []}
+            renderItem={({ item }) => purchaseHistoryButton(item)}
+            keyExtractor={(item) => item.id}
+            numColumns={4}
+            estimatedItemSize={4}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+          />
         </View>
-        <View className="flex-row justify-between gap-2">
-          {Array.from({ length: 4 }).map((_, i) => transferHistoryButton())}
+        <View>
+          <FlashList
+            data={Array.from({ length: 4 }, (_, i) => ({ id: i.toString() }))}
+            renderItem={() => transferHistoryButton()}
+            keyExtractor={(item) => item.id}
+            numColumns={4}
+            estimatedItemSize={4}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+          />
         </View>
       </View>
     </View>
