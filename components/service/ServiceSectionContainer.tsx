@@ -1,5 +1,6 @@
 import OptimizedImage from "@/components/common/OptimizedImage";
 import { ProductItem, SectionData } from "@/constants/dummyData/paymentScreen";
+import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight } from "lucide-react-native";
 import React from "react";
@@ -14,9 +15,43 @@ export default function ServiceSectionContainer({
 }: PaymentSectionContainerProps) {
   const handleViewAll = () => {
     if (section.viewAllPath) {
-      router.push(section.viewAllPath);
+      router.push({
+        pathname: "/view-all-item",
+        params: { categoryId: section.id },
+      });
     }
   };
+
+  const renderItem = ({ item }: { item: ProductItem }) => (
+    <Pressable
+      onPress={() =>
+        router.push({
+          pathname: "/purchase-item",
+          params: { productId: item.id },
+        })
+      }
+      className="items-center justify-center p-1"
+    >
+      {item.icon ? (
+        <View className="rounded-2xl overflow-hidden w-16 h-16 border-2 border-light-matte-black bg-light-primary-red/40">
+          <OptimizedImage
+            source={{ uri: item.icon }}
+            style={{ width: "100%", height: "100%" }}
+            contentFit="cover"
+          />
+        </View>
+      ) : (
+        <View className="rounded-2xl border-2 border-light-matte-black w-16 aspect-square bg-light-primary-red/40" />
+      )}
+      <Text
+        numberOfLines={2}
+        ellipsizeMode="tail"
+        className="text-[10px] text-center text-wrap max-w-16 mt-1"
+      >
+        {item.name}
+      </Text>
+    </Pressable>
+  );
 
   return (
     <View className="px-4">
@@ -37,32 +72,17 @@ export default function ServiceSectionContainer({
             </Pressable>
           )}
         </View>
-        <View className="flex-row gap-2 justify-between flex-wrap">
-          {section.items.map((item: ProductItem) => (
-            <Pressable
-              key={item.id}
-              onPress={() => router.push({
-                pathname: "/purchase-item", 
-                params: { productId: item.id }
-              })}
-              className="max-w-24 grow"
-            >
-              {item.icon ? (
-                <View className="rounded-2xl overflow-hidden w-16 h-16 border-2 border-light-matte-black bg-light-primary-red/40">
-                  <OptimizedImage
-                    source={{ uri: item.icon }}
-                    style={{ width: "100%", height: "100%" }}
-                    contentFit="cover"
-                  />
-                </View>
-              ) : (
-                <View className="rounded-2xl border-2 border-light-matte-black w-16 aspect-square bg-light-primary-red/40" />
-              )}
-              <Text className="text-[10px] text-center text-wrap max-w-16">
-                {item.name}
-              </Text>
-            </Pressable>
-          ))}
+        <View>
+          <FlashList
+            data={section.items}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            estimatedItemSize={8}
+            numColumns={4}
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingVertical: 4 }}
+          />
         </View>
       </View>
     </View>
