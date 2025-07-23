@@ -27,7 +27,6 @@ export default function PurchaseItemScreen() {
 
   useEffect(() => {
     if (inputFields && product) {
-      // Check if the product has input fields
       setHasInput(inputFields.forms.length > 0);
     }
   }, [product, inputFields]);

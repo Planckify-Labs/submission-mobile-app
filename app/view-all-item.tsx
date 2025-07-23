@@ -7,7 +7,13 @@ import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import React, { useRef, useState } from "react";
-import { Animated, Pressable, StatusBar, Text, View } from "react-native";
+import {
+  Animated,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type THeaderItem = {
@@ -71,7 +77,8 @@ const ProductItem = ({
   product,
   router,
 }: { product: TProduct; router: any }) => (
-  <Pressable
+  <TouchableOpacity
+    activeOpacity={0.7}
     onPress={() =>
       router.push({
         pathname: "/purchase-item",
@@ -98,7 +105,7 @@ const ProductItem = ({
     >
       {product.name}
     </Text>
-  </Pressable>
+  </TouchableOpacity>
 );
 
 export default function ViewAllItemScreen() {
@@ -136,9 +143,13 @@ export default function ViewAllItemScreen() {
           edges={["top"]}
         >
           <View className="flex-row items-center p-4">
-            <Pressable onPress={handleBackPress} className="mr-4">
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleBackPress}
+              className="mr-4"
+            >
               <ArrowLeft color="#c71c4b" size={24} />
-            </Pressable>
+            </TouchableOpacity>
             <SingleLoadingSekeleton width={150} height={24} borderRadius={4} />
           </View>
           <View className="pb-4">
@@ -187,9 +198,13 @@ export default function ViewAllItemScreen() {
       <StatusBar barStyle="dark-content" />
       <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
         <View className="flex-row items-center p-4">
-          <Pressable onPress={handleBackPress} className="mr-4">
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleBackPress}
+            className="mr-4"
+          >
             <ArrowLeft color="#c71c4b" size={24} />
-          </Pressable>
+          </TouchableOpacity>
           <Text className="text-light-matte-black text-xl font-bold">
             {categoryData.category.name}
           </Text>

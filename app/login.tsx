@@ -3,11 +3,11 @@ import { ChevronRight, CirclePlus, Key, Wallet } from "lucide-react-native";
 import React, { useRef } from "react";
 import {
   Image,
-  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -73,7 +73,8 @@ export default function Login() {
                 GET STARTED
               </Text>
 
-              <Pressable
+              <TouchableOpacity
+                activeOpacity={0.7}
                 className="bg-light-primary-red mb-3 py-4 px-5 pl-6 rounded-xl flex-row items-center justify-between"
                 onPress={() => router.push("/wallet-setup")}
               >
@@ -89,9 +90,10 @@ export default function Login() {
                   </View>
                 </View>
                 <ChevronRight color="#fff" size={20} />
-              </Pressable>
+              </TouchableOpacity>
 
-              <Pressable
+              <TouchableOpacity
+                activeOpacity={0.7}
                 className="bg-light border border-light-matte-black/10 py-4 px-5 rounded-xl flex-row items-center justify-between"
                 onPress={() => console.log("Login with Google")}
               >
@@ -107,7 +109,7 @@ export default function Login() {
                   </Text>
                 </View>
                 <ChevronRight color="#20222c" size={18} />
-              </Pressable>
+              </TouchableOpacity>
             </View>
 
             <View className="bg-light rounded-3xl p-6 shadow-md- mb-6">
@@ -116,7 +118,8 @@ export default function Login() {
               </Text>
 
               <View className="flex-row gap-3">
-                <Pressable
+                <TouchableOpacity
+                  activeOpacity={0.7}
                   className="flex-1 border border-light-matte-black/10 p-4 rounded-xl"
                   onPress={() => router.push("/import-seed-phrase")}
                 >
@@ -128,9 +131,10 @@ export default function Login() {
                       Seed Phrase
                     </Text>
                   </View>
-                </Pressable>
+                </TouchableOpacity>
 
-                <Pressable
+                <TouchableOpacity
+                  activeOpacity={0.7}
                   className="flex-1 border border-light-matte-black/10 p-4 rounded-xl"
                   onPress={() => router.push("/import-private-key")}
                 >
@@ -142,7 +146,7 @@ export default function Login() {
                       Private Key
                     </Text>
                   </View>
-                </Pressable>
+                </TouchableOpacity>
               </View>
             </View>
 

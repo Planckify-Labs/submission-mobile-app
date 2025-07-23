@@ -21,7 +21,6 @@ import {
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  Pressable,
   ScrollView,
   Text,
   TextInput,
@@ -378,9 +377,13 @@ export default function ItemWithInput({
       >
         <View className="flex-1 p-6">
           <View className="flex-row items-center mb-6">
-            <Pressable onPress={handleGoBack} className="mr-4">
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleGoBack}
+              className="mr-4"
+            >
               <ArrowLeft color="#c71c4b" size={24} />
-            </Pressable>
+            </TouchableOpacity>
             <Text className="text-light-matte-black text-xl font-bold">
               {product.name}
             </Text>
@@ -496,6 +499,7 @@ export default function ItemWithInput({
         }}
       >
         <TouchableOpacity
+          activeOpacity={0.7}
           onPress={scrollToPosition}
           className="w-full h-full justify-center bg-main items-center"
         >

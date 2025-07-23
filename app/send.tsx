@@ -19,11 +19,11 @@ import {
   Alert,
   Animated,
   Easing,
-  Pressable,
   ScrollView,
   StatusBar,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -260,9 +260,13 @@ export default function SendScreen() {
       <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
         <View className="flex-1 p-6">
           <View className="flex-row items-center mb-6">
-            <Pressable onPress={() => router.back()} className="mr-4">
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+              className="mr-4"
+            >
               <ArrowLeft color="#c71c4b" size={24} />
-            </Pressable>
+            </TouchableOpacity>
             <Text className="text-light-matte-black text-xl font-bold">
               Send
             </Text>
@@ -272,7 +276,8 @@ export default function SendScreen() {
             <View className="bg-light rounded-xl p-5 mb-6 shadow-sm">
               <View className="mb-6">
                 <Text className="text-light-matte-black/70 mb-2">From</Text>
-                <Pressable
+                <TouchableOpacity
+                  activeOpacity={0.7}
                   className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between"
                   onPress={() => setWalletModalVisible(true)}
                 >
@@ -298,7 +303,7 @@ export default function SendScreen() {
                     )}
                     <ChevronDown size={16} color="#c71c4b" />
                   </View>
-                </Pressable>
+                </TouchableOpacity>
               </View>
 
               <View className="flex-row items-center justify-between mb-4">
@@ -318,34 +323,39 @@ export default function SendScreen() {
                     placeholder="Enter wallet address"
                     placeholderTextColor="#20222c80"
                   />
-                  <Pressable
+                  <TouchableOpacity
+                    activeOpacity={0.7}
                     className="bg-light-primary-red/10 p-3 rounded-xl"
                     onPress={handlePasteAddress}
                   >
                     <ClipboardCopy size={20} color="#c71c4b" />
-                  </Pressable>
+                  </TouchableOpacity>
                 </View>
 
                 {wallets.length > 1 && (
-                  <Pressable
+                  <TouchableOpacity
+                    activeOpacity={0.7}
                     className="bg-light-primary-red/10 py-2 px-4 rounded-full self-start"
                     onPress={() => setRecipientModalVisible(true)}
                   >
                     <Text className="text-light-primary-red text-xs font-medium">
                       My Wallets
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 )}
               </View>
 
               <View className="mb-6">
                 <View className="flex-row items-center justify-between mb-2">
                   <Text className="text-light-matte-black/70">Amount</Text>
-                  <Pressable onPress={handleMaxAmount}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleMaxAmount}
+                  >
                     <Text className="text-light-primary-red text-xs font-medium">
                       MAX
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 </View>
                 <View className="flex-row items-center">
                   <TextInput
@@ -382,7 +392,8 @@ export default function SendScreen() {
               </View>
             </View>
 
-            <Pressable
+            <TouchableOpacity
+              activeOpacity={0.7}
               className={`bg-light-primary-red py-4 rounded-full items-center ${isLoading ? "opacity-70" : ""}`}
               onPress={handleSend}
               disabled={isLoading}
@@ -402,7 +413,7 @@ export default function SendScreen() {
                   <Text className="text-light font-bold text-lg">Send</Text>
                 </View>
               )}
-            </Pressable>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </SafeAreaView>

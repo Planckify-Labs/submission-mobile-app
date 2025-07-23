@@ -3,14 +3,7 @@ import * as ExpoClipboard from "expo-clipboard";
 import { openBrowserAsync } from "expo-web-browser";
 import { Copy, ExternalLink, ShoppingBag } from "lucide-react-native";
 import React, { useCallback } from "react";
-import {
-  Alert,
-  Image,
-  Pressable,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Alert, Image, Text, TouchableOpacity, View } from "react-native";
 import Chip from "../common/Chip";
 
 const PurchaseCard = React.memo(
@@ -67,10 +60,10 @@ const PurchaseCard = React.memo(
               >
                 {transaction?.txHash || "N/A"}
               </Text>
-              <TouchableOpacity onPress={copyToClipboard}>
+              <TouchableOpacity activeOpacity={0.7} onPress={copyToClipboard}>
                 <Copy size={14} color="#c71c4b" />
               </TouchableOpacity>
-              <TouchableOpacity onPress={openBlockExplorer}>
+              <TouchableOpacity activeOpacity={0.7} onPress={openBlockExplorer}>
                 <ExternalLink size={14} color="#c71c4b" />
               </TouchableOpacity>
             </View>
@@ -98,9 +91,12 @@ const PurchaseCard = React.memo(
             <Text className="text-light-primary-red bg-light-primary-red/10 font-bold text-center pb-2 border border-light-primary-red text-xs absolute -top-3 right-0 left-0 rounded-md p-2">
               Discount Rp.70,000
             </Text>
-            <Pressable className="bg-light-primary-red px-8 py-2 rounded-md mt-3">
+            <TouchableOpacity
+              activeOpacity={0.7}
+              className="bg-light-primary-red px-8 py-2 rounded-md mt-3"
+            >
               <Text className="text-white text-xs font-bold">Repurchase</Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       </View>

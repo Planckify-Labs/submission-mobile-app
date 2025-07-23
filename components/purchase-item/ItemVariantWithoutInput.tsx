@@ -2,13 +2,7 @@ import { useProductById } from "@/hooks/queries/useProducts";
 import { router } from "expo-router";
 import { ArrowLeft, Info } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View
-} from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import OptimizedImage from "../common/OptimizedImage";
 import ItemVariantWithoutInputSkeleton from "./ItemVariantWithoutInputSkeleton";
 
@@ -16,10 +10,14 @@ interface ItemVariantWithoutInputProps {
   productId?: string;
 }
 
-export default function ItemWithoutInput({ productId }: ItemVariantWithoutInputProps) {
+export default function ItemWithoutInput({
+  productId,
+}: ItemVariantWithoutInputProps) {
   const isMounted = useRef(true);
   const { data: product, isLoading, error } = useProductById(productId || "");
-  const [selectedItemVariant, setSelectedItemVariant] = useState<string | null>(null);
+  const [selectedItemVariant, setSelectedItemVariant] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     return () => {
@@ -41,6 +39,7 @@ export default function ItemWithoutInput({ productId }: ItemVariantWithoutInputP
           {error instanceof Error ? error.message : "Unknown error"}
         </Text>
         <TouchableOpacity
+          activeOpacity={0.7}
           className="bg-light-primary-red py-3 px-6 rounded-full"
           onPress={() => router.back()}
         >
@@ -54,9 +53,13 @@ export default function ItemWithoutInput({ productId }: ItemVariantWithoutInputP
     <ScrollView showsVerticalScrollIndicator={false}>
       <View className="flex-1 p-6">
         <View className="flex-row items-center mb-6">
-          <Pressable onPress={() => router.back()} className="mr-4">
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.back()}
+            className="mr-4"
+          >
             <ArrowLeft color="#c71c4b" size={24} />
-          </Pressable>
+          </TouchableOpacity>
           <Text className="text-light-matte-black text-xl font-bold">
             {product.name}
           </Text>
@@ -79,8 +82,9 @@ export default function ItemWithoutInput({ productId }: ItemVariantWithoutInputP
             {product.variants.map((variant) => {
               const price = variant.ProductPrice[0]?.sellPrice || "N/A";
               return (
-                <Pressable
+                <TouchableOpacity
                   key={variant.id}
+                  activeOpacity={0.7}
                   className={`bg-light-main-container border ${
                     selectedItemVariant === variant.id
                       ? "border-light-primary-red bg-light-primary-red/5"
@@ -97,7 +101,7 @@ export default function ItemWithoutInput({ productId }: ItemVariantWithoutInputP
                   <Text className="text-light-matte-black/70 text-xs mt-1">
                     {variant.description}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -160,13 +164,16 @@ export default function ItemWithoutInput({ productId }: ItemVariantWithoutInputP
           activeOpacity={0.7}
           className={`bg-light-primary-red py-4 rounded-full items-center ${!selectedItemVariant ? "opacity-50" : ""}`}
           disabled={!selectedItemVariant}
-          onPress={() => selectedItemVariant && router.push({
-            pathname: "/payment",
-            params: {
-              productId: product.id,
-              variantId: selectedItemVariant
-            }
-          })}
+          onPress={() =>
+            selectedItemVariant &&
+            router.push({
+              pathname: "/payment",
+              params: {
+                productId: product.id,
+                variantId: selectedItemVariant,
+              },
+            })
+          }
         >
           <Text className="text-light font-bold text-lg">
             Continue to Payment

@@ -17,7 +17,6 @@ import { ArrowLeft, ChevronDown } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Pressable,
   ScrollView,
   StatusBar,
   Text,
@@ -320,9 +319,13 @@ export default function PaymentScreen() {
       <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
         <View className="flex-1 px-5 pt-2">
           <View className="flex-row items-center mb-6">
-            <Pressable onPress={() => router.back()} className="mr-4">
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+              className="mr-4"
+            >
               <ArrowLeft color="#c71c4b" size={24} />
-            </Pressable>
+            </TouchableOpacity>
             <Text className="text-light-matte-black text-xl font-bold">
               Confirm Purchase
             </Text>
@@ -432,7 +435,8 @@ export default function PaymentScreen() {
                 <Text className="text-light-matte-black/70 text-sm mb-2">
                   Wallet
                 </Text>
-                <Pressable
+                <TouchableOpacity
+                  activeOpacity={0.7}
                   className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between border border-light-main-container/20"
                   onPress={() => setWalletModalVisible(true)}
                 >
@@ -450,7 +454,7 @@ export default function PaymentScreen() {
                     </View>
                   </View>
                   <ChevronDown size={20} color="#c71c4b" />
-                </Pressable>
+                </TouchableOpacity>
 
                 <View className="flex-row items-center justify-between mt-3">
                   <Text className="text-light-matte-black/60 text-xs">
@@ -467,7 +471,8 @@ export default function PaymentScreen() {
                 <Text className="text-light-matte-black/70 text-sm mb-2">
                   Payment Token
                 </Text>
-                <Pressable
+                <TouchableOpacity
+                  activeOpacity={0.7}
                   className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between border border-light-main-container/20"
                   onPress={() => setTokenModalVisible(true)}
                 >
@@ -493,7 +498,7 @@ export default function PaymentScreen() {
                     </View>
                   </View>
                   <ChevronDown size={20} color="#c71c4b" />
-                </Pressable>
+                </TouchableOpacity>
 
                 {selectedToken && parseFloat(tokenAmountNeeded) > 0 && (
                   <View className="mt-2 bg-light-primary-red/10 p-3 rounded-lg">

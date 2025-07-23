@@ -2,23 +2,23 @@ import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useWallet } from "@/hooks/useWallet";
 import { MoveDiagonal } from "lucide-react-native";
 import React, { useEffect } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import NetworkRadioButtonLoadingSkeletons from "./NetworkRadioButtonLoadingSkeletons";
 
-type Network = {
+type TNetwork = {
   id: string;
   name: string;
   symbol: string;
   color: string;
   isPinned?: boolean;
-  blockchainId?: string; // Add blockchainId to the Network type
+  blockchainId?: string;
 };
 
-type NetworkButtonsProps = {
-  networks: Network[];
+type TNetworkButtonsProps = {
+  networks: TNetwork[];
   activeNetwork: string;
   activeTab: "my-assets" | "explore-assets";
-  selectNetwork: (networkId: string, blockchainId?: string) => void; // Update to pass blockchainId
+  selectNetwork: (networkId: string, blockchainId?: string) => void;
   openNetworkModal: () => void;
 };
 
@@ -28,11 +28,10 @@ const NetworkRadioButtons = ({
   activeTab,
   selectNetwork,
   openNetworkModal,
-}: NetworkButtonsProps) => {
+}: TNetworkButtonsProps) => {
   const { activeChain } = useWallet();
   const { data: blockchains, isLoading } = useBlockchains({ isActive: true });
 
-  // Map blockchain data to network format with blockchainId
   const blockchainNetworks = React.useMemo(() => {
     if (!blockchains) return [];
 
@@ -40,9 +39,9 @@ const NetworkRadioButtons = ({
       id: blockchain.chainId.toString(),
       name: blockchain.name,
       symbol: "ETH",
-      color: "#627EEA", // Default color
+      color: "#627EEA",
       isPinned: true,
-      blockchainId: blockchain.id, // Include the blockchain ID from the API
+      blockchainId: blockchain.id,
     }));
   }, [blockchains]);
 
@@ -102,8 +101,9 @@ const NetworkRadioButtons = ({
           ) : (
             (blockchainNetworks.length > 0 ? blockchainNetworks : networks).map(
               (network) => (
-                <Pressable
+                <TouchableOpacity
                   key={network.id}
+                  activeOpacity={0.7}
                   onPress={() =>
                     selectNetwork(network.id, network.blockchainId)
                   }
@@ -131,19 +131,20 @@ const NetworkRadioButtons = ({
                   >
                     {network.name}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               ),
             )
           )}
         </View>
       </ScrollView>
-      <Pressable
+      <TouchableOpacity
+        activeOpacity={0.7}
         className={`absolute bottom-[1px] top-[1px] right-[1px] aspect-square ${accentColor} rounded-full items-center justify-center`}
         onPress={() => openNetworkModal()}
         accessibilityLabel="Open network selection"
       >
         <MoveDiagonal size={18} color="white" />
-      </Pressable>
+      </TouchableOpacity>
     </View>
   );
 };

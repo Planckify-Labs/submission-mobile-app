@@ -8,11 +8,11 @@ import { ArrowLeft, ChevronDown, Wallet } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
-  Pressable,
   ScrollView,
   StatusBar,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -173,9 +173,13 @@ export default function Withdraw() {
       <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
         <View className="flex-1 p-6 pb-0">
           <View className="flex-row items-center mb-6">
-            <Pressable onPress={() => router.back()} className="mr-4">
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+              className="mr-4"
+            >
               <ArrowLeft color="#c71c4b" size={24} />
-            </Pressable>
+            </TouchableOpacity>
             <Text className="text-light-matte-black text-xl font-bold">
               Withdraw
             </Text>
@@ -185,7 +189,8 @@ export default function Withdraw() {
             <View className="bg-light rounded-xl mb-6 shadow-sm">
               <View className="mb-6 p-5">
                 <Text className="text-light-matte-black/70 mb-2">From</Text>
-                <Pressable
+                <TouchableOpacity
+                  activeOpacity={0.7}
                   className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between"
                   onPress={() => setWalletModalVisible(true)}
                 >
@@ -201,7 +206,7 @@ export default function Withdraw() {
                     </Text>
                   </View>
                   <ChevronDown size={20} color="#c71c4b" />
-                </Pressable>
+                </TouchableOpacity>
 
                 <View className="flex-row items-center justify-between mt-2">
                   <Text className="text-light-matte-black/60 text-xs">
@@ -216,7 +221,8 @@ export default function Withdraw() {
 
               <View className="mb-6 p-5">
                 <Text className="text-light-matte-black/70 mb-2">Token</Text>
-                <Pressable
+                <TouchableOpacity
+                  activeOpacity={0.7}
                   className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between"
                   onPress={() => setTokenModalVisible(true)}
                 >
@@ -224,7 +230,7 @@ export default function Withdraw() {
                     {selectedToken.symbol} - {selectedToken.name}
                   </Text>
                   <ChevronDown size={20} color="#c71c4b" />
-                </Pressable>
+                </TouchableOpacity>
               </View>
 
               <View className="mb-6">
@@ -238,8 +244,9 @@ export default function Withdraw() {
                 >
                   <View className="mx-5 flex-row gap-2">
                     {PAYMENT_PLATFORMS.map((platform) => (
-                      <Pressable
+                      <TouchableOpacity
                         key={platform.id}
+                        activeOpacity={0.7}
                         className={`p-3 rounded-xl items-center mr-3 w-24 ${
                           selectedPlatform.id === platform.id
                             ? "bg-light-primary-red/10"
@@ -259,7 +266,7 @@ export default function Withdraw() {
                         >
                           {platform.name}
                         </Text>
-                      </Pressable>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 </ScrollView>
@@ -282,11 +289,14 @@ export default function Withdraw() {
               <View className="mb-6 p-5">
                 <View className="flex-row items-center justify-between mb-2">
                   <Text className="text-light-matte-black/70">Amount</Text>
-                  <Pressable onPress={handleMaxAmount}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleMaxAmount}
+                  >
                     <Text className="text-light-primary-red text-xs font-medium">
                       MAX
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 </View>
                 <View className="flex-row items-center">
                   <TextInput
@@ -304,20 +314,22 @@ export default function Withdraw() {
 
                 <View className="flex-row flex-wrap justify-between mt-3">
                   {QUICK_AMOUNTS.map((quickAmount) => (
-                    <Pressable
+                    <TouchableOpacity
                       key={quickAmount}
+                      activeOpacity={0.7}
                       className="bg-light-main-container py-2 px-3 rounded-lg mb-2"
                       onPress={() => handleQuickAmount(quickAmount)}
                     >
                       <Text className="text-light-primary-red text-xs font-medium">
                         {quickAmount}
                       </Text>
-                    </Pressable>
+                    </TouchableOpacity>
                   ))}
                 </View>
               </View>
 
-              <Pressable
+              <TouchableOpacity
+                activeOpacity={0.7}
                 className="bg-light-primary-red p-4 rounded-xl mx-5 mb-5"
                 onPress={handleWithdraw}
                 disabled={isLoading}
@@ -325,7 +337,7 @@ export default function Withdraw() {
                 <Text className="text-white font-bold text-center">
                   {isLoading ? "Processing..." : "Withdraw"}
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
 
             <View className="bg-light rounded-xl p-5 mb-6 shadow-sm">

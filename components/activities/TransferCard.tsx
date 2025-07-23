@@ -55,13 +55,14 @@ const TransferCard = React.memo(
               {transactionHash}
             </Text>
             <TouchableOpacity
+              activeOpacity={0.7}
               onPress={() =>
                 copyToClipboard("Transaction hash", transactionHash)
               }
             >
               <Copy size={14} color="#c71c4b" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={openBlockExplorer}>
+            <TouchableOpacity activeOpacity={0.7} onPress={openBlockExplorer}>
               <ExternalLink size={14} color="#c71c4b" />
             </TouchableOpacity>
           </View>

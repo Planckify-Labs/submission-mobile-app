@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 
 export interface TPromotionBannerProps {
   title: string;
@@ -20,14 +20,15 @@ export default function PromotionBanner({
         <View className="flex-1 p-4 justify-center">
           <Text className="text-white font-bold text-xl mb-1">{title}</Text>
           <Text className="text-white/90 mb-3">{description}</Text>
-          <Pressable
+          <TouchableOpacity
+            activeOpacity={0.7}
             className="bg-white rounded-full px-4 py-2 self-start"
             onPress={onPress}
           >
             <Text className="text-light-primary-red font-bold">
               {buttonText}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
     </View>

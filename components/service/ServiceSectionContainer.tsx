@@ -4,7 +4,7 @@ import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight } from "lucide-react-native";
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 
 interface PaymentSectionContainerProps {
   section: SectionData;
@@ -23,7 +23,8 @@ export default function ServiceSectionContainer({
   };
 
   const renderItem = ({ item }: { item: ProductItem }) => (
-    <Pressable
+    <TouchableOpacity
+      activeOpacity={0.7}
       onPress={() =>
         router.push({
           pathname: "/purchase-item",
@@ -50,7 +51,7 @@ export default function ServiceSectionContainer({
       >
         {item.name}
       </Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 
   return (
@@ -61,7 +62,8 @@ export default function ServiceSectionContainer({
             {section.title}
           </Text>
           {section.viewAllPath && (
-            <Pressable
+            <TouchableOpacity
+              activeOpacity={0.7}
               className="flex-row items-center justify-center border-2 ml-auto border-light-primary-red bg-light-primary-red/10 gap-2 rounded-full px-4 py-1"
               onPress={handleViewAll}
             >
@@ -69,7 +71,7 @@ export default function ServiceSectionContainer({
                 View All
               </Text>
               <MoveRight size={20} color="#c71c4b" />
-            </Pressable>
+            </TouchableOpacity>
           )}
         </View>
         <View>

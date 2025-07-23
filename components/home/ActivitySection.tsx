@@ -19,18 +19,25 @@ export default function ActivitySection() {
   });
 
   const purchaseHistoryButton = (payment: TTransaction) => (
-    <View key={payment.id} className="items-center justify-center">
+    <TouchableOpacity
+      key={payment.id}
+      activeOpacity={0.7}
+      className="items-center justify-center"
+    >
       <View className="bg-light-primary-red/10 rounded-xl aspect-square w-20 items-center justify-center">
         <Send color="#c71c4b" size={35} />
       </View>
       <Text className="text-light-matte-black text-center text-sm font-bold">
         Product Name
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 
   const transferHistoryButton = () => (
-    <View className="justify-center items-center">
+    <TouchableOpacity
+      activeOpacity={0.7}
+      className="justify-center items-center"
+    >
       <View className="aspect-square w-full max-w-[70px] relative bg-light-primary-red/10 rounded-full items-center justify-center p-3">
         <Text className="text-light-matte-black font-bold text-xs">88 ETH</Text>
         <View className="bg-light-main-container aspect-square w-6 rounded-full absolute bottom-0 right-0 items-center justify-center" />
@@ -38,7 +45,7 @@ export default function ActivitySection() {
       <Text className="text-light-matte-black text-center text-xs font-bold mt-1">
         0x123...456
       </Text>
-    </View>
+    </TouchableOpacity>
   );
   return (
     <View className="px-4">

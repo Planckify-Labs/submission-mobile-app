@@ -12,11 +12,11 @@ import React, { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
   Text,
+  TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -162,7 +162,8 @@ export default function Wallet() {
               scrollEnabled={false}
               updateCellsBatchingPeriod={50}
               ListFooterComponent={
-                <Pressable
+                <TouchableOpacity
+                  activeOpacity={0.7}
                   className="flex-row items-center justify-center p-3 border border-dashed border-light-matte-black/20 rounded-xl mt-2"
                   onPress={() => router.push("/login")}
                 >
@@ -174,7 +175,7 @@ export default function Wallet() {
                   <Text className="text-light-primary-red font-medium">
                     Add New Wallet
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               }
             />
           </View>

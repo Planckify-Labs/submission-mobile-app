@@ -19,8 +19,8 @@ import {
   Dimensions,
   Image,
   PanResponder,
-  Pressable,
   Text,
+  TouchableOpacity,
   Vibration,
   View,
 } from "react-native";
@@ -138,7 +138,8 @@ export default function BalanceSection() {
             <Text className="text-light-matte-black/70 text-xs mr-2">
               {activeWallet.name || "Wallet"}
             </Text>
-            <Pressable
+            <TouchableOpacity
+              activeOpacity={0.7}
               onPress={() => copyToClipboard(activeWallet.address, "Address")}
               className="flex-row items-center ml-auto gap-2"
             >
@@ -149,12 +150,13 @@ export default function BalanceSection() {
                 )}
               </Text>
               <Copy size={12} color="#c71c4b" className="ml-1" />
-            </Pressable>
+            </TouchableOpacity>
           </View>
 
           <View className="bg-light-main-container/50 p-4 rounded-xl mb-6">
             <View className="flex-row items-center justify-between mb-1">
-              <Pressable
+              <TouchableOpacity
+                activeOpacity={0.7}
                 onPress={() => {
                   setSelectedToken(activeChain.chain.nativeCurrency.symbol);
                   router.push("/asset-explorer");
@@ -165,9 +167,10 @@ export default function BalanceSection() {
                   {selectedToken}
                 </Text>
                 <ChevronDown size={14} color="#c71c4b" />
-              </Pressable>
+              </TouchableOpacity>
 
-              <Pressable
+              <TouchableOpacity
+                activeOpacity={0.7}
                 onPress={() => {
                   Vibration.vibrate(100);
                   setShowBalance((prevValue) => !prevValue);
@@ -178,7 +181,7 @@ export default function BalanceSection() {
                 ) : (
                   <EyeOff size={16} color="#c71c4b" />
                 )}
-              </Pressable>
+              </TouchableOpacity>
             </View>
 
             <View>
@@ -198,16 +201,20 @@ export default function BalanceSection() {
 
           <View className="flex-row gap-4 flex-wrap">
             <View className="flex-1 min-w-[100px] gap-3 flex-row flex-wrap">
-              <Pressable className="hidden flex-1 min-w-[120px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center">
+              <TouchableOpacity
+                activeOpacity={0.7}
+                className="hidden flex-1 min-w-[120px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center"
+              >
                 <View className="bg-light-primary-red/10 rounded-full p-1.5 mr-2">
                   <PlusIcon size={20} color="#c71c4b" />
                 </View>
                 <Text className="text-light-matte-black text-[10px] font-medium">
                   Top Up
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
 
-              <Pressable
+              <TouchableOpacity
+                activeOpacity={0.7}
                 onPress={() => router.push("/withdraw")}
                 className="flex-1 min-w-[100px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center"
               >
@@ -220,20 +227,25 @@ export default function BalanceSection() {
                 <Text className="text-light-matte-black text-[10px] font-medium">
                   Withdraw
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
 
             <View className="flex-row gap-3 flex-wrap justify-center">
-              <Pressable className="items-center m-1" onPress={openModal}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                className="items-center m-1"
+                onPress={openModal}
+              >
                 <View className="bg-light-matte-black rounded-full items-center justify-center w-12 h-12 mb-1">
                   <ArrowDownToLine size={20} color="#fff" />
                 </View>
                 <Text className="text-xs text-light-matte-black font-medium">
                   Receive
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
 
-              <Pressable
+              <TouchableOpacity
+                activeOpacity={0.7}
                 className="items-center m-1"
                 onPress={() => router.push("/send")}
               >
@@ -243,7 +255,7 @@ export default function BalanceSection() {
                 <Text className="text-xs text-light-matte-black font-medium">
                   Send
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           </View>
         </View>

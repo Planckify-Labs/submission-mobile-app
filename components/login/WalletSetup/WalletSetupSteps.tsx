@@ -1,7 +1,7 @@
 import { TWalletSetupStepsProps } from "@/constants/types/walletTypes";
 import { ArrowLeft } from "lucide-react-native";
 import React, { memo } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 const WalletSetupSteps = memo(function WalletSetupSteps({
   currentStep,
@@ -40,7 +40,6 @@ const WalletSetupSteps = memo(function WalletSetupSteps({
           {currentStepContent.content}
         </View>
       </ScrollView>
-
       <StepActionButton
         buttonText={currentStepContent.buttonText}
         onPress={currentStepContent.onButtonPress}
@@ -76,13 +75,14 @@ const NavigationBackButton = ({
   onPress: () => void;
   isDisabled: boolean;
 }) => (
-  <Pressable
+  <TouchableOpacity
+    activeOpacity={0.7}
     onPress={onPress}
     className={`mb-6 ${isDisabled ? "opacity-30" : ""}`}
     disabled={isDisabled}
   >
     <ArrowLeft color="#c71c4b" size={24} />
-  </Pressable>
+  </TouchableOpacity>
 );
 
 const StepActionButton = ({
@@ -95,7 +95,8 @@ const StepActionButton = ({
   isDisabled: boolean;
 }) => (
   <View className="p-6 bg-light-main-container">
-    <Pressable
+    <TouchableOpacity
+      activeOpacity={0.7}
       onPress={onPress}
       disabled={isDisabled}
       className={`bg-light-primary-red py-4 rounded-full items-center ${
@@ -103,7 +104,7 @@ const StepActionButton = ({
       }`}
     >
       <Text className="text-light font-bold text-lg">{buttonText}</Text>
-    </Pressable>
+    </TouchableOpacity>
   </View>
 );
 

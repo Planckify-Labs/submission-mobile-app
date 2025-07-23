@@ -8,11 +8,11 @@ import { router } from "expo-router";
 import { QrCode } from "lucide-react-native";
 import React from "react";
 import {
-  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -41,13 +41,14 @@ export default function Home() {
             experimentalBlurMethod="dimezisBlurView"
             className="overflow-hidden rounded-full"
           >
-            <Pressable
+            <TouchableOpacity
+              activeOpacity={0.7}
               onPress={() => router.push("/scan-to-pay")}
               className="bg-light-primary-red/40 px-10 py-4 rounded-full flex-row items-center gap-2"
             >
               <QrCode size={22} color="#fff" />
               <Text className="text-light font-bold text-2xl">Scan To Pay</Text>
-            </Pressable>
+            </TouchableOpacity>
           </BlurView>
         </View>
       </SafeAreaView>
