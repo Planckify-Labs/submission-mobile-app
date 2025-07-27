@@ -2,7 +2,7 @@ import { TProduct } from "@/api/types/product";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import SearchBar from "@/components/common/SearchBar";
 import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
-import { useProductsByCategories } from "@/hooks/queries/useProducts";
+import { useProductsByCategory } from "@/hooks/queries/useProducts";
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
@@ -73,56 +73,60 @@ const LoadingSkeletons = () => {
   );
 };
 
-const ProductItem = ({
-  product,
-  router,
-}: { product: TProduct; router: any }) => (
-  <TouchableOpacity
-    activeOpacity={0.7}
-    onPress={() =>
+const ProductItem = React.memo(
+  ({ product, router }: { product: TProduct; router: any }) => {
+    const handlePress = React.useCallback(() => {
       router.push({
         pathname: "/purchase-item",
         params: { productId: product.id },
-      })
-    }
-    className="items-center justify-center p-1"
-  >
-    {product.imageUrl ? (
-      <View className="rounded-2xl overflow-hidden w-16 h-16 border-2 border-light-matte-black bg-light-primary-red/40">
-        <OptimizedImage
-          source={{ uri: product.imageUrl }}
-          style={{ width: "100%", height: "100%" }}
-          contentFit="cover"
-        />
-      </View>
-    ) : (
-      <View className="rounded-2xl border-2 border-light-matte-black w-16 aspect-square bg-light-primary-red/40" />
-    )}
-    <Text
-      numberOfLines={2}
-      ellipsizeMode="tail"
-      className="text-[10px] text-center text-wrap max-w-16 mt-1"
-    >
-      {product.name}
-    </Text>
-  </TouchableOpacity>
+      });
+    }, [product.id, router]);
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={handlePress}
+        className="items-center justify-center p-1"
+      >
+        {product.imageUrl ? (
+          <View className="rounded-2xl overflow-hidden w-16 h-16 border-2 border-light-matte-black bg-light-primary-red/40">
+            <OptimizedImage
+              source={{ uri: product.imageUrl }}
+              style={{ width: "100%", height: "100%" }}
+              contentFit="cover"
+            />
+          </View>
+        ) : (
+          <View className="rounded-2xl border-2 border-light-matte-black w-16 aspect-square bg-light-primary-red/40" />
+        )}
+        <Text
+          numberOfLines={2}
+          ellipsizeMode="tail"
+          className="text-[10px] text-center text-wrap max-w-16 mt-1"
+        >
+          {product.name}
+        </Text>
+      </TouchableOpacity>
+    );
+  },
 );
 
+ProductItem.displayName = "ProductItem";
+
 export default function ViewAllItemScreen() {
-  const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
+  const { categoryId, categoryName } = useLocalSearchParams<{
+    categoryId: string;
+    categoryName: string;
+  }>();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const {
-    data: productsByCategories,
+    data: products,
     isLoading,
     error,
-  } = useProductsByCategories();
-
-  const categoryData = productsByCategories?.find(
-    (category) => category.category.id === categoryId,
-  );
+  } = useProductsByCategory(categoryId);
 
   const searchBarOpacity = scrollY.interpolate({
     inputRange: [50, 150],
@@ -133,6 +137,15 @@ export default function ViewAllItemScreen() {
   const handleBackPress = () => {
     router.back();
   };
+
+  const renderProductItem = React.useCallback(
+    ({ item: product }: { item: TProduct }) => (
+      <ProductItem product={product} router={router} />
+    ),
+    [router],
+  );
+
+  const keyExtractor = React.useCallback((product: TProduct) => product.id, []);
 
   if (isLoading) {
     return (
@@ -166,7 +179,7 @@ export default function ViewAllItemScreen() {
     );
   }
 
-  if (error || !categoryData) {
+  if (error || !products) {
     return (
       <SafeAreaView className="flex-1 bg-light-main-container items-center justify-center">
         <Text>Failed to load items.</Text>
@@ -178,20 +191,14 @@ export default function ViewAllItemScreen() {
   }
 
   const filteredProducts = searchQuery
-    ? categoryData.products.filter(
+    ? products.filter(
         (product) =>
           product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           product.description
             ?.toLowerCase()
             .includes(searchQuery.toLowerCase()),
       )
-    : categoryData.products;
-
-  const listData: TListItem[] = [
-    { type: "header", title: categoryData.category.name },
-    { type: "searchBar", searchQuery, setSearchQuery },
-    { type: "items", products: filteredProducts },
-  ];
+    : products;
 
   return (
     <>
@@ -206,63 +213,42 @@ export default function ViewAllItemScreen() {
             <ArrowLeft color="#c71c4b" size={24} />
           </TouchableOpacity>
           <Text className="text-light-matte-black text-xl font-bold">
-            {categoryData.category.name}
+            {categoryName || "Products"}
           </Text>
         </View>
-        <FlashList
-          data={listData}
-          renderItem={({ item }) => {
-            if (item.type === "searchBar") {
-              return (
-                <View className="pb-4">
-                  <SearchBar
-                    searchQuery={item.searchQuery}
-                    setSearchQuery={item.setSearchQuery}
-                    searchBarOpacity={searchBarOpacity}
-                    variant="borderedMinimal"
-                    placeholder={`Search in ${categoryData.category.name}...`}
-                  />
-                </View>
-              );
-            }
 
-            if (item.type === "items") {
-              return (
-                <View className="px-4">
-                  <View className="w-full" style={{ minHeight: 300 }}>
-                    <FlashList
-                      data={item.products}
-                      renderItem={({ item: product }) => (
-                        <ProductItem product={product} router={router} />
-                      )}
-                      keyExtractor={(product) => product.id}
-                      estimatedItemSize={20}
-                      numColumns={4}
-                      showsHorizontalScrollIndicator={false}
-                      showsVerticalScrollIndicator={false}
-                      contentContainerStyle={{
-                        paddingVertical: 4,
-                        paddingHorizontal: 4,
-                      }}
-                    />
-                  </View>
-                </View>
-              );
-            }
-
-            return null;
-          }}
-          keyExtractor={(item, index) => `${item.type}-${index}`}
-          showsVerticalScrollIndicator={false}
-          stickyHeaderIndices={[1]}
-          contentContainerStyle={{ paddingBottom: 24 }}
-          estimatedItemSize={30}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false },
-          )}
-          scrollEventThrottle={16}
-        />
+        <View className="flex-1 px-4 relative">
+          <View className="absolute bg-transparent top-0 left-0 right-0 z-10">
+            <SearchBar
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              searchBarOpacity={searchBarOpacity}
+              variant="borderedMinimal"
+              placeholder={`Search in ${categoryName || "Products"}...`}
+            />
+          </View>
+          <FlashList
+            data={filteredProducts}
+            renderItem={renderProductItem}
+            keyExtractor={keyExtractor}
+            estimatedItemSize={120}
+            numColumns={4}
+            className="pt-16"
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingVertical: 18,
+            }}
+            overrideItemLayout={(layout) => {
+              layout.size = 120;
+            }}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: false },
+            )}
+            scrollEventThrottle={16}
+          />
+        </View>
       </SafeAreaView>
     </>
   );

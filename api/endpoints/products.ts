@@ -50,7 +50,9 @@ export const productApi = {
   },
 
   getProductsByCategory: async (categoryId: string): Promise<TProduct[]> => {
-    const response = await api.get(`products/category/${categoryId}`);
+    const response = await api.get(
+      `products/categories/${categoryId}/products`,
+    );
     return response.json();
   },
 

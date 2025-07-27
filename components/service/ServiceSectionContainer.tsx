@@ -17,7 +17,7 @@ export default function ServiceSectionContainer({
     if (section.viewAllPath) {
       router.push({
         pathname: "/view-all-item",
-        params: { categoryId: section.id },
+        params: { categoryId: section.id, categoryName: section.title },
       });
     }
   };
