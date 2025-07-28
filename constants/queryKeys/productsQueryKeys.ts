@@ -3,7 +3,8 @@ export const productsQueryKeys = {
   lists: () => [...productsQueryKeys.all, "list"] as const,
   list: (filters: Record<string, unknown>) =>
     [...productsQueryKeys.lists(), filters] as const,
-  grouped: () => [...productsQueryKeys.all, "grouped-by-categories"] as const,
+  grouped: (take?: number) =>
+    [...productsQueryKeys.all, "grouped-by-categories", { take }] as const,
   byId: (id: string) => [...productsQueryKeys.all, "detail", id] as const,
   byCategory: (categoryId: string) =>
     [...productsQueryKeys.all, "by-category", categoryId] as const,

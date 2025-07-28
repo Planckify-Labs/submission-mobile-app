@@ -27,12 +27,12 @@ export const useProducts = () => {
   });
 };
 
-export const useProductsByCategories = () => {
+export const useProductsByCategories = (take?: number) => {
   return useQuery<TProductWithCategory[]>({
-    queryKey: productsQueryKeys.grouped(),
+    queryKey: productsQueryKeys.grouped(take),
     queryFn: async () => {
       try {
-        const response = await productApi.getProductsByCategories();
+        const response = await productApi.getProductsByCategories(take || 8);
         return response;
       } catch (error) {
         console.error("API Error:", error);

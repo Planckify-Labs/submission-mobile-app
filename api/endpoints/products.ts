@@ -21,12 +21,15 @@ export const productApi = {
   getAllProducts: (): Promise<TProduct[]> =>
     fetchList<TProduct[]>(publicApi, "products", "Failed to fetch products"),
 
-  getProductsByCategories: (): Promise<TProductWithCategory[]> =>
-    fetchList<TProductWithCategory[]>(
+  getProductsByCategories: (take?: number): Promise<TProductWithCategory[]> => {
+    const params = take ? { take } : {};
+    return searchItems<TProductWithCategory[]>(
       publicApi,
       "products/grouped-by-categories",
+      params,
       "Failed to fetch products by categories",
-    ),
+    );
+  },
 
   searchProducts: (params?: TProductSearchParams): Promise<TProduct[]> =>
     searchItems<TProduct[]>(
