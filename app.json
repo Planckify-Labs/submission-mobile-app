@@ -1,55 +1,56 @@
 {
-  "expo": {
-    "name": "TakumiPay - Your Crypto, Your Digital Goods",
-    "slug": "takumipay-mobile-app",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/takumipay-logo.png",
-    "scheme": "takumipay",
-    "userInterfaceStyle": "automatic",
-    "jsEngine": "hermes",
-    "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true,
-      "jsEngine": "hermes"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/takumipay-logo.png",
-        "backgroundColor": "#ffffff"
-      },
-      "jsEngine": "hermes",
-      "edgeToEdgeEnabled": true,
-      "package": "com.planckify.takumipay"
-    },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/takumipay-no-bg.png"
-    },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-camera",
-        {
-          "image": "./assets/images/takumipay-logo.png",
-          "imageWidth": 100,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
-        }
-      ],
-      "expo-secure-store"
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "tsconfigPaths": true
-    },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "a1df7e5b-c6f5-46a6-8ae1-fcab178f08ab"
-      }
-    },
-    "owner": "cstralpt"
-  }
+	"expo": {
+		"name": "TakumiPay",
+		"slug": "takumipay-mobile-app",
+		"version": "1.0.0",
+		"orientation": "portrait",
+		"icon": "./assets/images/takumipay-logo.png",
+		"scheme": "takumipay",
+		"userInterfaceStyle": "automatic",
+		"jsEngine": "hermes",
+		"newArchEnabled": true,
+		"ios": {
+			"supportsTablet": true,
+			"jsEngine": "hermes"
+		},
+		"android": {
+			"adaptiveIcon": {
+				"foregroundImage": "./assets/images/takumipay-logo.png",
+				"backgroundColor": "#ffffff",
+				"roundIconImage": "./assets/images/takumipay-logo.png"
+			},
+			"jsEngine": "hermes",
+			"edgeToEdgeEnabled": true,
+			"package": "com.planckify.takumipay"
+		},
+		"web": {
+			"bundler": "metro",
+			"output": "static",
+			"favicon": "./assets/images/takumipay-no-bg.png"
+		},
+		"plugins": [
+			"expo-router",
+			[
+				"expo-camera",
+				{
+					"image": "./assets/images/takumipay-logo.png",
+					"imageWidth": 100,
+					"resizeMode": "contain",
+					"backgroundColor": "#ffffff"
+				}
+			],
+			"expo-secure-store"
+		],
+		"experiments": {
+			"typedRoutes": true,
+			"tsconfigPaths": true
+		},
+		"extra": {
+			"router": {},
+			"eas": {
+				"projectId": "a1df7e5b-c6f5-46a6-8ae1-fcab178f08ab"
+			}
+		},
+		"owner": "cstralpt"
+	}
 }
