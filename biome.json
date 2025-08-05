@@ -1,15 +1,13 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "vcs": { "enabled": false, "clientKind": "git", "useIgnoreFile": false },
-  "files": { "ignoreUnknown": false, "ignore": [] },
-  "formatter": { "enabled": true, "indentStyle": "space" },
-  "organizeImports": { "enabled": true },
+  "$schema": "https://biomejs.dev/schemas/2.1.2/schema.json",
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space"
+  },
   "linter": {
     "enabled": true,
     "rules": {
       "recommended": false,
-      "a11y": { "noBlankTarget": "off" },
-      "complexity": { "noWith": "warn" },
       "correctness": {
         "noChildrenProp": "error",
         "noEmptyCharacterClassInRegex": "warn",
@@ -23,8 +21,9 @@
         "useIsNan": "error",
         "useJsxKeyInIterable": "error"
       },
-      "security": { "noDangerouslySetInnerHtmlWithChildren": "error" },
-      "style": { "noVar": "error" },
+      "security": {
+        "noDangerouslySetInnerHtmlWithChildren": "error"
+      },
       "suspicious": {
         "noCommentText": "error",
         "noDoubleEquals": "warn",
@@ -34,15 +33,16 @@
         "noDuplicateObjectKeys": "error",
         "noDuplicateParameters": "error",
         "noRedeclare": "warn",
-        "noUnsafeNegation": "warn",
-        "useValidTypeof": "error"
+        "noUnsafeNegation": "warn"
       }
-    },
-    "ignore": ["android/app/build", "dist/*"]
+    }
   },
   "javascript": {
-    "formatter": { "quoteStyle": "double" },
+    "formatter": {
+      "quoteStyle": "double"
+    },
     "globals": [
+      "__DEV__",
       "onscrollend",
       "onpointerleave",
       "oncontextrestored",
@@ -167,42 +167,11 @@
       "oninput",
       "onmessageerror",
       "onselectstart",
-      "__DEV__",
       "onmousewheel",
       "ononline"
     ]
   },
-  "overrides": [
-    { "include": ["**/*.d.ts"], "linter": { "rules": {} } },
-    {
-      "include": ["**/metro.config.js"],
-      "javascript": { "globals": ["exports"] }
-    },
-    { "include": ["**/*.js", "**/*.jsx"] },
-    {
-      "include": ["**/*.ts", "**/*.tsx", "**/*.d.ts"],
-      "javascript": { "globals": [] },
-      "linter": {
-        "rules": {
-          "complexity": { "noUselessConstructor": "warn" },
-          "correctness": {
-            "noUndeclaredVariables": "off",
-            "noUnusedVariables": "warn"
-          },
-          "style": {
-            "useConsistentArrayType": {
-              "level": "warn",
-              "options": { "syntax": "shorthand" }
-            }
-          },
-          "suspicious": {
-            "noDuplicateClassMembers": "error",
-            "noExtraNonNullAssertion": "warn",
-            "noRedeclare": "warn"
-          }
-        }
-      }
-    },
-    { "include": ["*.web.*"] }
-  ]
+  "files": {
+    "ignoreUnknown": true
+  }
 }
