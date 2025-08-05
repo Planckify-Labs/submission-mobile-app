@@ -62,29 +62,30 @@ const NetworkRadioButtons = ({
   };
 
   const getNetworkIdFromChainId = (chainId: number): string => {
-    const chainToNetworkMap: Record<number, string> = {
-      1: "ethereum",
-      137: "polygon",
-      56: "binance",
-      43114: "avalanche",
-      42161: "arbitrum",
-      10: "optimism",
-      8453: "base",
-      250: "fantom",
-      25: "cronos",
-    };
+    const blockchain = blockchains?.find((b) => b.chainId === chainId);
 
-    return chainToNetworkMap[chainId] || "ethereum";
+    if (blockchain) {
+      return blockchain.chainId.toString();
+    }
+
+    return "ethereum";
   };
 
   useEffect(() => {
     if (activeChain?.chain?.id) {
       const networkId = getNetworkIdFromChainId(activeChain.chain.id);
-      if (networks.some((network) => network.id === networkId)) {
+
+      const blockchain = blockchains?.find(
+        (b) => b.chainId === activeChain.chain.id,
+      );
+
+      if (blockchain) {
+        selectNetwork(networkId, blockchain.id);
+      } else if (networks.some((network) => network.id === networkId)) {
         selectNetwork(networkId);
       }
     }
-  }, [activeChain?.chain?.id]);
+  }, [activeChain?.chain?.id, blockchains]);
 
   const accentColor = getAccentColor();
   const borderColor = getBorderColor();

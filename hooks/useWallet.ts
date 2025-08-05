@@ -1,7 +1,13 @@
 import { usePerformance } from "@/components/providers/PerformanceProvider";
-import { ChainConfig, supportedChains } from "@/constants/configs/chainConfig";
+import {
+  type ChainConfig,
+  supportedChains,
+} from "@/constants/configs/chainConfig";
 import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
-import { TWallet, TWalletCreationParams } from "@/constants/types/walletTypes";
+import type {
+  TWallet,
+  TWalletCreationParams,
+} from "@/constants/types/walletTypes";
 import * as walletService from "@/services/walletService";
 import { getPublicClient, getWalletClient } from "@/utils/clients";
 import { createWalletFromParams } from "@/utils/walletUtils";
@@ -9,7 +15,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useMemo } from "react";
 import { Alert, InteractionManager } from "react-native";
-import { Account, PublicClient, WalletClient } from "viem";
+import type { Account, PublicClient, WalletClient } from "viem";
 
 export function useWallet() {
   const { deferredTask } = usePerformance();
@@ -182,18 +188,54 @@ export function useWallet() {
 
   const changeActiveChain = useCallback(
     async (chainId: number) => {
-      const chain = supportedChains.find(
-        (c: ChainConfig) => c.chain.id === chainId,
-      );
-      if (chain) {
-        try {
-          await setActiveChainMutation.mutateAsync(chain);
-          return true;
-        } catch {
+      try {
+        const { blockchainApi } = await import("@/api/endpoints/blockchains");
+
+        const blockchains = await blockchainApi.searchBlockchains({
+          chainId,
+        });
+        const blockchain = blockchains[0];
+
+        if (!blockchain) {
+          console.error(`No blockchain found with chainId ${chainId}`);
           return false;
         }
+
+        const apiChain: ChainConfig = {
+          chain: {
+            id: blockchain.chainId,
+            name: blockchain.name,
+            nativeCurrency: {
+              name: blockchain.tokens?.[0]?.name || "Ether",
+              symbol: blockchain.tokens?.[0]?.symbol || "ETH",
+              decimals: blockchain.tokens?.[0]?.decimals || 18,
+            },
+            rpcUrls: {
+              default: { http: [blockchain.rpcUrl] },
+              public: { http: [blockchain.rpcUrl] },
+            },
+            blockExplorers: blockchain.blockExplorer
+              ? {
+                  default: {
+                    name: blockchain.name,
+                    url: blockchain.blockExplorer,
+                  },
+                }
+              : undefined,
+          },
+          iconUrl: blockchain.tokens?.[0]?.logoUrl,
+          isTestnet:
+            blockchain.name.toLowerCase().includes("testnet") ||
+            blockchain.name.toLowerCase().includes("sepolia") ||
+            blockchain.name.toLowerCase().includes("goerli"),
+        };
+
+        await setActiveChainMutation.mutateAsync(apiChain);
+        return true;
+      } catch (error) {
+        console.error("Failed to create chain from API data:", error);
+        return false;
       }
-      return false;
     },
     [setActiveChainMutation],
   );
