@@ -7,6 +7,7 @@ import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useCreateBooking } from "@/hooks/queries/useBookings";
 import { useProductVariantById } from "@/hooks/queries/useProducts";
@@ -89,25 +90,29 @@ export default function PaymentScreen() {
     }
   }, [tokens]);
 
-  useEffect(() => {
-    const fetchExchangeRate = async () => {
-      setIsLoadingRate(true);
-      try {
-        const response = await exchangeRateApi.getLatestExchangeRate({
-          fromCurrency: "USDT",
-          toCurrency: "IDR",
-        });
-        setExchangeRate(response);
-      } catch (error) {
-        console.error("Error fetching exchange rate:", error);
-        Alert.alert("Error", "Failed to fetch exchange rate");
-      } finally {
-        setIsLoadingRate(false);
-      }
-    };
+  const fetchExchangeRate = useCallback(async () => {
+    if (!selectedToken) return;
 
-    fetchExchangeRate();
-  }, []);
+    setIsLoadingRate(true);
+    try {
+      const response = await exchangeRateApi.getLatestExchangeRate({
+        fromCurrency: selectedToken.symbol,
+        toCurrency: "IDR",
+      });
+      setExchangeRate(response);
+    } catch (error) {
+      console.error("Error fetching exchange rate:", error);
+      Alert.alert("Error", "Failed to fetch exchange rate");
+    } finally {
+      setIsLoadingRate(false);
+    }
+  }, [selectedToken]);
+
+  useEffect(() => {
+    if (selectedToken) {
+      fetchExchangeRate();
+    }
+  }, [selectedToken, fetchExchangeRate]);
 
   const tokenAmountNeeded =
     variantData?.ProductPrice?.[0]?.sellPrice && exchangeRate
@@ -197,6 +202,7 @@ export default function PaymentScreen() {
   const handleSelectToken = (token: TToken) => {
     setSelectedToken(token);
     setTokenModalVisible(false);
+    // Exchange rate will be refetched automatically due to the useEffect dependency on selectedToken
   };
 
   const formatBalance = (rawBalance: bigint) => {
@@ -264,9 +270,23 @@ export default function PaymentScreen() {
     createBooking,
     activeBlockchain,
     parsedCustomerInfo,
+    exchangeRate,
   ]);
 
+  const { isAuthenticated } = useIsAuthenticated();
+
   const handlePaymentConfirmation = () => {
+    if (!isAuthenticated) {
+      Alert.alert(
+        "Authentication Required",
+        "Please sign in with your wallet before proceeding with checkout.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Sign In", onPress: () => router.push("/auth") },
+        ],
+      );
+      return;
+    }
     setPinModalVisible(true);
   };
 
