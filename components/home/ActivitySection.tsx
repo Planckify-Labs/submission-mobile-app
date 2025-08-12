@@ -103,11 +103,11 @@ export default function ActivitySection() {
 
             <View className="items-center max-w-72">
               <Text className="text-light-matte-black font-bold text-xl mb-3 text-center">
-                Welcome to TakumiPay! 🎉
+                Welcome to your Takumi Wallet! 🎉
               </Text>
               <Text className="text-light-matte-black/60 text-center text-base leading-6 mb-8">
-                Connect your wallet to see all your amazing transactions and
-                activities in one place
+                Sign In with your wallet to see all your onchain activities in
+                one place
               </Text>
             </View>
 

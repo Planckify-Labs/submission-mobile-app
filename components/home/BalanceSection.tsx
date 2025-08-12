@@ -127,7 +127,7 @@ export default function BalanceSection() {
                 />
               </View>
               <Text className="font-bold text-light-matte-black text-base">
-                TakumiPay
+                Takumi Wallet
               </Text>
             </View>
 

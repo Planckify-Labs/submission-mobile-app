@@ -8,8 +8,8 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
   useWindowDimensions,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -61,7 +61,7 @@ export default function Login() {
               </View>
 
               <Text className="text-light-matte-black text-4xl font-bold text-center mb-2">
-                TakumiPay
+                Takumi Wallet
               </Text>
               <Text className="text-light-matte-black/70 text-base text-center max-w-72">
                 Next-Gen AI Wallet for All Your Payment Needs
