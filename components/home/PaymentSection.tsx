@@ -14,6 +14,8 @@ const paymentItems = [
         resizeMode="contain"
       />
     ),
+    categoryId:
+      process.env.EXPO_PUBLIC_PAYMENT_CATEGORY_PRODUCT_ID?.split(",")[0],
   },
   {
     name: "Gaming",
@@ -24,6 +26,8 @@ const paymentItems = [
         resizeMode="contain"
       />
     ),
+    categoryId:
+      process.env.EXPO_PUBLIC_PAYMENT_CATEGORY_PRODUCT_ID?.split(",")[1],
   },
   {
     name: "PLN",
@@ -34,12 +38,34 @@ const paymentItems = [
         resizeMode="contain"
       />
     ),
+    productId:
+      process.env.EXPO_PUBLIC_PAYMENT_CATEGORY_PRODUCT_ID?.split(",")[2],
   },
 ];
 
 export default function PaymentSection() {
   const renderPaymentItem = ({ item }: { item: (typeof paymentItems)[0] }) => (
-    <TouchableOpacity activeOpacity={0.7} className="items-center">
+    <TouchableOpacity
+      activeOpacity={0.7}
+      className="items-center"
+      onPress={() => {
+        if (item.categoryId) {
+          router.push({
+            pathname: "/view-all-item",
+            params: {
+              categoryId: item.categoryId,
+              productId: item.productId,
+              categoryName: item.name,
+            },
+          });
+        } else {
+          router.push({
+            pathname: "/purchase-item",
+            params: { productId: item.productId },
+          });
+        }
+      }}
+    >
       <View className="rounded-2xl border-2 border-light-matte-black w-16 aspect-square bg-light-main-container items-center justify-center">
         {item.icon}
       </View>
