@@ -6,7 +6,8 @@ import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight, Wallet2 } from "lucide-react-native";
 import React from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
+import OptimizedImage from "../common/OptimizedImage";
 
 export default function ActivitySection() {
   const { activeWallet } = useWallet();
@@ -33,11 +34,11 @@ export default function ActivitySection() {
 
   const purchaseHistoryButton = (payment: TTransaction) => (
     <TouchableOpacity activeOpacity={0.7} className="items-center">
-      <View className="rounded-2xl border-2 border-light-matte-black w-16 aspect-square bg-light-main-container items-center justify-center">
-        <Image
+      <View className="rounded-2xl border-2 p-0 border-light-matte-black w-16 aspect-square overflow-hidden bg-light-main-container">
+        <OptimizedImage
           source={{ uri: payment.purchase?.productVariant.product.imageUrl }}
-          style={{ width: 40, height: 40 }}
-          resizeMode="contain"
+          style={{ width: "100%", height: "100%" }}
+          contentFit="cover"
         />
       </View>
       <Text className="text-[10px] text-center text-wrap max-w-16 mt-1">
