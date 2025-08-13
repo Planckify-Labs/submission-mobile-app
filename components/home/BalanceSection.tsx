@@ -1,5 +1,6 @@
 import ChainSelector from "@/components/common/ChainSelector";
 import { useWallet } from "@/hooks/useWallet";
+import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { copyToClipboard } from "@/utils/authUtils";
 import { useRouter } from "expo-router";
 import {
@@ -13,7 +14,7 @@ import {
   PlusIcon,
   Wallet,
 } from "lucide-react-native";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -32,10 +33,18 @@ const MODAL_HEIGHT = height * 0.6;
 
 export default function BalanceSection() {
   const { activeWallet, activeChain, isLoading } = useWallet();
+  const { balance, isFetching } = useWalletBalance(
+    activeWallet?.address as `0x${string}` | string,
+    activeChain,
+  );
   const [isShowBalance, setShowBalance] = useState(true);
   const [selectedToken, setSelectedToken] = useState(
     activeChain?.chain.nativeCurrency?.symbol || "ETH",
   );
+  // Keep selectedToken in sync with activeChain changes
+  useEffect(() => {
+    setSelectedToken(activeChain?.chain.nativeCurrency?.symbol || "ETH");
+  }, [activeChain?.chain?.id, activeChain?.chain?.nativeCurrency?.symbol]);
   const [modalVisible, setModalVisible] = useState(false);
   const [isModalAnimationComplete, setIsModalAnimationComplete] =
     useState(false);
@@ -187,7 +196,7 @@ export default function BalanceSection() {
             <View>
               {isShowBalance ? (
                 <Text className="text-light-primary-red font-bold text-4xl">
-                  {activeWallet.balance}
+                  {isFetching ? "..." : balance}
                 </Text>
               ) : (
                 <View className="flex-row items-center gap-2 py-2">
