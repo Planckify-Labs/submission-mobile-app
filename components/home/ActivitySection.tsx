@@ -6,7 +6,7 @@ import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight, Wallet2 } from "lucide-react-native";
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Image, Text, TouchableOpacity, View } from "react-native";
 import { formatUnits } from "viem/utils";
 import OptimizedImage from "../common/OptimizedImage";
 
@@ -98,8 +98,13 @@ export default function ActivitySection() {
             <View className="relative mb-6">
               <View className="bg-light-primary-red/5 w-24 h-24 rounded-full items-center justify-center">
                 <View className="bg-light-primary-red/10 w-20 h-20 rounded-full items-center justify-center">
-                  <View className="bg-light-primary-red/20 w-16 h-16 rounded-full items-center justify-center">
-                    <Wallet2 color="#c71c4b" size={28} strokeWidth={1.5} />
+                  <View className="bg-light-primary-red/10 w-20 h-20 rounded-full relative">
+                    <Image
+                      source={require("@/assets/images/takumipay-no-bg.png")}
+                      style={{ width: 40, height: 40 }}
+                      resizeMode="contain"
+                      className="absolute top-[15px] left-[14px]"
+                    />
                   </View>
                 </View>
               </View>
@@ -147,47 +152,100 @@ export default function ActivitySection() {
       </View>
     );
   }
-
+  const isTransferHistory = transferHistory?.[0] && paymentHistory?.[0];
   return (
     <View className="px-4">
-      <View className="bg-light rounded-[14px] w-full p-[22px] gap-4">
-        <View className="flex-row">
-          <Text className="text-light-matte-black text-sm">Activities</Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push("/activities")}
-            className="flex-row items-center justify-center border-2 ml-auto border-light-primary-red bg-light-primary-red/10 gap-2 rounded-full px-4 py-1"
-          >
-            <Text className="text-light-matte-black text-sm font-bold">
-              View All
+      {isTransferHistory ? (
+        <View className="bg-light rounded-[14px] w-full p-[22px] gap-4">
+          <View className="flex-row">
+            <Text className="text-light-matte-black text-sm">Activities</Text>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.push("/activities")}
+              className="flex-row items-center justify-center border-2 ml-auto border-light-primary-red bg-light-primary-red/10 gap-2 rounded-full px-4 py-1"
+            >
+              <Text className="text-light-matte-black text-sm font-bold">
+                View All
+              </Text>
+
+              <MoveRight size={20} color="#c71c4b" />
+            </TouchableOpacity>
+          </View>
+          {paymentHistory?.[0] && (
+            <View>
+              <FlashList
+                data={paymentHistory?.slice(0, 4) || []}
+                renderItem={({ item }) => purchaseHistoryButton(item)}
+                keyExtractor={(item) => item.id}
+                numColumns={4}
+                estimatedItemSize={4}
+                showsVerticalScrollIndicator={false}
+                showsHorizontalScrollIndicator={false}
+              />
+            </View>
+          )}
+          {transferHistory?.[0] && (
+            <View>
+              <FlashList
+                data={transferHistory?.slice(0, 4) || []}
+                renderItem={({ item }) => transferHistoryButton(item)}
+                keyExtractor={(item) => item.id}
+                numColumns={4}
+                estimatedItemSize={4}
+                showsVerticalScrollIndicator={false}
+                showsHorizontalScrollIndicator={false}
+              />
+            </View>
+          )}
+        </View>
+      ) : (
+        <View className="bg-light rounded-[14px] w-full p-[22px] gap-4">
+          <View className="flex-row">
+            <Text className="text-light-matte-black text-sm">Activities</Text>
+          </View>
+
+          <View className="items-center py-10">
+            <View className="relative mb-5">
+              <View className="bg-light-primary-red/5 w-24 h-24 rounded-full items-center justify-center">
+                <View className="bg-light-primary-red/10 w-20 h-20 rounded-full relative">
+                  <Image
+                    source={require("@/assets/images/takumipay-no-bg.png")}
+                    style={{ width: 40, height: 40 }}
+                    resizeMode="contain"
+                    className="absolute top-[15px] left-[14px]"
+                  />
+                </View>
+              </View>
+              <View className="absolute -top-1 -right-1 w-3 h-3 bg-light-primary-red rounded-full" />
+            </View>
+
+            <Text className="text-light-matte-black font-semibold text-base">
+              No activity yet
+            </Text>
+            <Text className="text-light-matte-black/60 text-center text-sm mt-1 px-4">
+              Your transfers and purchases will appear here.
             </Text>
 
-            <MoveRight size={20} color="#c71c4b" />
-          </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => router.push("/send")}
+              className="bg-light-primary-red px-5 py-3 rounded-2xl flex-row items-center gap-2 mt-6 shadow-sm"
+              style={{
+                shadowColor: "#c71c4b",
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.12,
+                shadowRadius: 10,
+                elevation: 6,
+              }}
+            >
+              <MoveRight color="#ffffff" size={18} />
+              <Text className="text-white font-bold text-sm">
+                Make your first transfer
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <View>
-          <FlashList
-            data={paymentHistory?.slice(0, 4) || []}
-            renderItem={({ item }) => purchaseHistoryButton(item)}
-            keyExtractor={(item) => item.id}
-            numColumns={4}
-            estimatedItemSize={4}
-            showsVerticalScrollIndicator={false}
-            showsHorizontalScrollIndicator={false}
-          />
-        </View>
-        <View>
-          <FlashList
-            data={transferHistory?.slice(0, 4) || []}
-            renderItem={({ item }) => transferHistoryButton(item)}
-            keyExtractor={(item) => item.id}
-            numColumns={4}
-            estimatedItemSize={4}
-            showsVerticalScrollIndicator={false}
-            showsHorizontalScrollIndicator={false}
-          />
-        </View>
-      </View>
+      )}
     </View>
   );
 }
