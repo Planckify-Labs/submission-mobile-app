@@ -1,9 +1,9 @@
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight } from "lucide-react-native";
 import React from "react";
 import { Alert, Image, Text, TouchableOpacity, View } from "react-native";
-import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 
 const paymentItems = [
   {
@@ -48,7 +48,7 @@ export default function PaymentSection() {
   const { isAuthenticated, isLoading } = useIsAuthenticated();
 
   const handleNavigate = (item: (typeof paymentItems)[0]) => {
-    if (isLoading) return; // avoid flicker while checking
+    if (isLoading) return;
     if (!isAuthenticated) {
       Alert.alert(
         "Authentication Required",
