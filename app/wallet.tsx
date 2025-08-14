@@ -8,7 +8,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { authenticateUser, copyToClipboard } from "@/utils/authUtils";
 import { router } from "expo-router";
 import { Plus } from "lucide-react-native";
-import React, { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,8 +17,8 @@ import {
   StatusBar,
   Text,
   TouchableOpacity,
-  View,
   useWindowDimensions,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -75,7 +75,7 @@ export default function Wallet() {
 
   const handleWalletSwitch = useCallback(
     async (index: number) => {
-      await deferredTask(() => {
+      await deferredTask(async () => {
         setActiveWallet(index);
         setShowWalletInfo(false);
       }, "Switching wallet");

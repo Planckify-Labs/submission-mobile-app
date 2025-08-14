@@ -2,7 +2,8 @@ import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight } from "lucide-react-native";
 import React from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Image, Text, TouchableOpacity, View } from "react-native";
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 
 const paymentItems = [
   {
@@ -44,27 +45,44 @@ const paymentItems = [
 ];
 
 export default function PaymentSection() {
+  const { isAuthenticated, isLoading } = useIsAuthenticated();
+
+  const handleNavigate = (item: (typeof paymentItems)[0]) => {
+    if (isLoading) return; // avoid flicker while checking
+    if (!isAuthenticated) {
+      Alert.alert(
+        "Authentication Required",
+        "Please sign in with your current wallet to continue.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Sign In", onPress: () => router.push("/auth") },
+        ],
+      );
+      return;
+    }
+
+    if (item.categoryId) {
+      router.push({
+        pathname: "/view-all-item",
+        params: {
+          categoryId: item.categoryId,
+          productId: item.productId,
+          categoryName: item.name,
+        },
+      });
+    } else {
+      router.push({
+        pathname: "/purchase-item",
+        params: { productId: item.productId },
+      });
+    }
+  };
+
   const renderPaymentItem = ({ item }: { item: (typeof paymentItems)[0] }) => (
     <TouchableOpacity
       activeOpacity={0.7}
       className="items-center"
-      onPress={() => {
-        if (item.categoryId) {
-          router.push({
-            pathname: "/view-all-item",
-            params: {
-              categoryId: item.categoryId,
-              productId: item.productId,
-              categoryName: item.name,
-            },
-          });
-        } else {
-          router.push({
-            pathname: "/purchase-item",
-            params: { productId: item.productId },
-          });
-        }
-      }}
+      onPress={() => handleNavigate(item)}
     >
       <View className="rounded-2xl border-2 border-light-matte-black w-16 aspect-square bg-light-main-container items-center justify-center">
         {item.icon}

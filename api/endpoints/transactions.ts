@@ -1,4 +1,11 @@
 import { api } from "@/constants/configs/ky";
+import {
+  getAccessToken,
+  getAccessTokenForWallet,
+  getAuthenticatedWalletAddress,
+} from "@/hooks/queries/useAuth";
+import * as walletService from "@/services/walletService";
+import * as SecureStore from "expo-secure-store";
 import type {
   TTransaction,
   TTransactionListResponse,
@@ -7,7 +14,12 @@ import type {
 import { fetchById, searchItems } from "../utils/api-helpers";
 
 export const transactionApi = {
-  searchTransactions: (params: TTransactionSearchParams = {}) => {
+  searchTransactions: async (params: TTransactionSearchParams = {}) => {
+    const isAuthed = await isAuthenticatedForActiveWallet();
+    if (!isAuthed) {
+      return [] as TTransactionListResponse;
+    }
+
     const searchParams = { take: 10, ...params };
     return searchItems<TTransactionListResponse>(
       api,
@@ -17,11 +29,43 @@ export const transactionApi = {
     );
   },
 
-  getTransactionById: (id: string) =>
-    fetchById<TTransaction>(
+  getTransactionById: async (id: string) => {
+    const isAuthed = await isAuthenticatedForActiveWallet();
+    if (!isAuthed) {
+      return {} as TTransaction;
+    }
+
+    return fetchById<TTransaction>(
       api,
       "transactions",
       id,
       "Failed to fetch transaction",
-    ),
+    );
+  },
+};
+
+const isAuthenticatedForActiveWallet = async (): Promise<boolean> => {
+  try {
+    const indexStr = await SecureStore.getItemAsync("active_wallet_index");
+    const idx = indexStr ? parseInt(indexStr, 10) : 0;
+    const wallets = await walletService.loadWalletsFromStorage();
+    const activeAddr = wallets?.[idx]?.address?.toLowerCase() || null;
+
+    let token: string | null = null;
+    if (activeAddr) {
+      token = await getAccessTokenForWallet(activeAddr);
+    }
+
+    if (!token) {
+      const authedWallet =
+        (await getAuthenticatedWalletAddress())?.toLowerCase() || null;
+      if (authedWallet && authedWallet === activeAddr) {
+        token = await getAccessToken();
+      }
+    }
+
+    return !!token;
+  } catch {
+    return false;
+  }
 };

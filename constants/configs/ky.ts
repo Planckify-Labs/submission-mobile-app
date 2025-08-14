@@ -1,4 +1,10 @@
-import { getAccessToken } from "@/hooks/queries/useAuth";
+import {
+  getAccessToken,
+  getAccessTokenForWallet,
+  getAuthenticatedWalletAddress,
+} from "@/hooks/queries/useAuth";
+import * as walletService from "@/services/walletService";
+import * as SecureStore from "expo-secure-store";
 import ky from "ky";
 
 interface ApiError {
@@ -101,15 +107,38 @@ export const api = ky.create({
         setupBaseHeaders(request, "authenticated API");
 
         try {
-          const token = await getAccessToken();
+          const indexStr = await SecureStore.getItemAsync(
+            "active_wallet_index",
+          );
+          const idx = indexStr ? parseInt(indexStr, 10) : 0;
+          const wallets = await walletService.loadWalletsFromStorage();
+          const activeAddr = wallets?.[idx]?.address?.toLowerCase() || null;
+
+          let token: string | null = null;
+          if (activeAddr) {
+            token = await getAccessTokenForWallet(activeAddr);
+          }
+
+          if (!token) {
+            const authedWallet =
+              (await getAuthenticatedWalletAddress())?.toLowerCase() || null;
+            if (authedWallet && authedWallet === activeAddr) {
+              token = await getAccessToken();
+            }
+          }
+
           if (token) {
             request.headers.set("Authorization", `Bearer ${token}`);
             console.log("Authorization token set for request");
           } else {
-            console.warn("No access token available for authenticated request");
+            console.warn(
+              "No suitable access token for the current active wallet; blocking authenticated request",
+            );
+            throw new Error("Not authenticated for current wallet");
           }
         } catch (error) {
-          console.error("Failed to get access token:", error);
+          console.warn("Failed to get access token:", error);
+          throw error;
         }
       },
     ],

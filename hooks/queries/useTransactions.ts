@@ -5,29 +5,32 @@ import type {
 } from "@/api/types/transaction";
 import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
 import { useQuery } from "@tanstack/react-query";
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 
 export const useTransactionSearch = (
   params: TTransactionSearchParams = {},
   options?: { enabled?: boolean },
 ) => {
+  const { isAuthenticated, isLoading } = useIsAuthenticated();
   return useQuery({
     queryKey: transactionsQueryKeys.search(params),
     queryFn: async () => {
-      try {
-        const response = await transactionApi.searchTransactions(params);
-        return response;
-      } catch (error) {
-        console.error("API Error:", error);
-        throw error;
-      }
+      const response = await transactionApi.searchTransactions(params);
+      return response;
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    enabled: options?.enabled !== false && !!params.senderAddress,
+    enabled:
+      options?.enabled !== false &&
+      !!params.senderAddress &&
+      isAuthenticated === true &&
+      isLoading === false,
+    retry: false,
   });
 };
 
 export const useTransaction = (id: string) => {
+  const { isAuthenticated, isLoading } = useIsAuthenticated();
   return useQuery({
     queryKey: transactionsQueryKeys.detail(id),
     queryFn: async () => {
@@ -35,16 +38,12 @@ export const useTransaction = (id: string) => {
         return {} as TTransaction;
       }
 
-      try {
-        const response = await transactionApi.getTransactionById(id);
-        return response;
-      } catch (error) {
-        console.error("API Error:", error);
-        throw error;
-      }
+      const response = await transactionApi.getTransactionById(id);
+      return response;
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    enabled: !!id,
+    enabled: !!id && isAuthenticated === true && isLoading === false,
+    retry: false,
   });
 };
