@@ -2,6 +2,7 @@ import { TTransaction } from "@/api/types/transaction";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useTransactionSearch } from "@/hooks/queries/useTransactions";
 import { useWallet } from "@/hooks/useWallet";
+import { truncateAddress } from "@/utils/walletUtils";
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight, Wallet2 } from "lucide-react-native";
@@ -61,7 +62,7 @@ export default function ActivitySection() {
         <View className="bg-light-main-container aspect-square w-6 rounded-full absolute bottom-0 right-0 items-center justify-center" />
       </View>
       <Text className="text-light-matte-black text-center text-xs font-bold mt-1">
-        {transfer.recipientAddress}
+        {truncateAddress(transfer.recipientAddress)}
       </Text>
     </TouchableOpacity>
   );

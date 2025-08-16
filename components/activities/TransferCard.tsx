@@ -1,26 +1,23 @@
 import { TTransaction } from "@/api/types/transaction";
+import { truncateAddress } from "@/utils/walletUtils";
 import * as ExpoClipboard from "expo-clipboard";
 import { openBrowserAsync } from "expo-web-browser";
 import { Copy, ExternalLink, Send } from "lucide-react-native";
 import React, { useCallback } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
+import { formatUnits } from "viem/utils";
 import Chip from "../common/Chip";
 
 const TransferCard = React.memo(
   ({ transaction }: { transaction: TTransaction }) => {
-    const transactionHash = "0xabcdef1234567890";
-    const recipient = "0xrecipientAddress0987";
-    const spender = "0xspenderAddress1234";
-    const blockchain = "Ethereum Mainnet";
-
     const copyToClipboard = useCallback((label: string, value: string) => {
       ExpoClipboard.setStringAsync(value);
       Alert.alert("Copied!", `${label} copied to clipboard.`);
     }, []);
 
     const openBlockExplorer = useCallback(() => {
-      openBrowserAsync(`https://etherscan.io/tx/${transactionHash}`);
-    }, [transactionHash]);
+      openBrowserAsync(`https://sepolia.etherscan.io/tx/${transaction.txHash}`);
+    }, [transaction.txHash]);
 
     return (
       <View className="bg-white rounded-xl shadow-sm w-full p-5 gap-3">
@@ -34,7 +31,7 @@ const TransferCard = React.memo(
                 Transfer
               </Text>
               <Text className="text-light-matte-black/50 text-xs">
-                22 Jun 2025
+                {transaction.createdAt}
               </Text>
             </View>
           </View>
@@ -52,12 +49,12 @@ const TransferCard = React.memo(
               className="text-light-matte-black/50 text-xs flex-1"
               numberOfLines={1}
             >
-              {transactionHash}
+              {transaction.txHash}
             </Text>
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() =>
-                copyToClipboard("Transaction hash", transactionHash)
+                copyToClipboard("Transaction hash", transaction.txHash || "")
               }
             >
               <Copy size={14} color="#c71c4b" />
@@ -71,28 +68,38 @@ const TransferCard = React.memo(
         <View className="pt-1">
           <Text className="text-light-matte-black text-xs">Amount</Text>
           <Text className="text-light-primary-red font-bold text-md">
-            0.42 ETH
+            {formatUnits(
+              BigInt(transaction.amount),
+              transaction.token.decimals,
+            )}{" "}
+            {transaction.token.symbol}
           </Text>
-          <Text className="text-light-matte-black text-sm">Rp.61,000</Text>
+          {transaction?.amountInFiat && (
+            <Text className="text-light-matte-black text-sm">
+              {transaction.amountInFiat.toString()}
+            </Text>
+          )}
         </View>
 
         <View className="pt-1">
           <Text className="text-light-matte-black text-xs">Recipient</Text>
           <Text className="text-light-matte-black/80 text-sm" numberOfLines={1}>
-            {recipient}
+            {truncateAddress(transaction.recipientAddress)}
           </Text>
         </View>
 
         <View className="pt-1">
           <Text className="text-light-matte-black text-xs">Spender</Text>
           <Text className="text-light-matte-black/80 text-sm" numberOfLines={1}>
-            {spender}
+            {truncateAddress(transaction.senderAddress)}
           </Text>
         </View>
 
         <View className="border-t border-gray-200 mt-2 pt-2">
           <Text className="text-light-matte-black text-xs">Chain</Text>
-          <Text className="text-light-matte-black text-sm">{blockchain}</Text>
+          <Text className="text-light-matte-black text-sm">
+            {transaction.token.blockchain.name}
+          </Text>
         </View>
       </View>
     );
