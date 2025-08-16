@@ -12,6 +12,7 @@ import React, {
 import {
   ActivityIndicator,
   Animated,
+  Image,
   Modal,
   PanResponder,
   Pressable,
@@ -222,10 +223,6 @@ const TokenSelectorModal = memo(function TokenSelectorModal({
         isSelected ? "bg-light-primary-red/10" : "bg-light-main-container"
       }`;
 
-      const iconContainerStyle = `w-10 h-10 rounded-full mr-3 items-center justify-center ${
-        isSelected ? "bg-light-primary-red/20" : "bg-light-primary-red/10"
-      }`;
-
       const symbolStyle = `font-bold text-base ${
         isSelected ? "text-light-primary-red" : "text-light-primary-red/70"
       }`;
@@ -242,8 +239,16 @@ const TokenSelectorModal = memo(function TokenSelectorModal({
           className={containerStyle}
         >
           <View className="flex-row items-center">
-            <View className={iconContainerStyle}>
-              <Text className={symbolStyle}>{token.symbol.charAt(0)}</Text>
+            <View className="w-10 h-10 rounded-full mr-3 items-center justify-center overflow-hidden">
+              {token.logoUrl ? (
+                <Image
+                  source={{ uri: token.logoUrl }}
+                  className="w-full h-full"
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text className={symbolStyle}>{token.symbol.charAt(0)}</Text>
+              )}
             </View>
             <View>
               <Text className={nameStyle}>{token.symbol}</Text>

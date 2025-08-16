@@ -1,7 +1,13 @@
+import type { TToken } from "@/api/types/token";
 import ChainSelector from "@/components/common/ChainSelector";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
+import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
+import { useBlockchains } from "@/hooks/queries/useBlockchains";
+import { useTokens } from "@/hooks/queries/useTokens";
+import { useCreateTransaction } from "@/hooks/queries/useTransactions";
 import { useWallet } from "@/hooks/useWallet";
 import * as Clipboard from "expo-clipboard";
 import { router, useLocalSearchParams } from "expo-router";
@@ -19,6 +25,7 @@ import {
   Alert,
   Animated,
   Easing,
+  Image,
   ScrollView,
   StatusBar,
   Text,
@@ -27,7 +34,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { formatUnits, parseUnits } from "viem";
+import { erc20Abi, formatUnits, parseUnits } from "viem";
 
 export default function SendScreen() {
   const {
@@ -40,6 +47,18 @@ export default function SendScreen() {
     getPublicClientForActiveChain,
   } = useWallet();
 
+  const { isAuthenticated } = useIsAuthenticated();
+  const { mutateAsync: createTransaction } = useCreateTransaction();
+  const { data: blockchains } = useBlockchains();
+  const activeBackendChain = React.useMemo(
+    () => blockchains?.find((b) => b.chainId === activeChain.chain.id) || null,
+    [blockchains, activeChain.chain.id],
+  );
+  const { data: nativeTokens } = useTokens({
+    blockchainId: activeBackendChain?.id,
+    isNativeCurrency: true,
+  });
+
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -48,11 +67,19 @@ export default function SendScreen() {
   const [recipientModalVisible, setRecipientModalVisible] = useState(false);
   const [isPinModalVisible, setIsPinModalVisible] = useState(false);
   const [isLoadingBalance, setIsLoadingBalance] = useState(true);
+  const [isLoadingTokenBalance, setIsLoadingTokenBalance] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState<string>("0");
   const [transactionStatus, setTransactionStatus] = useState(
     "Preparing transaction...",
   );
+  const [selectedToken, setSelectedToken] = useState<TToken | undefined>(
+    undefined,
+  );
+  const [tokenModalVisible, setTokenModalVisible] = useState(false);
 
   const { recipientAddress } = useLocalSearchParams();
+
+  const nativeDecimals = activeChain.chain.nativeCurrency.decimals ?? 18;
 
   const spinValue = React.useRef(new Animated.Value(0)).current;
 
@@ -99,7 +126,71 @@ export default function SendScreen() {
     if (recipientAddress) {
       setRecipient(recipientAddress as string);
     }
-  }, [fetchBalance, recipientAddress]);
+    if (!selectedToken && nativeTokens && nativeTokens.length > 0) {
+      setSelectedToken(nativeTokens[0]);
+    }
+  }, [fetchBalance, recipientAddress, nativeTokens, selectedToken]);
+
+  useEffect(() => {
+    const backendId = activeBackendChain?.id;
+    if (!backendId) return;
+
+    if (!selectedToken) {
+      if (nativeTokens && nativeTokens.length > 0) {
+        setSelectedToken(nativeTokens[0]);
+      }
+      return;
+    }
+
+    if (selectedToken.blockchainId !== backendId) {
+      if (nativeTokens && nativeTokens.length > 0) {
+        setSelectedToken(nativeTokens[0]);
+      } else {
+        setSelectedToken(undefined);
+      }
+    }
+  }, [activeBackendChain?.id, selectedToken?.blockchainId, nativeTokens]);
+
+  useEffect(() => {
+    const fetchTokenBal = async () => {
+      if (!activeWallet?.address || !selectedToken) {
+        setTokenBalance("0");
+        return;
+      }
+
+      if (selectedToken.isNativeCurrency !== false) {
+        setTokenBalance(formatUnits(balance ?? BigInt(0), nativeDecimals));
+        return;
+      }
+
+      try {
+        setIsLoadingTokenBalance(true);
+        const publicClient = getPublicClientForActiveChain();
+        const bal = await publicClient.readContract({
+          address: selectedToken.contractAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [activeWallet.address as `0x${string}`],
+        });
+        setTokenBalance(
+          formatUnits(bal as bigint, selectedToken.decimals ?? 18),
+        );
+      } catch (e) {
+        console.error("Error fetching token balance:", e);
+        setTokenBalance("0");
+      } finally {
+        setIsLoadingTokenBalance(false);
+      }
+    };
+
+    fetchTokenBal();
+  }, [
+    activeWallet?.address,
+    selectedToken,
+    getPublicClientForActiveChain,
+    balance,
+    nativeDecimals,
+  ]);
 
   const handlePasteAddress = async () => {
     const text = await Clipboard.getStringAsync();
@@ -108,6 +199,7 @@ export default function SendScreen() {
 
   const handleMaxAmount = useCallback(async () => {
     if (!activeWallet?.address) return;
+    if (!selectedToken?.isNativeCurrency) return;
 
     const publicClient = getPublicClientForActiveChain();
     const estimatedGas = await publicClient.estimateGas({
@@ -123,18 +215,20 @@ export default function SendScreen() {
       const gasCost = gasBuffer * gasPrice;
 
       const maxAmount = balance > gasCost ? balance - gasCost : BigInt(0);
-      setAmount(formatUnits(maxAmount, 18));
+      setAmount(formatUnits(maxAmount, nativeDecimals));
     } catch (error) {
       console.error("Error estimating gas:", error);
       const maxAmount =
         balance > estimatedGas ? balance - estimatedGas : BigInt(0);
-      setAmount(formatUnits(maxAmount, 18));
+      setAmount(formatUnits(maxAmount, nativeDecimals));
     }
   }, [
     activeWallet?.address,
     balance,
     getPublicClientForActiveChain,
     recipient,
+    selectedToken?.isNativeCurrency,
+    nativeDecimals,
   ]);
 
   const validateInputs = useCallback(() => {
@@ -148,17 +242,26 @@ export default function SendScreen() {
       return false;
     }
 
-    const amountInWei = parseUnits(amount, 18);
-    if (amountInWei > balance) {
-      Alert.alert(
-        "Insufficient Balance",
-        `You don't have enough ${activeChain.chain.nativeCurrency.symbol} to complete this transaction.`,
-      );
-      return false;
+    if (selectedToken?.isNativeCurrency !== false) {
+      const amountInWei = parseUnits(amount, nativeDecimals);
+      if (amountInWei > balance) {
+        Alert.alert(
+          "Insufficient Balance",
+          `You don't have enough ${activeChain.chain.nativeCurrency.symbol} to complete this transaction.`,
+        );
+        return false;
+      }
     }
 
     return true;
-  }, [amount, balance, recipient, activeChain.chain.nativeCurrency.symbol]);
+  }, [
+    amount,
+    balance,
+    recipient,
+    activeChain.chain.nativeCurrency.symbol,
+    selectedToken?.isNativeCurrency,
+    nativeDecimals,
+  ]);
 
   const handleSend = useCallback(async () => {
     if (!validateInputs()) return;
@@ -196,22 +299,68 @@ export default function SendScreen() {
 
       try {
         setTransactionStatus("Building transaction...");
-        const value = parseUnits(amount, 18);
 
-        console.log("Sending transaction...");
+        let hash: `0x${string}`;
+        if (selectedToken && selectedToken.isNativeCurrency === false) {
+          const tokenAmount = parseUnits(amount, selectedToken.decimals);
+          setTransactionStatus(
+            `Sending ${amount} ${selectedToken.symbol} to the network...`,
+          );
+          hash = await walletClient.writeContract({
+            abi: erc20Abi,
+            address: selectedToken.contractAddress as `0x${string}`,
+            functionName: "transfer",
+            args: [recipient as `0x${string}`, tokenAmount],
+            account: walletClient.account,
+            chain: walletClient.chain,
+          });
+        } else {
+          const value = parseUnits(amount, nativeDecimals);
+          console.log("Sending transaction...");
 
-        setTransactionStatus(
-          `Sending ${amount} ${activeChain.chain.nativeCurrency.symbol} to the network...`,
-        );
-        const hash = await walletClient.sendTransaction({
-          account: walletClient.account,
-          to: recipient as `0x${string}`,
-          value,
-          chain: walletClient.chain,
-        });
+          setTransactionStatus(
+            `Sending ${amount} ${activeChain.chain.nativeCurrency.symbol} to the network...`,
+          );
+          hash = await walletClient.sendTransaction({
+            account: walletClient.account,
+            to: recipient as `0x${string}`,
+            value,
+            chain: walletClient.chain,
+          });
+        }
 
         console.log("Transaction sent with hash:", hash);
         setTransactionStatus("Transaction complete!");
+
+        try {
+          if (isAuthenticated && activeWallet?.address) {
+            if (selectedToken && selectedToken.isNativeCurrency === false) {
+              await createTransaction({
+                contractAddress: selectedToken.contractAddress,
+                blockchainId: activeBackendChain?.id as string,
+                type: "TRANSFER",
+                amount: parseFloat(amount),
+                txHash: hash,
+                fromAddress: activeWallet.address,
+                toAddress: recipient,
+              } as any);
+            } else {
+              const nativeTokenId = nativeTokens?.[0]?.id;
+              if (nativeTokenId) {
+                await createTransaction({
+                  tokenId: nativeTokenId,
+                  type: "TRANSFER",
+                  amount: parseFloat(amount),
+                  txHash: hash,
+                  fromAddress: activeWallet.address,
+                  toAddress: recipient,
+                });
+              }
+            }
+          }
+        } catch (historyErr) {
+          console.warn("Failed to create transfer history:", historyErr);
+        }
 
         await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -251,7 +400,7 @@ export default function SendScreen() {
   };
 
   const formatBalance = (rawBalance: bigint) => {
-    return parseFloat(formatUnits(rawBalance, 18)).toFixed(4);
+    return parseFloat(formatUnits(rawBalance, nativeDecimals)).toFixed(4);
   };
 
   return (
@@ -292,14 +441,24 @@ export default function SendScreen() {
                       )}
                     </Text>
                   </View>
-                  <View className="flex-row items-center">
+                  <View className="items-end">
                     {isLoadingBalance ? (
                       <ActivityIndicator size="small" color="#c71c4b" />
                     ) : (
-                      <Text className="text-light-matte-black mr-2">
-                        {formatBalance(balance)}{" "}
-                        {activeChain.chain.nativeCurrency.symbol}
-                      </Text>
+                      <>
+                        <Text className="text-light-matte-black">
+                          {formatBalance(balance)}{" "}
+                          {activeChain.chain.nativeCurrency.symbol}
+                        </Text>
+                        {selectedToken &&
+                          selectedToken.isNativeCurrency === false && (
+                            <Text className="text-light-matte-black/70 text-xs">
+                              {isLoadingTokenBalance
+                                ? "Loading token..."
+                                : `${parseFloat(tokenBalance).toFixed(4)} ${selectedToken.symbol}`}
+                            </Text>
+                          )}
+                      </>
                     )}
                     <ChevronDown size={16} color="#c71c4b" />
                   </View>
@@ -366,19 +525,44 @@ export default function SendScreen() {
                     placeholderTextColor="#20222c80"
                     keyboardType="decimal-pad"
                   />
-                  <Text className="absolute right-4 text-light-matte-black/70">
-                    {activeChain.chain.nativeCurrency.symbol}
-                  </Text>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    className="absolute right-2 px-2 py-1 rounded-lg bg-light-primary-red/10 flex-row items-center"
+                    onPress={() => setTokenModalVisible(true)}
+                  >
+                    <View className="w-5 h-5 rounded-full mr-2 items-center justify-center overflow-hidden bg-light-primary-red/10">
+                      {selectedToken?.logoUrl ? (
+                        <Image
+                          source={{ uri: selectedToken.logoUrl }}
+                          className="w-full h-full"
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Text className="text-light-primary-red text-[10px] font-bold">
+                          {(
+                            selectedToken?.symbol ||
+                            activeChain.chain.nativeCurrency.symbol
+                          ).charAt(0)}
+                        </Text>
+                      )}
+                    </View>
+                    <Text className="text-light-matte-black/70 font-medium">
+                      {selectedToken?.symbol ||
+                        activeChain.chain.nativeCurrency.symbol}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
-                <View className="flex-row justify-end mt-2">
-                  <Text className="text-light-matte-black/60 text-xs">
-                    Balance:{" "}
-                    {isLoadingBalance
-                      ? "Loading..."
-                      : `${formatBalance(balance)} ${activeChain.chain.nativeCurrency.symbol}`}
-                  </Text>
-                </View>
+                {selectedToken && selectedToken.isNativeCurrency === false && (
+                  <View className="flex-row justify-end mt-1">
+                    <Text className="text-light-matte-black/60 text-xs">
+                      Balance:{" "}
+                      {isLoadingTokenBalance
+                        ? "Loading..."
+                        : `${parseFloat(tokenBalance).toFixed(4)} ${selectedToken.symbol}`}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <View className="bg-light-primary-red/10 p-4 rounded-xl mb-6">
@@ -449,6 +633,15 @@ export default function SendScreen() {
         onClose={() => setIsPinModalVisible(false)}
         onConfirm={handlePinConfirm}
         title="Confirm Transaction"
+      />
+
+      <TokenSelectorModal
+        visible={tokenModalVisible}
+        onClose={() => setTokenModalVisible(false)}
+        selectedToken={selectedToken}
+        onSelectToken={(t) => setSelectedToken(t)}
+        title="Select Token"
+        blockchainId={activeBackendChain?.id}
       />
     </>
   );
