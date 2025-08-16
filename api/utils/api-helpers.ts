@@ -55,3 +55,12 @@ export const fetchById = async <T>(
 ): Promise<T> => {
   return apiCall(() => api.get(`${endpoint}/${id}`).json<T>(), errorMessage);
 };
+
+export const createItem = async <TReq, TRes>(
+  api: KyInstance,
+  endpoint: string,
+  json: TReq,
+  errorMessage: string,
+): Promise<TRes> => {
+  return apiCall(() => api.post(endpoint, { json }).json<TRes>(), errorMessage);
+};

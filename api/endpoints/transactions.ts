@@ -10,8 +10,9 @@ import type {
   TTransaction,
   TTransactionListResponse,
   TTransactionSearchParams,
+  TCreateTransactionRequest,
 } from "../types/transaction";
-import { fetchById, searchItems } from "../utils/api-helpers";
+import { createItem, fetchById, searchItems } from "../utils/api-helpers";
 
 export const transactionApi = {
   searchTransactions: async (params: TTransactionSearchParams = {}) => {
@@ -40,6 +41,20 @@ export const transactionApi = {
       "transactions",
       id,
       "Failed to fetch transaction",
+    );
+  },
+
+  createTransaction: async (payload: TCreateTransactionRequest) => {
+    const isAuthed = await isAuthenticatedForActiveWallet();
+    if (!isAuthed) {
+      return {} as TTransaction;
+    }
+
+    return createItem<TCreateTransactionRequest, TTransaction>(
+      api,
+      "transactions",
+      payload,
+      "Failed to create transaction",
     );
   },
 };

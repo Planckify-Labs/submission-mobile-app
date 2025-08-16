@@ -63,3 +63,15 @@ export interface TTransactionSearchParams {
 }
 
 export type TTransactionListResponse = TTransaction[];
+
+export interface TCreateTransactionRequest {
+  tokenId: string;
+  type: TTransactionType;
+  status?: TTransactionStatus;
+  amount: number | string;
+  amountInFiat?: number | string;
+  fiatCurrency?: string;
+  txHash?: string | null;
+  fromAddress?: string;
+  toAddress?: string;
+}
