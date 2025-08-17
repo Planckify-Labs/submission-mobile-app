@@ -1,9 +1,8 @@
-import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight } from "lucide-react-native";
 import React from "react";
-import { Alert, Image, Text, TouchableOpacity, View } from "react-native";
+import { Image, Text, TouchableOpacity, View } from "react-native";
 
 const paymentItems = [
   {
@@ -45,28 +44,12 @@ const paymentItems = [
 ];
 
 export default function PaymentSection() {
-  const { isAuthenticated, isLoading } = useIsAuthenticated();
-
   const handleNavigate = (item: (typeof paymentItems)[0]) => {
-    if (isLoading) return;
-    if (!isAuthenticated) {
-      Alert.alert(
-        "Authentication Required",
-        "Please sign in with your current wallet to continue.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Sign In", onPress: () => router.push("/auth") },
-        ],
-      );
-      return;
-    }
-
     if (item.categoryId) {
       router.push({
         pathname: "/view-all-item",
         params: {
           categoryId: item.categoryId,
-          productId: item.productId,
           categoryName: item.name,
         },
       });
