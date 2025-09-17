@@ -7,7 +7,8 @@ import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
-import { useTakumiPayContract } from "@/contracts/hooks/useTakumiPayContract";
+import { useTakumiWalletContract } from "@/contracts/hooks/useTakumiWalletContract";
+import type { TCreateTransactionParams } from "@/contracts/types/TTakumiWallet";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useCreateBooking } from "@/hooks/queries/useBookings";
@@ -38,13 +39,18 @@ export default function PaymentScreen() {
     getPublicClientForActiveChain,
     activeChain,
   } = useWallet();
-  const { purchase, createPurchaseInput } = useTakumiPayContract();
 
   const { data: blockchains } = useBlockchains();
   const activeBlockchain = useMemo(() => {
     if (!blockchains || !activeChain) return null;
     return blockchains.find((b) => b.chainId === activeChain.chain.id);
   }, [blockchains, activeChain]);
+
+  // TODO: fetch takumiwallet contract address from API
+  const takumiWalletAddress = "0x192eB3404Dc611C81cDc552c2337056C1F4bb970"; // address for sepolia testnet
+  const { createTransaction, waitForTransaction } = useTakumiWalletContract({
+    contractAddress: takumiWalletAddress,
+  });
 
   const [isLoading, setIsLoading] = useState(false);
   const [balance, setBalance] = useState<bigint>(BigInt(0));
@@ -216,14 +222,15 @@ export default function PaymentScreen() {
       !variantData?.id ||
       !variantData.ProductPrice?.[0]?.id ||
       !selectedToken ||
-      !activeBlockchain
+      !activeBlockchain ||
+      !takumiWalletAddress
     ) {
       Alert.alert("Error", "Missing required data for payment");
       return;
     }
 
     setIsLoading(true);
-    setTransactionStatus("Submittingg your purchase...");
+    setTransactionStatus("Submitting your purchase...");
 
     try {
       const booking = await createBooking({
@@ -238,40 +245,43 @@ export default function PaymentScreen() {
         customerInfo: parsedCustomerInfo,
       });
 
-      setTransactionStatus("Processing payment request...");
+      setTransactionStatus("Creating blockchain transaction...");
 
-      const purchaseInput = createPurchaseInput({
+      const refId = `${booking.id}-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+
+      const transactionParams: TCreateTransactionParams = {
         bookingId: booking.id.toString(),
+        exchangeRateId: BigInt(exchangeRate?.id ?? 0),
+        productVariantId: variantId,
         tokenAddress: selectedToken.contractAddress as Address,
-        amount: tokenAmountNeeded,
-        decimals: selectedToken.decimals,
-      });
+        refId,
+      };
 
-      setTransactionStatus("Sending transaction...");
-      const result = await purchase(purchaseInput);
+      setTransactionStatus("Sending transaction to blockchain...");
 
-      if (!result.success) {
-        throw new Error("Transaction failed");
-      }
+      const txHash = await createTransaction.mutateAsync(transactionParams);
+      console.log("Transaction hash:", txHash);
 
       setTransactionStatus("Confirming transaction...");
+
+      await waitForTransaction(txHash);
+
       setTransactionStatus("Finalizing purchase...");
 
-      const txHash = result.txHash;
       const txHashDisplay = txHash
         ? `${txHash.substring(0, 6)}...${txHash.substring(txHash.length - 4)}`
         : "";
 
       Alert.alert(
         "Payment Successful",
-        `You have successfully purchased ${variantData.name} for ${tokenAmountNeeded} ${selectedToken.symbol}.\n\nBooking ID: ${booking.id}\nTransaction: ${txHashDisplay}`,
+        `You have successfully purchased ${variantData.name} for ${tokenAmountNeeded} ${selectedToken.symbol}.\n\nBooking ID: ${booking.id}\nTransaction: ${txHashDisplay}\nRef ID: ${refId}`,
         [{ text: "OK", onPress: () => router.back() }],
       );
     } catch (error) {
       console.error("Payment error:", error);
       Alert.alert(
         "Payment Failed",
-        "An error occurred during the payment process",
+        `An error occurred during the payment process: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     } finally {
       setIsLoading(false);
@@ -287,8 +297,9 @@ export default function PaymentScreen() {
     activeBlockchain,
     parsedCustomerInfo,
     exchangeRate,
-    purchase,
-    createPurchaseInput,
+    takumiWalletAddress,
+    createTransaction,
+    waitForTransaction,
   ]);
 
   const { isAuthenticated } = useIsAuthenticated();
@@ -325,6 +336,7 @@ export default function PaymentScreen() {
       noVariantData: !variantData?.id || !variantData.ProductPrice?.[0]?.id,
       noExchangeRate: !exchangeRate?.rate,
       noTokensAvailable: tokens?.length === 0,
+      noContractAddress: !takumiWalletAddress,
     };
 
     console.log("Button disable conditions:", conditions);
@@ -339,7 +351,8 @@ export default function PaymentScreen() {
       conditions.noActiveBlockchain ||
       conditions.noVariantData ||
       conditions.noExchangeRate ||
-      conditions.noTokensAvailable
+      conditions.noTokensAvailable ||
+      conditions.noContractAddress
     );
   }, [
     isLoading,
@@ -352,6 +365,7 @@ export default function PaymentScreen() {
     variantData,
     exchangeRate,
     tokens,
+    takumiWalletAddress,
   ]);
 
   return (
