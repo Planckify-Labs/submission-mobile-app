@@ -28,6 +28,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useForm, Controller } from "react-hook-form";
 import ItemVariantWithInputSkeleton from "./ItemVariantWithInputSkeleton";
 
 interface ItemVariantWithInputProps {
@@ -40,6 +41,8 @@ type TInputField = {
   alias: string;
   options?: string[];
 };
+
+type FormData = Record<string, string>;
 
 type ProductVariant = {
   id: string;
@@ -64,12 +67,19 @@ export default function ItemWithInput({
   const isLoading = isProductLoading || isInputFieldsLoading;
   const error = productError;
 
-  const { data: inputValues, setNewData: setInputValues } = useRQGlobalState<
-    Record<string, string>
-  >({
-    queryKey: ["product-input-values", productId],
-    initialData: {},
+  // Initialize React Hook Form
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+  } = useForm<FormData>({
+    defaultValues: {},
+    mode: "onChange",
   });
+
+  const formValues = watch();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [activeField, setActiveField] = useState<TInputField | null>(null);
@@ -134,35 +144,17 @@ export default function ItemWithInput({
     };
   }, []);
 
-  const clearInputValuesRef = useRef(setInputValues);
 
+  // Initialize form fields when inputFields are loaded
   useEffect(() => {
-    clearInputValuesRef.current = setInputValues;
-  }, [setInputValues]);
-
-  useEffect(() => {
-    return () => {
-      clearInputValuesRef.current({});
-    };
-  }, []);
-
-  useEffect(() => {
-    if (inputFields?.forms && inputValues) {
-      const initialValues = { ...inputValues };
-      let needsUpdate = false;
-
+    if (inputFields?.forms) {
+      const initialValues: FormData = {};
       inputFields.forms.forEach((field) => {
-        if (initialValues[field.key] === undefined) {
-          initialValues[field.key] = "";
-          needsUpdate = true;
-        }
+        initialValues[field.key] = "";
+        setValue(field.key, "");
       });
-
-      if (needsUpdate) {
-        setInputValues(initialValues);
-      }
     }
-  }, [inputFields, inputValues, setInputValues]);
+  }, [inputFields, setValue]);
 
   useEffect(() => {
     return () => {
@@ -191,12 +183,7 @@ export default function ItemWithInput({
   };
 
   const handleInputChange = (key: string, value: string) => {
-    if (inputValues) {
-      setInputValues({
-        ...inputValues,
-        [key]: value,
-      });
-    }
+    setValue(key, value, { shouldValidate: true });
   };
 
   const openOptionModal = (field: TInputField) => {
@@ -205,7 +192,7 @@ export default function ItemWithInput({
   };
 
   const handleOptionSelect = (option: string) => {
-    if (activeField && inputValues) {
+    if (activeField) {
       handleInputChange(activeField.key, option);
     }
   };
@@ -215,77 +202,90 @@ export default function ItemWithInput({
   };
 
   const renderInputField = (field: TInputField) => {
-    if (!inputValues) return null;
-
     if (
       field.type.toLowerCase() === "option" &&
       field.options &&
       field.options.length > 0
     ) {
       return (
-        <View className="mb-4">
-          <Text className="text-light-matte-black/70 mb-2">{field.alias}</Text>
-          <TouchableOpacity
-            className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between"
-            onPress={() => openOptionModal(field)}
-            activeOpacity={0.7}
-          >
-            <View className="flex-1">
-              <Text className="text-light-matte-black font-medium text-lg">
-                {inputValues[field.key] || `${field.alias.toLowerCase()}`}
-              </Text>
-              <Text className="text-light-matte-black/60 text-xs">
-                {product?.category?.name}
-              </Text>
+        <Controller
+          key={field.key}
+          control={control}
+          name={field.key}
+          rules={{ required: true }}
+          render={({ field: { value } }) => (
+            <View className="mb-4">
+              <Text className="text-light-matte-black/70 mb-2">{field.alias}</Text>
+              <TouchableOpacity
+                className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between"
+                onPress={() => openOptionModal(field)}
+                activeOpacity={0.7}
+              >
+                <View className="flex-1">
+                  <Text className="text-light-matte-black font-medium text-lg">
+                    {value || `${field.alias.toLowerCase()}`}
+                  </Text>
+                  <Text className="text-light-matte-black/60 text-xs">
+                    {product?.category?.name}
+                  </Text>
+                </View>
+                <ChevronDown color="#333" size={20} />
+              </TouchableOpacity>
             </View>
-            <ChevronDown color="#333" size={20} />
-          </TouchableOpacity>
-        </View>
+          )}
+        />
       );
     }
 
     return (
-      <View className="mb-4">
-        <Text className="text-light-matte-black/70 mb-2">{field.alias}</Text>
-        <View className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between">
-          <View className="flex-1">
-            <TextInput
-              value={inputValues[field.key]}
-              onChangeText={(value) => handleInputChange(field.key, value)}
-              placeholder={`${field.alias.toLowerCase()}`}
-              keyboardType={getKeyboardType(field.type)}
-              className="text-light-matte-black font-medium text-lg"
-              autoCapitalize="none"
-            />
-            <Text className="text-light-matte-black/60 text-xs">
-              {product?.category?.name}
-            </Text>
+      <Controller
+        key={field.key}
+        control={control}
+        name={field.key}
+        rules={{ required: true }}
+        render={({ field: { value, onChange } }) => (
+          <View className="mb-4">
+            <Text className="text-light-matte-black/70 mb-2">{field.alias}</Text>
+            <View className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between">
+              <View className="flex-1">
+                <TextInput
+                  value={value}
+                  onChangeText={onChange}
+                  placeholder={`${field.alias.toLowerCase()}`}
+                  keyboardType={getKeyboardType(field.type)}
+                  className="text-light-matte-black font-medium text-lg"
+                  autoCapitalize="none"
+                />
+                <Text className="text-light-matte-black/60 text-xs">
+                  {product?.category?.name}
+                </Text>
+              </View>
+              <View className="flex-row items-center">
+                <Image
+                  source={{ uri: product?.imageUrl }}
+                  className="w-8 h-8 mr-2"
+                  style={{ resizeMode: "contain" }}
+                />
+              </View>
+            </View>
           </View>
-          <View className="flex-row items-center">
-            <Image
-              source={{ uri: product?.imageUrl }}
-              className="w-8 h-8 mr-2"
-              style={{ resizeMode: "contain" }}
-            />
-          </View>
-        </View>
-      </View>
+        )}
+      />
     );
   };
 
   const areAllInputsFilled = () => {
-    if (!inputFields?.forms || !inputValues) return false;
-
+    if (!inputFields?.forms) return false;
     if (inputFields.forms.length === 0) return false;
 
     return inputFields.forms.every((field) => {
-      const val = inputValues[field.key];
+      const val = formValues[field.key];
       return typeof val === "string" && val.trim().length > 0;
     });
   };
 
-  const formatCustomerInfo = (inputValues: Record<string, string>) => {
-    return Object.entries(inputValues).map(([key, value]) => ({
+  const formatCustomerInfo = (formData: FormData) => {
+    return Object.entries(formData).map(([key, value]) => ({
       key,
       value,
     }));
@@ -298,46 +298,41 @@ export default function ItemWithInput({
         key={variant.id}
         style={{ marginVertical: ITEM_MARGIN }}
         className="bg-light-main-container border border-light-matte-black/10 rounded-xl p-4"
-        onPress={async () => {
-          if (
-            inputValues &&
-            Object.values(inputValues).every((value) => !!value)
-          ) {
-            const textField = inputFields?.forms.find(
-              (f) => f.type.toLowerCase() !== "option",
-            );
-            if (textField) {
-              await upsertRecentNumber(inputValues[textField.key]);
-            }
-            const customerInfo = formatCustomerInfo(inputValues);
-            const params = {
-              variantId: variant.id,
-              customerInfo: JSON.stringify(customerInfo),
-            };
-
-            router.push({
-              pathname: "/payment",
-              params,
-            });
-
-            requestAnimationFrame(() => {
-              if (isMounted.current) {
-                setInputValues({});
-
-                if (productId && inputFields?.forms) {
-                  inputFields.forms.forEach((field) => {
-                    queryClient.removeQueries({
-                      queryKey: [
-                        "option-selector",
-                        `${productId}-${field.key}`,
-                      ],
-                    });
-                  });
-                }
-              }
-            });
+        onPress={handleSubmit(async (formData) => {
+          const textField = inputFields?.forms.find(
+            (f) => f.type.toLowerCase() !== "option",
+          );
+          if (textField) {
+            await upsertRecentNumber(formData[textField.key]);
           }
-        }}
+          const customerInfo = formatCustomerInfo(formData);
+          const params = {
+            variantId: variant.id,
+            customerInfo: JSON.stringify(customerInfo),
+          };
+
+          router.push({
+            pathname: "/payment",
+            params,
+          });
+
+          requestAnimationFrame(() => {
+            if (isMounted.current) {
+              reset();
+
+              if (productId && inputFields?.forms) {
+                inputFields.forms.forEach((field) => {
+                  queryClient.removeQueries({
+                    queryKey: [
+                      "option-selector",
+                      `${productId}-${field.key}`,
+                    ],
+                  });
+                });
+              }
+            }
+          });
+        })}
         activeOpacity={0.7}
       >
         <View className="flex-row justify-between items-center">
@@ -399,7 +394,7 @@ export default function ItemWithInput({
 
     requestAnimationFrame(() => {
       if (isMounted.current) {
-        setInputValues({});
+        reset();
 
         if (productId && inputFields?.forms) {
           inputFields.forms.forEach((field) => {
@@ -494,7 +489,7 @@ export default function ItemWithInput({
                                 (f) => f.type.toLowerCase() !== "option",
                               );
                               if (textField) {
-                                handleInputChange(textField.key, number);
+                                setValue(textField.key, number, { shouldValidate: true });
                               }
                             }}
                             activeOpacity={0.5}
@@ -580,7 +575,7 @@ export default function ItemWithInput({
         title={activeField?.alias || "Select Option"}
         options={activeField?.options || []}
         selectedOption={
-          activeField && inputValues ? inputValues[activeField.key] : undefined
+          activeField ? formValues[activeField.key] : undefined
         }
         stateKey={activeField ? `${productId}-${activeField.key}` : undefined}
         clearOnClose={false}
