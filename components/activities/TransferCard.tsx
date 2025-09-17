@@ -70,10 +70,20 @@ const TransferCard = React.memo(
         <View className="pt-1">
           <Text className="text-light-matte-black text-xs">Amount</Text>
           <Text className="text-light-primary-red font-bold text-md">
-            {formatUnits(
-              BigInt(transaction.amount),
-              transaction.token.decimals,
-            )}{" "}
+            {transaction?.amount &&
+              (() => {
+                try {
+                  const cleanAmount = transaction.amount.replace(/[^\d]/g, "");
+                  if (!cleanAmount || cleanAmount === "0") return "0";
+                  return formatUnits(
+                    BigInt(cleanAmount),
+                    transaction.token.decimals,
+                  );
+                } catch (error) {
+                  console.warn("Error formatting amount:", error);
+                  return transaction.amount;
+                }
+              })()}{" "}
             {transaction.token.symbol}
           </Text>
           {transaction?.amountInFiat && (
