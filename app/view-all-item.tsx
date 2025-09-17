@@ -32,8 +32,6 @@ type TItemsItem = {
   products: TProduct[];
 };
 
-type TListItem = THeaderItem | TSearchBarItem | TItemsItem;
-
 const SkeletonItem = () => (
   <View className="items-center justify-center p-1">
     <SingleLoadingSekeleton
@@ -233,7 +231,7 @@ export default function ViewAllItemScreen() {
             keyExtractor={keyExtractor}
             estimatedItemSize={120}
             numColumns={4}
-            className="pt-16"
+            className="pt-16 min-h-[300px]"
             showsHorizontalScrollIndicator={false}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
