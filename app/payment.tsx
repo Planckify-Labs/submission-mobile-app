@@ -13,6 +13,7 @@ import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useCreateBooking } from "@/hooks/queries/useBookings";
 import { useProductVariantById } from "@/hooks/queries/useProducts";
+import { useCreatePurchase } from "@/hooks/queries/usePurchases";
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useWallet } from "@/hooks/useWallet";
 import { router, useLocalSearchParams } from "expo-router";
@@ -84,6 +85,7 @@ export default function PaymentScreen() {
     useProductVariantById(variantId);
 
   const { mutateAsync: createBooking } = useCreateBooking();
+  const { mutateAsync: createPurchase } = useCreatePurchase();
 
   const { data: tokens, isLoading: isLoadingTokens } = useTokens({
     blockchainId: activeBlockchain?.id,
@@ -262,6 +264,29 @@ export default function PaymentScreen() {
       const txHash = await createTransaction.mutateAsync(transactionParams);
       console.log("Transaction hash:", txHash);
 
+      // Immediately create purchase with the transaction hash
+      setTransactionStatus("Creating purchase record...");
+
+      try {
+        const purchaseData = {
+          refId,
+          walletAddress: activeWallet.address,
+          bookingId: booking.id.toString(),
+          contractAddress: takumiWalletAddress,
+          networkId: activeBlockchain.id.toString(),
+          transactionHash: txHash,
+        };
+
+        const purchaseResponse = await createPurchase(purchaseData);
+        console.log("Purchase created:", purchaseResponse);
+      } catch (purchaseError) {
+        console.error("Failed to create purchase:", purchaseError);
+        Alert.alert(
+          "Warning",
+          "Purchase record creation failed, but transaction is proceeding. Please contact support if needed.",
+        );
+      }
+
       setTransactionStatus("Confirming transaction...");
 
       await waitForTransaction(txHash);
@@ -294,6 +319,7 @@ export default function PaymentScreen() {
     tokenAmountNeeded,
     selectedToken,
     createBooking,
+    createPurchase,
     activeBlockchain,
     parsedCustomerInfo,
     exchangeRate,
