@@ -118,10 +118,11 @@ export default function AuthScreen() {
       await createDelay(800);
 
       await deferredTask(async () => {
-        await verifySignature({
+        const authResponse = await verifySignature({
           message: nonceData.message,
           signature,
         });
+        console.log("jwt token: ", authResponse.access_token);
 
         queryClient.invalidateQueries({ queryKey: ["auth"] });
       }, "Verifying signature");
@@ -275,8 +276,8 @@ export default function AuthScreen() {
             <Text className="text-light-matte-black font-mono text-sm mb-3">
               {activeWallet?.address
                 ? `${activeWallet.address.substring(0, 12)}...${activeWallet.address.substring(
-                    activeWallet.address.length - 8,
-                  )}`
+                  activeWallet.address.length - 8,
+                )}`
                 : "No wallet selected"}
             </Text>
             <View className="flex-row items-center">

@@ -1,4 +1,4 @@
-import { api } from "@/constants/configs/ky";
+import { publicApi } from "@/constants/configs/ky";
 import type {
   TExchangeRate,
   TExchangeRateParams,
@@ -7,7 +7,7 @@ import type {
 export const exchangeRateApi = {
   getLatestExchangeRate: async (params?: TExchangeRateParams) => {
     try {
-      const response = await api
+      const response = await publicApi
         .get("exchange-rates/latest", {
           searchParams: params,
         })

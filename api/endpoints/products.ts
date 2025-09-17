@@ -41,7 +41,7 @@ export const productApi = {
 
   getProductById: async (id: string): Promise<TProductDetail> => {
     try {
-      const response = await api.get(`products/${id}`);
+      const response = await publicApi.get(`products/${id}`);
       return response.json();
     } catch (error: any) {
       if (error && error.name === "AbortError") {
@@ -53,7 +53,7 @@ export const productApi = {
   },
 
   getProductsByCategory: async (categoryId: string): Promise<TProduct[]> => {
-    const response = await api.get(
+    const response = await publicApi.get(
       `products/categories/${categoryId}/products`,
     );
     return response.json();
@@ -72,14 +72,14 @@ export const productApi = {
   getProductVariantById: async (
     variantId: string,
   ): Promise<TProductVariant> => {
-    const response = await api.get(`products/variants/${variantId}`);
+    const response = await publicApi.get(`products/variants/${variantId}`);
     return response.json();
   },
 
   getProductInputFields: async (
     productId: string,
   ): Promise<TProductInputFields> => {
-    const response = await api.get(`products/${productId}/input-fields`);
+    const response = await publicApi.get(`products/${productId}/input-fields`);
     return response.json();
   },
 };
