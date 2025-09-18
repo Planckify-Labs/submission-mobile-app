@@ -5,13 +5,13 @@ import { copyToClipboard } from "@/utils/authUtils";
 import { useRouter } from "expo-router";
 import {
   ArrowBigDown,
-  ArrowDownToLine,
-  ArrowUpToLine,
   ChevronDown,
   Copy,
   Eye,
   EyeOff,
   PlusIcon,
+  QrCode,
+  Send,
   Wallet,
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -212,7 +212,7 @@ export default function BalanceSection() {
             <View className="flex-1 min-w-[100px] gap-3 flex-row flex-wrap">
               <TouchableOpacity
                 activeOpacity={0.7}
-                className="hidden flex-1 min-w-[120px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center"
+                className="hidden- flex-1 min-w-[120px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center"
               >
                 <View className="bg-light-primary-red/10 rounded-full p-1.5 mr-2">
                   <PlusIcon size={20} color="#c71c4b" />
@@ -239,32 +239,63 @@ export default function BalanceSection() {
               </TouchableOpacity>
             </View>
 
-            <View className="flex-row gap-3 flex-wrap justify-center">
-              <TouchableOpacity
-                activeOpacity={0.7}
-                className="items-center m-1"
-                onPress={openModal}
-              >
-                <View className="bg-light-matte-black rounded-full items-center justify-center w-12 h-12 mb-1">
-                  <ArrowDownToLine size={20} color="#fff" />
-                </View>
-                <Text className="text-xs text-light-matte-black font-medium">
-                  Receive
-                </Text>
-              </TouchableOpacity>
+            <View className="">
+              <View className="flex-row gap-3 flex-wrap justify-center">
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  className="items-center m-1 mt-0"
+                  onPress={openModal}
+                >
+                  <View className="bg-light-matte-black rounded-full items-center justify-center w-12 h-12 mb-1">
+                    <QrCode size={20} color="#fff" />
+                  </View>
+                  <Text className="text-xs text-light-matte-black font-medium">
+                    Receive
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                activeOpacity={0.7}
-                className="items-center m-1"
-                onPress={() => router.push("/send")}
-              >
-                <View className="bg-light-matte-black rounded-full items-center justify-center w-12 h-12 mb-1">
-                  <ArrowUpToLine size={20} color="#fff" />
-                </View>
-                <Text className="text-xs text-light-matte-black font-medium">
-                  Send
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  className="items-center m-1 mt-0"
+                  onPress={() => router.push("/send")}
+                >
+                  <View className="bg-light-matte-black rounded-full items-center justify-center w-12 h-12 pt-[2px] pr-[2px] mb-1">
+                    <Send size={20} color="#fff" fill="#fff" />
+                  </View>
+                  <Text className="text-xs text-light-matte-black font-medium">
+                    Send
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View className="flex-row gap-2 p-1 flex-wrap justify-between bg-light-main-container rounded-xl items-center">
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  className="items-center"
+                  onPress={() => router.push("/asset-explorer")}
+                >
+                  <View className="bg-light-matte-black- rounded-full items-center justify-center w-12 h-12 mb-1">
+                    <Image
+                      source={require("@/assets/icons/asset-dark.png")}
+                      style={{ width: 30, height: 30 }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  className="items-center"
+                  onPress={() => alert("will navigate to dApps browser")}
+                >
+                  <View className="bg-light-matte-black- rounded-full items-center justify-center w-12 h-12 mb-1">
+                    <Image
+                      source={require("@/assets/icons/explorer-dark.png")}
+                      style={{ width: 30, height: 30 }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
