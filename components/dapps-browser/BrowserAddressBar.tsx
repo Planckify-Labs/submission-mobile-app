@@ -19,7 +19,7 @@ export default function BrowserAddressBar({
   addressBarRef,
 }: BrowserAddressBarProps) {
   return (
-    <View className="absolute top-4 left-4 right-4 flex-row gap-2">
+    <View className="flex-row gap-2 px-2">
       <BlurView
         intensity={40}
         experimentalBlurMethod="dimezisBlurView"
@@ -46,10 +46,7 @@ export default function BrowserAddressBar({
         experimentalBlurMethod="dimezisBlurView"
         className="rounded-full overflow-hidden aspect-square justify-center items-center"
       >
-        <TouchableOpacity
-          onPress={onGoBack}
-          className="w-fit bg-light/5"
-        >
+        <TouchableOpacity onPress={onGoBack} className="w-fit bg-light/5">
           <Shield size={20} color="#000" />
         </TouchableOpacity>
       </BlurView>

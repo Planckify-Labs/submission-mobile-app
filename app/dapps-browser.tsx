@@ -9,16 +9,8 @@ import {
   getEthereumProviderScript,
 } from "@/services/ethereumProvider";
 import { getAccountForWallet } from "@/services/walletService";
-import { BlurView } from "expo-blur";
-import { Shield } from "lucide-react-native";
 import React, { useCallback, useRef, useState } from "react";
-import {
-  Keyboard,
-  StatusBar,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Keyboard, StatusBar, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
 import { type Hex } from "viem";
@@ -399,7 +391,15 @@ export default function DappsBrowser() {
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" backgroundColor="white" />
 
-      <View className="flex-1 relative">
+      <View className="flex-1">
+        <BrowserAddressBar
+          addressBarText={addressBarText}
+          onChangeText={setAddressBarText}
+          onSubmitEditing={handleAddressSubmit}
+          onGoBack={handleGoBack}
+          addressBarRef={addressBarRef}
+        />
+
         <WebView
           ref={webViewRef}
           source={{ uri: browserState.url }}
@@ -432,20 +432,13 @@ export default function DappsBrowser() {
           allowsBackForwardNavigationGestures={true}
           sharedCookiesEnabled
           thirdPartyCookiesEnabled
-          // renderToHardwareTextureAndroid={true} this option caused a blank white screen so dont enable it
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
           androidLayerType="hardware"
           setSupportMultipleWindows={false}
           cacheEnabled
           cacheMode="LOAD_DEFAULT"
           className="flex-1"
-        />
-
-        <BrowserAddressBar
-          addressBarText={addressBarText}
-          onChangeText={setAddressBarText}
-          onSubmitEditing={handleAddressSubmit}
-          onGoBack={handleGoBack}
-          addressBarRef={addressBarRef}
         />
 
         <BrowserNavigationControls

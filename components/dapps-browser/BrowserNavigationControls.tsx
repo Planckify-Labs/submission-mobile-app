@@ -32,11 +32,11 @@ export default function BrowserNavigationControls({
   onHome,
 }: BrowserNavigationControlsProps) {
   return (
-    <View className="absolute bottom-6 left-4 right-4 justify-center">
+    <View className="justify-center">
       <BlurView
         intensity={20}
         experimentalBlurMethod="dimezisBlurView"
-        className="rounded-full border-4 border-light-matte-black overflow-hidden mx-auto"
+        className="px-2"
       >
         <View className="p-2">
           <View className="flex-row items-center justify-between gap-2">
@@ -72,7 +72,7 @@ export default function BrowserNavigationControls({
             >
               <Search size={20} color="#374151" />
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               onPress={onRefresh}
               className="p-3 rounded-full bg-white/20"
