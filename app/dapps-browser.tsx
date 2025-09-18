@@ -1,4 +1,6 @@
 import SignMessageModal from "@/components/common/SignMessageModal";
+import BrowserAddressBar from "@/components/dapps-browser/BrowserAddressBar";
+import BrowserNavigationControls from "@/components/dapps-browser/BrowserNavigationControls";
 import TransactionModal from "@/components/dapps-browser/TransactionModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useWallet } from "@/hooks/useWallet";
@@ -8,14 +10,7 @@ import {
 } from "@/services/ethereumProvider";
 import { getAccountForWallet } from "@/services/walletService";
 import { BlurView } from "expo-blur";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Home,
-  RotateCcw,
-  Search,
-  Shield,
-} from "lucide-react-native";
+import { Shield } from "lucide-react-native";
 import React, { useCallback, useRef, useState } from "react";
 import {
   Keyboard,
@@ -435,102 +430,32 @@ export default function DappsBrowser() {
           allowsInlineMediaPlayback={true}
           mediaPlaybackRequiresUserAction={false}
           allowsBackForwardNavigationGestures={true}
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
+          // renderToHardwareTextureAndroid={true} this option caused a blank white screen so dont enable it
+          androidLayerType="hardware"
+          setSupportMultipleWindows={false}
+          cacheEnabled
+          cacheMode="LOAD_DEFAULT"
           className="flex-1"
         />
 
-        <View className="absolute top-4 left-4 right-4 flex-row gap-2">
-          <BlurView
-            intensity={40}
-            experimentalBlurMethod="dimezisBlurView"
-            className="rounded-full overflow-hidden grow"
-          >
-            <View className="p-2- border-4 border-light-primary-red/35 rounded-full">
-              <TextInput
-                ref={addressBarRef}
-                value={addressBarText}
-                onChangeText={setAddressBarText}
-                onSubmitEditing={handleAddressSubmit}
-                placeholder="Search or enter website URL"
-                className="bg-transparent text-light-matte-black text-base p-2 px-4"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                returnKeyType="go"
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-          </BlurView>
-          <BlurView
-            intensity={40}
-            experimentalBlurMethod="dimezisBlurView"
-            className="rounded-full overflow-hidden aspect-square justify-center items-center"
-          >
-            <TouchableOpacity
-              onPress={handleGoBack}
-              className="w-fit bg-light/5"
-            >
-              <Shield size={20} color="#000" />
-            </TouchableOpacity>
-          </BlurView>
-        </View>
+        <BrowserAddressBar
+          addressBarText={addressBarText}
+          onChangeText={setAddressBarText}
+          onSubmitEditing={handleAddressSubmit}
+          onGoBack={handleGoBack}
+          addressBarRef={addressBarRef}
+        />
 
-        <View className="absolute bottom-6 left-4 right-4 justify-center">
-          <BlurView
-            intensity={20}
-            experimentalBlurMethod="dimezisBlurView"
-            className="rounded-full border-4 border-light-matte-black overflow-hidden mx-auto"
-          >
-            <View className="p-2">
-              <View className="flex-row items-center justify-between gap-2">
-                <TouchableOpacity
-                  onPress={handleGoBack}
-                  disabled={!browserState.canGoBack}
-                  className={`p-3 rounded-full ${
-                    browserState.canGoBack ? "bg-white/20" : "bg-gray-500/10"
-                  }`}
-                >
-                  <ArrowLeft
-                    size={20}
-                    color={browserState.canGoBack ? "#374151" : "#9CA3AF"}
-                  />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleGoForward}
-                  disabled={!browserState.canGoForward}
-                  className={`p-3 rounded-full ${
-                    browserState.canGoForward ? "bg-white/20" : "bg-gray-500/10"
-                  }`}
-                >
-                  <ArrowRight
-                    size={20}
-                    color={browserState.canGoForward ? "#374151" : "#9CA3AF"}
-                  />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => setIsAddressBarAutoFocus(true)}
-                  className="p-3 rounded-full bg-white/20"
-                >
-                  <Search size={20} color="#374151" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleRefresh}
-                  className="p-3 rounded-full bg-white/20"
-                >
-                  <RotateCcw size={20} color="#374151" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleHome}
-                  className="p-3 rounded-full bg-white/20"
-                >
-                  <Home size={20} color="#374151" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </BlurView>
-        </View>
+        <BrowserNavigationControls
+          browserState={browserState}
+          onGoBack={handleGoBack}
+          onGoForward={handleGoForward}
+          onSearch={() => setIsAddressBarAutoFocus(true)}
+          onRefresh={handleRefresh}
+          onHome={handleHome}
+        />
       </View>
 
       {pendingTransaction && activeWallet && (

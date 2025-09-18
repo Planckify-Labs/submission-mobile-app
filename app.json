@@ -62,7 +62,13 @@
           "imageWidth": 150
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-web-browser",
+        {
+          "experimentalLauncherActivity": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
