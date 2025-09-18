@@ -1,26 +1,29 @@
 import { publicApi } from "@/constants/configs/ky";
 import { fetchById, fetchList, searchItems } from "../utils/api-helpers";
 
+export interface TBlockchain {
+  id: string;
+  name: string;
+  chainId: number;
+  rpcUrl: string;
+  blockExplorer: string;
+  isEVM: boolean;
+  isActive: boolean;
+  isTestnet: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TSmartContract {
   id: string;
   name: string;
-  address: string;
+  blockchain: TBlockchain;
   blockchainId: string;
-  abi?: any[];
-  bytecode?: string;
-  isVerified: boolean;
+  address: string;
+  abiId: string;
   isActive: boolean;
-  contractType?: string;
-  description?: string;
-  version?: string;
-  compiler?: string;
   createdAt: string;
   updatedAt: string;
-  blockchain?: {
-    id: string;
-    name: string;
-    chainId: number;
-  };
 }
 
 export interface TSmartContractSearchParams {

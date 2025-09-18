@@ -10,15 +10,23 @@ import type {
   TGetTransactionsInRangeParams,
   TGetUserTransactionsParams,
   TTakumiTransaction,
+  TWithdrawAllParams,
+  TWithdrawParams,
 } from "../types/TTakumiWallet";
 
-interface UseTakumiWalletContractProps {
+interface TUseTakumiWalletContractProps {
   contractAddress: Address;
 }
+type TEventName =
+  | "AdminAdded"
+  | "AdminRemoved"
+  | "TransactionCreated"
+  | "NativeDeposit"
+  | "Withdraw";
 
 export function useTakumiWalletContract({
   contractAddress,
-}: UseTakumiWalletContractProps) {
+}: TUseTakumiWalletContractProps) {
   const {
     getClientForActiveWallet,
     getPublicClientForActiveChain,
@@ -171,8 +179,21 @@ export function useTakumiWalletContract({
 
   const createTransaction = useMutation({
     mutationFn: async (params: TCreateTransactionParams) => {
+      console.log("contract addr:", contractAddress);
       if (!walletClient || !walletClient.account)
         throw new Error("Wallet not connected");
+
+      const amountInWei = BigInt(
+        Math.floor(
+          parseFloat(params.amount) * Math.pow(10, params.tokenDecimals),
+        ),
+      );
+      console.log("Amount calculation:", {
+        humanAmount: params.amount,
+        tokenDecimals: params.tokenDecimals,
+        amountInWei: amountInWei.toString(),
+      });
+
       const hash = await walletClient.writeContract({
         address: contractAddress,
         abi: AbiTakumiWallet,
@@ -183,7 +204,40 @@ export function useTakumiWalletContract({
           params.productVariantId,
           params.tokenAddress,
           params.refId,
+          amountInWei,
         ],
+        chain: walletClient.chain,
+        account: walletClient.account,
+      });
+      return hash as Hash;
+    },
+  });
+
+  const withdraw = useMutation({
+    mutationFn: async (params: TWithdrawParams) => {
+      if (!walletClient || !walletClient.account)
+        throw new Error("Wallet not connected");
+      const hash = await walletClient.writeContract({
+        address: contractAddress,
+        abi: AbiTakumiWallet,
+        functionName: "withdraw",
+        args: [params.token, params.to, params.amount],
+        chain: walletClient.chain,
+        account: walletClient.account,
+      });
+      return hash as Hash;
+    },
+  });
+
+  const withdrawAll = useMutation({
+    mutationFn: async (params: TWithdrawAllParams) => {
+      if (!walletClient || !walletClient.account)
+        throw new Error("Wallet not connected");
+      const hash = await walletClient.writeContract({
+        address: contractAddress,
+        abi: AbiTakumiWallet,
+        functionName: "withdrawAll",
+        args: [params.token, params.to],
         chain: walletClient.chain,
         account: walletClient.account,
       });
@@ -263,6 +317,54 @@ export function useTakumiWalletContract({
     });
   };
 
+  const useWatchNativeDeposit = (
+    onNativeDeposit?: (log: any) => void,
+    enabled: boolean = true,
+  ) => {
+    return useQuery({
+      queryKey: ["takumi-wallet", "watchNativeDeposit", contractAddress],
+      queryFn: async () => {
+        if (!publicClient || !onNativeDeposit || !enabled) return null;
+
+        const unwatch = publicClient.watchContractEvent({
+          address: contractAddress,
+          abi: AbiTakumiWallet,
+          eventName: "NativeDeposit",
+          onLogs: onNativeDeposit,
+        });
+
+        return unwatch;
+      },
+      enabled: !!publicClient && !!onNativeDeposit && enabled,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+    });
+  };
+
+  const useWatchWithdraw = (
+    onWithdraw?: (log: any) => void,
+    enabled: boolean = true,
+  ) => {
+    return useQuery({
+      queryKey: ["takumi-wallet", "watchWithdraw", contractAddress],
+      queryFn: async () => {
+        if (!publicClient || !onWithdraw || !enabled) return null;
+
+        const unwatch = publicClient.watchContractEvent({
+          address: contractAddress,
+          abi: AbiTakumiWallet,
+          eventName: "Withdraw",
+          onLogs: onWithdraw,
+        });
+
+        return unwatch;
+      },
+      enabled: !!publicClient && !!onWithdraw && enabled,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+    });
+  };
+
   const getTransaction = useCallback(
     async (txId: bigint) => {
       if (!readContract) throw new Error("Contract not initialized");
@@ -280,11 +382,7 @@ export function useTakumiWalletContract({
   );
 
   const getContractLogs = useCallback(
-    async (
-      eventName: "AdminAdded" | "AdminRemoved" | "TransactionCreated",
-      fromBlock?: bigint,
-      toBlock?: bigint,
-    ) => {
+    async (eventName: TEventName, fromBlock?: bigint, toBlock?: bigint) => {
       if (!publicClient) throw new Error("Public client not available");
       return await publicClient.getContractEvents({
         address: contractAddress,
@@ -312,9 +410,13 @@ export function useTakumiWalletContract({
     addAdmin,
     removeAdmin,
     createTransaction,
+    withdraw,
+    withdrawAll,
     useWatchTransactionCreated,
     useWatchAdminAdded,
     useWatchAdminRemoved,
+    useWatchNativeDeposit,
+    useWatchWithdraw,
     getTransaction,
     waitForTransaction,
     getContractLogs,

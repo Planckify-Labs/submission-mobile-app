@@ -12,6 +12,7 @@ import type { TCreateTransactionParams } from "@/contracts/types/TTakumiWallet";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useCreateBooking } from "@/hooks/queries/useBookings";
+import { usePaymentProcessorContract } from "@/hooks/queries/usePaymentProcessorContract";
 import { useProductVariantById } from "@/hooks/queries/useProducts";
 import { useCreatePurchase } from "@/hooks/queries/usePurchases";
 import { useTokens } from "@/hooks/queries/useTokens";
@@ -47,10 +48,14 @@ export default function PaymentScreen() {
     return blockchains.find((b) => b.chainId === activeChain.chain.id);
   }, [blockchains, activeChain]);
 
-  // TODO: fetch takumiwallet contract address from API
-  const takumiWalletAddress = "0x192eB3404Dc611C81cDc552c2337056C1F4bb970"; // address for sepolia testnet
-  const { createTransaction, waitForTransaction } = useTakumiWalletContract({
+  const {
     contractAddress: takumiWalletAddress,
+    isLoading: isLoadingContract,
+    error: contractError,
+  } = usePaymentProcessorContract(activeBlockchain?.id);
+
+  const { createTransaction, waitForTransaction } = useTakumiWalletContract({
+    contractAddress: takumiWalletAddress as `0x${string}`,
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -257,6 +262,8 @@ export default function PaymentScreen() {
         productVariantId: variantId,
         tokenAddress: selectedToken.contractAddress as Address,
         refId,
+        amount: tokenAmountNeeded,
+        tokenDecimals: selectedToken.decimals,
       };
 
       setTransactionStatus("Sending transaction to blockchain...");
@@ -264,7 +271,6 @@ export default function PaymentScreen() {
       const txHash = await createTransaction.mutateAsync(transactionParams);
       console.log("Transaction hash:", txHash);
 
-      // Immediately create purchase with the transaction hash
       setTransactionStatus("Creating purchase record...");
 
       try {
@@ -356,6 +362,7 @@ export default function PaymentScreen() {
       isLoadingVariant: isLoadingVariant,
       isLoadingRate: isLoadingRate,
       isLoadingTokens: isLoadingTokens,
+      isLoadingContract: isLoadingContract,
       noActiveWallet: !activeWallet.address,
       noSelectedToken: !selectedToken,
       noActiveBlockchain: !activeBlockchain,
@@ -363,6 +370,7 @@ export default function PaymentScreen() {
       noExchangeRate: !exchangeRate?.rate,
       noTokensAvailable: tokens?.length === 0,
       noContractAddress: !takumiWalletAddress,
+      contractError: !!contractError,
     };
 
     console.log("Button disable conditions:", conditions);
@@ -372,19 +380,22 @@ export default function PaymentScreen() {
       conditions.isLoadingVariant ||
       conditions.isLoadingRate ||
       conditions.isLoadingTokens ||
+      conditions.isLoadingContract ||
       conditions.noActiveWallet ||
       conditions.noSelectedToken ||
       conditions.noActiveBlockchain ||
       conditions.noVariantData ||
       conditions.noExchangeRate ||
       conditions.noTokensAvailable ||
-      conditions.noContractAddress
+      conditions.noContractAddress ||
+      conditions.contractError
     );
   }, [
     isLoading,
     isLoadingVariant,
     isLoadingRate,
     isLoadingTokens,
+    isLoadingContract,
     activeWallet.address,
     selectedToken,
     activeBlockchain,
@@ -392,6 +403,7 @@ export default function PaymentScreen() {
     exchangeRate,
     tokens,
     takumiWalletAddress,
+    contractError,
   ]);
 
   return (
@@ -413,6 +425,18 @@ export default function PaymentScreen() {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
+            {contractError && (
+              <View className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4">
+                <Text className="text-red-800 font-medium text-sm mb-1">
+                  Contract Error
+                </Text>
+                <Text className="text-red-600 text-sm">
+                  Unable to load Payment Processor contract for this network.
+                  Please try switching networks or contact support.
+                </Text>
+              </View>
+            )}
+
             <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
               <Text className="text-light-matte-black font-bold text-lg mb-3">
                 Purchase Details

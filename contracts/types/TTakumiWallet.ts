@@ -6,6 +6,7 @@ export interface TTakumiTransaction {
   productVariantId: string;
   timestamp: bigint;
   refId: string;
+  amount: bigint;
 }
 
 export interface TCreateTransactionParams {
@@ -14,6 +15,8 @@ export interface TCreateTransactionParams {
   productVariantId: string;
   tokenAddress: `0x${string}`;
   refId: string;
+  amount: string;
+  tokenDecimals: number;
 }
 
 export interface TGetTransactionsByAddressParams {
@@ -34,6 +37,17 @@ export interface TGetUserTransactionsParams {
   limit: bigint;
 }
 
+export interface TWithdrawParams {
+  token: `0x${string}`;
+  to: `0x${string}`;
+  amount: bigint;
+}
+
+export interface TWithdrawAllParams {
+  token: `0x${string}`;
+  to: `0x${string}`;
+}
+
 export interface TTakumiWalletEvents {
   AdminAdded: {
     admin: `0x${string}`;
@@ -50,5 +64,15 @@ export interface TTakumiWalletEvents {
     productVariantId: string;
     timestamp: bigint;
     refId: string;
+    amount: bigint;
+  };
+  NativeDeposit: {
+    from: `0x${string}`;
+    amount: bigint;
+  };
+  Withdraw: {
+    to: `0x${string}`;
+    token: `0x${string}`;
+    amount: bigint;
   };
 }

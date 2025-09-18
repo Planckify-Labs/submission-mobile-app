@@ -1,5 +1,21 @@
 const AbiTakumiWallet = [
   {
+    inputs: [],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "token",
+        type: "address",
+      },
+    ],
+    name: "SafeERC20FailedOperation",
+    type: "error",
+  },
+  {
     anonymous: false,
     inputs: [
       {
@@ -23,6 +39,25 @@ const AbiTakumiWallet = [
       },
     ],
     name: "AdminRemoved",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "from",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "NativeDeposit",
     type: "event",
   },
   {
@@ -76,9 +111,44 @@ const AbiTakumiWallet = [
         name: "refId",
         type: "string",
       },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
     ],
     name: "TransactionCreated",
     type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "to",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "token",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "Withdraw",
+    type: "event",
+  },
+  {
+    stateMutability: "payable",
+    type: "fallback",
   },
   {
     inputs: [
@@ -120,29 +190,16 @@ const AbiTakumiWallet = [
         name: "refId",
         type: "string",
       },
+      {
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
     ],
     name: "createTransaction",
     outputs: [],
-    stateMutability: "nonpayable",
+    stateMutability: "payable",
     type: "function",
-  },
-  {
-    inputs: [
-      {
-        internalType: "address",
-        name: "admin",
-        type: "address",
-      },
-    ],
-    name: "removeAdmin",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    stateMutability: "nonpayable",
-    type: "constructor",
   },
   {
     inputs: [],
@@ -203,6 +260,11 @@ const AbiTakumiWallet = [
             internalType: "string",
             name: "refId",
             type: "string",
+          },
+          {
+            internalType: "uint256",
+            name: "amount",
+            type: "uint256",
           },
         ],
         internalType: "struct TakumiWallet.Transaction",
@@ -269,6 +331,11 @@ const AbiTakumiWallet = [
             internalType: "string",
             name: "refId",
             type: "string",
+          },
+          {
+            internalType: "uint256",
+            name: "amount",
+            type: "uint256",
           },
         ],
         internalType: "struct TakumiWallet.Transaction[]",
@@ -340,6 +407,11 @@ const AbiTakumiWallet = [
             internalType: "string",
             name: "refId",
             type: "string",
+          },
+          {
+            internalType: "uint256",
+            name: "amount",
+            type: "uint256",
           },
         ],
         internalType: "struct TakumiWallet.Transaction[]",
@@ -421,6 +493,11 @@ const AbiTakumiWallet = [
             name: "refId",
             type: "string",
           },
+          {
+            internalType: "uint256",
+            name: "amount",
+            type: "uint256",
+          },
         ],
         internalType: "struct TakumiWallet.Transaction[]",
         name: "",
@@ -460,6 +537,19 @@ const AbiTakumiWallet = [
       },
     ],
     stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "admin",
+        type: "address",
+      },
+    ],
+    name: "removeAdmin",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
   {
@@ -507,6 +597,11 @@ const AbiTakumiWallet = [
         name: "refId",
         type: "string",
       },
+      {
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
     ],
     stateMutability: "view",
     type: "function",
@@ -523,6 +618,51 @@ const AbiTakumiWallet = [
     ],
     stateMutability: "view",
     type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "token",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "to",
+        type: "address",
+      },
+      {
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "withdraw",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "token",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "to",
+        type: "address",
+      },
+    ],
+    name: "withdrawAll",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    stateMutability: "payable",
+    type: "receive",
   },
 ] as const;
 
