@@ -1,6 +1,9 @@
 import SignMessageModal from "@/components/common/SignMessageModal";
 import BrowserAddressBar from "@/components/dapps-browser/BrowserAddressBar";
 import BrowserNavigationControls from "@/components/dapps-browser/BrowserNavigationControls";
+import { TCategoryTab } from "@/components/dapps-browser/DAppList";
+import DAppsCategoryTab from "@/components/dapps-browser/DAppsCategoryTab";
+import EcosystemHub from "@/components/dapps-browser/EcosystemHub";
 import TransactionModal from "@/components/dapps-browser/TransactionModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useWallet } from "@/hooks/useWallet";
@@ -10,12 +13,12 @@ import {
 } from "@/services/ethereumProvider";
 import { getAccountForWallet } from "@/services/walletService";
 import React, { useCallback, useRef, useState } from "react";
-import { Keyboard, StatusBar, TextInput, View } from "react-native";
+import { Animated, Keyboard, StatusBar, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
 import { type Hex } from "viem";
 
-interface BrowserState {
+interface TBrowserState {
   url: string;
   title: string;
   canGoBack: boolean;
@@ -34,10 +37,11 @@ export default function DappsBrowser() {
   } = useWallet();
   const webViewRef = useRef<WebView>(null);
   const addressBarRef = useRef<TextInput>(null);
-  const [addressBarText, setAddressBarText] = useState("https://uniswap.org");
-  const [browserState, setBrowserState] = useState<BrowserState>({
-    url: "https://uniswap.org",
-    title: "Uniswap",
+  const [addressBarText, setAddressBarText] = useState("");
+  const [showHub, setShowHub] = useState(true);
+  const [browserState, setBrowserState] = useState<TBrowserState>({
+    url: "",
+    title: "Web3 Ecosystem Hub",
     canGoBack: false,
     canGoForward: false,
     loading: false,
@@ -47,9 +51,17 @@ export default function DappsBrowser() {
   const [pendingSignRequest, setPendingSignRequest] = useState<any>(null);
   const [showWalletSelection, setShowWalletSelection] = useState(false);
   const [pendingAccountRequest, setPendingAccountRequest] = useState<any>(null);
+  const [tabWidth, setTabWidth] = useState(0);
   const [pendingAccountRequests, setPendingAccountRequests] = useState<any[]>(
     [],
   );
+  const tabScrollX = useRef(new Animated.Value(0)).current;
+  const [activeCategory, setActiveCategory] = useState<TCategoryTab>("defi");
+
+  const handleTabBarLayout = (event: any) => {
+    const { width } = event.nativeEvent.layout;
+    setTabWidth(width / 3);
+  };
 
   React.useEffect(() => {
     if (activeWallet) {
@@ -75,6 +87,7 @@ export default function DappsBrowser() {
     (url: string) => {
       const formattedUrl = formatUrl(url);
       setAddressBarText(formattedUrl);
+      setShowHub(false);
       setBrowserState((prev) => ({
         ...prev,
         url: formattedUrl,
@@ -110,8 +123,32 @@ export default function DappsBrowser() {
   };
 
   const handleHome = () => {
-    navigateToUrl("https://uniswap.org");
+    setShowHub(true);
+    setAddressBarText("");
+    setBrowserState((prev) => ({
+      ...prev,
+      url: "",
+      title: "Web3 Ecosystem Hub",
+      canGoBack: false,
+      canGoForward: false,
+      loading: false,
+      isSecure: true,
+    }));
   };
+
+  const handleTabChange = (tab: TCategoryTab) => {
+    setActiveCategory(tab);
+    if (tabWidth > 0) {
+      const tabIndex = tab === "dex" ? 0 : tab === "defi" ? 1 : 2;
+      const translateX = tabWidth * tabIndex;
+      Animated.spring(tabScrollX, {
+        toValue: translateX,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const horizontalScrollX = useRef(new Animated.Value(0)).current;
 
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
@@ -387,6 +424,16 @@ export default function DappsBrowser() {
       setIsAddressBarAutoFocus(false);
     }
   }, [isAddressBarAutoFocus]);
+
+  React.useEffect(() => {
+    // Initialize tab animation position when tabWidth is available
+    if (tabWidth > 0) {
+      const tabIndex = ["dex", "defi", "gaming"].indexOf(activeCategory);
+      if (tabIndex >= 0) {
+        tabScrollX.setValue(tabIndex * tabWidth);
+      }
+    }
+  }, [activeCategory, tabScrollX, tabWidth]);
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" backgroundColor="#f5f6f9" />
@@ -399,55 +446,76 @@ export default function DappsBrowser() {
           addressBarRef={addressBarRef}
         />
 
-        <WebView
-          ref={webViewRef}
-          source={{ uri: browserState.url }}
-          onMessage={handleMessage}
-          injectedJavaScript={injectedJavaScript}
-          onLoadStart={() => {
-            setBrowserState((prev) => ({ ...prev, loading: true }));
-          }}
-          onLoadEnd={() => {
-            setBrowserState((prev) => ({ ...prev, loading: false }));
-          }}
-          onNavigationStateChange={(navState) => {
-            setBrowserState((prev) => ({
-              ...prev,
-              url: navState.url,
-              title: navState.title,
-              canGoBack: navState.canGoBack,
-              canGoForward: navState.canGoForward,
-              loading: navState.loading,
-              isSecure: navState.url.startsWith("https://"),
-            }));
-            setAddressBarText(navState.url);
-          }}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          startInLoadingState={true}
-          scalesPageToFit={true}
-          allowsInlineMediaPlayback={true}
-          mediaPlaybackRequiresUserAction={false}
-          allowsBackForwardNavigationGestures={true}
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
-          showsHorizontalScrollIndicator={false}
-          showsVerticalScrollIndicator={false}
-          androidLayerType="hardware"
-          setSupportMultipleWindows={false}
-          cacheEnabled
-          cacheMode="LOAD_DEFAULT"
-          className="flex-1"
-        />
+        {showHub ? (
+          <View className="flex-1">
+            <EcosystemHub
+              onNavigateToDapp={navigateToUrl}
+              activeCategory={activeCategory}
+              onCategoryChange={setActiveCategory}
+              horizontalScrollX={horizontalScrollX}
+            />
 
-        <BrowserNavigationControls
-          browserState={browserState}
-          onGoBack={handleGoBack}
-          onGoForward={handleGoForward}
-          onSearch={() => setIsAddressBarAutoFocus(true)}
-          onRefresh={handleRefresh}
-          onHome={handleHome}
-        />
+            <DAppsCategoryTab
+              activeCategory={activeCategory}
+              onTabChange={handleTabChange}
+              onLayout={handleTabBarLayout}
+              tabWidth={tabWidth}
+              horizontalScrollX={horizontalScrollX}
+            />
+          </View>
+        ) : (
+          <WebView
+            ref={webViewRef}
+            source={{ uri: browserState.url }}
+            onMessage={handleMessage}
+            injectedJavaScript={injectedJavaScript}
+            onLoadStart={() => {
+              setBrowserState((prev) => ({ ...prev, loading: true }));
+            }}
+            onLoadEnd={() => {
+              setBrowserState((prev) => ({ ...prev, loading: false }));
+            }}
+            onNavigationStateChange={(navState) => {
+              setBrowserState((prev) => ({
+                ...prev,
+                url: navState.url,
+                title: navState.title,
+                canGoBack: navState.canGoBack,
+                canGoForward: navState.canGoForward,
+                loading: navState.loading,
+                isSecure: navState.url.startsWith("https://"),
+              }));
+              setAddressBarText(navState.url);
+            }}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            startInLoadingState={true}
+            scalesPageToFit={true}
+            allowsInlineMediaPlayback={true}
+            mediaPlaybackRequiresUserAction={false}
+            allowsBackForwardNavigationGestures={true}
+            sharedCookiesEnabled
+            thirdPartyCookiesEnabled
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+            androidLayerType="hardware"
+            setSupportMultipleWindows={false}
+            cacheEnabled
+            cacheMode="LOAD_DEFAULT"
+            className="flex-1"
+          />
+        )}
+
+        {!showHub && (
+          <BrowserNavigationControls
+            browserState={browserState}
+            onGoBack={handleGoBack}
+            onGoForward={handleGoForward}
+            onSearch={() => setIsAddressBarAutoFocus(true)}
+            onRefresh={handleRefresh}
+            onHome={handleHome}
+          />
+        )}
       </View>
 
       {pendingTransaction && activeWallet && (
