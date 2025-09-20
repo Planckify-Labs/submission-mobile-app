@@ -18,6 +18,18 @@ export type TVendorResponse = {
   rc_code: string;
 };
 
+export type TProduct = {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  code: string;
+  categoryId: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type TProductVariant = {
   id: string;
   name: string;
@@ -28,6 +40,23 @@ export type TProductVariant = {
   createdAt: string;
   updatedAt: string;
   subCategoryId: string | null;
+  product: TProduct;
+};
+
+export type TTransaction = {
+  id: string;
+  userId: string;
+  tokenId: string;
+  type: "PAYMENT" | "DEPOSIT" | "WITHDRAWAL";
+  status: "PENDING" | "CONFIRMED" | "FAILED";
+  amount: string;
+  amountInFiat: string;
+  fiatCurrency: string;
+  txHash: string;
+  senderAddress: string;
+  recipientAddress: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type TPurchaseCompleted = {
@@ -40,8 +69,8 @@ export type TPurchaseCompleted = {
   refId: string;
   createdAt: string;
   updatedAt: string;
+  transaction: TTransaction;
   productVariant: TProductVariant;
-  bookingId: string;
 };
 
 export type TPurchaseInitialResponse = {

@@ -34,7 +34,7 @@ const PurchaseCard = React.memo(
 
     const handleCardPress = useCallback(() => {
       router.push({
-        pathname: "/transaction-detail",
+        pathname: "/activity-detail",
         params: { purchaseId: transaction.purchase?.id },
       });
     }, [router, transaction.purchase?.id]);
