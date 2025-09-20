@@ -18,6 +18,18 @@ export const purchaseApi = {
     }
   },
 
+  getPurchaseById: async (id: string) => {
+    try {
+      const response = await api
+        .get(`purchases/${id}`)
+        .json<TPurchaseCompleted>();
+      return response;
+    } catch (error) {
+      console.error("Failed to fetch purchase by ID:", error);
+      throw error;
+    }
+  },
+
   getPurchaseByRefId: async (refId: string) => {
     try {
       const response = await api

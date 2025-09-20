@@ -1,5 +1,6 @@
 import { TTransaction } from "@/api/types/transaction";
 import * as ExpoClipboard from "expo-clipboard";
+import { useRouter } from "expo-router";
 import { openBrowserAsync } from "expo-web-browser";
 import { Copy, ExternalLink, ShoppingBag } from "lucide-react-native";
 import React, { useCallback } from "react";
@@ -8,17 +9,42 @@ import Chip from "../common/Chip";
 
 const PurchaseCard = React.memo(
   ({ transaction }: { transaction: TTransaction }) => {
-    const copyToClipboard = useCallback(() => {
-      ExpoClipboard.setStringAsync(transaction?.txHash || "");
-      Alert.alert("Copied!", "Transaction hash copied to clipboard.");
-    }, [transaction?.txHash]);
+    const router = useRouter();
 
-    const openBlockExplorer = useCallback(() => {
-      openBrowserAsync(`https://etherscan.io/tx/${transaction?.txHash}`);
-    }, [transaction?.txHash]);
+    const copyToClipboard = useCallback(
+      (event: any) => {
+        event.stopPropagation();
+        ExpoClipboard.setStringAsync(transaction?.txHash || "");
+        Alert.alert("Copied!", "Transaction hash copied to clipboard.");
+      },
+      [transaction?.txHash],
+    );
+
+    const openBlockExplorer = useCallback(
+      (event: any) => {
+        event.stopPropagation();
+        openBrowserAsync(`https://etherscan.io/tx/${transaction?.txHash}`);
+      },
+      [transaction?.txHash],
+    );
+
+    const handleRepurchase = useCallback((event: any) => {
+      event.stopPropagation();
+    }, []);
+
+    const handleCardPress = useCallback(() => {
+      router.push({
+        pathname: "/transaction-detail",
+        params: { purchaseId: transaction.purchase?.id },
+      });
+    }, [router, transaction.purchase?.id]);
 
     return (
-      <View className="bg-white rounded-xl shadow-sm w-full p-5 gap-3">
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={handleCardPress}
+        className="bg-white rounded-xl shadow-sm w-full p-5 gap-3"
+      >
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
             <View className="bg-light-main-container p-2 rounded-md">
@@ -93,13 +119,14 @@ const PurchaseCard = React.memo(
             </Text>
             <TouchableOpacity
               activeOpacity={0.7}
+              onPress={handleRepurchase}
               className="bg-light-primary-red px-8 py-2 rounded-md mt-3"
             >
               <Text className="text-white text-xs font-bold">Repurchase</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   },
 );
