@@ -19,6 +19,7 @@ import type { TToken } from "@/api/types/token";
 import ChainSelector from "@/components/common/ChainSelector";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
+import SpendingApprovalModal from "@/components/common/SpendingApprovalModal";
 import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useTakumiWalletContract } from "@/contracts/hooks/useTakumiWalletContract";
@@ -39,6 +40,7 @@ export default function PaymentScreen() {
     activeWalletIndex,
     setActiveWallet,
     getPublicClientForActiveChain,
+    getClientForActiveWallet,
     activeChain,
   } = useWallet();
   const [purchaseAmount, setPurchaseAmount] = useState("");
@@ -49,11 +51,8 @@ export default function PaymentScreen() {
     return blockchains.find((b) => b.chainId === activeChain.chain.id);
   }, [blockchains, activeChain]);
 
-  const {
-    contractAddress: takumiWalletAddress,
-    isLoading: isLoadingContract,
-    error: contractError,
-  } = usePaymentProcessorContract(activeBlockchain?.id);
+  const { contractAddress: takumiWalletAddress, error: contractError } =
+    usePaymentProcessorContract(activeBlockchain?.id);
 
   const { createTransaction, waitForTransaction } = useTakumiWalletContract({
     contractAddress: takumiWalletAddress as `0x${string}`,
@@ -65,12 +64,14 @@ export default function PaymentScreen() {
   const [isLoadingTokenBalance, setIsLoadingTokenBalance] = useState(false);
   const [walletModalVisible, setWalletModalVisible] = useState(false);
   const [tokenModalVisible, setTokenModalVisible] = useState(false);
-  const [isLoadingBalance, setIsLoadingBalance] = useState(true);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [selectedToken, setSelectedToken] = useState<TToken | null>(null);
   const [transactionStatus, setTransactionStatus] = useState("");
   const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [approvalModalVisible, setApprovalModalVisible] = useState(false);
+  const [isApprovingSpending, setIsApprovingSpending] = useState(false);
   const [exchangeRate, setExchangeRate] = useState<TExchangeRate | null>(null);
-  const [isLoadingRate, setIsLoadingRate] = useState(true);
+  const [isLoadingRate, setIsLoadingRate] = useState(false);
 
   const { variantId, customerInfo } = useLocalSearchParams<{
     variantId: string;
@@ -93,7 +94,7 @@ export default function PaymentScreen() {
   const { mutateAsync: createBooking } = useCreateBooking();
   const { mutateAsync: createPurchase } = useCreatePurchase();
 
-  const { data: tokens, isLoading: isLoadingTokens } = useTokens({
+  const { data: tokens } = useTokens({
     blockchainId: activeBlockchain?.id,
     isStablecoin: true,
     isActive: true,
@@ -101,8 +102,10 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (tokens && tokens.length > 0 && !selectedToken) {
-      console.log("Setting default token:", tokens[0].symbol);
-      setSelectedToken(tokens[0]);
+      const timer = setTimeout(() => {
+        setSelectedToken(tokens[0]);
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [tokens, selectedToken]);
 
@@ -118,7 +121,6 @@ export default function PaymentScreen() {
       setExchangeRate(response);
     } catch (error) {
       console.error("Error fetching exchange rate:", error);
-      Alert.alert("Error", "Failed to fetch exchange rate");
     } finally {
       setIsLoadingRate(false);
     }
@@ -126,7 +128,10 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (selectedToken) {
-      fetchExchangeRate();
+      const timer = setTimeout(() => {
+        fetchExchangeRate();
+      }, 200);
+      return () => clearTimeout(timer);
     }
   }, [selectedToken, fetchExchangeRate]);
 
@@ -146,7 +151,11 @@ export default function PaymentScreen() {
     );
 
     return tokenAmountInWei.toString();
-  }, [variantData?.ProductPrice, exchangeRate?.rate, selectedToken]);
+  }, [
+    variantData?.ProductPrice?.[0]?.sellPrice,
+    exchangeRate?.rate,
+    selectedToken,
+  ]);
 
   useEffect(() => {
     if (calculatedPurchaseAmount) {
@@ -154,30 +163,34 @@ export default function PaymentScreen() {
     }
   }, [calculatedPurchaseAmount]);
 
+  const fetchBalance = useCallback(async () => {
+    if (!activeWallet.address) return;
+
+    setIsLoadingBalance(true);
+    try {
+      const publicClient = getPublicClientForActiveChain();
+      if (!publicClient) return;
+
+      const balanceValue = await publicClient.getBalance({
+        address: activeWallet.address as `0x${string}`,
+      });
+
+      setBalance(balanceValue);
+    } catch (error) {
+      console.error("Error fetching balance:", error);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  }, [activeWallet.address, getPublicClientForActiveChain]);
+
   useEffect(() => {
-    const fetchBalance = async () => {
-      if (!activeWallet.address) return;
-
-      setIsLoadingBalance(true);
-      try {
-        const publicClient = getPublicClientForActiveChain();
-        if (!publicClient) return;
-
-        const balanceValue = await publicClient.getBalance({
-          address: activeWallet.address as `0x${string}`,
-        });
-
-        setBalance(balanceValue);
-      } catch (error) {
-        console.error("Error fetching balance:", error);
-        Alert.alert("Error", "Failed to fetch wallet balance");
-      } finally {
-        setIsLoadingBalance(false);
-      }
-    };
-
-    fetchBalance();
-  }, [activeWallet, getPublicClientForActiveChain]);
+    if (activeWallet.address) {
+      const timer = setTimeout(() => {
+        fetchBalance();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [activeWallet.address, fetchBalance]);
 
   useEffect(() => {
     if (
@@ -210,7 +223,11 @@ export default function PaymentScreen() {
         args: [activeWallet.address as `0x${string}`],
       });
 
-      setTokenBalance(formatUnits(balance as bigint, selectedToken.decimals));
+      const formattedBalance = formatUnits(
+        balance as bigint,
+        selectedToken.decimals,
+      );
+      setTokenBalance(formattedBalance);
     } catch (error) {
       console.error("Error fetching token balance:", error);
       setTokenBalance("0");
@@ -221,7 +238,10 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (selectedToken && activeWallet.address) {
-      fetchTokenBalance();
+      const timer = setTimeout(() => {
+        fetchTokenBalance();
+      }, 400);
+      return () => clearTimeout(timer);
     } else {
       setTokenBalance("0");
     }
@@ -237,124 +257,195 @@ export default function PaymentScreen() {
     setTokenModalVisible(false);
   };
 
-  const formatBalance = (rawBalance: bigint) => {
+  const formatBalance = useCallback((rawBalance: bigint) => {
     return parseFloat(formatUnits(rawBalance, 18)).toFixed(4);
-  };
+  }, []);
 
-  const handlePayment = useCallback(async () => {
-    if (
-      !activeWallet.address ||
-      !variantData?.id ||
-      !variantData.ProductPrice?.[0]?.id ||
-      !selectedToken ||
-      !activeBlockchain ||
-      !takumiWalletAddress
-    ) {
-      Alert.alert("Error", "Missing required data for payment");
-      return;
-    }
-
-    setIsLoading(true);
-    setTransactionStatus("Submitting your purchase...");
-
-    try {
-      const booking = await createBooking({
-        walletAddress: activeWallet.address,
-        productVariantId: variantId,
-        productPriceId: variantData.ProductPrice[0].id,
-        payment: {
-          tokenAddress: selectedToken.contractAddress,
-          blockchainId: activeBlockchain.id,
-          exchangeRateId: exchangeRate?.id ?? 0,
-        },
-        customerInfo: parsedCustomerInfo,
-      });
-
-      setTransactionStatus("Creating blockchain transaction...");
-
-      const refId = `${booking.id}-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-
-      const transactionParams: TCreateTransactionParams = {
-        bookingId: booking.id.toString(),
-        exchangeRateId: BigInt(exchangeRate?.id ?? 0),
-        productVariantId: variantId,
-        tokenAddress: selectedToken.contractAddress as Address,
-        refId,
-        amount: booking.payment.token.amount,
-        tokenDecimals: selectedToken.decimals,
-      };
-      setPurchaseAmount(booking.payment.token.amount);
-      setTransactionStatus("Sending transaction to blockchain...");
-
-      const txHash = await createTransaction.mutateAsync(transactionParams);
-      console.log("Transaction hash:", txHash);
-
-      setTransactionStatus("Creating purchase record...");
-
-      try {
-        const purchaseData = {
-          refId,
-          walletAddress: activeWallet.address,
-          bookingId: booking.id.toString(),
-          contractAddress: takumiWalletAddress,
-          networkId: activeBlockchain.id.toString(),
-          transactionHash: txHash,
-        };
-
-        const purchaseResponse = await createPurchase(purchaseData);
-        console.log("Purchase created:", purchaseResponse);
-      } catch (purchaseError) {
-        console.error("Failed to create purchase:", purchaseError);
-        Alert.alert(
-          "Warning",
-          "Purchase record creation failed, but transaction is proceeding. Please contact support if needed.",
-        );
+  const approveSpending = useCallback(
+    async (isUnlimited = false) => {
+      if (
+        !selectedToken ||
+        !activeWallet.address ||
+        !takumiWalletAddress ||
+        !purchaseAmount
+      ) {
+        Alert.alert("Error", "Missing required data for approval");
+        return;
       }
 
-      setTransactionStatus("Confirming transaction...");
+      setIsApprovingSpending(true);
+      try {
+        const publicClient = getPublicClientForActiveChain();
+        if (!publicClient) throw new Error("No public client available");
 
-      await waitForTransaction(txHash);
+        const walletClient = getClientForActiveWallet();
+        if (!walletClient) throw new Error("No wallet client available");
 
-      setTransactionStatus("Finalizing purchase...");
+        const approvalAmount = isUnlimited
+          ? BigInt(
+              "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            )
+          : BigInt(purchaseAmount);
 
-      const txHashDisplay = txHash
-        ? `${txHash.substring(0, 6)}...${txHash.substring(txHash.length - 4)}`
-        : "";
+        const hash = await walletClient.writeContract({
+          address: selectedToken.contractAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [takumiWalletAddress as `0x${string}`, approvalAmount],
+          chain: walletClient.chain,
+          account: walletClient.account!,
+        });
 
-      Alert.alert(
-        "Payment Successful",
-        `You have successfully purchased ${variantData.name} for ${purchaseAmount} ${selectedToken.symbol}.\n\nBooking ID: ${booking.id}\nTransaction: ${txHashDisplay}\nRef ID: ${refId}`,
-        [{ text: "OK", onPress: () => router.back() }],
-      );
-    } catch (error) {
-      console.error("Payment error:", error);
-      Alert.alert(
-        "Payment Failed",
-        `An error occurred during the payment process: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
-    } finally {
-      setIsLoading(false);
-      setTransactionStatus("");
-    }
-  }, [
-    activeWallet.address,
-    variantId,
-    variantData,
-    purchaseAmount,
-    selectedToken,
-    createBooking,
-    createPurchase,
-    activeBlockchain,
-    parsedCustomerInfo,
-    exchangeRate,
-    takumiWalletAddress,
-    createTransaction,
-    waitForTransaction,
-  ]);
+        await publicClient.waitForTransactionReceipt({ hash });
+
+        setApprovalModalVisible(false);
+        if (isUnlimited) {
+          Alert.alert(
+            "Unlimited Allowance Approved",
+            `You've granted unlimited spending permission to ${selectedToken.symbol}. Future transactions won't require approval.`,
+          );
+        }
+
+        setTimeout(() => {
+          executePayment();
+        }, 100);
+      } catch (error) {
+        console.error("Error approving spending:", error);
+        Alert.alert(
+          "Approval Failed",
+          `Failed to approve token spending: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+      } finally {
+        setIsApprovingSpending(false);
+      }
+    },
+    [
+      selectedToken,
+      activeWallet.address,
+      takumiWalletAddress,
+      purchaseAmount,
+      getPublicClientForActiveChain,
+      getClientForActiveWallet,
+    ],
+  );
+
+  const executePayment = useCallback(
+    async (pin?: string) => {
+      if (
+        !activeWallet.address ||
+        !variantData?.id ||
+        !variantData.ProductPrice?.[0]?.id ||
+        !selectedToken ||
+        !activeBlockchain ||
+        !takumiWalletAddress
+      ) {
+        Alert.alert("Error", "Missing required data for payment");
+        return;
+      }
+
+      setIsLoading(true);
+      setTransactionStatus("Submitting your purchase...");
+
+      try {
+        const booking = await createBooking({
+          walletAddress: activeWallet.address,
+          productVariantId: variantId,
+          productPriceId: variantData.ProductPrice[0].id,
+          payment: {
+            tokenAddress: selectedToken.contractAddress,
+            blockchainId: activeBlockchain.id,
+            exchangeRateId: exchangeRate?.id ?? 0,
+          },
+          customerInfo: parsedCustomerInfo,
+        });
+
+        setTransactionStatus("Creating blockchain transaction...");
+
+        const refId = `${booking.id}-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+
+        const transactionParams: TCreateTransactionParams = {
+          bookingId: booking.id.toString(),
+          exchangeRateId: BigInt(exchangeRate?.id ?? 0),
+          productVariantId: variantId,
+          tokenAddress: selectedToken.contractAddress as Address,
+          refId,
+          amount: booking.payment.token.amount,
+          tokenDecimals: selectedToken.decimals,
+        };
+        setPurchaseAmount(booking.payment.token.amount);
+        setTransactionStatus("Sending transaction to blockchain...");
+
+        const txHash = await createTransaction.mutateAsync(transactionParams);
+        console.log("Transaction hash:", txHash);
+
+        setTransactionStatus("Creating purchase record...");
+
+        try {
+          const purchaseData = {
+            refId,
+            walletAddress: activeWallet.address,
+            bookingId: booking.id.toString(),
+            contractAddress: takumiWalletAddress,
+            networkId: activeBlockchain.id.toString(),
+            transactionHash: txHash,
+          };
+
+          const purchaseResponse = await createPurchase(purchaseData);
+          console.log("Purchase created:", purchaseResponse);
+        } catch (purchaseError) {
+          console.error("Failed to create purchase:", purchaseError);
+          Alert.alert(
+            "Warning",
+            "Purchase record creation failed, but transaction is proceeding. Please contact support if needed.",
+          );
+        }
+
+        setTransactionStatus("Confirming transaction...");
+
+        await waitForTransaction(txHash);
+
+        setTransactionStatus("Finalizing purchase...");
+
+        const txHashDisplay = txHash
+          ? `${txHash.substring(0, 6)}...${txHash.substring(txHash.length - 4)}`
+          : "";
+
+        Alert.alert(
+          "Payment Successful",
+          `You have successfully purchased ${variantData.name} for ${purchaseAmount} ${selectedToken.symbol}.\n\nBooking ID: ${booking.id}\nTransaction: ${txHashDisplay}\nRef ID: ${refId}`,
+          [{ text: "OK", onPress: () => router.back() }],
+        );
+      } catch (error) {
+        console.error("Payment error:", error);
+        Alert.alert(
+          "Payment Failed",
+          `An error occurred during the payment process: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+      } finally {
+        setIsLoading(false);
+        setTransactionStatus("");
+      }
+    },
+    [
+      activeWallet.address,
+      variantId,
+      variantData,
+      purchaseAmount,
+      selectedToken,
+      createBooking,
+      createPurchase,
+      activeBlockchain,
+      parsedCustomerInfo,
+      exchangeRate,
+      takumiWalletAddress,
+      createTransaction,
+      waitForTransaction,
+    ],
+  );
 
   const { isAuthenticated } = useIsAuthenticated();
 
-  const handlePaymentConfirmation = () => {
+  const handlePaymentConfirmation = useCallback(async () => {
     if (!isAuthenticated) {
       Alert.alert(
         "Authentication Required",
@@ -366,60 +457,82 @@ export default function PaymentScreen() {
       );
       return;
     }
-    setPinModalVisible(true);
-  };
 
-  const handlePaymentWithPin = async () => {
-    setPinModalVisible(false);
-    await handlePayment();
-  };
+    if (
+      selectedToken &&
+      activeWallet.address &&
+      takumiWalletAddress &&
+      purchaseAmount
+    ) {
+      try {
+        const publicClient = getPublicClientForActiveChain();
+        if (publicClient) {
+          const allowance = await publicClient.readContract({
+            address: selectedToken.contractAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: "allowance",
+            args: [
+              activeWallet.address as `0x${string}`,
+              takumiWalletAddress as `0x${string}`,
+            ],
+          });
+
+          const requiredAmount = BigInt(purchaseAmount);
+          if ((allowance as bigint) < requiredAmount) {
+            setApprovalModalVisible(true);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error("Error checking allowance:", error);
+      }
+    }
+
+    setPinModalVisible(true);
+  }, [
+    isAuthenticated,
+    selectedToken,
+    activeWallet.address,
+    takumiWalletAddress,
+    purchaseAmount,
+    getPublicClientForActiveChain,
+  ]);
+
+  const handlePinSubmit = useCallback(
+    async (pin: string) => {
+      try {
+        setPinModalVisible(false);
+        await executePayment(pin);
+      } catch (error) {
+        console.error("Payment failed:", error);
+        Alert.alert("Payment Failed", "Please try again");
+      }
+    },
+    [executePayment],
+  );
 
   const buttonDisabled = useMemo(() => {
-    const conditions = {
-      isLoading: isLoading,
-      isLoadingVariant: isLoadingVariant,
-      isLoadingRate: isLoadingRate,
-      isLoadingTokens: isLoadingTokens,
-      isLoadingContract: isLoadingContract,
-      noActiveWallet: !activeWallet.address,
-      noSelectedToken: !selectedToken,
-      noActiveBlockchain: !activeBlockchain,
-      noVariantData: !variantData?.id || !variantData.ProductPrice?.[0]?.id,
-      noExchangeRate: !exchangeRate?.rate,
-      noTokensAvailable: tokens?.length === 0,
-      noContractAddress: !takumiWalletAddress,
-      contractError: !!contractError,
-    };
-
-    console.log("Button disable conditions:", conditions);
-
     return (
-      conditions.isLoading ||
-      conditions.isLoadingVariant ||
-      conditions.isLoadingRate ||
-      conditions.isLoadingTokens ||
-      conditions.isLoadingContract ||
-      conditions.noActiveWallet ||
-      conditions.noSelectedToken ||
-      conditions.noActiveBlockchain ||
-      conditions.noVariantData ||
-      conditions.noExchangeRate ||
-      conditions.noTokensAvailable ||
-      conditions.noContractAddress ||
-      conditions.contractError
+      isLoading ||
+      isLoadingVariant ||
+      !activeWallet.address ||
+      !selectedToken ||
+      !activeBlockchain ||
+      !variantData?.id ||
+      !variantData.ProductPrice?.[0]?.id ||
+      !exchangeRate?.rate ||
+      !takumiWalletAddress ||
+      !!contractError
     );
   }, [
     isLoading,
     isLoadingVariant,
-    isLoadingRate,
-    isLoadingTokens,
-    isLoadingContract,
     activeWallet.address,
     selectedToken,
     activeBlockchain,
-    variantData,
-    exchangeRate,
-    tokens,
+    variantData?.id,
+    variantData?.ProductPrice,
+    exchangeRate?.rate,
     takumiWalletAddress,
     contractError,
   ]);
@@ -665,7 +778,7 @@ export default function PaymentScreen() {
           <PinConfirmationModal
             visible={pinModalVisible}
             onClose={() => setPinModalVisible(false)}
-            onConfirm={handlePaymentWithPin}
+            onConfirm={handlePinSubmit}
             title="Confirm Payment"
           />
         </View>
@@ -693,6 +806,21 @@ export default function PaymentScreen() {
             title="Select Payment Token"
             stablecoinsOnly={true}
             blockchainId={activeBlockchain?.id}
+          />
+        )}
+
+        {selectedToken && takumiWalletAddress && purchaseAmount && (
+          <SpendingApprovalModal
+            visible={approvalModalVisible}
+            onClose={() => setApprovalModalVisible(false)}
+            onApprove={approveSpending}
+            onCancel={() => setApprovalModalVisible(false)}
+            token={selectedToken}
+            spenderAddress={takumiWalletAddress}
+            amount={purchaseAmount}
+            isLoading={isApprovingSpending}
+            spenderName="Takumi Wallet"
+            isInternalContract={true}
           />
         )}
       </SafeAreaView>
