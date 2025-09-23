@@ -1,3 +1,17 @@
+import { router, useLocalSearchParams } from "expo-router";
+import { ArrowLeft, ChevronDown } from "lucide-react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Image,
+  ScrollView,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Address, erc20Abi, formatUnits } from "viem";
 import { exchangeRateApi } from "@/api/endpoints/exchange-rates";
 import { CustomerInfoItem } from "@/api/types/booking";
 import { TExchangeRate } from "@/api/types/exchange-rate";
@@ -17,20 +31,6 @@ import { useProductVariantById } from "@/hooks/queries/useProducts";
 import { useCreatePurchase } from "@/hooks/queries/usePurchases";
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useWallet } from "@/hooks/useWallet";
-import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, ChevronDown } from "lucide-react-native";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Image,
-  ScrollView,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Address, erc20Abi, formatUnits } from "viem";
 
 export default function PaymentScreen() {
   const {
@@ -41,6 +41,7 @@ export default function PaymentScreen() {
     getPublicClientForActiveChain,
     activeChain,
   } = useWallet();
+  const [purchaseAmount, setPurchaseAmount] = useState("");
 
   const { data: blockchains } = useBlockchains();
   const activeBlockchain = useMemo(() => {
@@ -129,12 +130,29 @@ export default function PaymentScreen() {
     }
   }, [selectedToken, fetchExchangeRate]);
 
-  const tokenAmountNeeded =
-    variantData?.ProductPrice?.[0]?.sellPrice && exchangeRate
-      ? (
-          parseFloat(variantData.ProductPrice[0].sellPrice) / exchangeRate.rate
-        ).toFixed(4)
-      : "0.0000";
+  const calculatedPurchaseAmount = useMemo(() => {
+    if (
+      !variantData?.ProductPrice?.[0]?.sellPrice ||
+      !exchangeRate?.rate ||
+      !selectedToken
+    ) {
+      return "";
+    }
+
+    const priceInIDR = parseInt(variantData.ProductPrice[0].sellPrice);
+    const tokenAmount = priceInIDR / exchangeRate.rate;
+    const tokenAmountInWei = Math.floor(
+      tokenAmount * Math.pow(10, selectedToken.decimals),
+    );
+
+    return tokenAmountInWei.toString();
+  }, [variantData?.ProductPrice, exchangeRate?.rate, selectedToken]);
+
+  useEffect(() => {
+    if (calculatedPurchaseAmount) {
+      setPurchaseAmount(calculatedPurchaseAmount);
+    }
+  }, [calculatedPurchaseAmount]);
 
   useEffect(() => {
     const fetchBalance = async () => {
@@ -195,7 +213,7 @@ export default function PaymentScreen() {
       setTokenBalance(formatUnits(balance as bigint, selectedToken.decimals));
     } catch (error) {
       console.error("Error fetching token balance:", error);
-      Alert.alert("Error", "Failed to fetch token balance");
+      setTokenBalance("0");
     } finally {
       setIsLoadingTokenBalance(false);
     }
@@ -262,10 +280,10 @@ export default function PaymentScreen() {
         productVariantId: variantId,
         tokenAddress: selectedToken.contractAddress as Address,
         refId,
-        amount: tokenAmountNeeded,
+        amount: booking.payment.token.amount,
         tokenDecimals: selectedToken.decimals,
       };
-
+      setPurchaseAmount(booking.payment.token.amount);
       setTransactionStatus("Sending transaction to blockchain...");
 
       const txHash = await createTransaction.mutateAsync(transactionParams);
@@ -305,7 +323,7 @@ export default function PaymentScreen() {
 
       Alert.alert(
         "Payment Successful",
-        `You have successfully purchased ${variantData.name} for ${tokenAmountNeeded} ${selectedToken.symbol}.\n\nBooking ID: ${booking.id}\nTransaction: ${txHashDisplay}\nRef ID: ${refId}`,
+        `You have successfully purchased ${variantData.name} for ${purchaseAmount} ${selectedToken.symbol}.\n\nBooking ID: ${booking.id}\nTransaction: ${txHashDisplay}\nRef ID: ${refId}`,
         [{ text: "OK", onPress: () => router.back() }],
       );
     } catch (error) {
@@ -322,7 +340,7 @@ export default function PaymentScreen() {
     activeWallet.address,
     variantId,
     variantData,
-    tokenAmountNeeded,
+    purchaseAmount,
     selectedToken,
     createBooking,
     createPurchase,
@@ -502,7 +520,9 @@ export default function PaymentScreen() {
                         </Text>
                       </View>
                       <Text className="text-light-matte-black text-sm font-medium">
-                        {tokenAmountNeeded} {selectedToken?.symbol}
+                        {purchaseAmount && selectedToken
+                          ? `${formatUnits(BigInt(purchaseAmount), selectedToken.decimals)} ${selectedToken.symbol}`
+                          : "Calculating..."}
                       </Text>
                     </View>
                   </View>
@@ -514,7 +534,7 @@ export default function PaymentScreen() {
                     <Text className="text-light-matte-black text-sm">
                       {isLoadingRate
                         ? "Loading..."
-                        : `1 ${selectedToken?.symbol} ≈ Rp${exchangeRate?.toLocaleString() || "0"}`}
+                        : `1 ${selectedToken?.symbol} ≈ Rp${exchangeRate?.rate ? exchangeRate.rate.toLocaleString() : "0"}`}
                     </Text>
                   </View>
 
@@ -531,7 +551,9 @@ export default function PaymentScreen() {
                         </Text>
                       </View>
                       <Text className="text-light-primary-red font-bold text-base">
-                        {tokenAmountNeeded} {selectedToken?.symbol}
+                        {purchaseAmount && selectedToken
+                          ? `${formatUnits(BigInt(purchaseAmount), selectedToken.decimals)} ${selectedToken.symbol}`
+                          : "Calculating..."}
                       </Text>
                     </View>
                   </View>
@@ -613,14 +635,19 @@ export default function PaymentScreen() {
                   <ChevronDown size={20} color="#c71c4b" />
                 </TouchableOpacity>
 
-                {selectedToken && parseFloat(tokenAmountNeeded) > 0 && (
-                  <View className="mt-2 bg-light-primary-red/10 p-3 rounded-lg">
-                    <Text className="text-light-primary-red text-sm">
-                      You need {tokenAmountNeeded} {selectedToken.symbol} for
-                      this transaction.
-                    </Text>
-                  </View>
-                )}
+                {selectedToken &&
+                  purchaseAmount !== "" &&
+                  parseFloat(purchaseAmount) > 0 && (
+                    <View className="mt-2 bg-light-primary-red/10 p-3 rounded-lg">
+                      <Text className="text-light-primary-red text-sm">
+                        You need{" "}
+                        {purchaseAmount && selectedToken
+                          ? `${formatUnits(BigInt(purchaseAmount), selectedToken.decimals)} ${selectedToken.symbol}`
+                          : "calculating amount..."}{" "}
+                        for this transaction.
+                      </Text>
+                    </View>
+                  )}
               </View>
             </View>
             <TouchableOpacity

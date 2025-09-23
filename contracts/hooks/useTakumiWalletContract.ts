@@ -1,8 +1,8 @@
-import { useWallet } from "@/hooks/useWallet";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import type { Address, Hash } from "viem";
 import { getContract } from "viem";
+import { useWallet } from "@/hooks/useWallet";
 import AbiTakumiWallet from "../abis/AbiTakumiWallet";
 import type {
   TCreateTransactionParams,
@@ -183,15 +183,9 @@ export function useTakumiWalletContract({
       if (!walletClient || !walletClient.account)
         throw new Error("Wallet not connected");
 
-      const amountInWei = BigInt(
-        Math.floor(
-          parseFloat(params.amount) * Math.pow(10, params.tokenDecimals),
-        ),
-      );
       console.log("Amount calculation:", {
-        humanAmount: params.amount,
+        amountInWei: params.amount,
         tokenDecimals: params.tokenDecimals,
-        amountInWei: amountInWei.toString(),
       });
 
       const hash = await walletClient.writeContract({
@@ -204,7 +198,7 @@ export function useTakumiWalletContract({
           params.productVariantId,
           params.tokenAddress,
           params.refId,
-          amountInWei,
+          params.amount as unknown as bigint,
         ],
         chain: walletClient.chain,
         account: walletClient.account,
