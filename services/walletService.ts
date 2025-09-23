@@ -1,11 +1,11 @@
-import { TWallet } from "@/constants/types/walletTypes";
 import * as SecureStore from "expo-secure-store";
 import {
   type HDAccount,
-  type PrivateKeyAccount,
   mnemonicToAccount,
+  type PrivateKeyAccount,
   privateKeyToAccount,
 } from "viem/accounts";
+import { TWallet } from "@/constants/types/walletTypes";
 
 const accountCache: Record<string, HDAccount | PrivateKeyAccount> = {};
 

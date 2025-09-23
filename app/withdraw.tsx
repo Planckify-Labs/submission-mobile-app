@@ -1,8 +1,3 @@
-import ChainSelector from "@/components/common/ChainSelector";
-import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
-import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
-import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
-import { useWallet } from "@/hooks/useWallet";
 import { router } from "expo-router";
 import { ArrowLeft, ChevronDown, Wallet } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
@@ -17,6 +12,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatUnits } from "viem";
+import ChainSelector from "@/components/common/ChainSelector";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
+import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
+import { useWallet } from "@/hooks/useWallet";
 
 const PAYMENT_PLATFORMS = [
   { id: "ovo", name: "OVO" },

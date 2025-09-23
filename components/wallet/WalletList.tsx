@@ -1,6 +1,6 @@
-import type { TWallet } from "@/constants/types/walletTypes";
 import React, { memo, useCallback } from "react";
 import { FlatList, ListRenderItemInfo, View } from "react-native";
+import type { TWallet } from "@/constants/types/walletTypes";
 import WalletCard from "./WalletCard";
 
 type WalletListProps = {

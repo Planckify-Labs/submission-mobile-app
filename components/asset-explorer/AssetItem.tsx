@@ -1,7 +1,7 @@
-import { TCryptoAsset } from "@/constants/types/assetTypes";
 import { Check, Plus } from "lucide-react-native";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
+import { TCryptoAsset } from "@/constants/types/assetTypes";
 
 type AssetItemProps = {
   item: TCryptoAsset;

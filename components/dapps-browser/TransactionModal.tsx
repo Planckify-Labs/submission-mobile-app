@@ -1,4 +1,3 @@
-import { TWallet } from "@/constants/types/walletTypes";
 import { AlertTriangle, Fuel, X } from "lucide-react-native";
 import React, { useState } from "react";
 import {
@@ -12,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatEther } from "viem";
+import { TWallet } from "@/constants/types/walletTypes";
 
 interface TransactionRequest {
   to?: string;

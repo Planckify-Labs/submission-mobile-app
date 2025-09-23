@@ -1,5 +1,3 @@
-import { TNetworkSelectorModalProps } from "@/constants/types/networkTypes";
-import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { Check, Search, Star, X } from "lucide-react-native";
 import React, { useEffect, useRef } from "react";
 import {
@@ -15,6 +13,8 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { TNetworkSelectorModalProps } from "@/constants/types/networkTypes";
+import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import NetworkSelectorModalLoadingSkeletons from "./NetworkSelectorModalLoadingSkeletons";
 
 const { height } = Dimensions.get("window");

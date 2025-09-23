@@ -1,5 +1,5 @@
-import { TWallet, TWalletCreationParams } from "@/constants/types/walletTypes";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
+import { TWallet, TWalletCreationParams } from "@/constants/types/walletTypes";
 
 export function isValidPrivateKey(privateKey: string): boolean {
   const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;

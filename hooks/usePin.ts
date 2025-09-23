@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from "expo-secure-store";
+import { useEffect, useState } from "react";
 
-const PIN_KEY = 'takumipay_user_pin';
+const PIN_KEY = "takumipay_user_pin";
 
 interface UsePinReturn {
   hasPin: boolean;
@@ -25,7 +25,7 @@ export function usePin(): UsePinReturn {
       const storedPin = await SecureStore.getItemAsync(PIN_KEY);
       setHasPin(!!storedPin);
     } catch (error) {
-      console.error('Error checking for PIN:', error);
+      console.error("Error checking for PIN:", error);
     } finally {
       setIsLoading(false);
     }
@@ -36,7 +36,7 @@ export function usePin(): UsePinReturn {
       const storedPin = await SecureStore.getItemAsync(PIN_KEY);
       return storedPin === pin;
     } catch (error) {
-      console.error('Error verifying PIN:', error);
+      console.error("Error verifying PIN:", error);
       return false;
     }
   };
@@ -46,8 +46,8 @@ export function usePin(): UsePinReturn {
       await SecureStore.setItemAsync(PIN_KEY, pin);
       setHasPin(true);
     } catch (error) {
-      console.error('Error setting PIN:', error);
-      throw new Error('Failed to save PIN');
+      console.error("Error setting PIN:", error);
+      throw new Error("Failed to save PIN");
     }
   };
 
@@ -56,8 +56,8 @@ export function usePin(): UsePinReturn {
       await SecureStore.deleteItemAsync(PIN_KEY);
       setHasPin(false);
     } catch (error) {
-      console.error('Error resetting PIN:', error);
-      throw new Error('Failed to reset PIN');
+      console.error("Error resetting PIN:", error);
+      throw new Error("Failed to reset PIN");
     }
   };
 

@@ -1,13 +1,3 @@
-import type { TTransaction } from "@/api/types/transaction";
-import ActivityHeader from "@/components/activities/ActivityHeader";
-import PurchaseCard from "@/components/activities/PurchaseCard";
-import PurchaseCardSkeleton from "@/components/activities/PurchaseCardSkeleton";
-import TransferCard from "@/components/activities/TransferCard";
-import TransferCardSkeleton from "@/components/activities/TransferCardSkeleton";
-import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
-import { useIsAuthenticated } from "@/hooks/queries/useAuth";
-import { useTransactionSearch } from "@/hooks/queries/useTransactions";
-import { useWallet } from "@/hooks/useWallet";
 import { FlashList } from "@shopify/flash-list";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
@@ -29,6 +19,16 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import type { TTransaction } from "@/api/types/transaction";
+import ActivityHeader from "@/components/activities/ActivityHeader";
+import PurchaseCard from "@/components/activities/PurchaseCard";
+import PurchaseCardSkeleton from "@/components/activities/PurchaseCardSkeleton";
+import TransferCard from "@/components/activities/TransferCard";
+import TransferCardSkeleton from "@/components/activities/TransferCardSkeleton";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
+import { useTransactionSearch } from "@/hooks/queries/useTransactions";
+import { useWallet } from "@/hooks/useWallet";
 
 type ListItem = TTransaction | { id: string };
 

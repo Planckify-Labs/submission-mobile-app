@@ -1,10 +1,10 @@
-import OptimizedImage from "@/components/common/OptimizedImage";
-import { ProductItem, SectionData } from "@/constants/dummyData/paymentScreen";
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight } from "lucide-react-native";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import OptimizedImage from "@/components/common/OptimizedImage";
+import { ProductItem, SectionData } from "@/constants/dummyData/paymentScreen";
 
 interface PaymentSectionContainerProps {
   section: SectionData;

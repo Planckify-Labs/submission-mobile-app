@@ -1,8 +1,10 @@
-import * as LocalAuthentication from "expo-local-authentication";
 import * as Clipboard from "expo-clipboard";
+import * as LocalAuthentication from "expo-local-authentication";
 import { Alert } from "react-native";
 
-export async function authenticateUser(promptMessage = "Authenticate to continue"): Promise<boolean> {
+export async function authenticateUser(
+  promptMessage = "Authenticate to continue",
+): Promise<boolean> {
   try {
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage,
@@ -17,7 +19,10 @@ export async function authenticateUser(promptMessage = "Authenticate to continue
   }
 }
 
-export async function copyToClipboard(text: string, label: string): Promise<boolean> {
+export async function copyToClipboard(
+  text: string,
+  label: string,
+): Promise<boolean> {
   try {
     await Clipboard.setStringAsync(text);
     Alert.alert("Copied", `${label} copied to clipboard`);

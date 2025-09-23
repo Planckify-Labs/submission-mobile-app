@@ -1,6 +1,3 @@
-import { useTokens } from "@/hooks/queries/useTokens";
-import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
-import { useWallet } from "@/hooks/useWallet";
 import { Check, ChevronDown, X } from "lucide-react-native";
 import React, { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
@@ -16,6 +13,9 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useTokens } from "@/hooks/queries/useTokens";
+import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
+import { useWallet } from "@/hooks/useWallet";
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;

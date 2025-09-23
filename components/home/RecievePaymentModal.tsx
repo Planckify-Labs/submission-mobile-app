@@ -1,6 +1,3 @@
-import { takumipayLogoBase64 } from "@/constants/takumipay";
-import { TWallet } from "@/constants/types/walletTypes";
-import { copyToClipboard } from "@/utils/authUtils";
 import { router } from "expo-router";
 import { Copy } from "lucide-react-native";
 import React from "react";
@@ -13,6 +10,9 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
+import { takumipayLogoBase64 } from "@/constants/takumipay";
+import { TWallet } from "@/constants/types/walletTypes";
+import { copyToClipboard } from "@/utils/authUtils";
 import Chip from "../common/Chip";
 
 type ReceivePaymentModalProps = {

@@ -1,6 +1,3 @@
-import { useNonce } from "@/hooks/queries/useAuth";
-import useRQGlobalState from "@/hooks/useRQGlobalState";
-import { useWallet } from "@/hooks/useWallet";
 import { Check, Clock, ShieldAlert } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -14,6 +11,9 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useNonce } from "@/hooks/queries/useAuth";
+import useRQGlobalState from "@/hooks/useRQGlobalState";
+import { useWallet } from "@/hooks/useWallet";
 
 interface TSignMessageModalProps {
   visible: boolean;

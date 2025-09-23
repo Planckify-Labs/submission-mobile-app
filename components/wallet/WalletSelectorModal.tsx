@@ -1,4 +1,3 @@
-import { TWallet } from "@/constants/types/walletTypes";
 import { Check, Wallet } from "lucide-react-native";
 import React, { memo, useCallback, useEffect, useRef } from "react";
 import {
@@ -12,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { TWallet } from "@/constants/types/walletTypes";
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;

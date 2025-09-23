@@ -1,10 +1,3 @@
-import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
-import PinConfirmationModal from "@/components/common/PinConfirmationModal";
-import SignMessageModal from "@/components/common/SignMessageModal";
-import { usePerformance } from "@/components/providers/PerformanceProvider";
-import { useVerifySignature } from "@/hooks/queries/useAuth";
-import useRQGlobalState from "@/hooks/useRQGlobalState";
-import { useWallet } from "@/hooks/useWallet";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -19,6 +12,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import PinConfirmationModal from "@/components/common/PinConfirmationModal";
+import SignMessageModal from "@/components/common/SignMessageModal";
+import { usePerformance } from "@/components/providers/PerformanceProvider";
+import { useVerifySignature } from "@/hooks/queries/useAuth";
+import useRQGlobalState from "@/hooks/useRQGlobalState";
+import { useWallet } from "@/hooks/useWallet";
 
 interface NonceData {
   message: string;
@@ -276,8 +276,8 @@ export default function AuthScreen() {
             <Text className="text-light-matte-black font-mono text-sm mb-3">
               {activeWallet?.address
                 ? `${activeWallet.address.substring(0, 12)}...${activeWallet.address.substring(
-                  activeWallet.address.length - 8,
-                )}`
+                    activeWallet.address.length - 8,
+                  )}`
                 : "No wallet selected"}
             </Text>
             <View className="flex-row items-center">

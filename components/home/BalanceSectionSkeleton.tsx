@@ -1,5 +1,5 @@
 import React from "react";
-import { View, useWindowDimensions } from "react-native";
+import { useWindowDimensions, View } from "react-native";
 import SingleLoadingSekelton from "../common/SingleLoadingSekeleton";
 
 export default function BalanceSectionSkeleton() {

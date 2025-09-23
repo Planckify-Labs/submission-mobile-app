@@ -1,5 +1,3 @@
-import { queryClient } from "@/app/_layout";
-import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { Check, X } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
@@ -13,6 +11,8 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { queryClient } from "@/app/_layout";
+import useRQGlobalState from "@/hooks/useRQGlobalState";
 
 interface OptionSelectorModalProps {
   visible: boolean;

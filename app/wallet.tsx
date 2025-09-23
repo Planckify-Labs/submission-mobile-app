@@ -1,11 +1,3 @@
-import Chip from "@/components/common/Chip";
-import SecurityWarning from "@/components/common/SecurityWarning";
-import { usePerformance } from "@/components/providers/PerformanceProvider";
-import AddressDisplay from "@/components/wallet/AddressDisplay";
-import WalletCard from "@/components/wallet/WalletCard";
-import { TWallet } from "@/constants/types/walletTypes";
-import { useWallet } from "@/hooks/useWallet";
-import { authenticateUser, copyToClipboard } from "@/utils/authUtils";
 import { router } from "expo-router";
 import { Plus } from "lucide-react-native";
 import React, { lazy, Suspense, useCallback, useEffect, useState } from "react";
@@ -21,6 +13,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Chip from "@/components/common/Chip";
+import SecurityWarning from "@/components/common/SecurityWarning";
+import { usePerformance } from "@/components/providers/PerformanceProvider";
+import AddressDisplay from "@/components/wallet/AddressDisplay";
+import WalletCard from "@/components/wallet/WalletCard";
+import { TWallet } from "@/constants/types/walletTypes";
+import { useWallet } from "@/hooks/useWallet";
+import { authenticateUser, copyToClipboard } from "@/utils/authUtils";
 
 const LazyWalletInfoDisplay = lazy(
   () => import("@/components/wallet/WalletInfoDisplay"),

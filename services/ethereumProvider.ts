@@ -1,6 +1,6 @@
+import { type Hash, type Hex } from "viem";
 import { takumipayLogoBase64 } from "@/constants/takumipay";
 import { TWallet } from "@/constants/types/walletTypes";
-import { type Hash, type Hex } from "viem";
 import { getAccountForWallet } from "./walletService";
 
 export interface RequestArguments {

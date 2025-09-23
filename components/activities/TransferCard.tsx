@@ -1,11 +1,11 @@
-import { TTransaction } from "@/api/types/transaction";
-import { truncateAddress } from "@/utils/walletUtils";
 import * as ExpoClipboard from "expo-clipboard";
 import { openBrowserAsync } from "expo-web-browser";
 import { Copy, ExternalLink, Send } from "lucide-react-native";
 import React, { useCallback } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
 import { formatUnits } from "viem/utils";
+import { TTransaction } from "@/api/types/transaction";
+import { truncateAddress } from "@/utils/walletUtils";
 import Chip from "../common/Chip";
 
 const TransferCard = React.memo(

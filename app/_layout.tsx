@@ -1,8 +1,8 @@
-import { PerformanceProvider } from "@/components/providers/PerformanceProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { SplashScreen, Stack, router } from "expo-router";
+import { router, SplashScreen, Stack } from "expo-router";
 import { useEffect } from "react";
 import { LogBox } from "react-native";
+import { PerformanceProvider } from "@/components/providers/PerformanceProvider";
 import "../global.css";
 import "../pollyfills";
 

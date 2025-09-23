@@ -1,10 +1,3 @@
-import { queryClient } from "@/app/_layout";
-import OptionSelectorModal from "@/components/common/OptionSelectorModal";
-import {
-  useProductById,
-  useProductInputFields,
-} from "@/hooks/queries/useProducts";
-import useRQGlobalState from "@/hooks/useRQGlobalState";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
@@ -17,6 +10,7 @@ import {
   Info,
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import {
   Animated,
   Image,
@@ -28,7 +22,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useForm, Controller } from "react-hook-form";
+import { queryClient } from "@/app/_layout";
+import OptionSelectorModal from "@/components/common/OptionSelectorModal";
+import {
+  useProductById,
+  useProductInputFields,
+} from "@/hooks/queries/useProducts";
+import useRQGlobalState from "@/hooks/useRQGlobalState";
 import ItemVariantWithInputSkeleton from "./ItemVariantWithInputSkeleton";
 
 interface ItemVariantWithInputProps {
@@ -68,13 +68,7 @@ export default function ItemWithInput({
   const error = productError;
 
   // Initialize React Hook Form
-  const {
-    control,
-    handleSubmit,
-    watch,
-    setValue,
-    reset,
-  } = useForm<FormData>({
+  const { control, handleSubmit, watch, setValue, reset } = useForm<FormData>({
     defaultValues: {},
     mode: "onChange",
   });
@@ -143,7 +137,6 @@ export default function ItemWithInput({
       isMounted.current = false;
     };
   }, []);
-
 
   // Initialize form fields when inputFields are loaded
   useEffect(() => {
@@ -215,7 +208,9 @@ export default function ItemWithInput({
           rules={{ required: true }}
           render={({ field: { value } }) => (
             <View className="mb-4">
-              <Text className="text-light-matte-black/70 mb-2">{field.alias}</Text>
+              <Text className="text-light-matte-black/70 mb-2">
+                {field.alias}
+              </Text>
               <TouchableOpacity
                 className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between"
                 onPress={() => openOptionModal(field)}
@@ -245,7 +240,9 @@ export default function ItemWithInput({
         rules={{ required: true }}
         render={({ field: { value, onChange } }) => (
           <View className="mb-4">
-            <Text className="text-light-matte-black/70 mb-2">{field.alias}</Text>
+            <Text className="text-light-matte-black/70 mb-2">
+              {field.alias}
+            </Text>
             <View className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between">
               <View className="flex-1">
                 <TextInput
@@ -323,10 +320,7 @@ export default function ItemWithInput({
               if (productId && inputFields?.forms) {
                 inputFields.forms.forEach((field) => {
                   queryClient.removeQueries({
-                    queryKey: [
-                      "option-selector",
-                      `${productId}-${field.key}`,
-                    ],
+                    queryKey: ["option-selector", `${productId}-${field.key}`],
                   });
                 });
               }
@@ -489,7 +483,9 @@ export default function ItemWithInput({
                                 (f) => f.type.toLowerCase() !== "option",
                               );
                               if (textField) {
-                                setValue(textField.key, number, { shouldValidate: true });
+                                setValue(textField.key, number, {
+                                  shouldValidate: true,
+                                });
                               }
                             }}
                             activeOpacity={0.5}
@@ -574,9 +570,7 @@ export default function ItemWithInput({
         onSelect={handleOptionSelect}
         title={activeField?.alias || "Select Option"}
         options={activeField?.options || []}
-        selectedOption={
-          activeField ? formValues[activeField.key] : undefined
-        }
+        selectedOption={activeField ? formValues[activeField.key] : undefined}
         stateKey={activeField ? `${productId}-${activeField.key}` : undefined}
         clearOnClose={false}
       />

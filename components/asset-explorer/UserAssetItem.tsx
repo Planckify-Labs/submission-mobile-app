@@ -1,7 +1,7 @@
-import { TCryptoAsset } from "@/constants/types/assetTypes";
 import { Trash2 } from "lucide-react-native";
 import React from "react";
 import { Alert, Pressable, Text, View } from "react-native";
+import { TCryptoAsset } from "@/constants/types/assetTypes";
 
 type UserAssetItemProps = {
   item: TCryptoAsset;

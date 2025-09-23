@@ -5,6 +5,7 @@ import {
   createWalletClient,
   http,
 } from "viem";
+
 type TChainConfig = Chain;
 
 export const getPublicClient = (chain: TChainConfig) => {

@@ -1,8 +1,3 @@
-import { TToken } from "@/api/types/token";
-import PinnedTokenCard from "@/components/common/PinnedTokenCard";
-import SearchBar from "@/components/common/SearchBar";
-import { useTokens } from "@/hooks/queries/useTokens";
-import { usePinnedTokens } from "@/hooks/usePinnedTokens";
 import { router } from "expo-router";
 import { ArrowLeft, Plus, X } from "lucide-react-native";
 import React, { useCallback, useState } from "react";
@@ -17,6 +12,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { TToken } from "@/api/types/token";
+import PinnedTokenCard from "@/components/common/PinnedTokenCard";
+import SearchBar from "@/components/common/SearchBar";
+import { useTokens } from "@/hooks/queries/useTokens";
+import { usePinnedTokens } from "@/hooks/usePinnedTokens";
 
 export default function PinnedTokenSettingScreen() {
   const [searchQuery, setSearchQuery] = useState("");

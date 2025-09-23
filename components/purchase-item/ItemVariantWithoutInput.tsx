@@ -1,8 +1,8 @@
-import { useProductById } from "@/hooks/queries/useProducts";
 import { router } from "expo-router";
 import { ArrowLeft, Info } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useProductById } from "@/hooks/queries/useProducts";
 import OptimizedImage from "../common/OptimizedImage";
 import ItemVariantWithoutInputSkeleton from "./ItemVariantWithoutInputSkeleton";
 

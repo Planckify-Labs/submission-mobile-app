@@ -1,8 +1,8 @@
-import Chip from "@/components/common/Chip";
-import type { TWallet } from "@/constants/types/walletTypes";
 import { Check, Edit3, Wallet as WalletIcon } from "lucide-react-native";
 import React, { memo, useMemo, useState } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
+import Chip from "@/components/common/Chip";
+import type { TWallet } from "@/constants/types/walletTypes";
 import WalletRenameModal from "./WalletRenameModal";
 
 type WalletCardProps = {

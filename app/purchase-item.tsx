@@ -1,3 +1,7 @@
+import { useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { StatusBar, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import ItemWithInput from "@/components/purchase-item/ItemVariantWithInput";
 import ItemVariantWithInputSkeleton from "@/components/purchase-item/ItemVariantWithInputSkeleton";
 import ItemWithoutInput from "@/components/purchase-item/ItemVariantWithoutInput";
@@ -6,10 +10,6 @@ import {
   useProductById,
   useProductInputFields,
 } from "@/hooks/queries/useProducts";
-import { useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { StatusBar, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PurchaseItemScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();

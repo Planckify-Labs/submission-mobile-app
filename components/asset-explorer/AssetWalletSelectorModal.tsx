@@ -1,6 +1,3 @@
-import { TAssetWalletSelectorModalProps } from "@/constants/types/assetTypes";
-import { TWallet } from "@/constants/types/walletTypes";
-import { loadWalletAssets, saveWalletAssets } from "@/utils/assetUtils";
 import { Check, Info } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -15,6 +12,9 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { TAssetWalletSelectorModalProps } from "@/constants/types/assetTypes";
+import { TWallet } from "@/constants/types/walletTypes";
+import { loadWalletAssets, saveWalletAssets } from "@/utils/assetUtils";
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;

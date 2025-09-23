@@ -1,8 +1,3 @@
-import {
-  getWeb3EcosystemCategories,
-  TDApp,
-  TDAppCategory,
-} from "@/constants/dummyData/ecosystemList";
 import React, { useCallback, useEffect, useRef } from "react";
 import {
   Animated,
@@ -13,6 +8,11 @@ import {
   Text,
   View,
 } from "react-native";
+import {
+  getWeb3EcosystemCategories,
+  TDApp,
+  TDAppCategory,
+} from "@/constants/dummyData/ecosystemList";
 import DAppCard from "./DAppCard";
 
 export type TCategoryTab = "defi" | "dex" | "gaming";

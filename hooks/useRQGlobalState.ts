@@ -1,10 +1,10 @@
-import { queryClient } from "@/app/_layout";
 import {
   type MutationFunction,
   type QueryKey,
   useMutation,
   useQuery,
 } from "@tanstack/react-query";
+import { queryClient } from "@/app/_layout";
 
 type TUseRQGlobalState<T> = {
   initialData?: T;

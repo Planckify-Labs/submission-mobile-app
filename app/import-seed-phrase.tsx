@@ -1,6 +1,3 @@
-import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
-import SeedPhraseGrid from "@/components/common/SeedPhraseGrid";
-import { useWallet } from "@/hooks/useWallet";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { ArrowLeft, Clipboard as ClipboardIcon } from "lucide-react-native";
@@ -17,6 +14,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import SeedPhraseGrid from "@/components/common/SeedPhraseGrid";
+import { useWallet } from "@/hooks/useWallet";
 
 export default function ImportWalletScreen() {
   const [seedPhraseArray, setSeedPhraseArray] = useState<string[]>(

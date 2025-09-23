@@ -1,5 +1,11 @@
 import React from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 type AddTokenFormProps = {
   tokenAddress: string;

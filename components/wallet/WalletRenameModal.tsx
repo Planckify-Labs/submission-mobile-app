@@ -1,16 +1,16 @@
-import React, { useState, useRef, useEffect } from "react";
+import { Check, X } from "lucide-react-native";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  Pressable,
+  Alert,
   Animated,
   Dimensions,
+  Modal,
+  Pressable,
+  Text,
+  TextInput,
   TouchableWithoutFeedback,
-  Alert,
+  View,
 } from "react-native";
-import { X, Check } from "lucide-react-native";
 
 const { height } = Dimensions.get("window");
 
@@ -69,7 +69,7 @@ export default function WalletRenameModal({
 
   const handleSave = async () => {
     const trimmedName = name.trim();
-    
+
     if (!trimmedName) {
       Alert.alert("Error", "Wallet name cannot be empty");
       return;

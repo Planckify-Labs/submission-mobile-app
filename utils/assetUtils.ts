@@ -1,10 +1,10 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Alert } from "react-native";
 import {
   TCryptoAsset,
   TExtendedCryptoAsset,
 } from "@/constants/types/assetTypes";
 import { TNetwork } from "@/constants/types/networkTypes";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Alert } from "react-native";
 
 export function isAssetAdded(
   userAssets: TCryptoAsset[],

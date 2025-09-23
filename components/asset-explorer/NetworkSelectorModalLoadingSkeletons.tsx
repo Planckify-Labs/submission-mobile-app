@@ -1,12 +1,14 @@
-import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 import React from "react";
 import { View } from "react-native";
+import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 
 type NetworkLoadingSkeletonsProps = {
   count?: number;
 };
 
-const NetworkLoadingSkeletons = ({ count = 5 }: NetworkLoadingSkeletonsProps) => {
+const NetworkLoadingSkeletons = ({
+  count = 5,
+}: NetworkLoadingSkeletonsProps) => {
   return (
     <>
       {Array(count)
@@ -32,11 +34,7 @@ const NetworkLoadingSkeletons = ({ count = 5 }: NetworkLoadingSkeletonsProps) =>
               />
               <SingleLoadingSekeleton width={60} height={12} borderRadius={4} />
             </View>
-            <SingleLoadingSekeleton
-              width={24}
-              height={24}
-              borderRadius={12}
-            />
+            <SingleLoadingSekeleton width={24} height={24} borderRadius={12} />
           </View>
         ))}
     </>

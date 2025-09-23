@@ -1,8 +1,8 @@
-import { useWallet } from "@/hooks/useWallet";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { useWallet } from "@/hooks/useWallet";
 
 interface WalletImportProps {
   type: "SeedPhrase" | "PrivateKey";

@@ -1,8 +1,8 @@
-import { tokenApi } from "@/api/endpoints/tokens";
-import type { TToken, TTokenSearchParams } from "@/api/types/token";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect } from "react";
+import { tokenApi } from "@/api/endpoints/tokens";
+import type { TToken, TTokenSearchParams } from "@/api/types/token";
 
 const TOKEN_STORAGE_KEY = "cached_tokens";
 const TOKEN_TIMESTAMP_KEY = "cached_tokens_timestamp";

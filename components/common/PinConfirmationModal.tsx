@@ -1,4 +1,3 @@
-import { usePin } from "@/hooks/usePin";
 import { Delete } from "lucide-react-native";
 import React, {
   useCallback,
@@ -17,6 +16,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { usePin } from "@/hooks/usePin";
 import PinSetupModal from "./PinSetupModal";
 
 interface PinConfirmationModalProps {

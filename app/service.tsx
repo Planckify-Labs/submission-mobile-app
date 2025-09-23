@@ -1,10 +1,3 @@
-import SearchBar from "@/components/common/SearchBar";
-import PromotionBanner from "@/components/service/PromotionBanner";
-import ServiceHeader from "@/components/service/ServiceHeader";
-import ServiceScreenSkeleton from "@/components/service/ServiceScreenSkeleton";
-import ServiceSectionContainer from "@/components/service/ServiceSectionContainer";
-import { type ListItemData as ListItem } from "@/constants/dummyData/paymentScreen";
-import { useProductsByCategories } from "@/hooks/queries/useProducts";
 import React, { useRef, useState } from "react";
 import {
   Animated,
@@ -14,6 +7,13 @@ import {
   Text,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import SearchBar from "@/components/common/SearchBar";
+import PromotionBanner from "@/components/service/PromotionBanner";
+import ServiceHeader from "@/components/service/ServiceHeader";
+import ServiceScreenSkeleton from "@/components/service/ServiceScreenSkeleton";
+import ServiceSectionContainer from "@/components/service/ServiceSectionContainer";
+import { type ListItemData as ListItem } from "@/constants/dummyData/paymentScreen";
+import { useProductsByCategories } from "@/hooks/queries/useProducts";
 
 export default function ServiceScreen() {
   const [searchQuery, setSearchQuery] = useState("");

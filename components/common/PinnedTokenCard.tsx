@@ -5,7 +5,9 @@ export const PINNEDTOKEN_KEY = "takumipay_user_pinned_tokens";
 
 export default function PinnedTokenCard({
   token,
-}: { token?: { symbol?: string; balance?: string; price?: string } }) {
+}: {
+  token?: { symbol?: string; balance?: string; price?: string };
+}) {
   return (
     <View className="rounded-xl border-2 border-light-matte-black/65 aspect-video p-4 w-[190px]">
       <View className="flex-row gap-2 items-center mb-4">

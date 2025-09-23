@@ -1,3 +1,9 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router, useNavigation } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
+import { Alert, BackHandler, StatusBar } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { english, generateMnemonic } from "viem/accounts";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import {
   TSelectedWords,
@@ -8,12 +14,6 @@ import {
 } from "@/constants/types/walletTypes";
 import { createWalletSteps } from "@/constants/walletSetup/walletCreationStepList";
 import { useWallet } from "@/hooks/useWallet";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router, useNavigation } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
-import { Alert, BackHandler, StatusBar } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { english, generateMnemonic } from "viem/accounts";
 import WalletSetupSteps from "./WalletSetupSteps";
 
 export default function WalletSetup() {

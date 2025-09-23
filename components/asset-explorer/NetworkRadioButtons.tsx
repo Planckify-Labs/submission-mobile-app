@@ -1,8 +1,8 @@
-import { useBlockchains } from "@/hooks/queries/useBlockchains";
-import { useWallet } from "@/hooks/useWallet";
 import { MoveDiagonal } from "lucide-react-native";
 import React, { useEffect } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useBlockchains } from "@/hooks/queries/useBlockchains";
+import { useWallet } from "@/hooks/useWallet";
 import NetworkRadioButtonLoadingSkeletons from "./NetworkRadioButtonLoadingSkeletons";
 
 type TNetwork = {

@@ -1,7 +1,3 @@
-import {
-  getPromotionalItems,
-  TPromotionalItem,
-} from "@/constants/dummyData/ecosystemList";
 import React from "react";
 import {
   Dimensions,
@@ -11,6 +7,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  getPromotionalItems,
+  TPromotionalItem,
+} from "@/constants/dummyData/ecosystemList";
 
 interface PromotionalSliderProps {
   onNavigateToDapp: (url: string) => void;

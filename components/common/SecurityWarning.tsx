@@ -1,6 +1,6 @@
+import { Shield } from "lucide-react-native";
 import React from "react";
 import { Text, View } from "react-native";
-import { Shield } from "lucide-react-native";
 
 type SecurityWarningProps = {
   message?: string;

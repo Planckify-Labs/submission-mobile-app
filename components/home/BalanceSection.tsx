@@ -1,7 +1,3 @@
-import ChainSelector from "@/components/common/ChainSelector";
-import { useWallet } from "@/hooks/useWallet";
-import { useWalletBalance } from "@/hooks/useWalletBalance";
-import { copyToClipboard } from "@/utils/authUtils";
 import { useRouter } from "expo-router";
 import {
   ArrowBigDown,
@@ -25,6 +21,10 @@ import {
   Vibration,
   View,
 } from "react-native";
+import ChainSelector from "@/components/common/ChainSelector";
+import { useWallet } from "@/hooks/useWallet";
+import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { copyToClipboard } from "@/utils/authUtils";
 import BalanceSectionSkeleton from "./BalanceSectionSkeleton";
 import RecievePaymentModal from "./RecievePaymentModal";
 

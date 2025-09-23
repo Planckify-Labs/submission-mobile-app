@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { productApi } from "@/api/endpoints/products";
 import type {
   TProduct,
@@ -8,7 +9,6 @@ import type {
   TProductWithCategory,
 } from "@/api/types/product";
 import { productsQueryKeys } from "@/constants/queryKeys/productsQueryKeys";
-import { useQuery } from "@tanstack/react-query";
 
 export const useProducts = () => {
   return useQuery<TProduct[]>({

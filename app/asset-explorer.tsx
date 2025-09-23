@@ -1,5 +1,3 @@
-import { SAMPLE_ASSETS } from "@/constants/dummyData/assets";
-import { useWallet } from "@/hooks/useWallet";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -10,7 +8,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import AddTokenForm from "@/components/asset-explorer/AddTokenForm";
 import AssetExplorerHeader from "@/components/asset-explorer/AssetExplorerHeader";
 import AssetItem from "@/components/asset-explorer/AssetItem";
@@ -20,11 +17,12 @@ import AssetExplorerTabs from "@/components/asset-explorer/MyAssetsAndExploreAss
 import NetworkRadioButtons from "@/components/asset-explorer/NetworkRadioButtons";
 import NetworkSelectorModal from "@/components/asset-explorer/NetworkSelectorModal";
 import UserAssetItem from "@/components/asset-explorer/UserAssetItem";
-import SearchBar from "@/components/common/SearchBar";
-
 import WalletInfo from "@/components/asset-explorer/WalletInfo";
+import SearchBar from "@/components/common/SearchBar";
+import { SAMPLE_ASSETS } from "@/constants/dummyData/assets";
 import { TAssetTabType, TCryptoAsset } from "@/constants/types/assetTypes";
 import { useTokens } from "@/hooks/queries/useTokens";
+import { useWallet } from "@/hooks/useWallet";
 import {
   adaptAssetForNetwork,
   addAsset,
@@ -37,9 +35,9 @@ import {
 } from "@/utils/assetUtils";
 import {
   ALL_NETWORKS,
-  type Network,
   filterNetworks,
   getPinnedNetworks,
+  type Network,
   toggleNetworkPin,
 } from "@/utils/networkUtils";
 import {

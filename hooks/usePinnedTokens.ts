@@ -1,7 +1,7 @@
-import { TToken } from "@/api/types/token";
-import QKEY_PinnedTokens from "@/constants/queryKeys/pinnedTokensQueryKeys";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
+import { TToken } from "@/api/types/token";
+import QKEY_PinnedTokens from "@/constants/queryKeys/pinnedTokensQueryKeys";
 import useRQGlobalState from "./useRQGlobalState";
 
 const storePinnedTokens = async (tokens: TToken[]): Promise<void> => {

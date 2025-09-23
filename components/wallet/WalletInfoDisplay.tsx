@@ -1,7 +1,7 @@
-import { TWallet } from "@/constants/types/walletTypes";
 import { Copy, Eye, EyeOff } from "lucide-react-native";
 import React, { memo } from "react";
 import { Pressable, Text, View } from "react-native";
+import { TWallet } from "@/constants/types/walletTypes";
 
 type WalletInfoDisplayProps = {
   wallet: TWallet;

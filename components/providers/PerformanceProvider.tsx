@@ -15,7 +15,9 @@ export const usePerformance = () => useContext(PerformanceContext);
 
 export function PerformanceProvider({
   children,
-}: { children: React.ReactNode }) {
+}: {
+  children: React.ReactNode;
+}) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {

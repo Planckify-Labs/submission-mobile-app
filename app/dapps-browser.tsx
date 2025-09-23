@@ -1,3 +1,8 @@
+import React, { useCallback, useRef, useState } from "react";
+import { Animated, Keyboard, StatusBar, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { WebView, WebViewMessageEvent } from "react-native-webview";
+import { type Hex } from "viem";
 import SignMessageModal from "@/components/common/SignMessageModal";
 import BrowserAddressBar from "@/components/dapps-browser/BrowserAddressBar";
 import BrowserNavigationControls from "@/components/dapps-browser/BrowserNavigationControls";
@@ -12,11 +17,6 @@ import {
   getEthereumProviderScript,
 } from "@/services/ethereumProvider";
 import { getAccountForWallet } from "@/services/walletService";
-import React, { useCallback, useRef, useState } from "react";
-import { Animated, Keyboard, StatusBar, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { WebView, WebViewMessageEvent } from "react-native-webview";
-import { type Hex } from "viem";
 
 interface TBrowserState {
   url: string;

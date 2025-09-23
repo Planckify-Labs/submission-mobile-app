@@ -1,6 +1,6 @@
-import { AssetListContentProps } from "@/constants/types/assetTypes";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
+import { AssetListContentProps } from "@/constants/types/assetTypes";
 import AssetLoadingSkeletons from "./AssetLoadingSkeletons";
 
 const AssetTabContent = ({

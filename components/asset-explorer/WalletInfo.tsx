@@ -1,11 +1,11 @@
-import { TWalletInfoProps } from "@/constants/types/networkTypes";
-import { useWallet } from "@/hooks/useWallet";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { Copy } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { formatUnits } from "viem";
+import { TWalletInfoProps } from "@/constants/types/networkTypes";
+import { useWallet } from "@/hooks/useWallet";
 
 const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
   const { activeChain, getPublicClientForActiveChain } = useWallet();
@@ -16,7 +16,7 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
   useEffect(() => {
     const fetchBalance = async () => {
       if (!activeWallet?.address) return;
-      
+
       try {
         setIsLoading(true);
         const publicClient = getPublicClientForActiveChain();
@@ -36,7 +36,7 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
 
   const formatBalance = (value: bigint): string => {
     const formatted = parseFloat(formatUnits(value, 18)).toFixed(4);
-    return formatted.replace(/\.?0+$/, '');
+    return formatted.replace(/\.?0+$/, "");
   };
 
   const copyAddress = async () => {
@@ -48,7 +48,7 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
     }
   };
 
-  const formattedAddress = activeWallet?.address 
+  const formattedAddress = activeWallet?.address
     ? `${activeWallet.address.substring(0, 6)}...${activeWallet.address.substring(activeWallet.address.length - 4)}`
     : "No wallet selected";
 
@@ -56,20 +56,22 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
     <View className="bg-light p-4 mb-4 rounded-2xl border-4 border-light-matte-black">
       <View className="flex-row justify-between items-center mb-4">
         <View>
-          <Text className="text-light-matte-black/60 text-xs mb-1">Current Wallet</Text>
+          <Text className="text-light-matte-black/60 text-xs mb-1">
+            Current Wallet
+          </Text>
           <Text className="text-light-matte-black font-bold text-lg">
             {activeWallet?.name || "My Wallet"}
           </Text>
         </View>
-        
+
         <View className="border border-light-primary-red/20 px-3 py-1 rounded-full">
           <Text className="text-light-primary-red text-xs font-medium">
             {activeChain?.chain?.name || "Ethereum"}
           </Text>
         </View>
       </View>
-      
-      <Pressable 
+
+      <Pressable
         onPress={copyAddress}
         className="flex-row items-center mb-4 border border-light-matte-black/10 p-2.5 rounded-xl"
       >
@@ -82,17 +84,19 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
           <Copy size={16} color="#c71c4b" />
         )}
       </Pressable>
-      
+
       <View className="border-t border-light-matte-black/10 pt-4">
         <View className="flex-row justify-between items-center">
-          <Text className="text-light-matte-black/70 font-medium">Native Balance</Text>
+          <Text className="text-light-matte-black/70 font-medium">
+            Native Balance
+          </Text>
           <View className="border border-light-primary-red/20 px-2 py-1 rounded-full">
             <Text className="text-light-primary-red text-xs">
               {activeChain?.chain?.nativeCurrency?.symbol || "ETH"}
             </Text>
           </View>
         </View>
-        
+
         <View className="mt-2">
           {isLoading ? (
             <ActivityIndicator size="small" color="#c71c4b" />

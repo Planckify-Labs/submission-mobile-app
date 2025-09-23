@@ -1,14 +1,3 @@
-import type { TToken } from "@/api/types/token";
-import ChainSelector from "@/components/common/ChainSelector";
-import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
-import PinConfirmationModal from "@/components/common/PinConfirmationModal";
-import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
-import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
-import { useIsAuthenticated } from "@/hooks/queries/useAuth";
-import { useBlockchains } from "@/hooks/queries/useBlockchains";
-import { useTokens } from "@/hooks/queries/useTokens";
-import { useCreateTransaction } from "@/hooks/queries/useTransactions";
-import { useWallet } from "@/hooks/useWallet";
 import * as Clipboard from "expo-clipboard";
 import { router, useLocalSearchParams } from "expo-router";
 import {
@@ -35,6 +24,17 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { erc20Abi, formatUnits, parseUnits } from "viem";
+import type { TToken } from "@/api/types/token";
+import ChainSelector from "@/components/common/ChainSelector";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import PinConfirmationModal from "@/components/common/PinConfirmationModal";
+import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
+import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
+import { useBlockchains } from "@/hooks/queries/useBlockchains";
+import { useTokens } from "@/hooks/queries/useTokens";
+import { useCreateTransaction } from "@/hooks/queries/useTransactions";
+import { useWallet } from "@/hooks/useWallet";
 
 export default function SendScreen() {
   const {

@@ -1,7 +1,7 @@
-import { TWalletSetupStepsProps } from "@/constants/types/walletTypes";
 import { ArrowLeft } from "lucide-react-native";
 import React, { memo } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { TWalletSetupStepsProps } from "@/constants/types/walletTypes";
 
 const WalletSetupSteps = memo(function WalletSetupSteps({
   currentStep,

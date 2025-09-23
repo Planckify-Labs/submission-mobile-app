@@ -1,14 +1,14 @@
-import { TTransaction } from "@/api/types/transaction";
-import { useIsAuthenticated } from "@/hooks/queries/useAuth";
-import { useTransactionSearch } from "@/hooks/queries/useTransactions";
-import { useWallet } from "@/hooks/useWallet";
-import { truncateAddress } from "@/utils/walletUtils";
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight, Wallet2 } from "lucide-react-native";
 import React from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import { formatUnits } from "viem/utils";
+import { TTransaction } from "@/api/types/transaction";
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
+import { useTransactionSearch } from "@/hooks/queries/useTransactions";
+import { useWallet } from "@/hooks/useWallet";
+import { truncateAddress } from "@/utils/walletUtils";
 import OptimizedImage from "../common/OptimizedImage";
 
 export default function ActivitySection() {
@@ -35,13 +35,17 @@ export default function ActivitySection() {
   );
 
   const purchaseHistoryButton = (payment: TTransaction) => (
-    <TouchableOpacity activeOpacity={0.7} className="items-center"
-    onPress={() => router.push({
-      pathname:"/activity-detail",
-      params:{
-        purchaseId: payment.purchase?.id
+    <TouchableOpacity
+      activeOpacity={0.7}
+      className="items-center"
+      onPress={() =>
+        router.push({
+          pathname: "/activity-detail",
+          params: {
+            purchaseId: payment.purchase?.id,
+          },
+        })
       }
-    })}
     >
       <View className="rounded-2xl border-2 p-0 border-light-matte-black w-16 aspect-square overflow-hidden bg-light-main-container">
         <OptimizedImage
@@ -60,27 +64,28 @@ export default function ActivitySection() {
     <TouchableOpacity
       activeOpacity={0.7}
       className="justify-center items-center"
-      onPress={() => router.push({
-        pathname:"/activity-detail",
-        params:{
-          transferId: transfer.id
-        }
-      })}
+      onPress={() =>
+        router.push({
+          pathname: "/activity-detail",
+          params: {
+            transferId: transfer.id,
+          },
+        })
+      }
     >
       <View className="aspect-square w-full max-w-[70px] relative bg-light-primary-red/10 rounded-full items-center justify-center p-3">
         <Text className="text-light-matte-black font-bold text-xs">
           {(() => {
             try {
               // Clean the amount string and convert to BigInt
-              const cleanAmount = transfer.amount.replace(/[^0-9]/g, '');
-              if (!cleanAmount || cleanAmount === '0') return '0';
+              const cleanAmount = transfer.amount.replace(/[^0-9]/g, "");
+              if (!cleanAmount || cleanAmount === "0") return "0";
               return formatUnits(BigInt(cleanAmount), transfer.token.decimals);
             } catch (error) {
-              console.warn('Error formatting transfer amount:', error);
-              return '0';
+              console.warn("Error formatting transfer amount:", error);
+              return "0";
             }
-          })()}{" "}
-          {transfer.token.symbol}
+          })()} {transfer.token.symbol}
         </Text>
         <View className="bg-light-main-container aspect-square w-6 rounded-full absolute bottom-0 right-0 items-center justify-center">
           <OptimizedImage

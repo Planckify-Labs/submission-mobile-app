@@ -1,5 +1,3 @@
-import { TToken } from "@/api/types/token";
-import { useTokens } from "@/hooks/queries/useTokens";
 import { Search } from "lucide-react-native";
 import React, {
   memo,
@@ -24,6 +22,8 @@ import {
   View,
   ViewStyle,
 } from "react-native";
+import { TToken } from "@/api/types/token";
+import { useTokens } from "@/hooks/queries/useTokens";
 
 interface TokenSelectorModalProps {
   visible: boolean;

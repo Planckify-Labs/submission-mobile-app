@@ -1,6 +1,6 @@
-import SearchBar from "@/components/common/SearchBar";
 import React, { useState } from "react";
 import { Animated, View } from "react-native";
+import SearchBar from "@/components/common/SearchBar";
 
 export default function ActivityHeader({
   placeholder,

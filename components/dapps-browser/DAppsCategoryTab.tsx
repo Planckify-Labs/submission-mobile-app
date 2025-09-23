@@ -1,6 +1,12 @@
 import { BlurView } from "expo-blur";
 import React from "react";
-import { Animated, LayoutChangeEvent, Text, TouchableOpacity, View } from "react-native";
+import {
+  Animated,
+  LayoutChangeEvent,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 type CategoryTab = "dex" | "defi" | "gaming";
 

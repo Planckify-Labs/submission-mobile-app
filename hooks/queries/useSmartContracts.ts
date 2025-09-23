@@ -1,8 +1,8 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   smartContractApi,
   TSmartContractSearchParams,
 } from "@/api/endpoints/smart-contracts";
-import { useMutation, useQuery } from "@tanstack/react-query";
 
 export const useSmartContracts = (params?: {
   blockchainId?: string;

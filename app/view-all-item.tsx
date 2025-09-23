@@ -1,8 +1,3 @@
-import { TProduct } from "@/api/types/product";
-import OptimizedImage from "@/components/common/OptimizedImage";
-import SearchBar from "@/components/common/SearchBar";
-import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
-import { useProductsByCategory } from "@/hooks/queries/useProducts";
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
@@ -15,6 +10,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { TProduct } from "@/api/types/product";
+import OptimizedImage from "@/components/common/OptimizedImage";
+import SearchBar from "@/components/common/SearchBar";
+import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
+import { useProductsByCategory } from "@/hooks/queries/useProducts";
 
 const SkeletonItem = () => (
   <View className="items-center justify-center p-1">

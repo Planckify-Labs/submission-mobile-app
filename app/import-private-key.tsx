@@ -1,5 +1,3 @@
-import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
-import { useWallet } from "@/hooks/useWallet";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import {
@@ -19,6 +17,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import { useWallet } from "@/hooks/useWallet";
 
 export default function ImportPrivateKeyScreen() {
   const [privateKey, setPrivateKey] = useState<string>("");

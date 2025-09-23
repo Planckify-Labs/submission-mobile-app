@@ -1,6 +1,6 @@
-import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 import React from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
+import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 
 const styles = StyleSheet.create({
   marginBottom6: {

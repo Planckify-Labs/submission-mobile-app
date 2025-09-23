@@ -1,7 +1,7 @@
-import { TDApp } from "@/constants/dummyData/ecosystemList";
 import { ArrowUpRight } from "lucide-react-native";
 import React from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
+import { TDApp } from "@/constants/dummyData/ecosystemList";
 
 interface DAppCardProps {
   dapp: TDApp;

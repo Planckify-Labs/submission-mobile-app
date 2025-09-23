@@ -1,8 +1,8 @@
-import { publicApi } from "@/constants/configs/ky";
-import { useWallet } from "@/hooks/useWallet";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { publicApi } from "@/constants/configs/ky";
+import { useWallet } from "@/hooks/useWallet";
 
 interface TNonceResponse {
   nonce: string;

@@ -1,3 +1,8 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as SecureStore from "expo-secure-store";
+import { useCallback, useEffect, useMemo } from "react";
+import { Alert, InteractionManager } from "react-native";
+import type { Account, PublicClient, WalletClient } from "viem";
 import { usePerformance } from "@/components/providers/PerformanceProvider";
 import {
   type ChainConfig,
@@ -11,11 +16,6 @@ import type {
 import * as walletService from "@/services/walletService";
 import { getPublicClient, getWalletClient } from "@/utils/clients";
 import { createWalletFromParams } from "@/utils/walletUtils";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as SecureStore from "expo-secure-store";
-import { useCallback, useEffect, useMemo } from "react";
-import { Alert, InteractionManager } from "react-native";
-import type { Account, PublicClient, WalletClient } from "viem";
 
 export function useWallet() {
   const { deferredTask } = usePerformance();

@@ -1,6 +1,6 @@
-import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 import React from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
+import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 
 const styles = StyleSheet.create({
   marginBottom6: {
@@ -39,7 +39,11 @@ export default function ItemVariantWithoutInputSkeleton() {
 
         {/* Options Section */}
         <View className="bg-light rounded-xl p-5 mb-6 shadow-sm">
-          <SingleLoadingSekeleton width={100} height={24} style={styles.marginBottom4} />
+          <SingleLoadingSekeleton
+            width={100}
+            height={24}
+            style={styles.marginBottom4}
+          />
           <View className="flex-row flex-wrap justify-between">
             {[1, 2, 3, 4].map((i) => (
               <View key={i} className="w-[48%] mb-3">
@@ -51,11 +55,23 @@ export default function ItemVariantWithoutInputSkeleton() {
 
         {/* Item Details */}
         <View className="bg-light rounded-xl p-5 mb-6 shadow-sm">
-          <SingleLoadingSekeleton width={120} height={24} style={styles.marginBottom4} />
+          <SingleLoadingSekeleton
+            width={120}
+            height={24}
+            style={styles.marginBottom4}
+          />
           <View className="flex-row mb-4">
-            <SingleLoadingSekeleton width={80} height={80} style={styles.marginRight4} />
+            <SingleLoadingSekeleton
+              width={80}
+              height={80}
+              style={styles.marginRight4}
+            />
             <View className="flex-1 justify-center">
-              <SingleLoadingSekeleton width="80%" height={24} style={styles.marginBottom2} />
+              <SingleLoadingSekeleton
+                width="80%"
+                height={24}
+                style={styles.marginBottom2}
+              />
               <SingleLoadingSekeleton width="100%" height={40} />
             </View>
           </View>
@@ -63,7 +79,11 @@ export default function ItemVariantWithoutInputSkeleton() {
           {/* Info Box */}
           <View className="bg-light-primary-red/10 p-4 rounded-xl mb-4">
             <View className="flex-row items-start">
-              <SingleLoadingSekeleton width={18} height={18} style={styles.marginRight4} />
+              <SingleLoadingSekeleton
+                width={18}
+                height={18}
+                style={styles.marginRight4}
+              />
               <SingleLoadingSekeleton width="90%" height={40} />
             </View>
           </View>
@@ -84,4 +104,4 @@ export default function ItemVariantWithoutInputSkeleton() {
       </View>
     </ScrollView>
   );
-} 
+}

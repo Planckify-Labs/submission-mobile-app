@@ -1,6 +1,6 @@
-import { getWeb3EcosystemCategories } from "@/constants/dummyData/ecosystemList";
 import React from "react";
 import { ScrollView, Text, View } from "react-native";
+import { getWeb3EcosystemCategories } from "@/constants/dummyData/ecosystemList";
 import DAppCard from "./DAppCard";
 
 interface PopularDAppsProps {

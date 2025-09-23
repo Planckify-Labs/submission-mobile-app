@@ -1,6 +1,6 @@
-import { TAssetCategoryTabsProps } from "@/constants/types/assetTypes";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
+import { TAssetCategoryTabsProps } from "@/constants/types/assetTypes";
 
 const MyAssetsAndExploreAssetTabs = ({
   activeTab,

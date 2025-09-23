@@ -1,11 +1,11 @@
-import type { ChainConfig } from "@/constants/configs/chainConfig";
-import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
-import { getPublicClient } from "@/utils/clients";
 import { useFocusEffect } from "@react-navigation/native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { formatUnits } from "viem";
+import type { ChainConfig } from "@/constants/configs/chainConfig";
+import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
+import { getPublicClient } from "@/utils/clients";
 
 export function useWalletBalance(
   address?: `0x${string}` | string,
