@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { formatUnits } from "viem";
 import type { TToken } from "@/api/types/token";
+import PinConfirmationModal from "./PinConfirmationModal";
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.5;
@@ -46,6 +47,7 @@ const SpendingApprovalModal: React.FC<SpendingApprovalModalProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
   const [unlimitedAllowance, setUnlimitedAllowance] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -111,7 +113,16 @@ const SpendingApprovalModal: React.FC<SpendingApprovalModalProps> = ({
   };
 
   const handleApprove = () => {
+    setShowPinModal(true);
+  };
+
+  const handlePinConfirm = (pin: string) => {
+    setShowPinModal(false);
     onApprove(unlimitedAllowance);
+  };
+
+  const handlePinClose = () => {
+    setShowPinModal(false);
   };
 
   const formattedAmount = formatUnits(BigInt(amount), token.decimals);
@@ -356,6 +367,13 @@ const SpendingApprovalModal: React.FC<SpendingApprovalModalProps> = ({
           </View>
         </Animated.View>
       </View>
+
+      <PinConfirmationModal
+        visible={showPinModal}
+        onClose={handlePinClose}
+        onConfirm={handlePinConfirm}
+        title="Confirm Token Approval"
+      />
     </Modal>
   );
 };
