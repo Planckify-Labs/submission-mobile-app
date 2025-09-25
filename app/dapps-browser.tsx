@@ -456,8 +456,6 @@ export default function DappsBrowser() {
             />
 
             <DAppsCategoryTab
-              activeCategory={activeCategory}
-              onTabChange={handleTabChange}
               onLayout={handleTabBarLayout}
               tabWidth={tabWidth}
               horizontalScrollX={horizontalScrollX}
