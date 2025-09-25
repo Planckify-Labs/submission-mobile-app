@@ -10,9 +10,9 @@ export const usePaymentProcessorContract = (blockchainId?: string) => {
     name: "Payment Processor",
     isActive: true,
   });
+  console.log("payment processor contract", contracts);
 
   const paymentProcessorContract = contracts?.[0];
-  console.log(paymentProcessorContract);
 
   return {
     contractAddress: paymentProcessorContract?.address,
