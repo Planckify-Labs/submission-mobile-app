@@ -61,16 +61,15 @@ export type TTransaction = {
 
 export type TPurchaseCompleted = {
   id: string;
+  status: "PENDING" | "COMPLETED" | "FAILED";
   transactionId: string;
   productVariantId: string;
-  status: "PENDING" | "COMPLETED" | "FAILED";
-  vendorResponse: TVendorResponse;
-  vendorRefId: string;
   refId: string;
   createdAt: string;
   updatedAt: string;
   transaction: TTransaction;
   productVariant: TProductVariant;
+  voucherCode?: string;
 };
 
 export type TPurchaseInitialResponse = {

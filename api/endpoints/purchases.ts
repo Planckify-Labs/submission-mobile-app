@@ -1,8 +1,8 @@
 import { api } from "@/constants/configs/ky";
 import type {
+  TPurchaseCompleted,
   TPurchaseCreateRequest,
   TPurchaseResponse,
-  TPurchaseCompleted,
 } from "../types/purchase";
 
 export const purchaseApi = {
@@ -50,18 +50,6 @@ export const purchaseApi = {
       return response;
     } catch (error) {
       console.error("Failed to fetch purchases for wallet:", error);
-      throw error;
-    }
-  },
-
-  getPurchaseStatus: async (refId: string) => {
-    try {
-      const response = await api
-        .get(`purchases/${refId}/status`)
-        .json<{ status: string; processingStatus?: string }>();
-      return response;
-    } catch (error) {
-      console.error("Failed to fetch purchase status:", error);
       throw error;
     }
   },
