@@ -1,0 +1,338 @@
+import * as Clipboard from "expo-clipboard";
+import {
+  CheckCircle,
+  Clock,
+  Copy,
+  CreditCard,
+  ExternalLink,
+  Link,
+  Package,
+  Ticket,
+  XCircle,
+} from "lucide-react-native";
+import React from "react";
+import { Alert, Text, TouchableOpacity, View } from "react-native";
+import { TPurchaseCompleted } from "@/api/types/purchase";
+
+export default function RenderActivityDetailCards({
+  purchase,
+}: {
+  purchase: TPurchaseCompleted;
+}) {
+  const copyToClipboard = async (text: string, label: string) => {
+    await Clipboard.setStringAsync(text);
+    Alert.alert("Copied!", `${label} copied to clipboard`);
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "COMPLETED":
+      case "CONFIRMED":
+        return <CheckCircle size={16} color="#10b981" />;
+      case "PENDING":
+        return <Clock size={16} color="#f59e0b" />;
+      case "FAILED":
+        return <XCircle size={16} color="#ef4444" />;
+      default:
+        return <Clock size={16} color="#6b7280" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "COMPLETED":
+      case "CONFIRMED":
+        return "text-emerald-600";
+      case "PENDING":
+        return "text-yellow-600";
+      case "FAILED":
+        return "text-red-600";
+      default:
+        return "text-gray-600";
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString("id-ID", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatCurrency = (amount: string, currency: string) => {
+    const numAmount = parseFloat(amount);
+    if (currency === "IDR") {
+      return `Rp${numAmount.toLocaleString("id-ID")}`;
+    }
+    return `${numAmount.toLocaleString()} ${currency}`;
+  };
+
+  return (
+    <View className="gap-4 p-4">
+      <View className="bg-white rounded-2xl p-4 shadow-sm">
+        <Text className="text-light-matte-black font-bold text-lg mb-4">
+          Purchase Details
+        </Text>
+
+        <View className="bg-light-main-container/30 rounded-xl p-4 mb-4 border-l-4 border-light-primary-red">
+          <View className="flex-row items-center justify-between mb-2">
+            <Text className="text-light-matte-black font-medium text-base">
+              Purchase #{purchase.refId.slice(-8).toUpperCase()}
+            </Text>
+            <View className="flex-row items-center">
+              {getStatusIcon(purchase.status)}
+              <Text
+                className={`ml-1 font-medium text-sm ${getStatusColor(purchase.status)}`}
+              >
+                {purchase.status}
+              </Text>
+            </View>
+          </View>
+          <View className="mt-3 space-y-1">
+            <View>
+              <Text className="text-light-matte-black/60 text-xs mb-1">
+                Purchase ID
+              </Text>
+              <View className="flex-row items-center justify-between bg-white rounded-lg p-2">
+                <Text
+                  className="text-light-matte-black text-xs font-mono flex-1"
+                  numberOfLines={1}
+                >
+                  {purchase.id}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => copyToClipboard(purchase.id, "Purchase ID")}
+                  className="ml-2 p-1"
+                >
+                  <Copy size={12} color="#c71c4b" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View>
+              <Text className="text-light-matte-black/60 text-xs mb-1">
+                Reference ID
+              </Text>
+              <View className="flex-row items-center justify-between bg-white rounded-lg p-2">
+                <Text
+                  className="text-light-matte-black text-xs font-mono flex-1"
+                  numberOfLines={1}
+                >
+                  {purchase.refId}
+                </Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    copyToClipboard(purchase.refId, "Reference ID")
+                  }
+                  className="ml-2 p-1"
+                >
+                  <Copy size={12} color="#c71c4b" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View className="flex-row justify-between items-center">
+              <Text className="text-light-matte-black/60 text-xs">
+                Date & Time
+              </Text>
+              <Text className="text-light-matte-black text-xs">
+                {formatDate(purchase.createdAt)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View className="bg-light-main-container/20 rounded-xl p-4 mb-4">
+          <View className="flex-row items-center mb-3">
+            <Package size={16} color="#c71c4b" />
+            <Text className="text-light-matte-black font-medium text-sm ml-2">
+              Item Details
+            </Text>
+          </View>
+
+          <View className="space-y-2">
+            <View className="flex-row justify-between items-start">
+              <Text className="text-light-matte-black/60 text-sm flex-1">
+                Product
+              </Text>
+              <Text className="text-light-matte-black text-sm font-medium flex-2 text-right">
+                {purchase.productVariant.product.name}
+              </Text>
+            </View>
+
+            <View className="flex-row justify-between items-start">
+              <Text className="text-light-matte-black/60 text-sm flex-1">
+                Variant
+              </Text>
+              <Text className="text-light-matte-black text-sm font-medium flex-2 text-right">
+                {purchase.productVariant.name}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View className="bg-light-main-container/20 rounded-xl p-4 mb-4">
+          <View className="flex-row items-center mb-3">
+            <CreditCard size={16} color="#c71c4b" />
+            <Text className="text-light-matte-black font-medium text-sm ml-2">
+              Payment Details
+            </Text>
+          </View>
+
+          <View className="space-y-2">
+            <View className="flex-row justify-between items-center">
+              <Text className="text-light-matte-black/60 text-sm">
+                Amount Paid
+              </Text>
+              <View className="flex-row items-center">
+                <View className="bg-light-primary-red/10 w-5 h-5 rounded-full mr-2 items-center justify-center">
+                  <Text className="text-light-primary-red text-xs font-bold">
+                    $
+                  </Text>
+                </View>
+                <Text className="text-light-primary-red font-bold text-sm">
+                  {purchase.transaction.amount} USDT
+                </Text>
+              </View>
+            </View>
+
+            <View className="flex-row justify-between items-center">
+              <Text className="text-light-matte-black/60 text-sm">
+                Fiat Amount
+              </Text>
+              <Text className="text-light-matte-black text-sm font-medium">
+                {formatCurrency(
+                  purchase.transaction.amountInFiat,
+                  purchase.transaction.fiatCurrency,
+                )}
+              </Text>
+            </View>
+
+            <View className="flex-row justify-between items-center">
+              <Text className="text-light-matte-black/60 text-sm">Network</Text>
+              <Text className="text-light-matte-black text-sm font-medium">
+                Ethereum
+              </Text>
+            </View>
+
+            <View className="h-px bg-light-matte-black/10 my-2" />
+
+            <View className="flex-row justify-between items-center">
+              <Text className="text-light-matte-black font-medium">
+                Transaction Status
+              </Text>
+              <View className="flex-row items-center">
+                {getStatusIcon(purchase.transaction.status)}
+                <Text
+                  className={`ml-1 font-medium text-sm ${getStatusColor(purchase.transaction.status)}`}
+                >
+                  {purchase.transaction.status}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View className="bg-light-main-container/20 rounded-xl p-4">
+          <View className="flex-row items-center mb-3">
+            <Link size={16} color="#c71c4b" />
+            <Text className="text-light-matte-black font-medium text-sm ml-2">
+              Transaction Details
+            </Text>
+          </View>
+
+          <View className="space-y-3">
+            <View>
+              <Text className="text-light-matte-black/60 text-xs mb-1">
+                Transaction Hash
+              </Text>
+              <View className="flex-row items-center justify-between bg-white rounded-lg p-3">
+                <Text
+                  className="text-light-matte-black text-xs font-mono flex-1"
+                  numberOfLines={1}
+                >
+                  {purchase.transaction.txHash}
+                </Text>
+                <View className="flex-row ml-2">
+                  <TouchableOpacity
+                    onPress={() =>
+                      copyToClipboard(
+                        purchase.transaction.txHash,
+                        "Transaction hash",
+                      )
+                    }
+                    className="mr-2 p-1"
+                  >
+                    <Copy size={14} color="#c71c4b" />
+                  </TouchableOpacity>
+                  <TouchableOpacity className="p-1">
+                    <ExternalLink size={14} color="#c71c4b" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            <View>
+              <Text className="text-light-matte-black/60 text-xs mb-1">
+                From Address
+              </Text>
+              <View className="flex-row items-center justify-between bg-white rounded-lg p-3">
+                <Text
+                  className="text-light-matte-black text-xs font-mono flex-1"
+                  numberOfLines={1}
+                >
+                  {purchase.transaction.senderAddress}
+                </Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    copyToClipboard(
+                      purchase.transaction.senderAddress,
+                      "Sender address",
+                    )
+                  }
+                  className="ml-2 p-1"
+                >
+                  <Copy size={14} color="#c71c4b" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {purchase.voucherCode && (
+        <View className="bg-white rounded-2xl p-4 shadow-sm">
+          <View className="flex-row items-center mb-4">
+            <Ticket size={20} color="#c71c4b" />
+            <Text className="text-light-matte-black font-bold text-lg ml-2">
+              Voucher Code
+            </Text>
+          </View>
+
+          <View className="bg-gradient-to-r from-light-primary-red/5 to-light-primary-red/10 rounded-xl p-4 border-2 border-dashed border-light-primary-red/30">
+            <View className="items-center">
+              <Text className="text-light-matte-black/60 text-sm mb-2">
+                Your voucher code is ready!
+              </Text>
+              <View className="bg-white rounded-lg p-4 w-full border border-light-primary-red/20">
+                <Text className="text-light-primary-red font-bold text-xl text-center font-mono tracking-wider">
+                  {purchase.voucherCode}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() =>
+                  copyToClipboard(purchase.voucherCode!, "Voucher code")
+                }
+                className="bg-light-primary-red rounded-lg px-6 py-3 mt-4 flex-row items-center"
+              >
+                <Copy size={16} color="white" />
+                <Text className="text-white font-medium ml-2">Copy Code</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
