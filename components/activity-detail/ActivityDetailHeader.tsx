@@ -30,7 +30,7 @@ export default function ActivityDetailHeader({
           elevation: 3,
         }}
       >
-        <ArrowLeft size={22} color="#20222c" strokeWidth={2} />
+        <ArrowLeft size={22} color="#c71c4b" strokeWidth={2} />
       </TouchableOpacity>
 
       <View className="flex-1 items-center mx-4">
@@ -54,7 +54,7 @@ export default function ActivityDetailHeader({
               elevation: 3,
             }}
           >
-            <Share size={20} color="#20222c" strokeWidth={2} />
+            <Share size={20} color="#c71c4b" strokeWidth={2} />
           </TouchableOpacity>
         )}
 
@@ -71,7 +71,7 @@ export default function ActivityDetailHeader({
               elevation: 3,
             }}
           >
-            <HelpCircle size={20} color="#20222c" strokeWidth={2} />
+            <HelpCircle size={20} color="#c71c4b" strokeWidth={2} />
           </TouchableOpacity>
         )}
 
