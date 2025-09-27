@@ -233,14 +233,6 @@ export default function RenderActivityDetailCards({
             </View>
 
             <View className="flex-row justify-between items-center">
-              <Text className="text-light-matte-black/60 text-sm">Token</Text>
-              <Text className="text-light-matte-black text-sm font-medium">
-                {purchase.transaction.token.name} (
-                {purchase.transaction.token.symbol})
-              </Text>
-            </View>
-
-            <View className="flex-row justify-between items-center">
               <Text className="text-light-matte-black/60 text-sm">
                 Token Address
               </Text>
