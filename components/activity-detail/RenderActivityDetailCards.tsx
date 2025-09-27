@@ -1,4 +1,5 @@
 import * as Clipboard from "expo-clipboard";
+import * as WebBrowser from "expo-web-browser";
 import {
   CheckCircle,
   Clock,
@@ -11,7 +12,8 @@ import {
   XCircle,
 } from "lucide-react-native";
 import React from "react";
-import { Alert, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Image, Text, TouchableOpacity, View } from "react-native";
+import { formatUnits } from "viem";
 import { TPurchaseCompleted } from "@/api/types/purchase";
 
 export default function RenderActivityDetailCards({
@@ -22,6 +24,14 @@ export default function RenderActivityDetailCards({
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
     Alert.alert("Copied!", `${label} copied to clipboard`);
+  };
+
+  const openBlockchainExplorer = async (
+    txHash: string,
+    explorerUrl: string,
+  ) => {
+    const url = `${explorerUrl}/tx/${txHash}`;
+    await WebBrowser.openBrowserAsync(url);
   };
 
   const getStatusIcon = (status: string) => {
@@ -67,7 +77,7 @@ export default function RenderActivityDetailCards({
     if (currency === "IDR") {
       return `Rp${numAmount.toLocaleString("id-ID")}`;
     }
-    return `${numAmount.toLocaleString()} ${currency}`;
+    return `${currency} ${numAmount.toLocaleString()}`;
   };
 
   return (
@@ -186,13 +196,19 @@ export default function RenderActivityDetailCards({
                 Amount Paid
               </Text>
               <View className="flex-row items-center">
-                <View className="bg-light-primary-red/10 w-5 h-5 rounded-full mr-2 items-center justify-center">
-                  <Text className="text-light-primary-red text-xs font-bold">
-                    $
-                  </Text>
+                <View className="w-5 h-5 rounded-full mr-2 items-center justify-center overflow-hidden">
+                  <Image
+                    source={{ uri: purchase.transaction.token.logoUrl }}
+                    className="w-full h-full"
+                    resizeMode="cover"
+                  />
                 </View>
                 <Text className="text-light-primary-red font-bold text-sm">
-                  {purchase.transaction.amount} USDT
+                  {formatUnits(
+                    BigInt(purchase.transaction.amount),
+                    purchase.transaction.token.decimals,
+                  )}{" "}
+                  {purchase.transaction.token.symbol}
                 </Text>
               </View>
             </View>
@@ -212,8 +228,37 @@ export default function RenderActivityDetailCards({
             <View className="flex-row justify-between items-center">
               <Text className="text-light-matte-black/60 text-sm">Network</Text>
               <Text className="text-light-matte-black text-sm font-medium">
-                Ethereum
+                {purchase.transaction.token.blockchain.name}
               </Text>
+            </View>
+
+            <View className="flex-row justify-between items-center">
+              <Text className="text-light-matte-black/60 text-sm">Token</Text>
+              <Text className="text-light-matte-black text-sm font-medium">
+                {purchase.transaction.token.name} (
+                {purchase.transaction.token.symbol})
+              </Text>
+            </View>
+
+            <View className="flex-row justify-between items-center">
+              <Text className="text-light-matte-black/60 text-sm">
+                Token Address
+              </Text>
+              <TouchableOpacity
+                onPress={() =>
+                  copyToClipboard(
+                    purchase.transaction.token.contractAddress,
+                    "Contract address",
+                  )
+                }
+                className="flex-row items-center"
+              >
+                <Text className="text-light-matte-black text-sm font-mono mr-1">
+                  {purchase.transaction.token.contractAddress.slice(0, 6)}...
+                  {purchase.transaction.token.contractAddress.slice(-4)}
+                </Text>
+                <Copy size={12} color="#c71c4b" />
+              </TouchableOpacity>
             </View>
 
             <View className="h-px bg-light-matte-black/10 my-2" />
@@ -266,7 +311,15 @@ export default function RenderActivityDetailCards({
                   >
                     <Copy size={14} color="#c71c4b" />
                   </TouchableOpacity>
-                  <TouchableOpacity className="p-1">
+                  <TouchableOpacity
+                    onPress={() =>
+                      openBlockchainExplorer(
+                        purchase.transaction.txHash,
+                        purchase.transaction.token.blockchain.blockExplorer,
+                      )
+                    }
+                    className="p-1"
+                  >
                     <ExternalLink size={14} color="#c71c4b" />
                   </TouchableOpacity>
                 </View>
@@ -289,6 +342,30 @@ export default function RenderActivityDetailCards({
                     copyToClipboard(
                       purchase.transaction.senderAddress,
                       "Sender address",
+                    )
+                  }
+                  className="ml-2 p-1"
+                >
+                  <Copy size={14} color="#c71c4b" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View>
+              <Text className="text-light-matte-black/60 text-xs mb-1">
+                To Address
+              </Text>
+              <View className="flex-row items-center justify-between bg-white rounded-lg p-3">
+                <Text
+                  className="text-light-matte-black text-xs font-mono flex-1"
+                  numberOfLines={1}
+                >
+                  {purchase.transaction.recipientAddress}
+                </Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    copyToClipboard(
+                      purchase.transaction.recipientAddress,
+                      "Recipient address",
                     )
                   }
                   className="ml-2 p-1"

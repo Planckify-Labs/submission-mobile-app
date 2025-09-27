@@ -43,6 +43,35 @@ export type TProductVariant = {
   product: TProduct;
 };
 
+export type TBlockchain = {
+  id: string;
+  name: string;
+  chainId: number;
+  rpcUrl: string;
+  blockExplorer: string;
+  isEVM: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  isTestnet: boolean;
+};
+
+export type TToken = {
+  id: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  blockchainId: string;
+  contractAddress: string;
+  logoUrl: string;
+  isStablecoin: boolean;
+  isActive: boolean;
+  isNativeCurrency: boolean;
+  createdAt: string;
+  updatedAt: string;
+  blockchain: TBlockchain;
+};
+
 export type TTransaction = {
   id: string;
   userId: string;
@@ -57,6 +86,7 @@ export type TTransaction = {
   recipientAddress: string;
   createdAt: string;
   updatedAt: string;
+  token: TToken;
 };
 
 export type TPurchaseCompleted = {
