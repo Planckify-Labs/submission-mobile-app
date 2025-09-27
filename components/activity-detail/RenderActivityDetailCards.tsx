@@ -1,4 +1,3 @@
-import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import {
   CheckCircle,
@@ -8,24 +7,20 @@ import {
   ExternalLink,
   Link,
   Package,
-  Ticket,
   XCircle,
 } from "lucide-react-native";
 import React from "react";
-import { Alert, Image, Text, TouchableOpacity, View } from "react-native";
+import { Image, Text, TouchableOpacity, View } from "react-native";
 import { formatUnits } from "viem";
 import { TPurchaseCompleted } from "@/api/types/purchase";
+import { copyToClipboard } from "@/utils/helperUtils";
+import AditionalInformationCard from "./render-activity-detail-cards/AditionalInformationCard";
 
 export default function RenderActivityDetailCards({
   purchase,
 }: {
   purchase: TPurchaseCompleted;
 }) {
-  const copyToClipboard = async (text: string, label: string) => {
-    await Clipboard.setStringAsync(text);
-    Alert.alert("Copied!", `${label} copied to clipboard`);
-  };
-
   const openBlockchainExplorer = async (
     txHash: string,
     explorerUrl: string,
@@ -87,7 +82,7 @@ export default function RenderActivityDetailCards({
           Purchase Details
         </Text>
 
-        <View className="bg-light-main-container/30 rounded-xl p-4 mb-4 border-l-4 border-light-primary-red">
+        <View className="bg-light-main-container/35 rounded-xl p-4 mb-4 border-l-4 border-light-primary-red">
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-light-matte-black font-medium text-base">
               Purchase #{purchase.refId.slice(-8).toUpperCase()}
@@ -153,7 +148,7 @@ export default function RenderActivityDetailCards({
           </View>
         </View>
 
-        <View className="bg-light-main-container/20 rounded-xl p-4 mb-4">
+        <View className="bg-light-main-container/35 rounded-xl p-4 mb-4">
           <View className="flex-row items-center mb-3">
             <Package size={16} color="#c71c4b" />
             <Text className="text-light-matte-black font-medium text-sm ml-2">
@@ -182,7 +177,7 @@ export default function RenderActivityDetailCards({
           </View>
         </View>
 
-        <View className="bg-light-main-container/20 rounded-xl p-4 mb-4">
+        <View className="bg-light-main-container/35 rounded-xl p-4 mb-4">
           <View className="flex-row items-center mb-3">
             <CreditCard size={16} color="#c71c4b" />
             <Text className="text-light-matte-black font-medium text-sm ml-2">
@@ -271,7 +266,7 @@ export default function RenderActivityDetailCards({
           </View>
         </View>
 
-        <View className="bg-light-main-container/20 rounded-xl p-4">
+        <View className="bg-light-main-container/35 rounded-xl p-4">
           <View className="flex-row items-center mb-3">
             <Link size={16} color="#c71c4b" />
             <Text className="text-light-matte-black font-medium text-sm ml-2">
@@ -370,38 +365,7 @@ export default function RenderActivityDetailCards({
         </View>
       </View>
 
-      {purchase.voucherCode && (
-        <View className="bg-white rounded-2xl p-4 shadow-sm">
-          <View className="flex-row items-center mb-4">
-            <Ticket size={20} color="#c71c4b" />
-            <Text className="text-light-matte-black font-bold text-lg ml-2">
-              Voucher Code
-            </Text>
-          </View>
-
-          <View className="bg-gradient-to-r from-light-primary-red/5 to-light-primary-red/10 rounded-xl p-4 border-2 border-dashed border-light-primary-red/30">
-            <View className="items-center">
-              <Text className="text-light-matte-black/60 text-sm mb-2">
-                Your voucher code is ready!
-              </Text>
-              <View className="bg-white rounded-lg p-4 w-full border border-light-primary-red/20">
-                <Text className="text-light-primary-red font-bold text-xl text-center font-mono tracking-wider">
-                  {purchase.voucherCode}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() =>
-                  copyToClipboard(purchase.voucherCode!, "Voucher code")
-                }
-                className="bg-light-primary-red rounded-lg px-6 py-3 mt-4 flex-row items-center"
-              >
-                <Copy size={16} color="white" />
-                <Text className="text-white font-medium ml-2">Copy Code</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
+      {purchase.voucherCode && <AditionalInformationCard purchase={purchase} />}
     </View>
   );
 }
