@@ -22,9 +22,10 @@ import {
   View,
 } from "react-native";
 import ChainSelector from "@/components/common/ChainSelector";
+import TakumiWalletHeaderLogo from "@/components/common/TakumiWalletHeaderLogo";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
-import { copyToClipboard } from "@/utils/authUtils";
+import { copyToClipboard } from "@/utils/helperUtils";
 import BalanceSectionSkeleton from "./BalanceSectionSkeleton";
 import RecievePaymentModal from "./RecievePaymentModal";
 
@@ -128,16 +129,7 @@ export default function BalanceSection() {
         <View className="bg-light rounded-2xl w-full p-5 shadow-sm">
           <View className="flex-row items-center justify-between mb-5">
             <View className="flex-row items-center">
-              <View className="bg-light-primary-red/10 w-8 relative p-2- aspect-square rounded-md mr-2">
-                <Image
-                  source={require("@/assets/images/takumipay-no-bg.png")}
-                  style={{ width: 20, height: 18 }}
-                  className="absolute bottom-[5px] left-1"
-                />
-              </View>
-              <Text className="font-bold text-light-matte-black text-base">
-                Takumi W
-              </Text>
+              <TakumiWalletHeaderLogo width={100} color="#c71c4b" />
             </View>
 
             <ChainSelector />
