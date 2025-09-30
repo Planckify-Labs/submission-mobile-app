@@ -1,6 +1,7 @@
 import { Check, Plus } from "lucide-react-native";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
+import OptimizedImage from "@/components/common/OptimizedImage";
 import { TCryptoAsset } from "@/constants/types/assetTypes";
 
 type AssetItemProps = {
@@ -30,8 +31,13 @@ const AssetItem = ({
       onLongPress={onLongPress}
     >
       <View className="flex-row items-center flex-1">
-        <View className="w-10 h-10 rounded-full bg-light-matte-black/10 items-center justify-center mr-3">
-          <Text className="text-lg">{item.logo}</Text>
+        <View className="w-10 h-10 rounded-full items-center justify-center mr-3 overflow-hidden">
+          <OptimizedImage
+            source={{ uri: item.logo }}
+            style={{ width: 30, height: 30 }}
+            contentFit="contain"
+            alt={`${item.name} logo`}
+          />
         </View>
         <View className="flex-1">
           <Text className="text-light-matte-black font-medium">

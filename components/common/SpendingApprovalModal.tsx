@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { formatUnits } from "viem";
 import type { TToken } from "@/api/types/token";
+import OptimizedImage from "./OptimizedImage";
 import PinConfirmationModal from "./PinConfirmationModal";
 
 const { height } = Dimensions.get("window");
@@ -217,12 +218,12 @@ const SpendingApprovalModal: React.FC<SpendingApprovalModalProps> = ({
                       Token
                     </Text>
                     <View className="flex-row items-center">
-                      <View className="bg-light-primary-red/10 w-6 h-6 rounded-full mr-2 items-center justify-center overflow-hidden">
+                      <View className="w-6 aspect-square rounded-full mr-2 items-center justify-center overflow-hidden">
                         {token.logoUrl ? (
-                          <Image
+                          <OptimizedImage
                             source={{ uri: token.logoUrl }}
-                            className="w-full h-full"
-                            resizeMode="cover"
+                            style={{ width: 15, height: 15 }}
+                            contentFit="contain"
                           />
                         ) : (
                           <Text className="text-light-primary-red text-xs font-bold">

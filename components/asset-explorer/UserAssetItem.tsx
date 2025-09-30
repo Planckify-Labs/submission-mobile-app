@@ -2,6 +2,7 @@ import { Trash2 } from "lucide-react-native";
 import React from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { TCryptoAsset } from "@/constants/types/assetTypes";
+import OptimizedImage from "../common/OptimizedImage";
 
 type UserAssetItemProps = {
   item: TCryptoAsset;
@@ -18,10 +19,13 @@ const UserAssetItem = ({ item, removeAsset }: UserAssetItemProps) => {
     >
       <View className="flex-row justify-between items-center">
         <View className="flex-row items-center">
-          <View className="w-10 h-10 bg-light-primary-red/10 rounded-full items-center justify-center mr-3">
-            <Text className="text-light-primary-red text-lg font-bold">
-              {item.logo}
-            </Text>
+          <View className="w-10 h-10 rounded-full items-center justify-center mr-3">
+            <OptimizedImage
+              source={{ uri: item.logo }}
+              style={{ width: 30, height: 30 }}
+              contentFit="contain"
+              alt={`${item.name} logo`}
+            />
           </View>
           <View>
             <Text className="text-light-matte-black font-bold">

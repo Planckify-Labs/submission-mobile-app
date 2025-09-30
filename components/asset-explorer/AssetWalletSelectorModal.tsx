@@ -15,6 +15,7 @@ import {
 import { TAssetWalletSelectorModalProps } from "@/constants/types/assetTypes";
 import { TWallet } from "@/constants/types/walletTypes";
 import { loadWalletAssets, saveWalletAssets } from "@/utils/assetUtils";
+import OptimizedImage from "../common/OptimizedImage";
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;
@@ -34,7 +35,6 @@ const AssetWalletSelectorModal = ({
   >({});
   const [isLoading, setIsLoading] = useState(false);
 
-  // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
 
@@ -43,7 +43,6 @@ const AssetWalletSelectorModal = ({
       setSelectedWallets([0]);
       checkExistingAssets();
 
-      // Start animations
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -384,10 +383,13 @@ const AssetWalletSelectorModal = ({
                           key={item.id}
                           className="flex-row items-center mr-3"
                         >
-                          <View className="w-6 h-6 bg-light-primary-red/10 rounded-full items-center justify-center mr-1">
-                            <Text className="text-light-primary-red font-bold text-xs">
-                              {item.logo}
-                            </Text>
+                          <View className="w-6 aspect-square bg-light-primary-red/10 rounded-full items-center justify-center mr-1">
+                            <OptimizedImage
+                              source={{ uri: item.logo }}
+                              style={{ width: 20, height: 20 }}
+                              contentFit="contain"
+                              alt={`${item.name} logo`}
+                            />
                           </View>
                           <Text className="text-light-matte-black text-xs">
                             {item.symbol}
@@ -404,9 +406,14 @@ const AssetWalletSelectorModal = ({
                 ) : (
                   <View className="flex-row items-center">
                     <View className="w-8 h-8 bg-light-primary-red/10 rounded-full items-center justify-center mr-2">
-                      <Text className="text-light-primary-red font-bold">
-                        {asset?.logo}
-                      </Text>
+                      {asset && (
+                        <OptimizedImage
+                          source={{ uri: asset.logo }}
+                          style={{ width: 20, height: 20 }}
+                          contentFit="contain"
+                          alt={`${asset.name} logo`}
+                        />
+                      )}
                     </View>
                     <Text className="text-light-matte-black font-bold">
                       {asset?.name} ({asset?.symbol})

@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { Search } from "lucide-react-native";
 import React, {
   memo,
@@ -9,7 +10,6 @@ import React, {
 } from "react";
 import {
   Animated,
-  Image,
   Modal,
   PanResponder,
   Pressable,
@@ -22,6 +22,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { TToken } from "@/api/types/token";
+import OptimizedImage from "../common/OptimizedImage";
 
 interface TokenSelectorModalProps {
   visible: boolean;
@@ -45,7 +46,6 @@ const TokenSelectorModal = memo(function TokenSelectorModal({
   const [searchQuery, setSearchQuery] = useState("");
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(300)).current;
-
 
   const filteredTokens = useMemo(() => {
     if (!tokens) return [];
@@ -226,12 +226,12 @@ const TokenSelectorModal = memo(function TokenSelectorModal({
           className={containerStyle}
         >
           <View className="flex-row items-center">
-            <View className="w-10 h-10 rounded-full mr-3 items-center justify-center overflow-hidden">
-              {token.logoUrl ? (
-                <Image
+            <View className="w-10 aspect-square rounded-full mr-3 items-center justify-center overflow-hidden">
+              {token?.logoUrl ? (
+                <OptimizedImage
                   source={{ uri: token.logoUrl }}
-                  className="w-full h-full"
-                  resizeMode="cover"
+                  style={{ width: 30, height: 30 }}
+                  contentFit="contain"
                 />
               ) : (
                 <Text className={symbolStyle}>{token.symbol.charAt(0)}</Text>

@@ -18,6 +18,7 @@ import { TExchangeRate } from "@/api/types/exchange-rate";
 import type { TToken } from "@/api/types/token";
 import ChainSelector from "@/components/common/ChainSelector";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import OptimizedImage from "@/components/common/OptimizedImage";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import SpendingApprovalModal from "@/components/common/SpendingApprovalModal";
 import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
@@ -767,10 +768,12 @@ export default function PaymentScreen() {
                   onPress={() => setTokenModalVisible(true)}
                 >
                   <View className="flex-row items-center">
-                    <View className="bg-light-primary-red/10 p-2 rounded-full mr-3">
-                      <Text className="text-light-primary-red font-bold text-xs">
-                        {selectedToken?.symbol?.charAt(0) || "?"}
-                      </Text>
+                    <View className="rounded-full mr-3 overflow-hidden">
+                      <OptimizedImage
+                        source={{ uri: selectedToken?.logoUrl }}
+                        style={{ width: 35, height: 35 }}
+                        contentFit="contain"
+                      />
                     </View>
                     <View>
                       <Text className="text-light-matte-black font-medium">

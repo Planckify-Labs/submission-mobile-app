@@ -14,7 +14,6 @@ import {
   Alert,
   Animated,
   Easing,
-  Image,
   ScrollView,
   StatusBar,
   Text,
@@ -27,6 +26,7 @@ import { erc20Abi, formatUnits, parseUnits } from "viem";
 import type { TToken } from "@/api/types/token";
 import ChainSelector from "@/components/common/ChainSelector";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import OptimizedImage from "@/components/common/OptimizedImage";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
@@ -531,10 +531,10 @@ export default function SendScreen() {
                   >
                     <View className="w-5 h-5 rounded-full mr-2 items-center justify-center overflow-hidden bg-light-primary-red/10">
                       {selectedToken?.logoUrl ? (
-                        <Image
+                        <OptimizedImage
                           source={{ uri: selectedToken.logoUrl }}
-                          className="w-full h-full"
-                          resizeMode="cover"
+                          style={{ width: 20, height: 20 }}
+                          contentFit="contain"
                         />
                       ) : (
                         <Text className="text-light-primary-red text-[10px] font-bold">
