@@ -16,6 +16,7 @@ import type {
 import * as walletService from "@/services/walletService";
 import { getPublicClient, getWalletClient } from "@/utils/clients";
 import { createWalletFromParams } from "@/utils/walletUtils";
+import { useBlockchainsWithStorage } from "./useBlockchainsWithStorage";
 
 export function useWallet() {
   const { deferredTask } = usePerformance();
@@ -99,6 +100,7 @@ export function useWallet() {
   const setActiveChainMutation = useMutation({
     mutationFn: async (chain: ChainConfig) => {
       await SecureStore.setItemAsync("active_chain", JSON.stringify(chain));
+      console.log("activeChain", chain.chain.id);
       return chain;
     },
     onSuccess: (chain) => {
@@ -186,15 +188,15 @@ export function useWallet() {
     [wallets, activeWalletIndex, saveWallets, setActiveWallet],
   );
 
+  const { data: blockchains } = useBlockchainsWithStorage({ isActive: true });
   const changeActiveChain = useCallback(
     async (chainId: number) => {
+      console.log("pressed chain id: ", chainId);
       try {
-        const { blockchainApi } = await import("@/api/endpoints/blockchains");
-
-        const blockchains = await blockchainApi.searchBlockchains({
-          chainId,
-        });
-        const blockchain = blockchains[0];
+        if (!blockchains) return false;
+        const blockchain = blockchains.find(
+          (blockchain) => blockchain.chainId === chainId,
+        );
 
         if (!blockchain) {
           console.error(`No blockchain found with chainId ${chainId}`);
@@ -237,7 +239,7 @@ export function useWallet() {
         return false;
       }
     },
-    [setActiveChainMutation],
+    [setActiveChainMutation, blockchains],
   );
 
   const getWalletAccount = useCallback(
