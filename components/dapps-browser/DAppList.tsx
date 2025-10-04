@@ -1,3 +1,4 @@
+import { FlashList } from "@shopify/flash-list";
 import { useQueries } from "@tanstack/react-query";
 import {
   ArrowLeftRight,
@@ -178,15 +179,23 @@ export default function DAppList({
           </View>
         </View>
 
-        <View className="px-4 gap-4">
+        <View className="px-4 flex-1">
           {isLoadingThisCategory ? (
-            Array.from({ length: 3 }).map((_, index) => (
-              <DAppCardSkeleton key={`skeleton-${category.id}-${index}`} />
-            ))
+            <View className="gap-4">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <DAppCardSkeleton key={`skeleton-${category.id}-${index}`} />
+              ))}
+            </View>
           ) : dapps.length > 0 ? (
-            dapps.map((dapp: TDapp) => (
-              <DAppCard key={dapp.id} dapp={dapp} onPress={onNavigateToDapp} />
-            ))
+            <FlashList
+              data={dapps}
+              renderItem={({ item }: { item: TDapp }) => (
+                <DAppCard dapp={item} onPress={onNavigateToDapp} />
+              )}
+              keyExtractor={(item: TDapp) => item.id}
+              ItemSeparatorComponent={() => <View className="h-4" />}
+              showsVerticalScrollIndicator={false}
+            />
           ) : (
             <View className="flex-1 justify-center items-center py-8">
               <Text className="text-light-matte-black/60 text-center">
