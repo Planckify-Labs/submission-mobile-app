@@ -1,5 +1,4 @@
 import { type QueryKey, useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback } from "react";
 import { queryClient } from "@/app/_layout";
 
 type TUseRQGlobalState<T> = {
@@ -32,12 +31,9 @@ export default function useRQGlobalState<T>({
     },
   });
 
-  const setNewData = useCallback(
-    (newData: T) => {
-      mutate(newData);
-    },
-    [mutate],
-  );
+  const setNewData = (newData: T) => {
+    mutate(newData);
+  };
 
   return { data, setNewData };
 }
