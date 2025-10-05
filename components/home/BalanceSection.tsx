@@ -42,7 +42,6 @@ export default function BalanceSection() {
   const [selectedToken, setSelectedToken] = useState(
     activeChain?.chain.nativeCurrency?.symbol || "ETH",
   );
-  // Keep selectedToken in sync with activeChain changes
   useEffect(() => {
     setSelectedToken(activeChain?.chain.nativeCurrency?.symbol || "ETH");
   }, [activeChain?.chain?.nativeCurrency?.symbol]);

@@ -148,24 +148,13 @@ const ChainSelector = memo(() => {
           }`}
           onPress={() => handleChainSelect(chain.chain.id)}
         >
-          {chain.iconUrl && !hasIconError ? (
-            <Image
-              source={{ uri: chain.iconUrl }}
-              style={{ width: 24, height: 24 }}
-              className="mr-3"
-              onError={() => handleIconError(chain.chain.id)}
-              defaultSource={require("@/assets/images/takumipay-logo.png")}
-            />
-          ) : (
-            <View
-              style={{ width: 24, height: 24 }}
-              className="bg-gray-200 rounded-full mr-3 items-center justify-center"
-            >
-              <Text className="text-xs font-bold">
-                {chain.chain.name.substring(0, 1)}
-              </Text>
-            </View>
-          )}
+          <Image
+            source={{ uri: chain.iconUrl }}
+            style={{ width: 24, height: 24 }}
+            className="mr-3 rounded-full"
+            onError={() => handleIconError(chain.chain.id)}
+            defaultSource={require("@/assets/images/takumipay-logo.png")}
+          />
 
           <View className="flex-1">
             <Text className="text-light-matte-black font-bold">
@@ -207,7 +196,7 @@ const ChainSelector = memo(() => {
               uri: activeChain.iconUrl,
             }}
             style={{ width: 20, height: 20 }}
-            className="mr-2"
+            className="mr-2 rounded-full"
             onError={() => setMainIconError(true)}
             defaultSource={require("@/assets/images/takumipay-logo.png")}
           />
