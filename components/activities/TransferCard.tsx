@@ -72,7 +72,7 @@ const TransferCard = React.memo(
                   if (!cleanAmount || cleanAmount === "0") return "0";
                   return formatUnits(
                     BigInt(cleanAmount),
-                    transaction.token.decimals,
+                    transaction.token.decimals ?? 18,
                   );
                 } catch (error) {
                   console.warn("Error formatting amount:", error);

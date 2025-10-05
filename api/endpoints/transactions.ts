@@ -10,23 +10,26 @@ import type {
   TCreateTransactionRequest,
   TTransaction,
   TTransactionListResponse,
-  TTransactionSearchParams,
+  TTransactionType,
 } from "../types/transaction";
 import { createItem, fetchById, searchItems } from "../utils/api-helpers";
 
 export const transactionApi = {
-  searchTransactions: async (params: TTransactionSearchParams = {}) => {
+  getMyHistory: async (
+    params: { type?: TTransactionType; take?: number } = {},
+  ) => {
     const isAuthed = await isAuthenticatedForActiveWallet();
     if (!isAuthed) {
       return [] as TTransactionListResponse;
     }
 
     const searchParams = { take: 10, ...params };
+    
     return searchItems<TTransactionListResponse>(
       api,
-      "transactions/search",
+      "transactions/my-history",
       searchParams,
-      "Failed to search transactions",
+      "Failed to fetch transaction history",
     );
   },
 

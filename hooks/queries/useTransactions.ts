@@ -4,27 +4,27 @@ import { transactionApi } from "@/api/endpoints/transactions";
 import type {
   TCreateTransactionRequest,
   TTransaction,
-  TTransactionSearchParams,
+  TTransactionType,
 } from "@/api/types/transaction";
 import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 
-export const useTransactionSearch = (
-  params: TTransactionSearchParams = {},
+export const useTransactionHistory = (
+  params: { type?: TTransactionType; take?: number } = {},
   options?: { enabled?: boolean },
 ) => {
   const { isAuthenticated, isLoading } = useIsAuthenticated();
+  
   return useQuery({
-    queryKey: transactionsQueryKeys.search(params),
+    queryKey: transactionsQueryKeys.history(params),
     queryFn: async () => {
-      const response = await transactionApi.searchTransactions(params);
+      const response = await transactionApi.getMyHistory(params);
       return response;
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     enabled:
       options?.enabled !== false &&
-      !!params.senderAddress &&
       isAuthenticated === true &&
       isLoading === false,
     retry: false,

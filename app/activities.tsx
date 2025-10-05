@@ -27,8 +27,7 @@ import TransferCard from "@/components/activities/TransferCard";
 import TransferCardSkeleton from "@/components/activities/TransferCardSkeleton";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
-import { useTransactionSearch } from "@/hooks/queries/useTransactions";
-import { useWallet } from "@/hooks/useWallet";
+import { useTransactionHistory } from "@/hooks/queries/useTransactions";
 
 type ListItem = TTransaction | { id: string };
 
@@ -69,7 +68,6 @@ export default function ActivitiesScreen() {
     "purchase" | "transfers"
   >("purchase");
   const horizontalScrollRef = useRef<FlatList>(null);
-  const { activeWallet } = useWallet();
 
   useEffect(() => {
     if (isAuthenticated === false && !isAuthLoading) {
@@ -81,8 +79,7 @@ export default function ActivitiesScreen() {
     data: transactions,
     isLoading: isTransactionsLoading,
     refetch,
-  } = useTransactionSearch({
-    senderAddress: activeWallet?.address,
+  } = useTransactionHistory({
     type: activeActivity === "purchase" ? "PAYMENT" : "TRANSFER",
   });
 

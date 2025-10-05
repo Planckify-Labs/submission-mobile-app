@@ -13,7 +13,7 @@ export default function TransferDetailHeading({
   transfer,
 }: TransferDetailHeadingProps) {
   const formatAmount = () => {
-    return formatUnits(BigInt(transfer.amount), transfer.token.decimals);
+    return formatUnits(BigInt(transfer.amount), transfer.token.decimals ?? 18);
   };
   return (
     <View className="items-center mb-6">

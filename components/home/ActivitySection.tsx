@@ -1,12 +1,12 @@
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight, Wallet2 } from "lucide-react-native";
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import { formatUnits } from "viem/utils";
 import { TTransaction } from "@/api/types/transaction";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
-import { useTransactionSearch } from "@/hooks/queries/useTransactions";
+import { useTransactionHistory } from "@/hooks/queries/useTransactions";
 import { useWallet } from "@/hooks/useWallet";
 import { truncateAddress } from "@/utils/walletUtils";
 import OptimizedImage from "../common/OptimizedImage";
@@ -14,25 +14,45 @@ import OptimizedImage from "../common/OptimizedImage";
 export default function ActivitySection() {
   const { activeWallet } = useWallet();
   const { isAuthenticated, isLoading: isAuthLoading } = useIsAuthenticated();
+  const previousWalletAddress = useRef<string | undefined>(undefined);
 
   const shouldFetchTransactions = Boolean(
     isAuthenticated && !isAuthLoading && activeWallet?.address,
   );
 
-  const { data: transferHistory } = useTransactionSearch(
-    {
-      type: "TRANSFER",
-      senderAddress: activeWallet?.address,
-    },
-    { enabled: shouldFetchTransactions },
-  );
-  const { data: paymentHistory } = useTransactionSearch(
-    {
-      type: "PAYMENT",
-      senderAddress: activeWallet?.address,
-    },
-    { enabled: shouldFetchTransactions },
-  );
+  const { data: transferHistory, refetch: refetchTransferHistory } =
+    useTransactionHistory(
+      { type: "TRANSFER", take: 4 },
+      { enabled: shouldFetchTransactions },
+    );
+  const { data: paymentHistory, refetch: refetchPaymentHistory } =
+    useTransactionHistory(
+      { type: "PAYMENT", take: 4 },
+      { enabled: shouldFetchTransactions },
+    );
+
+  useEffect(() => {
+    const currentWalletAddress = activeWallet?.address;
+
+    if (
+      currentWalletAddress &&
+      previousWalletAddress.current !== undefined &&
+      previousWalletAddress.current !== currentWalletAddress &&
+      isAuthenticated &&
+      !isAuthLoading
+    ) {
+      refetchTransferHistory();
+      refetchPaymentHistory();
+    }
+
+    previousWalletAddress.current = currentWalletAddress;
+  }, [
+    activeWallet?.address,
+    isAuthenticated,
+    isAuthLoading,
+    refetchTransferHistory,
+    refetchPaymentHistory,
+  ]);
 
   const purchaseHistoryButton = (payment: TTransaction) => (
     <TouchableOpacity
@@ -77,10 +97,12 @@ export default function ActivitySection() {
         <Text className="text-light-matte-black font-bold text-xs">
           {(() => {
             try {
-              // Clean the amount string and convert to BigInt
               const cleanAmount = transfer.amount.replace(/[^0-9]/g, "");
               if (!cleanAmount || cleanAmount === "0") return "0";
-              return formatUnits(BigInt(cleanAmount), transfer.token.decimals);
+              return formatUnits(
+                BigInt(cleanAmount),
+                transfer.token.decimals ?? 18,
+              );
             } catch (error) {
               console.warn("Error formatting transfer amount:", error);
               return "0";
@@ -222,7 +244,7 @@ export default function ActivitySection() {
           {transferHistory?.[0] !== undefined && (
             <View>
               <FlashList
-                data={transferHistory?.slice(0, 4) || []}
+                data={transferHistory || []}
                 renderItem={({ item }) => transferHistoryButton(item)}
                 keyExtractor={(item) => item.id}
                 numColumns={4}

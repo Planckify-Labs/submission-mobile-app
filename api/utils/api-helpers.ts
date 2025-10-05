@@ -43,7 +43,12 @@ export const searchItems = async <T>(
 ): Promise<T> => {
   return apiCall(() => {
     const searchParams = buildSearchParams(params);
-    return api.get(endpoint, { searchParams }).json<T>();
+    
+    // Construct URL manually to ensure parameters are included
+    const queryString = searchParams.toString();
+    const fullUrl = queryString ? `${endpoint}?${queryString}` : endpoint;
+    
+    return api.get(fullUrl).json<T>();
   }, errorMessage);
 };
 
