@@ -87,7 +87,7 @@ export default function RecievePaymentModal({
           <View className="px-6 flex-1">
             <View className="flex-row items-center justify-between mb-6">
               <Text className="text-light-matte-black text-xl font-bold">
-                Receive Payment
+                Receive Funds
               </Text>
               <Pressable
                 onPress={closeModal}
@@ -120,20 +120,20 @@ export default function RecievePaymentModal({
                       }}
                       outerEyesOptions={{
                         topLeft: {
-                          borderRadius: 8,
+                          borderRadius: 15,
                           color: "#c71c4b",
                         },
                         topRight: {
-                          borderRadius: 8,
+                          borderRadius: 15,
                           color: "#c71c4b",
                         },
                         bottomLeft: {
-                          borderRadius: 8,
+                          borderRadius: 15,
                           color: "#c71c4b",
                         },
                       }}
                       innerEyesOptions={{
-                        borderRadius: 4,
+                        borderRadius: 10,
                         color: "#20222c",
                       }}
                       logo={{
