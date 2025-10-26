@@ -25,8 +25,6 @@ const ChainSelector = memo(() => {
   const [modalVisible, setModalVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
-  const [mainIconError, setMainIconError] = useState(false);
-  const [iconErrors, setIconErrors] = useState<Record<number, boolean>>({});
 
   console.log("activeChain", activeChain.iconUrl);
 
@@ -131,14 +129,22 @@ const ChainSelector = memo(() => {
     }),
   ).current;
 
-  const handleIconError = useCallback((chainId: number) => {
-    setIconErrors((prev) => ({ ...prev, [chainId]: true }));
-  }, []);
-
   const renderChainItem = useCallback(
-    (chain: any) => {
+    (chain: {
+      chain: {
+        id: number;
+        name: string;
+        nativeCurrency: {
+          name: string | undefined;
+          symbol: string | undefined;
+          decimals: number | undefined;
+        };
+      };
+      iconUrl: string | undefined;
+      isTestnet: boolean;
+      blockchainId: string;
+    }) => {
       const isActive = activeChain.chain.id === chain.chain.id;
-      const hasIconError = iconErrors[chain.chain.id];
 
       return (
         <Pressable
@@ -152,7 +158,6 @@ const ChainSelector = memo(() => {
             source={{ uri: chain.iconUrl }}
             style={{ width: 24, height: 24 }}
             className="mr-3 rounded-full"
-            onError={() => handleIconError(chain.chain.id)}
             defaultSource={require("@/assets/images/takumipay-logo.png")}
           />
 
@@ -161,7 +166,7 @@ const ChainSelector = memo(() => {
               {chain.chain.name}
             </Text>
             <Text className="text-light-matte-black/70 text-sm">
-              {chain.chain.nativeCurrency.symbol}
+              {chain.chain.nativeCurrency.symbol || "N/A"}
             </Text>
           </View>
 
@@ -181,7 +186,7 @@ const ChainSelector = memo(() => {
         </Pressable>
       );
     },
-    [activeChain, handleChainSelect, iconErrors, handleIconError],
+    [activeChain, handleChainSelect],
   );
 
   return (
@@ -190,27 +195,14 @@ const ChainSelector = memo(() => {
         onPress={openModal}
         className="flex-row items-center bg-light-main-container px-3 py-2 rounded-full"
       >
-        {activeChain.iconUrl && !mainIconError ? (
-          <Image
-            source={{
-              uri: activeChain.iconUrl,
-            }}
-            style={{ width: 20, height: 20 }}
-            className="mr-2 rounded-full"
-            onError={() => setMainIconError(true)}
-            defaultSource={require("@/assets/images/takumipay-logo.png")}
-          />
-        ) : (
-          <View
-            style={{ width: 20, height: 20 }}
-            className="bg-gray-200 rounded-full mr-2 items-center justify-center"
-          >
-            <Text className="text-xs font-bold">
-              {activeChain.chain.name.substring(0, 1)}
-            </Text>
-          </View>
-        )}
-
+        <Image
+          source={{
+            uri: activeChain.iconUrl,
+          }}
+          style={{ width: 20, height: 20 }}
+          className="mr-2 rounded-full bg-light-matte-black/5"
+          defaultSource={require("@/assets/images/takumipay-logo.png")}
+        />
         <Text className="text-light-matte-black text-xs font-medium mr-2">
           {activeChain.chain.name}
         </Text>
