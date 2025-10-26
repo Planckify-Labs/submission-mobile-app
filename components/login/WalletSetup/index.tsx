@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useNavigation } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, BackHandler, StatusBar } from "react-native";
+import { BackHandler, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { english, generateMnemonic } from "viem/accounts";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
@@ -115,9 +115,8 @@ export default function WalletSetup() {
 
           if (progress.step === 3) {
             setSelectedWords({});
-            Alert.alert(
-              "Verification Required",
-              "For security reasons, you'll need to verify your seed phrase again.",
+            console.log(
+              "Verification Required: For security reasons, you'll need to verify your seed phrase again.",
             );
           } else {
             setSelectedWords(progress.selectedWords || {});
@@ -125,9 +124,8 @@ export default function WalletSetup() {
 
           generateWordOptions(progress.mnemonic);
 
-          Alert.alert(
-            "Setup Resumed",
-            "Your previous wallet setup has been restored.",
+          console.log(
+            "Setup Resumed: Your previous wallet setup has been restored.",
           );
         } else {
           const generatedMnemonic = generateMnemonic(english).split(" ");
@@ -211,15 +209,14 @@ export default function WalletSetup() {
       } else {
         timeouts.forEach(clearTimeout);
         setIsLoading(false);
-        Alert.alert("Error", "Failed to create wallet");
+        console.error("Error: Failed to create wallet");
       }
     } catch (error) {
       timeouts.forEach(clearTimeout);
       console.error("Wallet creation error:", error);
       setIsLoading(false);
-      Alert.alert(
-        "Error",
-        "An unexpected error occurred while creating the wallet",
+      console.error(
+        "Error: An unexpected error occurred while creating the wallet",
       );
     }
   }, [mnemonic, addWallet, clearProgress, createDelay]);
@@ -228,14 +225,10 @@ export default function WalletSetup() {
     if (isLoading) return;
 
     if (currentStep === 0) {
-      Alert.alert(
-        "Exit Setup?",
-        "Are you sure you want to exit wallet setup? Your progress will be lost.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Exit", onPress: () => router.back() },
-        ],
+      console.log(
+        "Exit Setup?: Are you sure you want to exit wallet setup? Your progress will be lost.",
       );
+      router.back();
     } else {
       setCurrentStep(currentStep - 1);
     }

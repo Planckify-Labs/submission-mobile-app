@@ -1,7 +1,6 @@
 import { Check, X } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -69,7 +68,7 @@ export default function WalletRenameModal({
     const trimmedName = name.trim();
 
     if (!trimmedName) {
-      Alert.alert("Error", "Wallet name cannot be empty");
+      console.error("Error: Wallet name cannot be empty");
       return;
     }
 
@@ -79,7 +78,7 @@ export default function WalletRenameModal({
     }
 
     if (trimmedName.length > 32) {
-      Alert.alert("Error", "Wallet name must be 32 characters or less");
+      console.error("Error: Wallet name must be 32 characters or less");
       return;
     }
 
@@ -88,7 +87,7 @@ export default function WalletRenameModal({
       await onRename?.(trimmedName);
       onClose();
     } catch (_error) {
-      Alert.alert("Error", "Failed to rename wallet");
+      console.error("Error: Failed to rename wallet");
     } finally {
       setLoading(false);
     }

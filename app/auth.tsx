@@ -3,14 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { ArrowLeft, Shield, Wallet2 } from "lucide-react-native";
 import React, { useCallback, useState } from "react";
-import {
-  Alert,
-  Image,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
@@ -77,7 +70,7 @@ export default function AuthScreen() {
 
   const handleSignMessage = useCallback(async () => {
     if (!nonceData?.message) {
-      Alert.alert("Error", "Failed to get authentication message");
+      console.error("Error: Failed to get authentication message");
       return;
     }
 
@@ -135,11 +128,11 @@ export default function AuthScreen() {
       router.replace("/");
     } catch (error: any) {
       console.error("Authentication error:", error);
-      setIsLoading(false);
-      Alert.alert(
-        "Authentication Failed",
+      console.error(
+        "Authentication Failed:",
         error?.message || "Failed to authenticate with wallet",
       );
+      setIsLoading(false);
     }
   }, [
     nonceData,
@@ -155,7 +148,7 @@ export default function AuthScreen() {
 
   const startAuthentication = useCallback(() => {
     if (!activeWallet?.address) {
-      Alert.alert("Error", "No wallet selected");
+      console.error("Error: No wallet selected");
       return;
     }
 

@@ -8,7 +8,6 @@ import {
 } from "lucide-react-native";
 import React, { useState } from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   StatusBar,
@@ -33,21 +32,21 @@ export default function ImportPrivateKeyScreen() {
 
       const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
       if (!privateKeyRegex.test(text)) {
-        Alert.alert("Invalid Private Key", "Please paste a valid private key");
+        console.error("Invalid Private Key: Please paste a valid private key");
         return;
       }
 
       setPrivateKey(text);
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "Failed to paste from clipboard");
+      console.error("Error: Failed to paste from clipboard");
     }
   };
 
   const handleImport = () => {
     const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
     if (!privateKeyRegex.test(privateKey)) {
-      Alert.alert("Invalid Private Key", "Please enter a valid private key");
+      console.error("Invalid Private Key: Please enter a valid private key");
       return;
     }
 
@@ -70,19 +69,17 @@ export default function ImportPrivateKeyScreen() {
       .then((success) => {
         setIsLoading(false);
         if (success) {
-          Alert.alert("Success", "Wallet imported successfully", [
-            { text: "OK", onPress: () => router.replace("/") },
-          ]);
+          console.log("Success: Wallet imported successfully");
+          router.replace("/");
         } else {
-          Alert.alert("Error", "Failed to import wallet");
+          console.error("Error: Failed to import wallet");
         }
       })
       .catch((error) => {
         setIsLoading(false);
         console.error("Import error:", error);
-        Alert.alert(
-          "Error",
-          "An unexpected error occurred during wallet import",
+        console.error(
+          "Error: An unexpected error occurred during wallet import",
         );
       });
   };

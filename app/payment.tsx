@@ -2,7 +2,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, ChevronDown } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Image,
   ScrollView,
   StatusBar,
@@ -28,9 +27,9 @@ import type { TCreateTransactionParams } from "@/contracts/types/TTakumiWallet";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useCreateBooking } from "@/hooks/queries/useBookings";
-import { useSmartContractByChain } from "@/hooks/queries/useSmartContracts";
 import { useProductVariantById } from "@/hooks/queries/useProducts";
 import { useCreatePurchase } from "@/hooks/queries/usePurchases";
+import { useSmartContractByChain } from "@/hooks/queries/useSmartContracts";
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useWallet } from "@/hooks/useWallet";
 
@@ -52,10 +51,10 @@ export default function PaymentScreen() {
     return blockchains.find((b) => b.chainId === activeChain.chain.id);
   }, [blockchains, activeChain]);
 
-  const { 
-    data: smartContract, 
-    isLoading: isLoadingContract, 
-    error: contractError 
+  const {
+    data: smartContract,
+    isLoading: isLoadingContract,
+    error: contractError,
   } = useSmartContractByChain(activeBlockchain?.chainId || 0);
 
   const contractAddress = smartContract?.address;
@@ -278,7 +277,7 @@ export default function PaymentScreen() {
         !activeBlockchain ||
         !contractAddress
       ) {
-        Alert.alert("Error", "Missing required data for payment");
+        console.error("Error: Missing required data for payment");
         return;
       }
 
@@ -333,9 +332,8 @@ export default function PaymentScreen() {
           console.log("Purchase created:", purchaseResponse);
         } catch (purchaseError) {
           console.error("Failed to create purchase:", purchaseError);
-          Alert.alert(
-            "Warning",
-            "Purchase record creation failed, but transaction is proceeding. Please contact support if needed.",
+          console.error(
+            "Warning: Purchase record creation failed, but transaction is proceeding. Please contact support if needed.",
           );
         }
 
@@ -349,15 +347,15 @@ export default function PaymentScreen() {
           ? `${txHash.substring(0, 6)}...${txHash.substring(txHash.length - 4)}`
           : "";
 
-        Alert.alert(
-          "Payment Successful",
-          `You have successfully purchased ${variantData.name} for ${purchaseAmount} ${selectedToken.symbol}.\n\nBooking ID: ${booking.id}\nTransaction: ${txHashDisplay}\nRef ID: ${refId}`,
-          [{ text: "OK", onPress: () => router.back() }],
+        console.log(
+          "Payment Successful:",
+          `You have successfully purchased ${variantData.name} for ${purchaseAmount} ${selectedToken.symbol}. Booking ID: ${booking.id}, Transaction: ${txHashDisplay}, Ref ID: ${refId}`,
         );
+        router.back();
       } catch (error) {
         console.error("Payment error:", error);
-        Alert.alert(
-          "Payment Failed",
+        console.error(
+          "Payment Failed:",
           `An error occurred during the payment process: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       } finally {
@@ -390,7 +388,7 @@ export default function PaymentScreen() {
         !contractAddress ||
         !purchaseAmount
       ) {
-        Alert.alert("Error", "Missing required data for approval");
+        console.error("Error: Missing required data for approval");
         return;
       }
 
@@ -422,8 +420,8 @@ export default function PaymentScreen() {
         setApprovalModalVisible(false);
         setShouldShowApprovalModal(false);
         if (isUnlimited) {
-          Alert.alert(
-            "Unlimited Allowance Approved",
+          console.log(
+            "Unlimited Allowance Approved:",
             `You've granted unlimited spending permission to ${selectedToken.symbol}. Future transactions won't require approval.`,
           );
         }
@@ -433,8 +431,8 @@ export default function PaymentScreen() {
         }, 100);
       } catch (error) {
         console.error("Error approving spending:", error);
-        Alert.alert(
-          "Approval Failed",
+        console.error(
+          "Approval Failed:",
           `Failed to approve token spending: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       } finally {
@@ -456,14 +454,10 @@ export default function PaymentScreen() {
 
   const handlePaymentConfirmation = useCallback(async () => {
     if (!isAuthenticated) {
-      Alert.alert(
-        "Authentication Required",
-        "Please sign in with your wallet before proceeding with checkout.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Sign In", onPress: () => router.push("/auth") },
-        ],
+      console.error(
+        "Authentication Required: Please sign in with your wallet before proceeding with checkout.",
       );
+      router.push("/auth");
       return;
     }
 
@@ -519,7 +513,7 @@ export default function PaymentScreen() {
         await executePayment(pin);
       } catch (error) {
         console.error("Payment failed:", error);
-        Alert.alert("Payment Failed", "Please try again");
+        console.error("Payment Failed: Please try again");
       }
     },
     [executePayment],

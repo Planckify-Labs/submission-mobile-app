@@ -52,11 +52,11 @@ export default function ActivityDetailScreen() {
   const activityData = purchase || transfer;
 
   const handleSharePress = () => {
-    Alert.alert("Share", "Share receipt functionality coming soon!");
+    console.log("Share: Share receipt functionality coming soon!");
   };
 
   const handleHelpPress = () => {
-    Alert.alert("Help", "Need help with this transaction? Contact support.");
+    console.log("Help: Need help with this transaction? Contact support.");
   };
 
   if (isLoading) {

@@ -1,7 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { useWallet } from "@/hooks/useWallet";
 
 interface WalletImportProps {
@@ -28,20 +28,20 @@ export default function WalletImport({
       const text = await Clipboard.getStringAsync();
 
       if (!validateInput(text)) {
-        Alert.alert("Invalid Input", validationMessage);
+        console.error("Invalid Input:", validationMessage);
         return;
       }
 
       setInput(text);
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "Failed to paste from clipboard");
+      console.error("Error: Failed to paste from clipboard");
     }
   };
 
   const handleImport = () => {
     if (!validateInput(input)) {
-      Alert.alert("Invalid Input", validationMessage);
+      console.error("Invalid Input:", validationMessage);
       return;
     }
 
@@ -51,11 +51,10 @@ export default function WalletImport({
       name: walletName || undefined,
     }).then((success) => {
       if (success) {
-        Alert.alert("Success", "Wallet imported successfully", [
-          { text: "OK", onPress: () => router.replace("/") },
-        ]);
+        console.log("Success: Wallet imported successfully");
+        router.replace("/");
       } else {
-        Alert.alert("Error", "Failed to import wallet");
+        console.error("Error: Failed to import wallet");
       }
     });
   };

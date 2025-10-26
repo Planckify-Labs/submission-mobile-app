@@ -11,7 +11,6 @@ import {
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   ScrollView,
@@ -237,20 +236,20 @@ export default function SendScreen() {
 
   const validateInputs = useCallback(() => {
     if (!recipient) {
-      Alert.alert("Error", "Please enter a recipient address");
+      console.error("Error: Please enter a recipient address");
       return false;
     }
 
     if (!amount || parseFloat(amount) <= 0) {
-      Alert.alert("Error", "Please enter a valid amount");
+      console.error("Error: Please enter a valid amount");
       return false;
     }
 
     if (selectedToken?.isNativeCurrency !== false) {
       const amountInWei = parseUnits(amount, nativeDecimals);
       if (amountInWei > balance) {
-        Alert.alert(
-          "Insufficient Balance",
+        console.error(
+          "Insufficient Balance:",
           `You don't have enough ${activeChain.chain.nativeCurrency.symbol} to complete this transaction.`,
         );
         return false;
@@ -287,14 +286,14 @@ export default function SendScreen() {
       const walletClient = getClientForActiveWallet();
       if (!walletClient) {
         console.log("No wallet client available");
-        Alert.alert("Error", "Unable to initialize wallet client");
+        console.error("Error: Unable to initialize wallet client");
         setIsLoading(false);
         return;
       }
 
       if (!walletClient.account) {
         console.log("No account available in wallet client");
-        Alert.alert("Error", "Wallet account not properly configured");
+        console.error("Error: Wallet account not properly configured");
         setIsLoading(false);
         return;
       }
@@ -368,22 +367,22 @@ export default function SendScreen() {
 
         await new Promise((resolve) => setTimeout(resolve, 500));
 
-        Alert.alert(
-          "Transaction Sent",
-          `Transaction has been submitted.\nHash: ${hash}\nNetwork: ${activeChain.chain.name}`,
-          [{ text: "OK", onPress: () => router.back() }],
+        console.log(
+          "Transaction Sent:",
+          `Transaction has been submitted. Hash: ${hash}, Network: ${activeChain.chain.name}`,
         );
+        router.back();
       } catch (txError: any) {
         console.error("Transaction execution error:", txError);
-        Alert.alert(
-          "Transaction Failed",
+        console.error(
+          "Transaction Failed:",
           txError?.message || "Failed to execute transaction",
         );
       }
     } catch (error: any) {
       console.error("Send transaction setup error:", error);
-      Alert.alert(
-        "Transaction Setup Failed",
+      console.error(
+        "Transaction Setup Failed:",
         error?.message || "Failed to set up transaction",
       );
     } finally {

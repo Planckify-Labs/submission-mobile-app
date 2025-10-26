@@ -1,5 +1,4 @@
 import * as LocalAuthentication from "expo-local-authentication";
-import { Alert } from "react-native";
 
 export async function authenticateUser(
   promptMessage = "Authenticate to continue",
@@ -13,7 +12,7 @@ export async function authenticateUser(
     return result.success;
   } catch (error) {
     console.error("Authentication error:", error);
-    Alert.alert("Error", "Authentication failed");
+    console.error("Error: Authentication failed");
     return false;
   }
 }

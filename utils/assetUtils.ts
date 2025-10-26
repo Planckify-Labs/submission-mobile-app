@@ -1,5 +1,4 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Alert } from "react-native";
 import {
   TCryptoAsset,
   TExtendedCryptoAsset,
@@ -18,11 +17,11 @@ export function addAsset(
   asset: TCryptoAsset,
 ): TCryptoAsset[] {
   if (isAssetAdded(userAssets, asset.id)) {
-    Alert.alert("Already Added", `${asset.name} is already in your assets`);
+    console.log("Already Added:", `${asset.name} is already in your assets`);
     return userAssets;
   }
 
-  Alert.alert("Asset Added", `${asset.name} has been added to your assets`);
+  console.log("Asset Added:", `${asset.name} has been added to your assets`);
   return [...userAssets, asset];
 }
 
@@ -35,15 +34,15 @@ export function addMultipleAssets(
   );
 
   if (newAssets.length === 0) {
-    Alert.alert(
-      "No New Assets",
+    console.log(
+      "No New Assets:",
       "All selected assets are already in your list",
     );
     return userAssets;
   }
 
-  Alert.alert(
-    "Assets Added",
+  console.log(
+    "Assets Added:",
     `${newAssets.length} asset${newAssets.length > 1 ? "s" : ""} added to your list`,
   );
 
@@ -64,7 +63,7 @@ export function addCustomToken(
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       if (!tokenAddress || tokenAddress.length < 10) {
-        Alert.alert("Invalid Address", "Please enter a valid token address");
+        console.error("Invalid Address: Please enter a valid token address");
         reject(new Error("Invalid address"));
         return;
       }
@@ -80,7 +79,7 @@ export function addCustomToken(
         contractAddress: tokenAddress,
       };
 
-      Alert.alert("Token Added", `Custom token has been added to your assets`);
+      console.log("Token Added:", `Custom token has been added to your assets`);
       resolve([...userAssets, newToken as TCryptoAsset]);
     }, 1500);
   });

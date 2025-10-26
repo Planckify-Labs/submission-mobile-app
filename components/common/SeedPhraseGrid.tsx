@@ -64,7 +64,7 @@ export default function SeedPhraseGrid({
           className="flex-row items-center justify-center mb-5 bg-light gap-2 p-4 rounded-xl"
           onPress={() => {
             Clipboard.setStringAsync(mnemonic.join(" "));
-            Alert.alert("Copied", "Secret phrase copied to clipboard");
+            console.log("Copied: Secret phrase copied to clipboard");
           }}
         >
           <Copy size={18} color="#c71c4b" className="mr-2" />

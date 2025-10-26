@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Image,
   Pressable,
   StatusBar,
@@ -40,11 +39,10 @@ export default function ScanToPay() {
         params: { recipientAddress: dataFromBarCode },
       });
     } else {
-      Alert.alert(
-        "Invalid QR Code",
-        "The scanned QR code does not contain a valid wallet address.",
-        [{ text: "Scan Again", onPress: () => setScanned(false) }],
+      console.error(
+        "Invalid QR Code: The scanned QR code does not contain a valid wallet address.",
       );
+      setScanned(false);
     }
   };
 

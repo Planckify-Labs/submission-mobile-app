@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useMemo } from "react";
-import { Alert, InteractionManager } from "react-native";
+import { InteractionManager } from "react-native";
 import type { Account, PublicClient, WalletClient } from "viem";
 import { usePerformance } from "@/components/providers/PerformanceProvider";
 import {
@@ -81,7 +81,7 @@ export function useWallet() {
     },
     onError: (error) => {
       console.error("Failed to save wallets:", error);
-      Alert.alert("Error", "Failed to save wallet information");
+      console.error("Error: Failed to save wallet information");
     },
   });
 
@@ -148,9 +148,8 @@ export function useWallet() {
         );
 
         if (walletExists) {
-          Alert.alert(
-            "Duplicate Wallet",
-            "This wallet has already been imported.",
+          console.error(
+            "Duplicate Wallet: This wallet has already been imported.",
           );
           return false;
         }

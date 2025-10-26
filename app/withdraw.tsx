@@ -2,7 +2,6 @@ import { router } from "expo-router";
 import { ArrowLeft, ChevronDown, Wallet } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   ScrollView,
   StatusBar,
   Text,
@@ -81,7 +80,7 @@ export default function Withdraw() {
         setBalance(balanceValue);
       } catch (error) {
         console.error("Error fetching balance:", error);
-        Alert.alert("Error", "Failed to fetch wallet balance");
+        console.error("Error: Failed to fetch wallet balance");
       } finally {
         setIsLoadingBalance(false);
       }
@@ -129,12 +128,12 @@ export default function Withdraw() {
 
   const validateInputs = useCallback(() => {
     if (!phoneNumber.trim()) {
-      Alert.alert("Error", "Please enter a phone number");
+      console.error("Error: Please enter a phone number");
       return false;
     }
 
     if (!amount || parseFloat(amount) <= 0) {
-      Alert.alert("Error", "Please enter a valid amount");
+      console.error("Error: Please enter a valid amount");
       return false;
     }
 
@@ -143,12 +142,12 @@ export default function Withdraw() {
       const balanceValue = parseFloat(formatUnits(balance, 18));
 
       if (amountValue > balanceValue) {
-        Alert.alert("Insufficient Balance", "You don't have enough funds");
+        console.error("Insufficient Balance: You don't have enough funds");
         return false;
       }
     } catch (error) {
       console.error("Error validating inputs:", error);
-      Alert.alert("Error", "Invalid amount format");
+      console.error("Error: Invalid amount format");
       return false;
     }
 
@@ -171,16 +170,15 @@ export default function Withdraw() {
       setTransactionStatus("Finalizing transaction...");
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      Alert.alert(
-        "Withdrawal Successful",
+      console.log(
+        "Withdrawal Successful:",
         `You have successfully withdrawn ${amount} ${selectedToken?.symbol || "tokens"} to ${selectedPlatform.name} account ${phoneNumber}`,
-        [{ text: "OK", onPress: () => router.back() }],
       );
+      router.back();
     } catch (error) {
       console.error("Withdrawal error:", error);
-      Alert.alert(
-        "Withdrawal Failed",
-        "An error occurred during the withdrawal process",
+      console.error(
+        "Withdrawal Failed: An error occurred during the withdrawal process",
       );
     } finally {
       setIsLoading(false);

@@ -2,7 +2,6 @@ import { AlertTriangle, Fuel, X } from "lucide-react-native";
 import React, { memo, useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   Text,
@@ -33,8 +32,8 @@ const TransactionModal = memo<TTransactionModalProps>(
         await onApprove();
         onClose();
       } catch (error: any) {
-        Alert.alert(
-          "Transaction Failed",
+        console.error(
+          "Transaction Failed:",
           error.message || "Unknown error occurred",
         );
       } finally {

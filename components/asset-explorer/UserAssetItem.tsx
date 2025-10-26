@@ -14,7 +14,7 @@ const UserAssetItem = ({ item, removeAsset }: UserAssetItemProps) => {
     <Pressable
       className="bg-light rounded-xl p-4 mb-3 shadow-sm"
       onPress={() => {
-        Alert.alert("Asset Details", `View details for ${item.name}`);
+        console.log("Asset Details:", `View details for ${item.name}`);
       }}
     >
       <View className="flex-row justify-between items-center">

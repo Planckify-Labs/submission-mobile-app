@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import { ArrowLeft, Clipboard as ClipboardIcon } from "lucide-react-native";
 import React, { useRef, useState } from "react";
 import {
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Pressable,
@@ -42,9 +41,8 @@ export default function ImportWalletScreen() {
       const words = text.trim().split(/\s+/);
 
       if (words.length !== 12 && words.length !== 24) {
-        Alert.alert(
-          "Invalid Seed Phrase",
-          "Please paste a valid 12 or 24-word seed phrase",
+        console.error(
+          "Invalid Seed Phrase: Please paste a valid 12 or 24-word seed phrase",
         );
         return;
       }
@@ -52,7 +50,7 @@ export default function ImportWalletScreen() {
       setSeedPhraseArray(words);
     } catch (error) {
       console.log(error);
-      Alert.alert("Error", "Failed to paste from clipboard");
+      console.error("Error: Failed to paste from clipboard");
     }
   };
 
@@ -61,9 +59,8 @@ export default function ImportWalletScreen() {
     const words = seedPhrase.split(/\s+/);
 
     if (words.length !== 12 && words.length !== 24) {
-      Alert.alert(
-        "Invalid Seed Phrase",
-        "Please enter a valid 12 or 24-word seed phrase",
+      console.error(
+        "Invalid Seed Phrase: Please enter a valid 12 or 24-word seed phrase",
       );
       return;
     }
@@ -87,19 +84,17 @@ export default function ImportWalletScreen() {
       .then((success) => {
         setIsLoading(false);
         if (success) {
-          Alert.alert("Success", "Wallet imported successfully", [
-            { text: "OK", onPress: () => router.replace("/") },
-          ]);
+          console.log("Success: Wallet imported successfully");
+          router.replace("/");
         } else {
-          Alert.alert("Error", "Failed to import wallet");
+          console.error("Error: Failed to import wallet");
         }
       })
       .catch((error) => {
         setIsLoading(false);
         console.error("Import error:", error);
-        Alert.alert(
-          "Error",
-          "An unexpected error occurred during wallet import",
+        console.error(
+          "Error: An unexpected error occurred during wallet import",
         );
       });
   };

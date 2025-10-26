@@ -236,13 +236,13 @@ const AssetWalletSelectorModal = ({
 
     if (duplicateCount > 0 && !hasAddedAssets) {
       const assetNames = duplicateAssets.join(", ");
-      Alert.alert(
-        "Already Added",
+      console.log(
+        "Already Added:",
         `${assetNames} ${duplicateAssets.length > 1 ? "are" : "is"} already in the selected wallet(s) on this network.`,
       );
     } else if (duplicateCount > 0 && hasAddedAssets) {
-      Alert.alert(
-        "Partial Addition",
+      console.log(
+        "Partial Addition:",
         `Some assets were added, but ${duplicateCount} asset(s) were already in the selected wallet(s).`,
       );
     }
