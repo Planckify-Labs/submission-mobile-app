@@ -160,9 +160,9 @@ const DAppList = memo<TCategoryDAppsListProps>(function DAppList({
     () => (
       <View style={{ width: SCREEN_WIDTH }} className="pb-16">
         <View className="mx-4 mb-6">
-          <View className="bg-gradient-to-r from-light-main-container to-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <View className="bg-gradient-to-r from-light-main-container to-white rounded-2xl p-5 border border-gray-100">
             <View className="flex-row items-center mb-3">
-              <View className="bg-light-primary-red/10 p-3 rounded-2xl mr-4 shadow-sm">
+              <View className="bg-light-primary-red/10 p-3 rounded-2xl mr-4">
                 <View className="w-6 h-6 bg-gray-300 rounded animate-pulse" />
               </View>
               <View className="flex-1">
