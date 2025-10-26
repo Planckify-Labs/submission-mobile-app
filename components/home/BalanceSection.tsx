@@ -38,7 +38,7 @@ export default function BalanceSection() {
     activeWallet?.address as `0x${string}` | string,
     activeChain,
   );
-  const [isShowBalance, setShowBalance] = useState(true);
+  const [isShowBalance, setShowBalance] = useState(false);
   const [selectedToken, setSelectedToken] = useState(
     activeChain?.chain.nativeCurrency?.symbol || "ETH",
   );
