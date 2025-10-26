@@ -312,15 +312,16 @@ const PinConfirmationModal: React.FC<PinConfirmationModalProps> = ({
                 <View className="items-center">{renderNumberPad()}</View>
               </View>
 
-              <Pressable
+              <TouchableOpacity
                 className={`bg-light-primary-red py-4 rounded-xl items-center ${
                   pin.length < pinLength ? "opacity-50" : ""
                 }`}
+                activeOpacity={0.7}
                 onPress={handleConfirm}
                 disabled={pin.length < pinLength}
               >
                 <Text className="text-white font-bold">Confirm</Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           </Animated.View>
         </View>
