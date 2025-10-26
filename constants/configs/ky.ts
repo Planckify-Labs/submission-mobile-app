@@ -1,6 +1,8 @@
+import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import ky from "ky";
 import {
+  clearTokens,
   getAccessToken,
   getAccessTokenForWallet,
   getAuthenticatedWalletAddress,
@@ -65,9 +67,35 @@ const handleApiResponse = async (
       console.error(`API Error Response for ${request.url}:`, error);
 
       if (response.status === 401) {
-        throw new Error(
-          "Authentication failed. Please check your API key or login status.",
+        console.log(
+          "401 Unauthorized - Clearing tokens and redirecting to auth",
         );
+
+        await clearTokens();
+
+        try {
+          const indexStr = await SecureStore.getItemAsync(
+            "active_wallet_index",
+          );
+          const idx = indexStr ? parseInt(indexStr, 10) : 0;
+          const wallets = await walletService.loadWalletsFromStorage();
+          const activeAddr = wallets?.[idx]?.address?.toLowerCase();
+
+          if (activeAddr) {
+            await SecureStore.deleteItemAsync(
+              `takumipay_access_token_${activeAddr}`,
+            );
+            await SecureStore.deleteItemAsync(
+              `takumipay_refresh_token_${activeAddr}`,
+            );
+          }
+        } catch (clearError) {
+          console.error("Error clearing per-wallet tokens:", clearError);
+        }
+
+        router.replace("/auth");
+
+        throw new Error("Authentication expired. Please sign in again.");
       } else if (response.status === 403) {
         throw new Error(
           "Access forbidden. You don't have permission for this resource.",
