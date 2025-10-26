@@ -23,7 +23,7 @@ export default function PLNCard({
     <View className="p-4">
       <View className="bg-gradient-to-r from-light-main-container to-white rounded-2xl mb-4">
         <View className="flex-row items-center mb-3">
-          <View className="bg-yellow-500/10 p-3 rounded-2xl mr-4 shadow-sm">
+          <View className="bg-yellow-500/10 p-3 rounded-2xl mr-4">
             <Zap size={24} color="#f97316" strokeWidth={2} />
           </View>
           <View className="flex-1">
