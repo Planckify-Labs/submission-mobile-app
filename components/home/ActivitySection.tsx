@@ -8,6 +8,7 @@ import { TTransaction } from "@/api/types/transaction";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useTransactionHistory } from "@/hooks/queries/useTransactions";
 import { useWallet } from "@/hooks/useWallet";
+import { formatTokenAmount } from "@/utils/helperUtils";
 import { truncateAddress } from "@/utils/walletUtils";
 import OptimizedImage from "../common/OptimizedImage";
 
@@ -94,18 +95,22 @@ export default function ActivitySection() {
       }
     >
       <View className="aspect-square w-full max-w-[70px] relative bg-light-primary-red/10 rounded-full items-center justify-center p-3">
-        <Text className="text-light-matte-black font-bold text-xs">
+        <Text className="text-light-primary-red font-bold text-lg">
           {(() => {
             try {
-              return formatUnits(
+              const formattedUnits = formatUnits(
                 BigInt(transfer.amount),
                 transfer?.token?.decimals as number,
               );
+              return formatTokenAmount(formattedUnits);
             } catch (error) {
               console.warn("Error formatting transfer amount:", error);
               return "0";
             }
-          })()} {transfer.token.symbol}
+          })()}
+        </Text>
+        <Text className="text-light-matte-black font-bold text-xs">
+        {transfer.token.symbol}
         </Text>
         <View className="bg-light-main-container aspect-square w-5 rounded-full absolute bottom-0 right-[10px] items-center justify-center">
           <OptimizedImage
