@@ -97,11 +97,9 @@ export default function ActivitySection() {
         <Text className="text-light-matte-black font-bold text-xs">
           {(() => {
             try {
-              const cleanAmount = transfer.amount.replace(/[^0-9]/g, "");
-              if (!cleanAmount || cleanAmount === "0") return "0";
               return formatUnits(
-                BigInt(cleanAmount),
-                transfer.token.decimals ?? 18,
+                BigInt(transfer.amount),
+                transfer?.token?.decimals as number,
               );
             } catch (error) {
               console.warn("Error formatting transfer amount:", error);
@@ -109,10 +107,17 @@ export default function ActivitySection() {
             }
           })()} {transfer.token.symbol}
         </Text>
-        <View className="bg-light-main-container aspect-square w-6 rounded-full absolute bottom-0 right-0 items-center justify-center">
+        <View className="bg-light-main-container aspect-square w-5 rounded-full absolute bottom-0 right-[10px] items-center justify-center">
+          <OptimizedImage
+            source={{ uri: transfer.token.blockchain.tokens[0].logoUrl }}
+            style={{ width: 16, height: 16 }}
+            contentFit="contain"
+            />
+        </View>
+        <View className="bg-light-main-container aspect-square w-3 rounded-full absolute bottom-[12px] right-0 items-center justify-center">
           <OptimizedImage
             source={{ uri: transfer.token.logoUrl }}
-            style={{ width: 20, height: 20 }}
+            style={{ width: 15, height: 15 }}
             contentFit="contain"
           />
         </View>

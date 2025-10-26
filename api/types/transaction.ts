@@ -1,10 +1,28 @@
 export type TTransactionType = "TRANSFER" | "PAYMENT";
 
-export type TTransactionStatus = "PENDING" | "COMPLETED" | "FAILED" | "PROCESSING";
+export type TTransactionStatus =
+  | "PENDING"
+  | "COMPLETED"
+  | "FAILED"
+  | "PROCESSING";
 
 export interface TBlockchainInToken {
   name: string;
   blockExplorer: string;
+  tokens: {
+    id: string;
+    name: string;
+    symbol: string;
+    decimals: number;
+    blockchainId: string;
+    contractAddress: string | null;
+    logoUrl: string;
+    isStablecoin: boolean;
+    isActive: boolean;
+    isNativeCurrency: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }[];
 }
 
 export interface TToken {
