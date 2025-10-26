@@ -14,7 +14,7 @@ export const useTransactionHistory = (
   options?: { enabled?: boolean },
 ) => {
   const { isAuthenticated, isLoading } = useIsAuthenticated();
-  
+
   return useQuery({
     queryKey: transactionsQueryKeys.history(params),
     queryFn: async () => {
@@ -101,7 +101,7 @@ export const useCreateTransaction = () => {
     },
     onSuccess: (_data, _variables) => {
       queryClient.invalidateQueries({
-        queryKey: transactionsQueryKeys.search({} as any).slice(0, 2),
+        queryKey: transactionsQueryKeys.all,
         exact: false,
       });
     },

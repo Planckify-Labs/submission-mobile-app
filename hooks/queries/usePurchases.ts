@@ -1,6 +1,7 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { purchaseApi } from "@/api/endpoints/purchases";
 import type { TPurchaseCreateRequest } from "@/api/types/purchase";
+import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
 
 export const usePurchaseById = (purchaseId: string | undefined) => {
   return useQuery({
@@ -21,6 +22,7 @@ export const usePurchaseById = (purchaseId: string | undefined) => {
 };
 
 export const useCreatePurchase = () => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (data: TPurchaseCreateRequest) => {
       try {
@@ -31,6 +33,12 @@ export const useCreatePurchase = () => {
         console.error("API Error:", error);
         throw error;
       }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: transactionsQueryKeys.all,
+        exact: false,
+      });
     },
   });
 };
