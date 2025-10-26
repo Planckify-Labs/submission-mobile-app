@@ -8,6 +8,7 @@ import {
   type ChainConfig,
   supportedChains,
 } from "@/constants/configs/chainConfig";
+import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
 import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
 import type {
   TWallet,
@@ -91,6 +92,10 @@ export function useWallet() {
     },
     onSuccess: (index) => {
       queryClient.setQueryData([QKEY_Wallets.activeWalletIndex], index);
+      queryClient.invalidateQueries({
+        queryKey: transactionsQueryKeys.all,
+        exact: false,
+      });
     },
     onError: (error) => {
       console.error("Failed to save active wallet index:", error);
