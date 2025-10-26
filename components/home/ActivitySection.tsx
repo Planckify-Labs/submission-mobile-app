@@ -68,6 +68,7 @@ export default function ActivitySection() {
         })
       }
     >
+      <View  className="relative">
       <View className="rounded-2xl border-2 p-0 border-light-matte-black w-16 aspect-square overflow-hidden bg-light-main-container">
         <OptimizedImage
           source={{ uri: payment.purchase?.productVariant.product.imageUrl }}
@@ -75,9 +76,26 @@ export default function ActivitySection() {
           contentFit="cover"
         />
       </View>
+
+      <View className="bg-light-main-container aspect-square w-4 rounded-full absolute -bottom-[5px] right-[10px] items-center justify-center">
+          <OptimizedImage
+            source={{ uri: payment.token.blockchain.tokens[0].logoUrl }}
+            style={{ width: 14, height: 14 }}
+            contentFit="contain"
+          />
+        </View>
+        <View className="bg-light-main-container aspect-square w-3 rounded-full absolute bottom-[5px] right-0 items-center justify-center">
+          <OptimizedImage
+            source={{ uri: payment.token.logoUrl }}
+            style={{ width: 15, height: 15 }}
+            contentFit="contain"
+          />
+        </View>
+      </View>
       <Text className="text-[10px] text-center text-wrap max-w-16 mt-1">
         {payment.purchase?.productVariant.name}
       </Text>
+      
     </TouchableOpacity>
   );
 
