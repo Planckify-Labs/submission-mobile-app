@@ -5,7 +5,7 @@ import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 export default function TransferDetailCardSkeleton() {
   return (
     <View className="mt-4">
-      <View className="bg-gradient-to-r from-light-main-container to-white rounded-2xl p-5 shadow-sm border border-gray-100">
+      <View className="bg-gradient-to-r from-light-main-container to-white rounded-2xl p-5 border border-gray-100">
         <View className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-row items-center gap-3">
