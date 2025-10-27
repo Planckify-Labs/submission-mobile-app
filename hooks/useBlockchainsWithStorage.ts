@@ -82,7 +82,6 @@ export const useBlockchainsWithStorage = (
           options?.name ||
           options?.chainId ||
           options?.isEVM !== undefined ||
-          options?.isActive !== undefined ||
           options?.cursor ||
           options?.take ||
           options?.isNativeCurrency

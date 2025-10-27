@@ -17,7 +17,6 @@ export interface TUseBlockchainsWithStorageOptions {
   name?: string;
   chainId?: number;
   isEVM?: boolean;
-  isActive?: boolean;
   take?: number;
   cursor?: string;
   forceRefresh?: boolean;
