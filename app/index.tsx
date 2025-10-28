@@ -1,54 +1,75 @@
-import { BlurView } from "expo-blur";
-import { router } from "expo-router";
-import { QrCode } from "lucide-react-native";
-import React from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  BackHandler,
+  Dimensions,
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import ActivitySection from "@/components/home/ActivitySection";
-import BalanceSection from "@/components/home/BalanceSection";
-import Header from "@/components/home/Header";
-import PaymentSection from "@/components/home/PaymentSection";
+import HomeChatMode from "@/components/home/HomeChatMode";
+import HomeMain from "@/components/home/HomeMain";
+import ScanToPayChatModeFloatingButtons from "@/components/home/ScanToPayChatModeFloatingButtons";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function Home() {
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const scrollToIndex = useCallback((index: number) => {
+    scrollViewRef.current?.scrollTo({
+      x: SCREEN_WIDTH * index,
+      animated: true,
+    });
+    setCurrentIndex(index);
+  }, []);
+
+  const handleChatModePress = () => {
+    scrollToIndex(1);
+  };
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        if (currentIndex === 1) {
+          scrollToIndex(0);
+          return true;
+        }
+        return false;
+      },
+    );
+
+    return () => backHandler.remove();
+  }, [currentIndex, scrollToIndex]);
+
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#f5f6f9" />
       <SafeAreaView style={styles.container} edges={["top"]}>
         <ScrollView
-          className="bg-light-main-container flex-1"
-          contentContainerStyle={{ gap: 16 }}
-          showsVerticalScrollIndicator={false}
+          ref={scrollViewRef}
+          horizontal={true}
+          scrollEnabled={false}
+          pagingEnabled={true}
+          showsHorizontalScrollIndicator={false}
+          style={styles.horizontalScroll}
         >
-          <View className="flex-1 gap-4 py-4 pb-24">
-            <Header />
-            <BalanceSection />
-            <ActivitySection />
-            <PaymentSection />
+          <View style={{ width: SCREEN_WIDTH }}>
+            <HomeMain />
+          </View>
+          <View style={{ width: SCREEN_WIDTH }}>
+            <HomeChatMode />
           </View>
         </ScrollView>
-        <View className="absolute bottom-2 justify-center items-center w-full">
-          <BlurView
-            intensity={20}
-            experimentalBlurMethod="dimezisBlurView"
-            className="overflow-hidden rounded-full"
-          >
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => router.push("/scan-to-pay")}
-              className="bg-light-primary-red/40 px-10 py-4 rounded-full flex-row items-center gap-2"
-            >
-              <QrCode size={22} color="#fff" />
-              <Text className="text-light font-bold text-xl">Scan To Pay</Text>
-            </TouchableOpacity>
-          </BlurView>
-        </View>
+
+        {currentIndex === 0 && (
+          <ScanToPayChatModeFloatingButtons
+            onChatModePress={handleChatModePress}
+          />
+        )}
       </SafeAreaView>
     </>
   );
@@ -58,5 +79,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f6f9",
+  },
+  horizontalScroll: {
+    flex: 1,
   },
 });
