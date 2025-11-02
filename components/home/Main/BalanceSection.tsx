@@ -209,7 +209,7 @@ export default function BalanceSection() {
                   <PlusIcon size={20} color="#c71c4b" />
                 </View>
                 <Text className="text-light-matte-black text-[10px] font-medium">
-                  Top Up
+                  Deposit
                 </Text>
               </TouchableOpacity>
 
