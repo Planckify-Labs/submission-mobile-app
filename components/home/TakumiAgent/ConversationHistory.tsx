@@ -4,7 +4,6 @@ import {
   Check,
   ChevronRight,
   CopyIcon,
-  MessageCircle,
   Search,
   Wallet,
   X,
@@ -31,28 +30,15 @@ import { useTokens } from "@/hooks/queries/useTokens";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { useWallet } from "@/hooks/useWallet";
 import { copyToClipboard } from "@/utils/helperUtils";
-import { ChatMessageProps } from "./ChatMessage";
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;
 
-interface ChatSession {
-  id: string;
-  title: string;
-  messages: ChatMessageProps[];
-}
-
 interface ConversationHistory {
-  sessions: ChatSession[];
-  onSelectSession: (sessionId: string, messages: ChatMessageProps[]) => void;
-  onNewChat: () => void;
   onScrollToChat?: () => void;
 }
 
 export default function ConversationHistory({
-  sessions,
-  onSelectSession,
-  onNewChat,
   onScrollToChat,
 }: ConversationHistory) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -107,18 +93,6 @@ export default function ConversationHistory({
     if (!activeWallet?.address) return "...";
     return `${activeWallet.address.substring(0, 6)}...${activeWallet.address.substring(activeWallet.address.length - 4)}`;
   }, [activeWallet?.address]);
-
-  const filteredSessions = useMemo(() => {
-    if (!searchQuery.trim()) return sessions;
-    const query = searchQuery.toLowerCase();
-    return sessions.filter(
-      (session) =>
-        session.title.toLowerCase().includes(query) ||
-        session.messages.some((msg) =>
-          msg.content.toLowerCase().includes(query),
-        ),
-    );
-  }, [sessions, searchQuery]);
 
   const closeChainModal = useCallback(() => {
     Animated.parallel([
@@ -228,48 +202,27 @@ export default function ConversationHistory({
           Conversations
         </Text>
 
-        {filteredSessions.length === 0 ? (
-          <View className="flex-1 justify-center items-center">
-            <MessageCircle
-              size={48}
-              color="#ccc"
-              style={{ marginBottom: 12 }}
-            />
-            <Text className="text-gray-400 text-center text-sm">
-              {searchQuery ? "No conversations found" : "No chat history yet"}
-            </Text>
-          </View>
-        ) : (
-          <FlashList
-            data={filteredSessions}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => {
-              const lastMessage = item.messages[item.messages.length - 1];
-              const lastMessageDate = lastMessage?.timestamp
-                ? format(new Date(lastMessage.timestamp), "MMM d, yyyy")
-                : "No date";
-
-              return (
-                <TouchableOpacity
-                  onPress={() => onSelectSession(item.id, item.messages)}
-                  className="rounded-lg px-4 py-3 mb-2"
+        <FlashList
+          data={["test"]}
+          keyExtractor={(item) => item}
+          renderItem={({ item }) => {
+            return (
+              <TouchableOpacity
+                onPress={() => {}}
+                className="rounded-lg px-4 py-3 mb-2"
+              >
+                <Text
+                  className="text-light-matte-black font-normal text-base"
+                  numberOfLines={2}
                 >
-                  <Text
-                    className="text-light-matte-black font-normal text-base"
-                    numberOfLines={2}
-                  >
-                    {item.title}
-                  </Text>
-                  <Text className="text-sm text-gray-500 mt-1">
-                    {lastMessageDate}
-                  </Text>
-                </TouchableOpacity>
-              );
-            }}
-            scrollEnabled={true}
-            showsVerticalScrollIndicator={true}
-          />
-        )}
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+          scrollEnabled={true}
+          showsVerticalScrollIndicator={false}
+        />
         <View className="flex-row justify-between p-4 px-[4px]">
           <View className="flex-row gap-2 items-center">
             <TouchableOpacity onPress={openChainModal}>

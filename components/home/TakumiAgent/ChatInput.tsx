@@ -1,5 +1,5 @@
 import { ArrowUp, Maximize2, Mic, Minimize2 } from "lucide-react-native";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -9,19 +9,28 @@ import {
 } from "react-native";
 
 export interface ChatInputProps {
-  onSendMessage: (message: string) => void;
+  value: string;
+  onChangeText: (text: string) => void;
+  onSend: () => Promise<void> | void;
   isLoading?: boolean;
   placeholder?: string;
 }
 
 export default function ChatInput({
-  onSendMessage,
+  value,
+  onChangeText,
+  onSend,
   isLoading = false,
   placeholder = "Ask me anything...",
 }: ChatInputProps) {
-  const [message, setMessage] = useState("");
   const [contentHeight, setContentHeight] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!value) {
+      setContentHeight(0);
+    }
+  }, [value]);
 
   const getBorderRadius = () => {
     const lineHeight = 20;
@@ -34,13 +43,15 @@ export default function ChatInput({
   };
 
   const hasEnoughLines = Math.ceil(contentHeight / 20) >= 5;
+  const isSendDisabled = isLoading || !value.trim();
 
-  const handleSend = () => {
-    if (message.trim()) {
-      onSendMessage(message.trim());
-      setMessage("");
+  const handleSend = useCallback(() => {
+    if (isSendDisabled) {
+      return Promise.resolve();
     }
-  };
+
+    return Promise.resolve(onSend());
+  }, [isSendDisabled, onSend]);
 
   return (
     <View className="flex-row items-center px-3 py-3 gap-2">
@@ -65,8 +76,8 @@ export default function ChatInput({
             className="flex-1 py-2.5 px-2 text-base text-light-matte-black"
             placeholder={placeholder}
             placeholderTextColor="#999"
-            value={message}
-            onChangeText={setMessage}
+            value={value}
+            onChangeText={onChangeText}
             onContentSizeChange={(e) =>
               setContentHeight(e.nativeEvent.contentSize.height)
             }
@@ -75,7 +86,9 @@ export default function ChatInput({
             maxLength={500}
             editable={!isLoading}
             returnKeyType="send"
-            onSubmitEditing={handleSend}
+            onSubmitEditing={() => {
+              void handleSend();
+            }}
           />
 
           <TouchableOpacity
@@ -101,12 +114,12 @@ export default function ChatInput({
 
       <TouchableOpacity
         className={`w-11 h-11 rounded-full justify-center items-center ${
-          isLoading || !message.trim()
-            ? "bg-gray-300 opacity-60"
-            : "bg-light-primary-red"
+          isSendDisabled ? "bg-gray-300 opacity-60" : "bg-light-primary-red"
         }`}
-        onPress={handleSend}
-        disabled={isLoading || !message.trim()}
+        onPress={() => {
+          void handleSend();
+        }}
+        disabled={isSendDisabled}
       >
         {isLoading ? (
           <ActivityIndicator size="small" color="#ffffff" />
@@ -127,8 +140,8 @@ export default function ChatInput({
               className="flex-1 text-base text-light-matte-black"
               placeholder={placeholder}
               placeholderTextColor="#999"
-              value={message}
-              onChangeText={setMessage}
+              value={value}
+              onChangeText={onChangeText}
               multiline
               maxLength={500}
               editable={!isLoading}
@@ -156,15 +169,14 @@ export default function ChatInput({
 
             <TouchableOpacity
               className={`w-11 h-11 rounded-full justify-center items-center ${
-                isLoading || !message.trim()
+                isSendDisabled
                   ? "bg-gray-300 opacity-60"
                   : "bg-light-primary-red"
               }`}
               onPress={() => {
-                handleSend();
-                setIsExpanded(false);
+                void handleSend().then(() => setIsExpanded(false));
               }}
-              disabled={isLoading || !message.trim()}
+              disabled={isSendDisabled}
             >
               {isLoading ? (
                 <ActivityIndicator size="small" color="#ffffff" />

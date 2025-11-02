@@ -32,7 +32,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "server",
       "favicon": "./assets/images/takumipay-no-bg.png"
     },
     "plugins": [
