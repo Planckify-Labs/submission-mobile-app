@@ -18,6 +18,7 @@ export default function QuickPrompts({ onSelectPrompt }: QuickPromptsProps) {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 12, paddingRight: 16, paddingLeft: 16 }}
+        nestedScrollEnabled={true}
       >
         {AGENT_QUICK_PROMPTS.map((item) => (
           <TouchableOpacity
