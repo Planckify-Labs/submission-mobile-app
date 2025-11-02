@@ -81,9 +81,9 @@ export default function ChatInput({
             onContentSizeChange={(e) =>
               setContentHeight(e.nativeEvent.contentSize.height)
             }
-            numberOfLines={100}
+            numberOfLines={5}
             multiline
-            maxLength={500}
+            maxLength={1200}
             editable={!isLoading}
             returnKeyType="send"
             onSubmitEditing={() => {
