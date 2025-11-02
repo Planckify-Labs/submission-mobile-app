@@ -226,12 +226,12 @@ export default function ConversationHistory({
         <View className="flex-row justify-between p-4 px-[4px]">
           <View className="flex-row gap-2 items-center">
             <TouchableOpacity onPress={openChainModal}>
-              <View className="aspect-square w-[50px] rounded-full bg-light/50 border-4 border-light-matte-black/80">
+              <View className="aspect-square w-[42px] rounded-full bg-light/50 border-4 border-light-matte-black/80">
                 <OptimizedImage source={{ uri: activeChain?.iconUrl }} />
               </View>
             </TouchableOpacity>
             <View>
-              <Text className="text-base text-light-matte-black font-semibold">
+              <Text className="text-sm text-light-matte-black font-semibold">
                 {activeWallet?.name}
               </Text>
               <Text className="text-[10px] font-bold text-light-matte-black/70">
@@ -264,7 +264,6 @@ export default function ConversationHistory({
         </View>
       </View>
 
-      {/* Wallet Selector Modal */}
       <WalletSelectorModal
         visible={showWalletSelector}
         onClose={() => setShowWalletSelector(false)}
@@ -274,7 +273,6 @@ export default function ConversationHistory({
         title="Switch Wallet"
       />
 
-      {/* Chain Selector Modal */}
       {showChainSelector && (
         <Modal
           transparent
