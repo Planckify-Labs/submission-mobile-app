@@ -20,6 +20,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { generateAPIUrl } from "@/utils/helperUtils";
 import ChatInput from "./ChatInput";
 import ConversationHistory from "./ConversationHistory";
@@ -221,89 +222,91 @@ export default function AgentMode() {
   }, [error, isLoading]);
 
   return (
-    <ScrollView
-      ref={scrollViewRef}
-      horizontal
-      pagingEnabled
-      scrollEventThrottle={16}
-      showsHorizontalScrollIndicator={false}
-      className="flex-1 bg-light-main-container"
-    >
-      <View style={{ width: screenWidth }}>
-        <ConversationHistory onScrollToChat={handleScrollToChat} />
-      </View>
-
-      <View
-        style={{ width: screenWidth }}
+    <KeyboardProvider>
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        pagingEnabled
+        scrollEventThrottle={16}
+        showsHorizontalScrollIndicator={false}
         className="flex-1 bg-light-main-container"
       >
-        <View className="flex-row justify-between px-4">
-          <BlurView
-            intensity={20}
-            experimentalBlurMethod="dimezisBlurView"
-            className="overflow-hidden rounded-full"
-          >
-            <TouchableOpacity
-              onPress={handleScrollToHistory}
-              className="bg-light/60 p-4 aspect-square rounded-full gap-[4px] relative w-[38px]"
-            >
-              <View className="border border-light-primary-red w-[15px] absolute top-[15px] left-[12px]" />
-              <View className="border border-light-primary-red w-[10px] absolute top-[21px] left-[12px]" />
-            </TouchableOpacity>
-          </BlurView>
-          <BlurView
-            intensity={20}
-            experimentalBlurMethod="dimezisBlurView"
-            className="overflow-hidden rounded-full"
-          >
-            <View className="bg-white/40 px-4 py-2 rounded-full">
-              <Text className="font-semibold">Takumi Agent</Text>
-            </View>
-          </BlurView>
-          <BlurView
-            intensity={20}
-            experimentalBlurMethod="dimezisBlurView"
-            className="overflow-hidden rounded-full"
-          >
-            <TouchableOpacity className="bg-light/60 p-[10px] rounded-full">
-              <SquarePen size={20} color="#c71c4b" />
-            </TouchableOpacity>
-          </BlurView>
+        <View style={{ width: screenWidth }}>
+          <ConversationHistory onScrollToChat={handleScrollToChat} />
         </View>
 
-        <View className="flex-1 pt-6">
-          <View className="flex-1 px-4">
-            <FlashList
-              ref={chatListRef}
-              data={chatMessages}
-              renderItem={renderChatMessage}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={chatContentContainerStyle as ViewStyle}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={
-                <View className="items-center px-4">
-                  <Text className="text-sm text-light-matte-black/70 text-center mt-3">
-                    Welcome to Takumi Agent!
-                  </Text>
-                </View>
-              }
-              ListFooterComponent={listFooterComponent}
-            />
+        <View
+          style={{ width: screenWidth }}
+          className="flex-1 bg-light-main-container"
+        >
+          <View className="flex-row justify-between px-4 hidden-">
+            <BlurView
+              intensity={20}
+              experimentalBlurMethod="dimezisBlurView"
+              className="overflow-hidden rounded-full"
+            >
+              <TouchableOpacity
+                onPress={handleScrollToHistory}
+                className="bg-light/60 p-4 aspect-square rounded-full gap-[4px] relative w-[38px]"
+              >
+                <View className="border border-light-primary-red w-[15px] absolute top-[15px] left-[12px]" />
+                <View className="border border-light-primary-red w-[10px] absolute top-[21px] left-[12px]" />
+              </TouchableOpacity>
+            </BlurView>
+            <BlurView
+              intensity={20}
+              experimentalBlurMethod="dimezisBlurView"
+              className="overflow-hidden rounded-full"
+            >
+              <View className="bg-white/40 px-4 py-2 rounded-full">
+                <Text className="font-semibold">Takumi Agent</Text>
+              </View>
+            </BlurView>
+            <BlurView
+              intensity={20}
+              experimentalBlurMethod="dimezisBlurView"
+              className="overflow-hidden rounded-full"
+            >
+              <TouchableOpacity className="bg-light/60 p-[10px] rounded-full">
+                <SquarePen size={20} color="#c71c4b" />
+              </TouchableOpacity>
+            </BlurView>
           </View>
 
-          {chatMessages.length === 0 && (
-            <QuickPrompts onSelectPrompt={handlePromptSelect} />
-          )}
+          <View className="flex-1 pt-6">
+            <View className="flex-1 px-4">
+              <FlashList
+                ref={chatListRef}
+                data={chatMessages}
+                renderItem={renderChatMessage}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={chatContentContainerStyle as ViewStyle}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View className="items-center px-4">
+                    <Text className="text-sm text-light-matte-black/70 text-center mt-3">
+                      Welcome to Takumi Agent!
+                    </Text>
+                  </View>
+                }
+                ListFooterComponent={listFooterComponent}
+              />
+            </View>
 
-          <ChatInput
-            value={input}
-            onChangeText={handleInputChange}
-            onSend={handleSend}
-            isLoading={isLoading}
-            placeholder="Ask me anything..."
-          />
+            {chatMessages.length === 0 && (
+              <QuickPrompts onSelectPrompt={handlePromptSelect} />
+            )}
+
+            <ChatInput
+              value={input}
+              onChangeText={handleInputChange}
+              onSend={handleSend}
+              isLoading={isLoading}
+              placeholder="Ask me anything..."
+            />
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardProvider>
   );
 }

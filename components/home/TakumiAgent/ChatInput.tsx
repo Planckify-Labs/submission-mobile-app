@@ -2,13 +2,12 @@ import { ArrowUp, Maximize2, Mic, Minimize2 } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export interface ChatInputProps {
@@ -60,12 +59,12 @@ export default function ChatInput({
   return (
     <>
       <KeyboardAvoidingView
-        behavior={Platform.select({ ios: "padding", default: "height" })}
+        behavior="padding"
         keyboardVerticalOffset={bottomInset ? bottomInset + 12 : 12}
         style={{ width: "100%" }}
       >
         <View style={{ paddingBottom: bottomInset || 0 }}>
-          <View className="flex-row items-center px-3 py-3 gap-2">
+          <View className="flex-row items-center px-3 pb-3 gap-2">
             <View
               style={{
                 flex: 1,
@@ -125,7 +124,9 @@ export default function ChatInput({
 
             <TouchableOpacity
               className={`w-11 h-11 rounded-full justify-center items-center ${
-                isSendDisabled ? "bg-gray-300 opacity-60" : "bg-light-primary-red"
+                isSendDisabled
+                  ? "bg-gray-300 opacity-60"
+                  : "bg-light-primary-red"
               }`}
               onPress={() => {
                 void handleSend();
