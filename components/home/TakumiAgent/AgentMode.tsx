@@ -25,6 +25,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { generateAPIUrl } from "@/utils/helperUtils";
 import ChatInput from "./ChatInput";
 import ConversationHistory from "./ConversationHistory";
+import MessageContent from "./MessageContent";
 import QuickPrompts from "./QuickPrompts";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -144,48 +145,19 @@ export default function AgentMode() {
   const renderChatMessage = useCallback(
     ({ item }: ListRenderItemInfo<ChatMessage>) => {
       const isUser = item.role === "user";
-      const textContent = item.parts
-        .map((part) => {
-          switch (part.type) {
-            case "text":
-            case "reasoning":
-              return part.text;
-            default:
-              return undefined;
-          }
-        })
-        .filter(Boolean)
-        .join("\n\n");
-
-      const hasContent = Boolean(textContent.trim().length);
 
       return (
         <View
           className={`w-full mb-4 z-0 ${isUser ? "items-end" : "items-start"}`}
         >
-          <Text
-            className={`text-[10px] font-semibold mb-1 ${
-              isUser ? "text-light-primary-red/80" : "text-light-matte-black/60"
-            }`}
-          >
-            {isUser ? "You" : "Takumi Agent"}
-          </Text>
           <View
-            className={`max-w-[85%] rounded-3xl px-4 py-3 ${
+            className={`${
               isUser
-                ? "bg-light-primary-red"
-                : "bg-white border border-light-primary-red/10"
+                ? "bg-light-primary-red max-w-[85%] rounded-3xl px-4 py-3"
+                : "bg-white- border- border-light-primary-red/10-"
             }`}
           >
-            <Text
-              className={`text-sm leading-5 ${
-                isUser ? "text-white" : "text-light-matte-black"
-              }`}
-            >
-              {hasContent
-                ? textContent
-                : "This message includes content we can't display yet."}
-            </Text>
+            <MessageContent message={item} isUser={isUser} />
           </View>
         </View>
       );
