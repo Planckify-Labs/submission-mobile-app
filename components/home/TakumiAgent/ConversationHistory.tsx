@@ -22,7 +22,6 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useTokens } from "@/hooks/queries/useTokens";
