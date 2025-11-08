@@ -12,7 +12,6 @@ import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
-  FlatList,
   Modal,
   PanResponder,
   Pressable,
@@ -170,7 +169,7 @@ export default function ConversationHistory({
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-light-main-container">
+    <View className="flex-1 bg-light-main-container">
       <View className="flex-1 px-4">
         <View className="flex-row items-center mb-6">
           <View className="flex-1 bg-light rounded-full flex-row items-center px-4 py-2">
@@ -386,6 +385,6 @@ export default function ConversationHistory({
           </View>
         </Modal>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
