@@ -1,5 +1,6 @@
+import { FlashList } from "@shopify/flash-list";
 import React from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 
 import { AGENT_QUICK_PROMPTS } from "@/constants/agent";
 
@@ -9,32 +10,34 @@ export interface QuickPromptsProps {
 
 export default function QuickPrompts({ onSelectPrompt }: QuickPromptsProps) {
   return (
-    <View className="py-5 bg-light-main-container">
-      <Text className="text-lg font-semibold text-light-matte-black mx-4 mb-4">
+    <View className="py-5 bg-light-main-container mb-[47px]">
+      <Text className="text-lg font-semibold text-light-matte-black/80 mx-4 mb-2">
         What can I help you with?
       </Text>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 12, paddingRight: 16, paddingLeft: 16 }}
-        nestedScrollEnabled={true}
-      >
-        {AGENT_QUICK_PROMPTS.map((item) => (
+      <FlashList
+        data={AGENT_QUICK_PROMPTS}
+        nestedScrollEnabled
+        renderItem={({ item }) => (
           <TouchableOpacity
-            key={item.id}
-            className="min-w-[140px] border-2 border-light-primary-red max-w-[200px] px-3 py-3 rounded-full bg-light/10 justify-center items-center"
+            className="min-w-[140px] border border-light-matte-black/10 max-w-[200px] px-3 py-3 rounded-full bg-light/10 justify-center items-center"
             onPress={() => onSelectPrompt(item.prompt)}
           >
             <Text
-              className="text-sm font-bold text-light-primary-red text-center leading-tight"
+              className="text-sm font-bold text-light-matte-black/40 text-center leading-tight"
               numberOfLines={2}
             >
               {item.prompt}
             </Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+        )}
+        keyExtractor={(item) => item.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16 }}
+        ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+        numColumns={1}
+      />
     </View>
   );
 }

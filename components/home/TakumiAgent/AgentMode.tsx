@@ -13,6 +13,7 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   ScrollView,
   Text,
@@ -32,6 +33,7 @@ export default function AgentMode() {
   const scrollViewRef = useRef<ScrollView>(null);
   const [input, setInput] = useState("");
   const lastSendTimeRef = useRef<number>(0);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const { messages, error, sendMessage, status, clearError } = useChat({
     transport: new DefaultChatTransport({
@@ -84,7 +86,6 @@ export default function AgentMode() {
       const trimmed = text.trim();
       if (!trimmed) return;
 
-      // Prevent rapid-fire requests (minimum 1 second between messages)
       const now = Date.now();
       const timeSinceLastSend = now - lastSendTimeRef.current;
       if (timeSinceLastSend < 1000) {
@@ -124,9 +125,16 @@ export default function AgentMode() {
     [messages],
   );
 
+  const blurViewOpacity = scrollY.interpolate({
+    inputRange: [50, 150],
+    outputRange: [1, 0.4],
+    extrapolate: "clamp",
+  });
+
   const chatContentContainerStyle = useMemo(
     () => ({
-      paddingBottom: 24,
+      paddingBottom: 50,
+      paddingTop: 45,
       flexGrow: 1,
       justifyContent: chatMessages.length === 0 ? "center" : "flex-start",
     }),
@@ -152,7 +160,9 @@ export default function AgentMode() {
       const hasContent = Boolean(textContent.trim().length);
 
       return (
-        <View className={`w-full mb-4 ${isUser ? "items-end" : "items-start"}`}>
+        <View
+          className={`w-full mb-4 z-0 ${isUser ? "items-end" : "items-start"}`}
+        >
           <Text
             className={`text-[10px] font-semibold mb-1 ${
               isUser ? "text-light-primary-red/80" : "text-light-matte-black/60"
@@ -237,20 +247,26 @@ export default function AgentMode() {
 
         <View
           style={{ width: screenWidth }}
-          className="flex-1 bg-light-main-container"
+          className="flex-1 bg-light-main-container relative"
         >
-          <View className="flex-row justify-between px-4 hidden-">
+          <View className="flex-row justify-between z-50 px-4 absolute top-0 left-0 w-full">
             <BlurView
               intensity={20}
               experimentalBlurMethod="dimezisBlurView"
               className="overflow-hidden rounded-full"
             >
+              <Animated.View
+                style={{ opacity: blurViewOpacity }}
+                className="absolute bg-light w-full h-full left-0 right-0 rounded-full"
+              >
+                <View />
+              </Animated.View>
               <TouchableOpacity
                 onPress={handleScrollToHistory}
-                className="bg-light/60 p-4 aspect-square rounded-full gap-[4px] relative w-[38px]"
+                className="p-4 aspect-square rounded-full gap-[4px] relative w-[38px]"
               >
-                <View className="border border-light-primary-red w-[15px] absolute top-[15px] left-[12px]" />
-                <View className="border border-light-primary-red w-[10px] absolute top-[21px] left-[12px]" />
+                <View className="border border-light-primary-red w-[15px] absolute top-[15px] rounded-full left-[12px]" />
+                <View className="border border-light-primary-red w-[10px] absolute top-[21px] rounded-full left-[12px]" />
               </TouchableOpacity>
             </BlurView>
             <BlurView
@@ -258,8 +274,18 @@ export default function AgentMode() {
               experimentalBlurMethod="dimezisBlurView"
               className="overflow-hidden rounded-full"
             >
-              <View className="bg-white/40 px-4 py-2 rounded-full">
-                <Text className="font-semibold">Takumi Agent</Text>
+              <Animated.View
+                style={{
+                  opacity: blurViewOpacity,
+                }}
+                className="absolute bg-white w-full h-full left-0 right-0 rounded-full"
+              >
+                <View />
+              </Animated.View>
+              <View className="px-4 pt-3 rounded-full">
+                <Text className="font-semibold text-light-matte-black/80">
+                  Takumi Agent
+                </Text>
               </View>
             </BlurView>
             <BlurView
@@ -267,13 +293,21 @@ export default function AgentMode() {
               experimentalBlurMethod="dimezisBlurView"
               className="overflow-hidden rounded-full"
             >
-              <TouchableOpacity className="bg-light/60 p-[10px] rounded-full">
+              <Animated.View
+                style={{
+                  opacity: blurViewOpacity,
+                }}
+                className="absolute bg-light w-full h-full left-0 right-0 rounded-full"
+              >
+                <View />
+              </Animated.View>
+              <TouchableOpacity className="p-[10px] rounded-full">
                 <SquarePen size={20} color="#c71c4b" />
               </TouchableOpacity>
             </BlurView>
           </View>
 
-          <View className="flex-1 pt-6">
+          <View className="flex-1">
             <View className="flex-1 px-4">
               <FlashList
                 ref={chatListRef}
@@ -282,6 +316,11 @@ export default function AgentMode() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={chatContentContainerStyle as ViewStyle}
                 showsVerticalScrollIndicator={false}
+                onScroll={Animated.event(
+                  [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                  { useNativeDriver: false },
+                )}
+                scrollEventThrottle={16}
                 ListEmptyComponent={
                   <View className="items-center px-4">
                     <Text className="text-sm text-light-matte-black/70 text-center mt-3">
