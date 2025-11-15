@@ -2,7 +2,8 @@ import { BlurView } from "expo-blur";
 import { router } from "expo-router";
 import { AudioLines, MessageCircle, Mic, QrCode } from "lucide-react-native";
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Platform, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface ScanToPayChatModeFloatingButtonsProps {
   onChatModePress: () => void;
@@ -11,8 +12,14 @@ interface ScanToPayChatModeFloatingButtonsProps {
 export default function ScanToPayChatModeFloatingButtons({
   onChatModePress,
 }: ScanToPayChatModeFloatingButtonsProps) {
+  const { bottom } = useSafeAreaInsets();
+  const bottomOffset = Platform.OS === "ios" ? 8 : bottom > 0 ? bottom : 0;
+
   return (
-    <View className="absolute bottom-2 justify-center items-center w-full">
+    <View
+      className="absolute justify-center items-center w-full"
+      style={{ bottom: bottomOffset }}
+    >
       <View className="flex-row gap-3 items-center">
         <BlurView
           intensity={20}

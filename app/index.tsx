@@ -2,12 +2,16 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   BackHandler,
   Dimensions,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import HomeMain from "@/components/home/Main/HomeMain";
 import ScanToPayChatModeFloatingButtons from "@/components/home/Main/ScanToPayChatModeFloatingButtons";
 import AgentMode from "@/components/home/TakumiAgent/AgentMode";
@@ -45,10 +49,12 @@ export default function Home() {
     return () => backHandler.remove();
   }, [currentIndex, scrollToIndex]);
 
+  const { bottom } = useSafeAreaInsets();
+  const bottomOffset = Platform.OS === "ios" ? 0 : bottom > 0 ? bottom : 0;
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#f5f6f9" />
-      <SafeAreaView style={styles.container} edges={["top"]}>
+      <SafeAreaView style={[styles.container]} edges={["top"]}>
         <ScrollView
           ref={scrollViewRef}
           horizontal={true}
@@ -56,6 +62,7 @@ export default function Home() {
           pagingEnabled={true}
           showsHorizontalScrollIndicator={false}
           style={styles.horizontalScroll}
+          contentContainerStyle={{ paddingBottom: bottomOffset }}
         >
           <View style={{ width: SCREEN_WIDTH }}>
             <HomeMain />

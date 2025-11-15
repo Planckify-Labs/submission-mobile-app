@@ -18,7 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { TTransaction } from "@/api/types/transaction";
 import ActivityHeader from "@/components/activities/ActivityHeader";
 import PurchaseCard from "@/components/activities/PurchaseCard";
@@ -342,6 +342,8 @@ export default function ActivitiesScreen() {
     [activeActivity, handleTabChange, horizontalScrollX],
   );
 
+  const { bottom } = useSafeAreaInsets();
+  const bottomOffset = bottom > 0 ? bottom + 8 : 8;
   return (
     <>
       <StatusBar barStyle="dark-content" />
@@ -355,6 +357,7 @@ export default function ActivitiesScreen() {
         <SafeAreaView
           className="flex-1 bg-light-main-container relative"
           edges={["top"]}
+          style={{ paddingBottom: bottomOffset }}
         >
           <View className="flex-1 relative">
             <ActivityHeader

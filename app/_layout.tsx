@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { router, SplashScreen, Stack } from "expo-router";
 import { useEffect } from "react";
 import { LogBox } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PerformanceProvider } from "@/components/providers/PerformanceProvider";
 import "../global.css";
 import "../pollyfills";
@@ -56,15 +57,17 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <PerformanceProvider>
-        <InitializeApp />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: "ios_from_left",
-            contentStyle: { backgroundColor: "#f5f6f9" },
-            animationDuration: 700,
-          }}
-        />
+        <SafeAreaProvider>
+          <InitializeApp />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "ios_from_left",
+              contentStyle: { backgroundColor: "#f5f6f9" },
+              animationDuration: 700,
+            }}
+          />
+        </SafeAreaProvider>
       </PerformanceProvider>
     </QueryClientProvider>
   );

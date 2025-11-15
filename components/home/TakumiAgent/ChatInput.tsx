@@ -64,7 +64,7 @@ export default function ChatInput({
         style={{ width: "100%" }}
         className="absolute bottom-0 left-0 w-full"
       >
-        <View style={{ paddingBottom: bottomInset || 0 }}>
+        <View>
           <View className="flex-row items-center px-3 pb-3 gap-2">
             <View
               style={{

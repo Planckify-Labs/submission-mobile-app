@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Platform,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -22,6 +23,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ChatInput from "./ChatInput";
 import ConversationHistory from "./ConversationHistory";
 import MessageContent from "./MessageContent";
@@ -202,6 +204,8 @@ export default function AgentMode() {
     );
   }, [error, isLoading]);
 
+  const { bottom } = useSafeAreaInsets();
+  const bottomOffset = Platform.OS === "ios" ? 0 : bottom > 0 ? bottom : 0;
   return (
     <KeyboardProvider>
       <ScrollView
@@ -212,12 +216,12 @@ export default function AgentMode() {
         showsHorizontalScrollIndicator={false}
         className="flex-1 bg-light-main-container"
       >
-        <View style={{ width: screenWidth }}>
+        <View style={{ width: screenWidth, paddingBottom: bottomOffset }}>
           <ConversationHistory onScrollToChat={handleScrollToChat} />
         </View>
 
         <View
-          style={{ width: screenWidth }}
+          style={{ width: screenWidth, paddingBottom: bottomOffset }}
           className="flex-1 bg-light-main-container relative"
         >
           <View className="flex-row justify-between z-50 px-4 absolute top-0 left-0 w-full">

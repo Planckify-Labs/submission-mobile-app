@@ -2,7 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useNavigation } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { BackHandler, StatusBar } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { english, generateMnemonic } from "viem/accounts";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import {
@@ -254,10 +257,16 @@ export default function WalletSetup() {
     };
   }
 
+  const { bottom } = useSafeAreaInsets();
+  const bottomOffset = bottom > 0 ? bottom : 0;
   return (
     <>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
+      <SafeAreaView
+        className="flex-1 bg-light-main-container"
+        edges={["top"]}
+        style={{ paddingBottom: bottomOffset }}
+      >
         <WalletSetupSteps
           currentStep={currentStep}
           steps={steps}
