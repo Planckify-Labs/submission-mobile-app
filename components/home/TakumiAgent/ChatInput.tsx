@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   TextInput,
   TouchableOpacity,
   View,
@@ -65,7 +66,12 @@ export default function ChatInput({
         className="absolute bottom-0 left-0 w-full"
       >
         <View>
-          <View className="flex-row items-center px-3 pb-3 gap-2">
+          <View
+            className="flex-row items-center px-3- gap-2"
+            style={{
+              paddingHorizontal: Platform.OS === "ios" ? 20 : 12,
+            }}
+          >
             <View
               style={{
                 flex: 1,

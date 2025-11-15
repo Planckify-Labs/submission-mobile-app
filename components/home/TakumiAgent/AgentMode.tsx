@@ -205,7 +205,7 @@ export default function AgentMode() {
   }, [error, isLoading]);
 
   const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 0 : bottom > 0 ? bottom : 0;
+  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
   return (
     <KeyboardProvider>
       <ScrollView
