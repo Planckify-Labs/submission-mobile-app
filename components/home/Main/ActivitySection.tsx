@@ -1,10 +1,6 @@
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
-import {
-  MoveRight,
-  Sparkles,
-  Wallet2,
-} from "lucide-react-native";
+import { MoveRight, Sparkles, Wallet2 } from "lucide-react-native";
 import React, { useEffect, useRef } from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import { formatUnits } from "viem/utils";
@@ -119,9 +115,11 @@ export default function ActivitySection() {
         <Text className="text-light-primary-red font-bold text-lg">
           {(() => {
             try {
+              console.log("token decimals", transfer.token.decimals);
               const formattedUnits = formatUnits(
                 BigInt(transfer.amount),
-                transfer?.token?.decimals as number,
+                // TODO: fix this, token decimals is undefined, it uses the fallback value of 6
+                transfer.token.decimals || 6,
               );
               return formatTokenAmount(formattedUnits);
             } catch (error) {
@@ -131,7 +129,9 @@ export default function ActivitySection() {
           })()}
         </Text>
         <Text className="text-light-matte-black font-bold text-xs">
-          {transfer.token.symbol}
+          {transfer.token.symbol.length > 6
+            ? transfer.token.symbol.slice(0, 6) + "…"
+            : transfer.token.symbol}
         </Text>
         <View className="bg-light-main-container aspect-square w-4 rounded-full border border-light-matte-black absolute bottom-0 right-[10px] items-center justify-center">
           <OptimizedImage

@@ -4,6 +4,7 @@ import { Image, Text, View } from "react-native";
 import { formatUnits } from "viem";
 import { TTransaction } from "@/api/types/transaction";
 import OptimizedImage from "@/components/common/OptimizedImage";
+import { formatTokenAmount } from "@/utils/helperUtils";
 
 interface TransferDetailHeadingProps {
   transfer: TTransaction;
@@ -13,7 +14,16 @@ export default function TransferDetailHeading({
   transfer,
 }: TransferDetailHeadingProps) {
   const formatAmount = () => {
-    return formatUnits(BigInt(transfer.amount), transfer.token.decimals ?? 18);
+    if (!transfer.amount) return "0";
+    try {
+      const decimalAmount = formatUnits(
+        BigInt(transfer.amount),
+        transfer.token?.decimals as number,
+      );
+      return formatTokenAmount(decimalAmount);
+    } catch {
+      return transfer.amount;
+    }
   };
   return (
     <View className="items-center mb-6">
