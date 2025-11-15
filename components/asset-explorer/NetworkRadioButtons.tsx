@@ -1,6 +1,13 @@
 import { MoveDiagonal } from "lucide-react-native";
 import React, { useCallback, useEffect } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useWallet } from "@/hooks/useWallet";
 import NetworkRadioButtonLoadingSkeletons from "./NetworkRadioButtonLoadingSkeletons";
@@ -31,6 +38,8 @@ const NetworkRadioButtons = ({
 }: TNetworkButtonsProps) => {
   const { activeChain } = useWallet();
   const { data: blockchains, isLoading } = useBlockchains({ isActive: true });
+  const { bottom } = useSafeAreaInsets();
+  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
 
   const blockchainNetworks = React.useMemo(() => {
     if (!blockchains) return [];
@@ -102,7 +111,12 @@ const NetworkRadioButtons = ({
 
   return (
     <View
-      className={`absolute bottom-4 left-2 right-2 flex-row justify-center bg-light rounded-full overflow-hidden border-4 ${borderColor}`}
+      className={`absolute bottom-4 flex-row justify-center bg-light rounded-full overflow-hidden border-4 ${borderColor}`}
+      style={{
+        bottom: bottomOffset,
+        left: Platform.OS === "ios" ? 16 : 4,
+        right: Platform.OS === "ios" ? 16 : 4,
+      }}
     >
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View className="flex-row p-1 pr-10 gap-2">
