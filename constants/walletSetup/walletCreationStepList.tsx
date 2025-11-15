@@ -9,7 +9,7 @@ import {
   Wallet,
 } from "lucide-react-native";
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import SeedPhraseGrid from "@/components/common/SeedPhraseGrid";
 
 export type WalletCreationStep = {
@@ -158,8 +158,15 @@ export const createWalletSteps = (
     buttonText: "Continue",
     onButtonPress: () => {
       if (!isChecked) {
-        console.error(
-          "Confirmation Required: Please confirm you've saved your secret phrase somewhere safe",
+        Alert.alert(
+          "Confirmation Required",
+          "Please confirm you've saved your secret phrase somewhere safe",
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+            },
+          ],
         );
       } else {
         setCurrentStep(3);
@@ -194,8 +201,15 @@ export const createWalletSteps = (
       );
 
       if (!allCorrect) {
-        console.error(
-          "Incorrect Words: Please select the correct words from your secret phrase",
+        Alert.alert(
+          "Incorrect Words",
+          "Please select the correct words from your secret phrase",
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+            },
+          ],
         );
       } else {
         setCurrentStep(4);
