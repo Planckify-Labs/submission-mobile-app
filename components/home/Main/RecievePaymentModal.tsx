@@ -4,12 +4,14 @@ import React from "react";
 import {
   Animated,
   Modal,
+  Platform,
   Pressable,
   Text,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
 import QRCodeStyled from "react-native-qrcode-styled";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { takumipayLogoBase64 } from "@/constants/takumipay";
 import { TWallet } from "@/constants/types/walletTypes";
 import { copyToClipboard } from "@/utils/helperUtils";
@@ -40,6 +42,8 @@ export default function RecievePaymentModal({
   panResponder,
   isModalAnimationComplete,
 }: ReceivePaymentModalProps) {
+  const { bottom } = useSafeAreaInsets();
+  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
   return (
     <Modal
       transparent
@@ -65,7 +69,7 @@ export default function RecievePaymentModal({
             left: 0,
             right: 0,
             height: "auto",
-            paddingBottom: 20,
+            paddingBottom: bottomOffset,
             backgroundColor: "#f5f6f9",
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,
