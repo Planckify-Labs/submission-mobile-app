@@ -1,7 +1,12 @@
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { MoveRight, Sparkles, Wallet2 } from "lucide-react-native";
-import React, { useEffect, useRef } from "react";
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import { formatUnits } from "viem/utils";
 import { TTransaction } from "@/api/types/transaction";
@@ -12,7 +17,11 @@ import { formatTokenAmount } from "@/utils/helperUtils";
 import { truncateAddress } from "@/utils/walletUtils";
 import OptimizedImage from "../../common/OptimizedImage";
 
-export default function ActivitySection() {
+export interface ActivitySectionRef {
+  refetch: () => void;
+}
+
+const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
   const { activeWallet } = useWallet();
   const { isAuthenticated, isLoading: isAuthLoading } = useIsAuthenticated();
   const previousWalletAddress = useRef<string | undefined>(undefined);
@@ -31,6 +40,14 @@ export default function ActivitySection() {
       { type: "PAYMENT", take: 4 },
       { enabled: shouldFetchTransactions },
     );
+
+  // Expose refetch to parent component
+  useImperativeHandle(ref, () => ({
+    refetch: () => {
+      refetchTransferHistory();
+      refetchPaymentHistory();
+    },
+  }));
 
   useEffect(() => {
     const currentWalletAddress = activeWallet?.address;
@@ -338,4 +355,8 @@ export default function ActivitySection() {
       )}
     </View>
   );
-}
+});
+
+ActivitySection.displayName = "ActivitySection";
+
+export default ActivitySection;

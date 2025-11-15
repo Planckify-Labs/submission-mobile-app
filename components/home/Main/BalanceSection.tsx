@@ -10,7 +10,14 @@ import {
   Send,
   Wallet,
 } from "lucide-react-native";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import {
   Animated,
   Dimensions,
@@ -32,12 +39,21 @@ import RecievePaymentModal from "./RecievePaymentModal";
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.6;
 
-export default function BalanceSection() {
+export interface BalanceSectionRef {
+  refetch: () => void;
+}
+
+const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   const { activeWallet, activeChain, isLoading } = useWallet();
-  const { balance, isFetching } = useWalletBalance(
+  const { balance, isFetching, refetch } = useWalletBalance(
     activeWallet?.address as `0x${string}` | string,
     activeChain,
   );
+
+  // Expose refetch to parent component
+  useImperativeHandle(ref, () => ({
+    refetch,
+  }));
   const [isShowBalance, setShowBalance] = useState(false);
   const [selectedToken, setSelectedToken] = useState(
     activeChain?.chain.nativeCurrency?.symbol || "ETH",
@@ -306,4 +322,8 @@ export default function BalanceSection() {
       )}
     </>
   );
-}
+});
+
+BalanceSection.displayName = "BalanceSection";
+
+export default BalanceSection;
