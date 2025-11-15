@@ -22,7 +22,6 @@ import {
   ViewStyle,
 } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { generateAPIUrl } from "@/utils/helperUtils";
 import ChatInput from "./ChatInput";
 import ConversationHistory from "./ConversationHistory";
 import MessageContent from "./MessageContent";
@@ -39,7 +38,7 @@ export default function AgentMode() {
   const { messages, error, sendMessage, status, clearError } = useChat({
     transport: new DefaultChatTransport({
       fetch: expoFetch as unknown as typeof globalThis.fetch,
-      api: generateAPIUrl("/api/chat"),
+      api: `${process.env.EXPO_PUBLIC_AI_API_URL}/chat?secrectApiKey=${process.env.EXPO_PUBLIC_SECRET_AI_KEY}`,
     }),
     onError: (chatError) => {
       console.error(chatError, "Takumi agent chat error");
