@@ -12,6 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "jsEngine": "hermes",
+      "bundleIdentifier": "com.planckify.takumiwallet",
       "icon": {
         "light": "./assets/icons/light.png",
         "dark": "./assets/icons/dark.png"
