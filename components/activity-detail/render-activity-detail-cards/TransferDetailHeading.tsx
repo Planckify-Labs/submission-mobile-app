@@ -1,6 +1,6 @@
 import { Send } from "lucide-react-native";
 import React from "react";
-import { Image, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { formatUnits } from "viem";
 import { TTransaction } from "@/api/types/transaction";
 import OptimizedImage from "@/components/common/OptimizedImage";
