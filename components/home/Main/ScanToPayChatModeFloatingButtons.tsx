@@ -13,7 +13,7 @@ export default function ScanToPayChatModeFloatingButtons({
   onChatModePress,
 }: ScanToPayChatModeFloatingButtonsProps) {
   const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 8 : bottom > 0 ? bottom : 0;
+  const bottomOffset = Platform.OS === "ios" ? 8 : bottom > 0 ? bottom : 2;
 
   return (
     <View

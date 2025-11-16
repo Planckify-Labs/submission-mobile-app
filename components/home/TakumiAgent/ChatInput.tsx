@@ -61,9 +61,9 @@ export default function ChatInput({
     <>
       <KeyboardAvoidingView
         behavior="padding"
-        keyboardVerticalOffset={bottomInset ? bottomInset + 12 : 12}
+        keyboardVerticalOffset={bottomInset ? bottomInset + 40 : 40}
         style={{ width: "100%" }}
-        className="absolute bottom-0 left-0 w-full"
+        className="absolute bottom-1 left-0 w-full"
       >
         <View>
           <View
