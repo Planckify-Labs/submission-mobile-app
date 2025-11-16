@@ -6,9 +6,7 @@ import { type Hex } from "viem";
 import SignMessageModal from "@/components/common/SignMessageModal";
 import BrowserAddressBar from "@/components/dapps-browser/BrowserAddressBar";
 import BrowserNavigationControls from "@/components/dapps-browser/BrowserNavigationControls";
-import { TCategoryTab } from "@/components/dapps-browser/DAppList";
-import DAppsCategoryTab from "@/components/dapps-browser/DAppsCategoryTab";
-import EcosystemHub from "@/components/dapps-browser/EcosystemHub";
+import DAppsHub from "@/components/dapps-browser/DAppsHub";
 import TransactionModal from "@/components/dapps-browser/TransactionModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useWallet } from "@/hooks/useWallet";
@@ -51,17 +49,9 @@ export default function DappsBrowser() {
   const [pendingSignRequest, setPendingSignRequest] = useState<any>(null);
   const [showWalletSelection, setShowWalletSelection] = useState(false);
   const [pendingAccountRequest, setPendingAccountRequest] = useState<any>(null);
-  const [tabWidth, setTabWidth] = useState(0);
   const [pendingAccountRequests, setPendingAccountRequests] = useState<any[]>(
     [],
   );
-  const tabScrollX = useRef(new Animated.Value(0)).current;
-  const [activeCategory, setActiveCategory] = useState<TCategoryTab>("defi");
-
-  const handleTabBarLayout = (event: any) => {
-    const { width } = event.nativeEvent.layout;
-    setTabWidth(width / 3);
-  };
 
   React.useEffect(() => {
     if (activeWallet) {
@@ -135,20 +125,6 @@ export default function DappsBrowser() {
       isSecure: true,
     }));
   };
-
-  const _handleTabChange = (tab: TCategoryTab) => {
-    setActiveCategory(tab);
-    if (tabWidth > 0) {
-      const tabIndex = tab === "dex" ? 0 : tab === "defi" ? 1 : 2;
-      const translateX = tabWidth * tabIndex;
-      Animated.spring(tabScrollX, {
-        toValue: translateX,
-        useNativeDriver: true,
-      }).start();
-    }
-  };
-
-  const horizontalScrollX = useRef(new Animated.Value(0)).current;
 
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
@@ -425,15 +401,6 @@ export default function DappsBrowser() {
     }
   }, [isAddressBarAutoFocus]);
 
-  React.useEffect(() => {
-    // Initialize tab animation position when tabWidth is available
-    if (tabWidth > 0) {
-      const tabIndex = ["dex", "defi", "gaming"].indexOf(activeCategory);
-      if (tabIndex >= 0) {
-        tabScrollX.setValue(tabIndex * tabWidth);
-      }
-    }
-  }, [activeCategory, tabScrollX, tabWidth]);
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" backgroundColor="#f5f6f9" />
@@ -447,20 +414,7 @@ export default function DappsBrowser() {
         />
 
         {showHub ? (
-          <View className="flex-1">
-            <EcosystemHub
-              onNavigateToDapp={navigateToUrl}
-              activeCategory={activeCategory}
-              onCategoryChange={setActiveCategory}
-              horizontalScrollX={horizontalScrollX}
-            />
-
-            <DAppsCategoryTab
-              onLayout={handleTabBarLayout}
-              tabWidth={tabWidth}
-              horizontalScrollX={horizontalScrollX}
-            />
-          </View>
+          <DAppsHub onNavigateToDapp={navigateToUrl} />
         ) : (
           <WebView
             ref={webViewRef}
@@ -536,7 +490,7 @@ export default function DappsBrowser() {
           onClose={() => {
             handleSignReject();
           }}
-          onConfirm={async (rememberChoice: boolean) => {
+          onConfirm={async () => {
             try {
               await handleSignApprove();
             } catch (error: any) {
@@ -587,7 +541,7 @@ export default function DappsBrowser() {
           setPendingAccountRequest(null);
           setPendingAccountRequests([]);
         }}
-        onSelectWallet={(index) => {}}
+        onSelectWallet={() => {}}
         onSelectWalletForDapp={(wallet, index) => {
           console.log("Wallet selected:", wallet.name, wallet.address);
           setActiveWallet(index);

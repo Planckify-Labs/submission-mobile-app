@@ -25,8 +25,6 @@ import { truncateAddress } from "@/utils/walletUtils";
 import OptimizedImage from "../../common/OptimizedImage";
 import ActivitySkeleton from "./ActivitySkeleton";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
 export interface ActivitySectionRef {
   refetch: () => void;
 }
