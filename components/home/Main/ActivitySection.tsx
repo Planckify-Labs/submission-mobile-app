@@ -6,7 +6,6 @@ import {
   ShoppingBag,
   Sparkles,
   TrendingUp,
-  Wallet2,
 } from "lucide-react-native";
 import React, {
   forwardRef,
@@ -200,28 +199,41 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
           </View>
 
           <View className="items-center py-10 px-4">
-            {/* Wallet Icon with modern design */}
-            <View className="mb-8 relative">
+            <View className="mb-8 relative items-center justify-center h-32">
+              <View className="absolute w-28 h-28 bg-light-primary-red/5 rounded-full" />
+              <View className="absolute w-20 h-20 bg-light-primary-red/10 rounded-full" />
+
+              <View className="absolute -top-2 -left-8 w-3 h-3 bg-light-primary-red/30 rounded-full" />
+              <View className="absolute top-4 -right-10 w-2 h-2 bg-light-primary-red/40 rounded-full" />
+              <View className="absolute -bottom-2 left-6 w-2.5 h-2.5 bg-light-primary-red/25 rounded-full" />
+
               <View
-                className="bg-light-primary-red/10 w-20 h-20 rounded-3xl items-center justify-center"
+                className="bg-white w-24 h-24 rounded-3xl items-center justify-center border-2 border-light-primary-red/20"
                 style={{
                   shadowColor: "#c71c4b",
                   shadowOffset: { width: 0, height: 8 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 16,
-                  elevation: 4,
+                  shadowOpacity: 0.15,
+                  shadowRadius: 20,
+                  elevation: 10,
                 }}
               >
-                <Wallet2 color="#c71c4b" size={36} strokeWidth={2} />
+                <View className="absolute inset-2 bg-light-primary-red/5 rounded-2xl" />
+
+                <Image
+                  source={require("@/assets/images/takumipay-no-bg.png")}
+                  style={{ width: 60, height: 60 }}
+                  resizeMode="contain"
+                />
               </View>
-              {/* Decorative dot */}
-              <View className="absolute -top-1 -right-1 w-4 h-4 bg-light-primary-red rounded-full border-2 border-light" />
+
+              <View className="absolute -top-1 -right-6 w-5 h-5 bg-light-primary-red rounded-full border-[3px] border-light items-center justify-center">
+                <View className="w-2 h-2 bg-white rounded-full" />
+              </View>
             </View>
 
-            {/* Content */}
             <View className="items-center max-w-[280px] mb-8">
               <Text className="text-light-matte-black font-bold text-2xl mb-3 text-center">
-                Welcome! 👋
+                Welcome to your Takumi AI Wallet 🎉
               </Text>
               <Text className="text-light-matte-black/45 text-center text-sm leading-6">
                 Sign in to unlock your activity timeline and track all your
@@ -229,7 +241,6 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
               </Text>
             </View>
 
-            {/* Sign In Button */}
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => router.push("/auth")}
@@ -242,13 +253,11 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
                 elevation: 8,
               }}
             >
-              <Wallet2 color="#ffffff" size={20} strokeWidth={2.5} />
               <Text className="text-white font-bold text-base">
                 Sign In With Ethereum
               </Text>
             </TouchableOpacity>
 
-            {/* Feature highlights */}
             <View className="gap-2.5 w-full">
               <View className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl bg-light-main-container">
                 <View className="bg-light-primary-red/10 p-1.5 rounded-lg">
