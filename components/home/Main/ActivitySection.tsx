@@ -23,6 +23,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { formatTokenAmount } from "@/utils/helperUtils";
 import { truncateAddress } from "@/utils/walletUtils";
 import OptimizedImage from "../../common/OptimizedImage";
+import ActivitySkeleton from "./ActivitySkeleton";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -50,7 +51,6 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
       { enabled: shouldFetchTransactions },
     );
 
-  // Expose refetch to parent component
   useImperativeHandle(ref, () => ({
     refetch: () => {
       refetchTransferHistory();
@@ -187,14 +187,7 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
           <View className="flex-row">
             <Text className="text-light-matte-black text-sm">Activities</Text>
           </View>
-          <View className="items-center py-8">
-            <View className="bg-light-primary-red/10 p-4 rounded-full mb-4">
-              <Wallet2 color="#c71c4b" size={32} />
-            </View>
-            <Text className="text-light-matte-black/70 text-center">
-              Loading...
-            </Text>
-          </View>
+          <ActivitySkeleton />
         </View>
       </View>
     );
