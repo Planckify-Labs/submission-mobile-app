@@ -3,13 +3,17 @@ import { ArrowLeft, ChevronDown } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
+  Platform,
   ScrollView,
   StatusBar,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Address, erc20Abi, formatUnits } from "viem";
 import { exchangeRateApi } from "@/api/endpoints/exchange-rates";
 import { CustomerInfoItem } from "@/api/types/booking";
@@ -579,10 +583,16 @@ export default function PaymentScreen() {
     contractError,
   ]);
 
+  const { bottom } = useSafeAreaInsets();
+  const bottomOffset = Platform.OS === "ios" ? 0 : bottom > 0 ? bottom : 0;
   return (
     <>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
+      <SafeAreaView
+        className="flex-1 bg-light-main-container"
+        edges={["top"]}
+        style={{ paddingBottom: bottomOffset }}
+      >
         <View className="flex-1 px-5 pt-2">
           <View className="flex-row items-center mb-6">
             <TouchableOpacity
