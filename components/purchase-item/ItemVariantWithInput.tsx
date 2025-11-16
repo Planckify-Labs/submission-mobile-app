@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FlashList } from "@shopify/flash-list";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import {
   ArrowDown,
   ArrowLeft,
@@ -68,7 +68,6 @@ export default function ItemWithInput({
   const isLoading = isProductLoading || isInputFieldsLoading;
   const error = productError;
 
-  // Initialize React Hook Form
   const { control, handleSubmit, watch, setValue, reset } = useForm<FormData>({
     defaultValues: {},
     mode: "onChange",
@@ -140,7 +139,13 @@ export default function ItemWithInput({
     };
   }, []);
 
-  // Initialize form fields when inputFields are loaded
+  // Reset navigation state when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      setIsNavigating(false);
+    }, []),
+  );
+
   useEffect(() => {
     if (inputFields?.forms) {
       const initialValues: FormData = {};
@@ -316,8 +321,9 @@ export default function ItemWithInput({
             params,
           });
 
-          requestAnimationFrame(() => {
+          setTimeout(() => {
             if (isMounted.current) {
+              setIsNavigating(false);
               reset();
 
               if (productId && inputFields?.forms) {
@@ -328,7 +334,7 @@ export default function ItemWithInput({
                 });
               }
             }
-          });
+          }, 500);
         })}
         activeOpacity={0.7}
         disabled={isNavigating}

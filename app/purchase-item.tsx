@@ -1,7 +1,10 @@
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { StatusBar, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Platform, StatusBar, Text, View } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import ItemWithInput from "@/components/purchase-item/ItemVariantWithInput";
 import ItemVariantWithInputSkeleton from "@/components/purchase-item/ItemVariantWithInputSkeleton";
 import ItemWithoutInput from "@/components/purchase-item/ItemVariantWithoutInput";
@@ -22,6 +25,9 @@ export default function PurchaseItemScreen() {
   const { data: inputFields, isLoading: isInputFieldsLoading } =
     useProductInputFields(productId);
 
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const bottomOffset =
+    Platform.OS === "ios" ? 0 : bottomInset > 0 ? bottomInset : 0;
   const isLoading = isProductLoading || isInputFieldsLoading;
   const error = productError;
 
@@ -64,7 +70,11 @@ export default function PurchaseItemScreen() {
   return (
     <>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
+      <SafeAreaView
+        className="flex-1 bg-light-main-container"
+        edges={["top"]}
+        style={{ paddingBottom: bottomOffset }}
+      >
         {hasInput === null ? (
           <ItemVariantWithoutInputSkeleton />
         ) : hasInput ? (

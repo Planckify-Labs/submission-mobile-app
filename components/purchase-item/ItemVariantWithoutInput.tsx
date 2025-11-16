@@ -1,6 +1,6 @@
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { ArrowLeft, Info } from "lucide-react-native";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useProductById } from "@/hooks/queries/useProducts";
 import LoadinngSpinnerPopup from "../common/LoadinngSpinnerPopup";
@@ -26,6 +26,12 @@ export default function ItemWithoutInput({
       isMounted.current = false;
     };
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsNavigating(false);
+    }, []),
+  );
 
   if (isLoading) {
     return <ItemVariantWithoutInputSkeleton />;
@@ -176,6 +182,12 @@ export default function ItemWithoutInput({
                   variantId: selectedItemVariant,
                 },
               });
+
+              setTimeout(() => {
+                if (isMounted.current) {
+                  setIsNavigating(false);
+                }
+              }, 500);
             }
           }}
         >

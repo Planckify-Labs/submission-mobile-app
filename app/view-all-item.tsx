@@ -4,12 +4,16 @@ import { ArrowLeft } from "lucide-react-native";
 import React, { useRef, useState } from "react";
 import {
   Animated,
+  Platform,
   StatusBar,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { TProduct } from "@/api/types/product";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import SearchBar from "@/components/common/SearchBar";
@@ -103,6 +107,9 @@ export default function ViewAllItemScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const scrollY = useRef(new Animated.Value(0)).current;
 
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const bottomOffset =
+    Platform.OS === "ios" ? 0 : bottomInset > 0 ? bottomInset : 0;
   const {
     data: products,
     isLoading,
@@ -184,7 +191,11 @@ export default function ViewAllItemScreen() {
   return (
     <>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
+      <SafeAreaView
+        className="flex-1 bg-light-main-container"
+        edges={["top"]}
+        style={{ paddingBottom: bottomOffset }}
+      >
         <View className="flex-row items-center p-4">
           <TouchableOpacity
             activeOpacity={0.7}
