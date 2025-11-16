@@ -1,13 +1,20 @@
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
-import { MoveRight, Sparkles, Wallet2 } from "lucide-react-native";
+import {
+  MoveRight,
+  Send,
+  ShoppingBag,
+  Sparkles,
+  TrendingUp,
+  Wallet2,
+} from "lucide-react-native";
 import React, {
   forwardRef,
   useEffect,
   useImperativeHandle,
   useRef,
 } from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Dimensions, Image, Text, TouchableOpacity, View } from "react-native";
 import { formatUnits } from "viem/utils";
 import { TTransaction } from "@/api/types/transaction";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
@@ -16,6 +23,8 @@ import { useWallet } from "@/hooks/useWallet";
 import { formatTokenAmount } from "@/utils/helperUtils";
 import { truncateAddress } from "@/utils/walletUtils";
 import OptimizedImage from "../../common/OptimizedImage";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export interface ActivitySectionRef {
   refetch: () => void;
@@ -199,58 +208,74 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
             <Text className="text-light-matte-black text-sm">Activities</Text>
           </View>
 
-          <View className="items-center py-12">
-            <View className="relative mb-6">
-              <View className="bg-light-primary-red/5 w-24 h-24 rounded-full items-center justify-center">
-                <View className="bg-light-primary-red/10 w-20 h-20 rounded-full items-center justify-center">
-                  <View className="bg-light-primary-red/10 w-20 h-20 rounded-full relative">
-                    <Image
-                      source={require("@/assets/images/takumipay-no-bg.png")}
-                      style={{ width: 40, height: 40 }}
-                      resizeMode="contain"
-                      className="absolute top-[15px] left-[14px]"
-                    />
-                  </View>
-                </View>
+          <View className="items-center py-10 px-4">
+            {/* Wallet Icon with modern design */}
+            <View className="mb-8 relative">
+              <View
+                className="bg-light-primary-red/10 w-20 h-20 rounded-3xl items-center justify-center"
+                style={{
+                  shadowColor: "#c71c4b",
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 16,
+                  elevation: 4,
+                }}
+              >
+                <Wallet2 color="#c71c4b" size={36} strokeWidth={2} />
               </View>
-              <View className="absolute -top-1 -right-1 w-3 h-3 bg-light-primary-red rounded-full" />
+              {/* Decorative dot */}
+              <View className="absolute -top-1 -right-1 w-4 h-4 bg-light-primary-red rounded-full border-2 border-light" />
             </View>
 
-            <View className="items-center max-w-72">
-              <Text className="text-light-matte-black font-bold text-xl mb-3 text-center">
-                Welcome to your Takumi Wallet! 🎉
+            {/* Content */}
+            <View className="items-center max-w-[280px] mb-8">
+              <Text className="text-light-matte-black font-bold text-2xl mb-3 text-center">
+                Welcome! 👋
               </Text>
-              <Text className="text-light-matte-black/60 text-center text-base leading-6 mb-8">
-                Sign In with your wallet to see all your onchain activities in
-                one place
+              <Text className="text-light-matte-black/45 text-center text-sm leading-6">
+                Sign in to unlock your activity timeline and track all your
+                on-chain transactions
               </Text>
             </View>
 
+            {/* Sign In Button */}
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => router.push("/auth")}
-              className="bg-light-primary-red py-4 px-8 rounded-2xl flex-row items-center gap-3 shadow-sm"
+              className="bg-light-primary-red py-4 px-8 rounded-2xl flex-row items-center gap-3 mb-6"
               style={{
                 shadowColor: "#c71c4b",
                 shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
+                shadowOpacity: 0.2,
                 shadowRadius: 12,
                 elevation: 8,
               }}
             >
-              <Wallet2 color="#ffffff" size={20} strokeWidth={2} />
+              <Wallet2 color="#ffffff" size={20} strokeWidth={2.5} />
               <Text className="text-white font-bold text-base">
                 Sign In With Ethereum
               </Text>
             </TouchableOpacity>
 
-            <View className="flex-row items-center mt-6 px-4 py-3 bg-light-main-container rounded-xl">
-              <View className="bg-light-primary-red/10 p-2 rounded-full mr-3">
-                <Wallet2 color="#c71c4b" size={14} />
+            {/* Feature highlights */}
+            <View className="gap-2.5 w-full">
+              <View className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl bg-light-main-container">
+                <View className="bg-light-primary-red/10 p-1.5 rounded-lg">
+                  <Sparkles color="#c71c4b" size={14} strokeWidth={2.5} />
+                </View>
+                <Text className="text-light-matte-black/55 text-xs flex-1 font-medium">
+                  Secure & gasless authentication
+                </Text>
               </View>
-              <Text className="text-light-matte-black/50 text-xs flex-1">
-                Secure authentication • No gas fees required
-              </Text>
+
+              <View className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl bg-light-main-container">
+                <View className="bg-light-primary-red/10 p-1.5 rounded-lg">
+                  <TrendingUp color="#c71c4b" size={14} strokeWidth={2.5} />
+                </View>
+                <Text className="text-light-matte-black/55 text-xs flex-1 font-medium">
+                  Track all your on-chain activity
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -308,47 +333,100 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
             <Text className="text-light-matte-black text-sm">Activities</Text>
           </View>
 
-          <View className="items-center py-10">
-            <View className="relative mb-5">
-              <View className="bg-light-primary-red/5 w-24 h-24 rounded-full items-center justify-center">
-                <View className="bg-light-primary-red/10 w-20 h-20 rounded-full relative">
-                  <Image
-                    source={require("@/assets/images/takumipay-no-bg.png")}
-                    style={{ width: 40, height: 40 }}
-                    resizeMode="contain"
-                    className="absolute top-[15px] left-[14px]"
-                  />
+          <View className="py-8 px-5">
+            <View className="items-center mb-8 relative h-32">
+              <View className="absolute top-0 left-1/4 w-16 h-16 bg-light-primary-red/5 rounded-2xl rotate-12" />
+              <View className="absolute top-4 right-1/4 w-12 h-12 bg-light-primary-red/8 rounded-xl -rotate-6" />
+
+              <View className="absolute top-8 items-center">
+                <View
+                  className="bg-light rounded-3xl p-6 border-2 border-light-primary-red/20"
+                  style={{
+                    shadowColor: "#c71c4b",
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 16,
+                    elevation: 8,
+                  }}
+                >
+                  <View className="flex-row items-center gap-3">
+                    <View className="bg-light-primary-red/10 p-3 rounded-2xl">
+                      <ShoppingBag color="#c71c4b" size={28} strokeWidth={2} />
+                    </View>
+                    <View className="w-px h-10 bg-light-matte-black/10" />
+                    <View className="bg-light-primary-red/10 p-3 rounded-2xl">
+                      <Send color="#c71c4b" fill="#c71c4b" size={28} />
+                    </View>
+                  </View>
                 </View>
               </View>
-              <View className="absolute -top-1 -right-1 w-3 h-3 bg-light-primary-red rounded-full" />
             </View>
 
-            <Text className="text-light-matte-black font-semibold text-base">
-              You're all set to make a move
-            </Text>
-            <Text className="text-light-matte-black/60 text-center text-sm mt-1 px-4 leading-5">
-              Send your first transfer or shop through Takumi and your timeline
-              will populate instantly.
-            </Text>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => router.push("/service")}
-              className="bg-light-primary-red w-full- rounded-full items-center gap-3 mt-6 px-5 py-4 mx-auto-"
-            >
-              <Text className="text-light font-bold text-sm text-center">
-                Make your first purchase
+            <View className="items-center mb-8 mt-4">
+              <Text className="text-light-matte-black font-bold text-2xl mb-3 text-center">
+                No Activity Yet
               </Text>
-            </TouchableOpacity>
+              <Text className="text-light-matte-black/45 text-center text-sm leading-6 max-w-[260px]">
+                Start your journey by making a purchase or sending crypto
+              </Text>
+            </View>
 
-            <View className="flex-row items-start gap-3 mt-5 px-4 py-3 rounded-2xl bg-light-main-container border border-light-primary-red/15">
-              <View className="bg-light-primary-red/10 p-2 rounded-full">
-                <Sparkles color="#c71c4b" size={14} />
+            <View className="flex-row gap-3 mb-6">
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => router.push("/service")}
+                className="flex-1 bg-light-primary-red rounded-2xl p-4 items-center"
+                style={{
+                  shadowColor: "#c71c4b",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 8,
+                  elevation: 5,
+                }}
+              >
+                <View className="bg-white/20 p-2.5 rounded-xl mb-2">
+                  <ShoppingBag color="#ffffff" size={20} strokeWidth={2.5} />
+                </View>
+                <Text className="text-white font-bold text-sm">Shop</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => router.push("/send")}
+                className="flex-1 bg-light-matte-black rounded-2xl p-4 items-center"
+                style={{
+                  shadowColor: "#20222c",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 8,
+                  elevation: 5,
+                }}
+              >
+                <View className="bg-white/10 p-2.5 rounded-xl mb-2">
+                  <Send color="#ffffff" size={20} fill="#ffffff" />
+                </View>
+                <Text className="text-white font-bold text-sm">Transfer</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View className="gap-2.5">
+              <View className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl bg-light-main-container">
+                <View className="bg-light-primary-red/10 p-1.5 rounded-lg">
+                  <TrendingUp color="#c71c4b" size={14} strokeWidth={2.5} />
+                </View>
+                <Text className="text-light-matte-black/55 text-xs flex-1 font-medium">
+                  Track all transactions in real-time
+                </Text>
               </View>
-              <Text className="text-light-matte-black/65 text-xs leading-5 flex-1">
-                We'll highlight your latest transfers & purchases here the
-                moment they land on-chain.
-              </Text>
+
+              <View className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl bg-light-main-container">
+                <View className="bg-light-primary-red/10 p-1.5 rounded-lg">
+                  <Sparkles color="#c71c4b" size={14} strokeWidth={2.5} />
+                </View>
+                <Text className="text-light-matte-black/55 text-xs flex-1 font-medium">
+                  Instant on-chain activity updates
+                </Text>
+              </View>
             </View>
           </View>
         </View>
