@@ -23,6 +23,7 @@ import {
   View,
 } from "react-native";
 import { queryClient } from "@/app/_layout";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import OptionSelectorModal from "@/components/common/OptionSelectorModal";
 import {
   useProductById,
@@ -79,6 +80,7 @@ export default function ItemWithInput({
   const [activeField, setActiveField] = useState<TInputField | null>(null);
   const [isScrolling, setIsScrolling] = useState(false);
   const [isAtTop, setIsAtTop] = useState(true);
+  const [isNavigating, setIsNavigating] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const scrollButtonOpacity = useRef(new Animated.Value(0)).current;
 
@@ -296,6 +298,7 @@ export default function ItemWithInput({
         style={{ marginVertical: ITEM_MARGIN }}
         className="bg-light-main-container border border-light-matte-black/10 rounded-xl p-4"
         onPress={handleSubmit(async (formData) => {
+          setIsNavigating(true);
           const textField = inputFields?.forms.find(
             (f) => f.type.toLowerCase() !== "option",
           );
@@ -328,6 +331,7 @@ export default function ItemWithInput({
           });
         })}
         activeOpacity={0.7}
+        disabled={isNavigating}
       >
         <View className="flex-row justify-between items-center">
           <View className="flex-1">
@@ -572,6 +576,12 @@ export default function ItemWithInput({
         selectedOption={activeField ? formValues[activeField.key] : undefined}
         stateKey={activeField ? `${productId}-${activeField.key}` : undefined}
         clearOnClose={false}
+      />
+
+      <LoadinngSpinnerPopup
+        visible={isNavigating}
+        title="Preparing Payment"
+        message="Please wait while we prepare your payment..."
       />
     </>
   );

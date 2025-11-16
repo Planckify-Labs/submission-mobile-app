@@ -3,6 +3,7 @@ import { ArrowLeft, Info } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useProductById } from "@/hooks/queries/useProducts";
+import LoadinngSpinnerPopup from "../common/LoadinngSpinnerPopup";
 import OptimizedImage from "../common/OptimizedImage";
 import ItemVariantWithoutInputSkeleton from "./ItemVariantWithoutInputSkeleton";
 
@@ -18,6 +19,7 @@ export default function ItemWithoutInput({
   const [selectedItemVariant, setSelectedItemVariant] = useState<string | null>(
     null,
   );
+  const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -162,24 +164,32 @@ export default function ItemWithoutInput({
 
         <TouchableOpacity
           activeOpacity={0.7}
-          className={`bg-light-primary-red py-4 rounded-full items-center ${!selectedItemVariant ? "opacity-50" : ""}`}
-          disabled={!selectedItemVariant}
-          onPress={() =>
-            selectedItemVariant &&
-            router.push({
-              pathname: "/payment",
-              params: {
-                productId: product.id,
-                variantId: selectedItemVariant,
-              },
-            })
-          }
+          className={`bg-light-primary-red py-4 rounded-full items-center ${!selectedItemVariant || isNavigating ? "opacity-50" : ""}`}
+          disabled={!selectedItemVariant || isNavigating}
+          onPress={() => {
+            if (selectedItemVariant) {
+              setIsNavigating(true);
+              router.push({
+                pathname: "/payment",
+                params: {
+                  productId: product.id,
+                  variantId: selectedItemVariant,
+                },
+              });
+            }
+          }}
         >
           <Text className="text-light font-bold text-lg">
             Continue to Payment
           </Text>
         </TouchableOpacity>
       </View>
+
+      <LoadinngSpinnerPopup
+        visible={isNavigating}
+        title="Preparing Payment"
+        message="Please wait while we prepare your payment..."
+      />
     </ScrollView>
   );
 }
