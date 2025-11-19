@@ -293,13 +293,15 @@ export default function ActivitiesScreen() {
     { useNativeDriver: false },
   );
 
-  const TabButtons = useMemo(
-    () => (
+  const TabButtons = () => (
+    <View
+      style={{ paddingBottom: bottomOffset }}
+      className="bottom-0 absolute left-0 right-0"
+    >
       <BlurView
         intensity={30}
         experimentalBlurMethod="dimezisBlurView"
-        className="overflow-hidden rounded-full absolute left-0 right-0 mx-4 border-4 border-light-main-container/80"
-        style={{ bottom: 16 + bottomOffset }}
+        className="overflow-hidden rounded-full mx-4 border-4 border-light-main-container/80"
       >
         <View className="bg-mainborder-light-main-container/10 w-full flex-row items-center justify-evenly relative">
           <TouchableOpacity
@@ -342,12 +344,12 @@ export default function ActivitiesScreen() {
           />
         </View>
       </BlurView>
-    ),
-    [activeActivity, handleTabChange, horizontalScrollX],
+    </View>
   );
 
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = bottom > 0 ? bottom + 8 : 8;
+  console.log({ bottom });
   return (
     <>
       <StatusBar barStyle="dark-content" />
@@ -387,7 +389,7 @@ export default function ActivitiesScreen() {
               scrollEventThrottle={16}
             />
           </View>
-          {TabButtons}
+          <TabButtons />
         </SafeAreaView>
       )}
     </>
