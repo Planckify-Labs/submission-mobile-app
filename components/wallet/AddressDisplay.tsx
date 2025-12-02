@@ -1,4 +1,4 @@
-import { Copy } from "lucide-react-native";
+import { Copy, Hash } from "lucide-react-native";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 
@@ -11,25 +11,32 @@ export default function AddressDisplay({
   address,
   onCopy,
 }: AddressDisplayProps) {
+  const formattedAddress = address
+    ? `${address.substring(0, 10)}...${address.substring(address.length - 8)}`
+    : "";
+
   return (
     <View className="mb-4">
-      <Text className="text-light-matte-black/70 mb-1">Wallet Address</Text>
-      <View className="bg-light-main-container/50 p-3 rounded-xl mb-3 flex-row items-center">
-        <Text
-          className="text-light-matte-black/80 flex-1 text-sm"
-          numberOfLines={2}
-          ellipsizeMode="middle"
-        >
-          {address}
+      <View className="flex-row items-center mb-2">
+        <Hash size={12} color="#c71c4b" />
+        <Text className="text-light-matte-black/50 text-xs font-medium ml-1 uppercase tracking-wide">
+          Address
         </Text>
-        <Pressable
-          onPress={onCopy}
-          className="ml-2 p-2"
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Copy size={16} color="#c71c4b" />
-        </Pressable>
       </View>
+      <Pressable
+        onPress={onCopy}
+        className="bg-light-main-container/50 p-4 rounded-2xl flex-row items-center active:bg-light-main-container"
+      >
+        <Text
+          className="text-light-matte-black font-medium flex-1 text-sm tracking-wide"
+          numberOfLines={1}
+        >
+          {formattedAddress}
+        </Text>
+        <View className="w-8 h-8 rounded-xl bg-light-primary-red/10 items-center justify-center ml-3">
+          <Copy size={14} color="#c71c4b" />
+        </View>
+      </Pressable>
     </View>
   );
 }
