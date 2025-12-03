@@ -168,11 +168,7 @@ export default function ServiceScreen() {
   return (
     <>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView
-        className="flex-1 bg-light-main-container"
-        edges={["top"]}
-        style={{ paddingBottom: bottomOffset }}
-      >
+      <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
         <FlatList
           data={serviceList}
           renderItem={renderServiceScreenItem}
@@ -181,7 +177,7 @@ export default function ServiceScreen() {
           }
           showsVerticalScrollIndicator={false}
           stickyHeaderIndices={[1]}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={{ paddingBottom: bottomOffset }}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             { useNativeDriver: false },

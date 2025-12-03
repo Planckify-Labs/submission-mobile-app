@@ -402,7 +402,7 @@ export default function DappsBrowser() {
   }, [isAddressBarAutoFocus]);
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#f5f6f9" />
 
       <View className="flex-1">
