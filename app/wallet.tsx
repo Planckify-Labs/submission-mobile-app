@@ -20,7 +20,7 @@ import {
 } from "react-native-safe-area-context";
 import { usePerformance } from "@/components/providers/PerformanceProvider";
 import WalletCompactCard from "@/components/wallet/WalletCompactCard";
-import WalletExpandedDetails from "@/components/wallet/WalletExpandedDetails";
+import WalletDetails from "@/components/wallet/WalletDetails";
 import WalletSwitcherModal from "@/components/wallet/WalletSwitcherModal";
 import { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
@@ -237,7 +237,7 @@ export default function Wallet() {
             </View>
           </TouchableOpacity>
 
-          <WalletExpandedDetails
+          <WalletDetails
             wallet={activeWallet}
             showWalletInfo={showWalletInfo}
             setShowWalletInfo={setShowWalletInfo}

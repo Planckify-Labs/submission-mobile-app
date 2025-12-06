@@ -18,19 +18,19 @@ const LazyLoadingPlaceholder = () => (
   </View>
 );
 
-type WalletExpandedDetailsProps = {
+type TWalletDetails = {
   wallet: TWallet;
   showWalletInfo: boolean;
   setShowWalletInfo: (show: boolean) => void;
   animatedStyle?: object;
 };
 
-export default function WalletExpandedDetails({
+export default function WalletDetails({
   wallet,
   showWalletInfo,
   setShowWalletInfo,
   animatedStyle,
-}: WalletExpandedDetailsProps) {
+}: TWalletDetails) {
   const { deferredTask } = usePerformance();
 
   const handleToggleWalletInfo = useCallback(async () => {
@@ -51,16 +51,15 @@ export default function WalletExpandedDetails({
       className="bg-light rounded-3xl overflow-hidden mx-4"
       style={[
         {
-          shadowColor: "#20222c",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          elevation: 8,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 4,
+          elevation: 1,
         },
         animatedStyle,
       ]}
     >
-      {/* Header Section */}
       <View className="px-5 pt-5 pb-4">
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center">
@@ -80,10 +79,8 @@ export default function WalletExpandedDetails({
         </View>
       </View>
 
-      {/* Divider */}
       <View className="h-px bg-light-matte-black/5 mx-5" />
 
-      {/* Content Section */}
       <View className="px-5 py-4">
         <AddressDisplay
           address={wallet.address}
@@ -100,7 +97,6 @@ export default function WalletExpandedDetails({
         </Suspense>
       </View>
 
-      {/* Security Footer */}
       {wallet.type !== "Social" && (
         <View className="bg-light-main-container/60 px-5 py-4">
           <View className="flex-row items-center">
