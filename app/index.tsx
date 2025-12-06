@@ -21,6 +21,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 export default function Home() {
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Track if agent mode has ever been opened to keep it mounted once visited
+  const [hasVisitedAgentMode, setHasVisitedAgentMode] = useState(false);
 
   const scrollToIndex = useCallback((index: number) => {
     scrollViewRef.current?.scrollTo({
@@ -28,6 +30,10 @@ export default function Home() {
       animated: true,
     });
     setCurrentIndex(index);
+    // Mark agent mode as visited when navigating to it
+    if (index === 1) {
+      setHasVisitedAgentMode(true);
+    }
   }, []);
 
   const handleChatModePress = () => {
@@ -68,7 +74,7 @@ export default function Home() {
             <HomeMain />
           </View>
           <View style={{ width: SCREEN_WIDTH }}>
-            <AgentMode />
+            {hasVisitedAgentMode && <AgentMode />}
           </View>
         </ScrollView>
 
