@@ -28,10 +28,18 @@ export default function ServiceSectionContainer({
 }: PaymentSectionContainerProps) {
   const handleViewAll = () => {
     if (section.viewAllPath) {
-      router.push({
-        pathname: "/view-all-item",
-        params: { categoryId: section.id, categoryName: section.title },
-      });
+      // Navigate to pulsa-data screen for Pulsa & Data Package category
+      if (
+        section.title.toLowerCase().includes("pulsa") &&
+        section.title.toLowerCase().includes("data")
+      ) {
+        router.push("/pulsa-data");
+      } else {
+        router.push({
+          pathname: "/view-all-item",
+          params: { categoryId: section.id, categoryName: section.title },
+        });
+      }
     }
   };
 

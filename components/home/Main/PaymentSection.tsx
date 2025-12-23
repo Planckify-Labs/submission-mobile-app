@@ -14,8 +14,7 @@ const paymentItems = [
         resizeMode="contain"
       />
     ),
-    categoryId:
-      process.env.EXPO_PUBLIC_PAYMENT_CATEGORY_PRODUCT_ID?.split(",")[0],
+    route: "/pulsa-data",
   },
   {
     name: "Gaming",
@@ -45,7 +44,9 @@ const paymentItems = [
 
 export default function PaymentSection() {
   const handleNavigate = (item: (typeof paymentItems)[0]) => {
-    if (item.categoryId) {
+    if (item.route) {
+      router.push(item.route as any);
+    } else if (item.categoryId) {
       router.push({
         pathname: "/view-all-item",
         params: {
