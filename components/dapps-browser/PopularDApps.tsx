@@ -8,7 +8,6 @@ import { generateSkeletonData } from "../../utils/dappsBrowserUtils";
 import DAppCard from "./DAppCard";
 import DAppCardSkeleton from "./DAppCardSkeleton";
 import DappsErrorMessage from "./DappsErrorMessage";
-
 const PopularDApps = memo<TDAppNavigationProps>(function PopularDApps({
   onNavigateToDapp,
 }) {
@@ -31,7 +30,7 @@ const PopularDApps = memo<TDAppNavigationProps>(function PopularDApps({
 
       return (
         <View style={{ width: POPULAR_CARD_WIDTH }}>
-          <DAppCard dapp={item} isCompact onPress={onNavigateToDapp} />
+          <DAppCard dapp={item} onPress={onNavigateToDapp} />
         </View>
       );
     },

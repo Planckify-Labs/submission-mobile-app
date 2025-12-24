@@ -21,6 +21,7 @@ export interface TUseBlockchainsWithStorageOptions {
   cursor?: string;
   forceRefresh?: boolean;
   isNativeCurrency?: boolean;
+  isActive: boolean;
 }
 
 export type TBlockchainListResponse = TBlockchain[];
