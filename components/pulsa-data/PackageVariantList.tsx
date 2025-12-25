@@ -97,7 +97,6 @@ export const PackageVariantList = memo(function PackageVariantList() {
           paddingTop: 10,
           paddingBottom: bottomOffset,
         }}
-        estimatedItemSize={SKELETON_HEIGHT}
       />
     );
   }

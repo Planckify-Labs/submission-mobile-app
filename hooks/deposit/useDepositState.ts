@@ -44,16 +44,34 @@ export function useDepositState() {
     blockchainId: activeBackendChain?.id,
   });
 
+  const selectedToken = state?.selectedToken;
+  const amount = state?.amount ?? "";
+  const fiatAmount = state?.fiatAmount ?? "";
+  const isLoading = state?.isLoading ?? false;
+  const transactionStatus = state?.transactionStatus ?? "";
+
   useEffect(() => {
     if (stablecoinTokens && stablecoinTokens.length > 0) {
       if (
-        !state?.selectedToken ||
-        !stablecoinTokens.some((token) => token.id === state.selectedToken?.id)
+        !selectedToken ||
+        !stablecoinTokens.some((token) => token.id === selectedToken?.id)
       ) {
-        setState({ ...state, selectedToken: stablecoinTokens[0] });
+        setState({
+          selectedToken: stablecoinTokens[0],
+          amount,
+          fiatAmount,
+          isLoading,
+          transactionStatus,
+        });
       }
-    } else if (state?.selectedToken) {
-      setState({ ...state, selectedToken: undefined });
+    } else if (selectedToken) {
+      setState({
+        selectedToken: undefined,
+        amount,
+        fiatAmount,
+        isLoading,
+        transactionStatus,
+      });
     }
   }, [stablecoinTokens]);
 
@@ -66,15 +84,21 @@ export function useDepositState() {
   }, []);
 
   const exchangeRate = useMemo(
-    () => getExchangeRate(state?.selectedToken),
-    [state?.selectedToken, getExchangeRate]
+    () => getExchangeRate(selectedToken),
+    [selectedToken, getExchangeRate]
   );
 
   const setSelectedToken = useCallback(
     (token: TToken) => {
-      setState({ ...state, selectedToken: token });
+      setState({
+        selectedToken: token,
+        amount,
+        fiatAmount,
+        isLoading,
+        transactionStatus,
+      });
     },
-    [state, setState]
+    [amount, fiatAmount, isLoading, transactionStatus, setState]
   );
 
   const setAmount = useCallback(
@@ -83,9 +107,15 @@ export function useDepositState() {
         value && !isNaN(parseFloat(value))
           ? (parseFloat(value) * exchangeRate).toFixed(2)
           : "";
-      setState({ ...state, amount: value, fiatAmount: newFiatAmount });
+      setState({
+        selectedToken,
+        amount: value,
+        fiatAmount: newFiatAmount,
+        isLoading,
+        transactionStatus,
+      });
     },
-    [state, setState, exchangeRate]
+    [selectedToken, isLoading, transactionStatus, setState, exchangeRate]
   );
 
   const setFiatAmount = useCallback(
@@ -94,61 +124,97 @@ export function useDepositState() {
         value && !isNaN(parseFloat(value))
           ? (parseFloat(value) / exchangeRate).toFixed(2)
           : "";
-      setState({ ...state, fiatAmount: value, amount: newAmount });
+      setState({
+        selectedToken,
+        amount: newAmount,
+        fiatAmount: value,
+        isLoading,
+        transactionStatus,
+      });
     },
-    [state, setState, exchangeRate]
+    [selectedToken, isLoading, transactionStatus, setState, exchangeRate]
   );
 
   const setQuickAmount = useCallback(
     (value: string) => {
-      const fiatAmount = (parseFloat(value) * exchangeRate).toFixed(2);
-      setState({ ...state, amount: value, fiatAmount });
+      const newFiatAmount = (parseFloat(value) * exchangeRate).toFixed(2);
+      setState({
+        selectedToken,
+        amount: value,
+        fiatAmount: newFiatAmount,
+        isLoading,
+        transactionStatus,
+      });
     },
-    [state, setState, exchangeRate]
+    [selectedToken, isLoading, transactionStatus, setState, exchangeRate]
   );
 
   const validateInputs = useCallback(() => {
-    if (!state?.amount || parseFloat(state.amount) <= 0) {
+    if (!amount || parseFloat(amount) <= 0) {
       console.error("Error: Please enter a valid amount");
       return false;
     }
     return true;
-  }, [state?.amount]);
+  }, [amount]);
 
   const handleDeposit = useCallback(async () => {
     if (!validateInputs()) return;
 
-    setState({ ...state, isLoading: true, transactionStatus: "Preparing deposit instructions..." });
+    setState({
+      selectedToken,
+      amount,
+      fiatAmount,
+      isLoading: true,
+      transactionStatus: "Preparing deposit instructions...",
+    });
 
     try {
-      setState({ ...state, isLoading: true, transactionStatus: "Generating deposit address..." });
+      setState({
+        selectedToken,
+        amount,
+        fiatAmount,
+        isLoading: true,
+        transactionStatus: "Generating deposit address...",
+      });
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      setState({ ...state, isLoading: true, transactionStatus: "Waiting for deposit confirmation..." });
+      setState({
+        selectedToken,
+        amount,
+        fiatAmount,
+        isLoading: true,
+        transactionStatus: "Waiting for deposit confirmation...",
+      });
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       console.log(
         "Deposit Instructions Ready:",
-        `Send ${state?.amount} ${state?.selectedToken?.symbol || "tokens"} to your wallet address`
+        `Send ${amount} ${selectedToken?.symbol || "tokens"} to your wallet address`
       );
       router.back();
     } catch (error) {
       console.error("Deposit error:", error);
     } finally {
-      setState({ ...state, isLoading: false, transactionStatus: "" });
+      setState({
+        selectedToken,
+        amount,
+        fiatAmount,
+        isLoading: false,
+        transactionStatus: "",
+      });
     }
-  }, [state, setState, validateInputs]);
+  }, [selectedToken, amount, fiatAmount, setState, validateInputs]);
 
   const resetState = useCallback(() => {
     setState(initialDepositState);
   }, [setState]);
 
   return {
-    selectedToken: state?.selectedToken,
-    amount: state?.amount ?? "",
-    fiatAmount: state?.fiatAmount ?? "",
-    isLoading: state?.isLoading ?? false,
-    transactionStatus: state?.transactionStatus ?? "",
+    selectedToken,
+    amount,
+    fiatAmount,
+    isLoading,
+    transactionStatus,
     exchangeRate,
     stablecoinTokens: stablecoinTokens ?? [],
     activeChain,
