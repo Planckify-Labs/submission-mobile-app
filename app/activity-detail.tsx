@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
+import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ActivityDetailHeader from "@/components/activity-detail/ActivityDetailHeader";
 import RenderActivityDetailCards from "@/components/activity-detail/RenderActivityDetailCards";
@@ -25,13 +25,17 @@ export default function ActivityDetailScreen() {
     data: purchase,
     isLoading: isPurchaseLoading,
     error: purchaseError,
+    refetch: refetchPurchase,
   } = usePurchaseById(purchaseId);
 
   const {
     data: transfer,
     isLoading: isTransferLoading,
     error: transferError,
+    refetch: refetchTransfer,
   } = useTransaction(transferId);
+
+  const [isRefetchingActivityDetail, setIsRefetchingActivityDetail] = useState(false);
 
   useEffect(() => {
     const initializeComponent = () => {
@@ -59,6 +63,22 @@ export default function ActivityDetailScreen() {
     console.log("Help: Need help with this transaction? Contact support.");
   };
 
+  const onRefresh = async () => {
+    setIsRefetchingActivityDetail(true);
+    try {
+      if (purchaseId) {
+        await refetchPurchase();
+      }
+      if (transferId) {
+        await refetchTransfer();
+      }
+    } catch (error) {
+      console.error("Error refreshing activity detail:", error);
+    } finally {
+      setIsRefetchingActivityDetail(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-light-main-container">
@@ -72,6 +92,9 @@ export default function ActivityDetailScreen() {
           className="flex-1"
           contentContainerStyle={{ paddingBottom: 20 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={isRefetchingActivityDetail} onRefresh={onRefresh} />
+          }
         >
           {purchaseId ? (
             <>
@@ -147,6 +170,9 @@ export default function ActivityDetailScreen() {
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefetchingActivityDetail} onRefresh={onRefresh} />
+        }
       >
         {(purchase || transfer) && (
           <>
