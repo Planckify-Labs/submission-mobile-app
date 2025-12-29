@@ -15,28 +15,64 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { TNetworkSelectorModalProps } from "@/constants/types/networkTypes";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
+import { useActiveNetwork } from "@/hooks/useAssetExplorerState";
+import { useNetworkModal } from "@/hooks/useNetworkModal";
+import { usePinnedNetworks } from "@/hooks/usePinnedNetworks";
 import NetworkSelectorModalLoadingSkeletons from "./NetworkSelectorModalLoadingSkeletons";
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;
 
-const NetworkSelectorModal = ({
-  visible,
-  activeNetworkId,
-  searchQuery,
-  onSearchChange,
-  onSelectNetwork,
-  toggleNetworkPin,
-  closeModal,
-  fadeAnim,
-  translateY,
-}: TNetworkSelectorModalProps) => {
+const NetworkSelectorModal = () => {
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
-  
+
+  const { isVisible, searchQuery, setSearchQuery, closeModal } =
+    useNetworkModal();
+  const { activeNetwork, selectNetwork } = useActiveNetwork();
   const { data: blockchains, isLoading } = useBlockchains({ isActive: true });
+  const { isPinned, togglePin } = usePinnedNetworks();
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+
+  useEffect(() => {
+    if (isVisible) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      fadeAnim.setValue(0);
+      translateY.setValue(MODAL_HEIGHT);
+    }
+  }, [isVisible, fadeAnim, translateY]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: MODAL_HEIGHT,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      closeModal();
+    });
+  };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -51,11 +87,7 @@ const NetworkSelectorModal = ({
       },
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dy > 50 || gestureState.vy > 0.5) {
-          Animated.timing(translateY, {
-            toValue: MODAL_HEIGHT,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => closeModal());
+          handleClose();
         } else {
           Animated.spring(translateY, {
             toValue: 0,
@@ -67,55 +99,38 @@ const NetworkSelectorModal = ({
     }),
   ).current;
 
-  const apiNetworks = React.useMemo(() => {
+  const displayNetworks = React.useMemo(() => {
     if (!blockchains) return [];
 
-    return blockchains.map((blockchain) => {
-      return {
-        id: blockchain.chainId.toString(),
-        name: blockchain.name,
-        symbol: blockchain.tokens?.[0]?.symbol,
-        color: "#627EEA",
-        isPinned: true,
-        blockchainId: blockchain.id,
-        logoUrl: blockchain.tokens?.[0]?.logoUrl || "",
-      };
-    });
-  }, [blockchains]);
+    const networks = blockchains.map((blockchain) => ({
+      id: blockchain.chainId.toString(),
+      name: blockchain.name,
+      symbol: blockchain.tokens?.[0]?.symbol,
+      color: "#627EEA",
+      isPinned: true,
+      blockchainId: blockchain.id,
+      logoUrl: blockchain.tokens?.[0]?.logoUrl || "",
+    }));
 
-  const displayNetworks = apiNetworks;
+    if (!searchQuery) return networks;
 
-  useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [visible, fadeAnim, translateY]);
+    return networks.filter(
+      (network) =>
+        network.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        network.symbol?.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [blockchains, searchQuery]);
 
-  const handleSearchChange = (text: string) => {
-    onSearchChange(text);
-  };
-
-  if (!visible) return null;
+  if (!isVisible) return null;
 
   return (
     <Modal
-      visible={visible}
+      visible={isVisible}
       transparent
       animationType="none"
-      onRequestClose={closeModal}
+      onRequestClose={handleClose}
     >
-      <TouchableWithoutFeedback onPress={closeModal}>
+      <TouchableWithoutFeedback onPress={handleClose}>
         <Animated.View
           style={{
             flex: 1,
@@ -156,7 +171,7 @@ const NetworkSelectorModal = ({
                     Networks
                   </Text>
                   <Pressable
-                    onPress={closeModal}
+                    onPress={handleClose}
                     className="w-8 h-8 rounded-full bg-light-primary-red/10 items-center justify-center"
                   >
                     <X size={18} color="#c71c4b" />
@@ -170,11 +185,11 @@ const NetworkSelectorModal = ({
                     placeholder="Search networks..."
                     placeholderTextColor="#20222c60"
                     value={searchQuery}
-                    onChangeText={handleSearchChange}
+                    onChangeText={setSearchQuery}
                   />
                   {searchQuery.length > 0 && (
                     <Pressable
-                      onPress={() => handleSearchChange("")}
+                      onPress={() => setSearchQuery("")}
                       className="bg-gray-200/70 rounded-full w-5 h-5 items-center justify-center"
                     >
                       <X size={12} color="#20222c" />
@@ -202,14 +217,14 @@ const NetworkSelectorModal = ({
                       <Pressable
                         key={item.id}
                         className={`flex-row items-center p-3.5 mb-3 rounded-xl ${
-                          activeNetworkId === item.id
+                          activeNetwork === item.id
                             ? "bg-light-primary-red/10"
                             : "bg-light"
                         }`}
-                        onPress={() =>
-                          onSelectNetwork &&
-                          onSelectNetwork(item.id, item.blockchainId)
-                        }
+                        onPress={() => {
+                          selectNetwork(item.id, item.blockchainId);
+                          handleClose();
+                        }}
                       >
                         <View className="flex-row items-center flex-1">
                           {item.logoUrl ? (
@@ -242,7 +257,7 @@ const NetworkSelectorModal = ({
                         </View>
 
                         <View className="flex-row items-center">
-                          {activeNetworkId === item.id && (
+                          {activeNetwork === item.id && (
                             <View className="w-7 h-7 rounded-full bg-light-primary-red/10 items-center justify-center mr-3">
                               <Check
                                 size={16}
@@ -254,7 +269,16 @@ const NetworkSelectorModal = ({
 
                           <Pressable
                             className="p-1.5"
-                            onPress={() => toggleNetworkPin(item.id)}
+                            onPress={() =>
+                              togglePin({
+                                id: item.id,
+                                name: item.name,
+                                symbol: item.symbol ?? "",
+                                color: item.color ?? "#627EEA",
+                                blockchainId: item.blockchainId,
+                                logoUrl: item.logoUrl,
+                              })
+                            }
                             hitSlop={{
                               top: 10,
                               bottom: 10,
@@ -264,8 +288,10 @@ const NetworkSelectorModal = ({
                           >
                             <Star
                               size={18}
-                              color={item.isPinned ? "#c71c4b" : "#20222c30"}
-                              fill={item.isPinned ? "#c71c4b" : "none"}
+                              color={
+                                isPinned(item.id) ? "#c71c4b" : "#20222c30"
+                              }
+                              fill={isPinned(item.id) ? "#c71c4b" : "none"}
                             />
                           </Pressable>
                         </View>

@@ -1,12 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Animated,
-  Dimensions,
-  ScrollView,
-  StatusBar,
-  View,
-} from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ScrollView, StatusBar, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AddTokenForm from "@/components/asset-explorer/AddTokenForm";
 import AssetExplorerHeader from "@/components/asset-explorer/AssetExplorerHeader";
@@ -20,108 +13,63 @@ import UserAssetItem from "@/components/asset-explorer/UserAssetItem";
 import WalletInfo from "@/components/asset-explorer/WalletInfo";
 import SearchBar from "@/components/common/SearchBar";
 import { SAMPLE_ASSETS } from "@/constants/dummyData/assets";
-import { TAssetTabType, TCryptoAsset } from "@/constants/types/assetTypes";
+import type { TCryptoAsset } from "@/constants/types/assetTypes";
 import { useTokens } from "@/hooks/queries/useTokens";
+import {
+  useActiveNetwork,
+  useActiveTab,
+  useAssetSearchQuery,
+} from "@/hooks/useAssetExplorerState";
+import { useAssetSelection } from "@/hooks/useAssetSelection";
+import { useUserAssets } from "@/hooks/useUserAssets";
 import { useWallet } from "@/hooks/useWallet";
 import {
   adaptAssetForNetwork,
-  addAsset,
-  addCustomToken,
-  addMultipleAssets,
   filterAssets,
   getNetworkSpecificAssets,
-  isAssetAdded,
-  removeAsset,
 } from "@/utils/assetUtils";
-import {
-  ALL_NETWORKS,
-  filterNetworks,
-  getPinnedNetworks,
-  type Network,
-  toggleNetworkPin,
-} from "@/utils/networkUtils";
-import {
-  enterSelectionMode,
-  exitSelectionMode,
-  isAssetSelected,
-  toggleAssetSelection,
-} from "@/utils/selectionUtils";
-
-const { height } = Dimensions.get("window");
-const MODAL_HEIGHT = height * 0.67;
+import { ALL_NETWORKS } from "@/utils/networkUtils";
 
 export default function AssetExplorer() {
-  const [userAssets, setUserAssets] = useState<TCryptoAsset[]>([]);
-  const [availableAssets, setAvailableAssets] = useState<TCryptoAsset[]>([]);
-  const [selectedAssets, setSelectedAssets] = useState<TCryptoAsset[]>([]);
-  const [currentAsset, setCurrentAsset] = useState<TCryptoAsset | null>(null);
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [networkSearchQuery, setNetworkSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [showAddToken, setShowAddToken] = useState(false);
   const [tokenAddress, setTokenAddress] = useState("");
-  const [walletSelectorVisible, setWalletSelectorVisible] = useState(false);
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<TAssetTabType>("my-assets");
-
-  const [activeNetwork, setActiveNetwork] = useState(ALL_NETWORKS[0].id);
-  const [activeBlockchainId, setActiveBlockchainId] = useState<
-    string | undefined
-  >(undefined);
-  const [networks, setNetworks] = useState<Network[]>(getPinnedNetworks());
-  const [networkModalVisible, setNetworkModalVisible] = useState(false);
-
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+  const [isLoading, setIsLoading] = useState(false);
+  const [availableAssets, setAvailableAssets] = useState<TCryptoAsset[]>([]);
 
   const { wallets, activeWalletIndex } = useWallet();
   const activeWallet = wallets[activeWalletIndex];
+
+  const { activeTab, setActiveTab } = useActiveTab();
+  const { activeNetwork, activeBlockchainId } = useActiveNetwork();
+  const { searchQuery, setSearchQuery } = useAssetSearchQuery();
+
+  const {
+    userAssets,
+    addAsset,
+    removeAsset,
+    addCustomToken,
+    addMultipleAssets,
+    isAssetAdded,
+  } = useUserAssets();
+
+  const {
+    selectionMode,
+    selectedAssets,
+    currentAsset,
+    walletSelectorVisible,
+    handleAssetLongPress,
+    handleToggleAssetSelection,
+    cancelSelectionMode,
+    openWalletSelector,
+    closeWalletSelector,
+    confirmSelection,
+    isAssetSelected,
+  } = useAssetSelection();
 
   const { data: tokens, isLoading: isLoadingTokens } = useTokens({
     blockchainId: activeBlockchainId,
     isActive: true,
   });
-
-  const getStorageKey = useCallback(() => {
-    return `wallet_assets_${activeWallet?.address}_${activeNetwork}`;
-  }, [activeWallet?.address, activeNetwork]);
-
-  const loadUserAssets = useCallback(async () => {
-    try {
-      const storageKey = getStorageKey();
-      const storedAssets = await AsyncStorage.getItem(storageKey);
-
-      if (storedAssets) {
-        setUserAssets(JSON.parse(storedAssets));
-      } else {
-        setUserAssets([]);
-      }
-    } catch (error) {
-      console.error("Failed to load assets:", error);
-    }
-  }, [getStorageKey]);
-
-  const saveUserAssets = useCallback(async () => {
-    try {
-      const storageKey = getStorageKey();
-      await AsyncStorage.setItem(storageKey, JSON.stringify(userAssets));
-    } catch (error) {
-      console.error("Failed to save assets:", error);
-    }
-  }, [userAssets, getStorageKey]);
-
-  useEffect(() => {
-    if (activeWallet?.address) {
-      loadUserAssets();
-    }
-  }, [activeWallet?.address, loadUserAssets]);
-
-  useEffect(() => {
-    if (activeWallet?.address) {
-      saveUserAssets();
-    }
-  }, [activeWallet?.address, saveUserAssets]);
 
   useEffect(() => {
     if (tokens) {
@@ -148,57 +96,20 @@ export default function AssetExplorer() {
     }
   }, [tokens, isLoadingTokens, activeNetwork, activeBlockchainId]);
 
-  const filteredAvailableAssets = filterAssets(availableAssets, searchQuery);
-  const filteredUserAssets = filterAssets(userAssets, searchQuery);
-  const filteredNetworks = filterNetworks(ALL_NETWORKS, networkSearchQuery);
+  const filteredAvailableAssets = useMemo(
+    () => filterAssets(availableAssets, searchQuery),
+    [availableAssets, searchQuery],
+  );
 
-  const openNetworkModal = useCallback(() => {
-    setNetworkModalVisible(true);
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [fadeAnim, translateY]);
-
-  const closeNetworkModal = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: MODAL_HEIGHT,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setNetworkModalVisible(false);
-      setNetworkSearchQuery("");
-    });
-  }, [fadeAnim, translateY]);
-
-  const handleAddAsset = useCallback((asset: TCryptoAsset) => {
-    setUserAssets((current) => addAsset(current, asset));
-  }, []);
-
-  const handleRemoveAsset = useCallback((assetId: string) => {
-    setUserAssets((current) => removeAsset(current, assetId));
-  }, []);
+  const filteredUserAssets = useMemo(
+    () => filterAssets(userAssets, searchQuery),
+    [userAssets, searchQuery],
+  );
 
   const handleAddCustomToken = useCallback(async () => {
     setIsLoading(true);
     try {
-      const updatedAssets = await addCustomToken(userAssets, tokenAddress);
-      setUserAssets(updatedAssets);
+      await addCustomToken(tokenAddress);
       setTokenAddress("");
       setShowAddToken(false);
     } catch (error) {
@@ -206,32 +117,13 @@ export default function AssetExplorer() {
     } finally {
       setIsLoading(false);
     }
-  }, [tokenAddress, userAssets]);
-
-  const handleAssetLongPress = useCallback(
-    (asset: TCryptoAsset) => {
-      if (!selectionMode) {
-        setSelectionMode(true);
-        setSelectedAssets(enterSelectionMode(asset));
-      }
-    },
-    [selectionMode],
-  );
-
-  const handleToggleAssetSelection = useCallback((asset: TCryptoAsset) => {
-    setSelectedAssets((current) => toggleAssetSelection(current, asset));
-  }, []);
-
-  const handleCancelSelectionMode = useCallback(() => {
-    setSelectionMode(false);
-    setSelectedAssets(exitSelectionMode());
-  }, []);
+  }, [tokenAddress, addCustomToken]);
 
   const handleAddSelectedAssets = useCallback(() => {
     if (selectedAssets.length > 0) {
-      setWalletSelectorVisible(true);
+      openWalletSelector();
     }
-  }, [selectedAssets]);
+  }, [selectedAssets, openWalletSelector]);
 
   const handleAddAssetsToWallets = useCallback(
     (
@@ -241,38 +133,20 @@ export default function AssetExplorer() {
     ) => {
       if (!assetsToAdd || assetsToAdd.length === 0) return;
 
-      let updatedAssets = [...userAssets];
-
       walletIndices.forEach(() => {
-        updatedAssets = addMultipleAssets(updatedAssets, assetsToAdd);
+        addMultipleAssets(assetsToAdd);
       });
 
-      setUserAssets(updatedAssets);
-      setWalletSelectorVisible(false);
-      setSelectionMode(false);
-      setSelectedAssets([]);
+      confirmSelection();
     },
-    [userAssets],
+    [addMultipleAssets, confirmSelection],
   );
-
-  const handleSelectNetwork = useCallback(
-    (networkId: string, blockchainId?: string) => {
-      setActiveNetwork(networkId);
-      setActiveBlockchainId(blockchainId);
-    },
-    [],
-  );
-
-  const handleToggleNetworkPin = useCallback((networkId: string) => {
-    const updatedNetworks = toggleNetworkPin(networkId);
-    setNetworks(updatedNetworks.filter((n) => n.isPinned));
-  }, []);
 
   const renderUserAssetItem = useCallback(
     ({ item }: { item: TCryptoAsset }) => {
-      return <UserAssetItem item={item} removeAsset={handleRemoveAsset} />;
+      return <UserAssetItem item={item} removeAsset={removeAsset} />;
     },
-    [handleRemoveAsset],
+    [removeAsset],
   );
 
   const renderAvailableAssetItem = useCallback(
@@ -282,8 +156,8 @@ export default function AssetExplorer() {
         activeNetwork,
         ALL_NETWORKS,
       );
-      const isAdded = isAssetAdded(userAssets, adaptedItem.id);
-      const isSelected = isAssetSelected(selectedAssets, adaptedItem.id);
+      const isAdded = isAssetAdded(adaptedItem.id);
+      const isSelected = isAssetSelected(adaptedItem.id);
 
       return (
         <AssetItem
@@ -295,33 +169,23 @@ export default function AssetExplorer() {
             if (selectionMode) {
               handleToggleAssetSelection(adaptedItem);
             } else {
-              setCurrentAsset(adaptedItem);
-              setWalletSelectorVisible(true);
+              openWalletSelector(adaptedItem);
             }
           }}
           onLongPress={() => handleAssetLongPress(adaptedItem)}
-          onAddPress={() => {
-            setCurrentAsset(adaptedItem);
-            setWalletSelectorVisible(true);
-          }}
+          onAddPress={() => openWalletSelector(adaptedItem)}
         />
       );
     },
     [
-      userAssets,
-      selectedAssets,
+      activeNetwork,
+      isAssetAdded,
+      isAssetSelected,
       selectionMode,
       handleToggleAssetSelection,
       handleAssetLongPress,
-      activeNetwork,
+      openWalletSelector,
     ],
-  );
-
-  const checkIsAssetAdded = useCallback(
-    (assetId: string) => {
-      return isAssetAdded(userAssets, assetId);
-    },
-    [userAssets],
   );
 
   return (
@@ -337,7 +201,7 @@ export default function AssetExplorer() {
             <AssetExplorerHeader
               selectionMode={selectionMode}
               selectedAssetsCount={selectedAssets.length}
-              cancelSelectionMode={handleCancelSelectionMode}
+              cancelSelectionMode={cancelSelectionMode}
               addSelectedAssets={handleAddSelectedAssets}
             />
 
@@ -373,8 +237,8 @@ export default function AssetExplorer() {
               setActiveTab={setActiveTab}
               filteredUserAssets={filteredUserAssets}
               filteredAvailableAssets={filteredAvailableAssets}
-              isAssetAdded={checkIsAssetAdded}
-              addAsset={handleAddAsset}
+              isAssetAdded={isAssetAdded}
+              addAsset={addAsset}
               selectionMode={selectionMode}
               searchQuery={searchQuery}
               renderUserAssetItem={renderUserAssetItem}
@@ -383,29 +247,10 @@ export default function AssetExplorer() {
             />
           </View>
         </ScrollView>
-        {!selectionMode && (
-          <NetworkRadioButtons
-            networks={networks}
-            activeNetwork={activeNetwork}
-            activeTab={activeTab}
-            selectNetwork={handleSelectNetwork}
-            openNetworkModal={openNetworkModal}
-          />
-        )}
+        {!selectionMode && <NetworkRadioButtons />}
       </SafeAreaView>
 
-      <NetworkSelectorModal
-        visible={networkModalVisible}
-        networks={filteredNetworks}
-        activeNetworkId={activeNetwork}
-        searchQuery={networkSearchQuery}
-        onSearchChange={setNetworkSearchQuery}
-        onSelectNetwork={handleSelectNetwork}
-        toggleNetworkPin={handleToggleNetworkPin}
-        closeModal={closeNetworkModal}
-        fadeAnim={fadeAnim}
-        translateY={translateY}
-      />
+      <NetworkSelectorModal />
 
       <AssetWalletSelectorModal
         visible={walletSelectorVisible}
@@ -413,18 +258,14 @@ export default function AssetExplorer() {
         assets={selectionMode ? selectedAssets : undefined}
         wallets={wallets}
         activeNetwork={activeNetwork}
-        onClose={() => {
-          setWalletSelectorVisible(false);
-          setCurrentAsset(null);
-        }}
+        onClose={closeWalletSelector}
         onConfirm={(walletIndices, selectedAsset, selectedAssets) => {
           if (selectionMode && selectedAssets) {
             handleAddAssetsToWallets(walletIndices, null, selectedAssets);
           } else if (selectedAsset) {
-            handleAddAsset(selectedAsset);
+            addAsset(selectedAsset);
           }
-          setWalletSelectorVisible(false);
-          setCurrentAsset(null);
+          closeWalletSelector();
         }}
       />
     </>

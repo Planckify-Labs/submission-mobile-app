@@ -9,39 +9,35 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
+import { useActiveNetwork, useActiveTab } from "@/hooks/useAssetExplorerState";
+import { useNetworkModal } from "@/hooks/useNetworkModal";
+import { usePinnedNetworks } from "@/hooks/usePinnedNetworks";
 import { useWallet } from "@/hooks/useWallet";
 import NetworkRadioButtonLoadingSkeletons from "./NetworkRadioButtonLoadingSkeletons";
 
-type TNetwork = {
-  id: string;
-  name: string;
-  symbol: string;
-  color: string;
-  isPinned?: boolean;
-  blockchainId?: string;
-};
-
-type TNetworkButtonsProps = {
-  networks: TNetwork[];
-  activeNetwork: string;
-  activeTab: "my-assets" | "explore-assets";
-  selectNetwork: (networkId: string, blockchainId?: string) => void;
-  openNetworkModal: () => void;
-};
-
-const NetworkRadioButtons = ({
-  networks,
-  activeNetwork,
-  activeTab,
-  selectNetwork,
-  openNetworkModal,
-}: TNetworkButtonsProps) => {
+const NetworkRadioButtons = () => {
   const { activeChain } = useWallet();
   const { data: blockchains, isLoading } = useBlockchains({ isActive: true });
+  const { pinnedNetworks } = usePinnedNetworks();
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
 
-  const blockchainNetworks = React.useMemo(() => {
+  const { activeNetwork, selectNetwork } = useActiveNetwork();
+  const { activeTab } = useActiveTab();
+  const { openModal } = useNetworkModal();
+
+  const displayNetworks = React.useMemo(() => {
+    if (pinnedNetworks.length > 0) {
+      return pinnedNetworks.map((network) => ({
+        id: network.id,
+        name: network.name,
+        symbol: network.symbol,
+        color: network.color,
+        isPinned: true,
+        blockchainId: network.blockchainId,
+      }));
+    }
+
     if (!blockchains) return [];
 
     return blockchains.map((blockchain) => ({
@@ -52,7 +48,7 @@ const NetworkRadioButtons = ({
       isPinned: true,
       blockchainId: blockchain.id,
     }));
-  }, [blockchains]);
+  }, [blockchains, pinnedNetworks]);
 
   const getAccentColor = () => {
     return activeTab === "my-assets"
@@ -93,14 +89,14 @@ const NetworkRadioButtons = ({
 
       if (blockchain) {
         selectNetwork(networkId, blockchain.id);
-      } else if (networks.some((network) => network.id === networkId)) {
+      } else if (displayNetworks.some((network) => network.id === networkId)) {
         selectNetwork(networkId);
       }
     }
   }, [
     activeChain?.chain?.id,
     blockchains,
-    networks,
+    displayNetworks,
     selectNetwork,
     getNetworkIdFromChainId,
   ]);
@@ -123,48 +119,44 @@ const NetworkRadioButtons = ({
           {isLoading ? (
             <NetworkRadioButtonLoadingSkeletons />
           ) : (
-            (blockchainNetworks.length > 0 ? blockchainNetworks : networks).map(
-              (network) => (
-                <TouchableOpacity
-                  key={network.id}
-                  activeOpacity={0.7}
-                  onPress={() =>
-                    selectNetwork(network.id, network.blockchainId)
-                  }
-                  className={`px-3 py-2 rounded-full mx-1- flex-row items-center ${
+            displayNetworks.map((network) => (
+              <TouchableOpacity
+                key={network.id}
+                activeOpacity={0.7}
+                onPress={() => selectNetwork(network.id, network.blockchainId)}
+                className={`px-3 py-2 rounded-full mx-1- flex-row items-center ${
+                  activeNetwork === network.id
+                    ? accentColor
+                    : "bg-light-main-container"
+                }`}
+              >
+                <View
+                  className={`w-3 h-3 rounded-full mr-2 ${
                     activeNetwork === network.id
-                      ? accentColor
-                      : "bg-light-main-container"
+                      ? "bg-white"
+                      : activeTab === "my-assets"
+                        ? "bg-light-primary-red/70"
+                        : "bg-light-matte-black/70"
                   }`}
+                />
+                <Text
+                  className={`${
+                    activeNetwork === network.id
+                      ? accentTextColor
+                      : "text-light-matte-black"
+                  } font-medium text-xs`}
                 >
-                  <View
-                    className={`w-3 h-3 rounded-full mr-2 ${
-                      activeNetwork === network.id
-                        ? "bg-white"
-                        : activeTab === "my-assets"
-                          ? "bg-light-primary-red/70"
-                          : "bg-light-matte-black/70"
-                    }`}
-                  />
-                  <Text
-                    className={`${
-                      activeNetwork === network.id
-                        ? accentTextColor
-                        : "text-light-matte-black"
-                    } font-medium text-xs`}
-                  >
-                    {network.name}
-                  </Text>
-                </TouchableOpacity>
-              ),
-            )
+                  {network.name}
+                </Text>
+              </TouchableOpacity>
+            ))
           )}
         </View>
       </ScrollView>
       <TouchableOpacity
         activeOpacity={0.7}
         className={`absolute bottom-[1px] top-[1px] right-[1px] aspect-square ${accentColor} rounded-full items-center justify-center`}
-        onPress={() => openNetworkModal()}
+        onPress={openModal}
         accessibilityLabel="Open network selection"
       >
         <MoveDiagonal size={18} color="white" />
