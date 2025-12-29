@@ -1,4 +1,5 @@
-import { type QueryKey, useMutation, useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { type QueryKey, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/app/_layout";
 
 type TUseRQGlobalState<T> = {
@@ -12,28 +13,17 @@ export default function useRQGlobalState<T>({
 }: TUseRQGlobalState<T>) {
   const { data } = useQuery({
     queryKey,
-    initialData: () => initialData,
-    queryFn: async () => {
-      const cachedData = queryClient.getQueryData(queryKey);
-      if (cachedData) {
-        return cachedData as T;
-      }
-      return initialData as T;
-    },
+    queryFn: () => queryClient.getQueryData<T>(queryKey) ?? initialData,
+    initialData,
+    staleTime: Number.POSITIVE_INFINITY,
   });
 
-  const { mutate } = useMutation({
-    mutationFn: async (newData: T) => {
-      return newData;
-    },
-    onSuccess: (newData) => {
+  const setNewData = useCallback(
+    (newData: T) => {
       queryClient.setQueryData(queryKey, newData);
     },
-  });
-
-  const setNewData = (newData: T) => {
-    mutate(newData);
-  };
+    [queryKey],
+  );
 
   return { data, setNewData };
 }
