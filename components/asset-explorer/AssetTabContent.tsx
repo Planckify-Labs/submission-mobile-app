@@ -1,19 +1,19 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
-import { AssetListContentProps } from "@/constants/types/assetTypes";
+import type { TAssetTabContentProps } from "@/constants/types/assetTypes";
 import AssetLoadingSkeletons from "./AssetLoadingSkeletons";
 
 const AssetTabContent = ({
-  activeTab,
-  userAssets,
-  filteredUserAssets,
-  filteredAvailableAssets,
-  searchQuery,
-  setActiveTab,
-  renderUserAssetItem,
-  renderAvailableAssetItem,
-  isLoading,
-}: AssetListContentProps) => {
+  state,
+  data,
+  actions,
+  renderItems,
+}: TAssetTabContentProps) => {
+  const { activeTab, searchQuery, isLoading } = state;
+  const { userAssets, filteredUserAssets, filteredAvailableAssets } = data;
+  const { setActiveTab } = actions;
+  const { renderUserAssetItem, renderAvailableAssetItem } = renderItems;
+
   if (activeTab === "my-assets") {
     return (
       <View>

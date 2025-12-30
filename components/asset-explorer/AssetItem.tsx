@@ -2,28 +2,11 @@ import { Check, Plus } from "lucide-react-native";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import OptimizedImage from "@/components/common/OptimizedImage";
-import { TCryptoAsset } from "@/constants/types/assetTypes";
+import type { TAssetItemProps } from "@/constants/types/assetTypes";
 
-type AssetItemProps = {
-  item: TCryptoAsset;
-  isAdded: boolean;
-  isSelected?: boolean;
-  selectionMode?: boolean;
-  onPress: () => void;
-  onLongPress?: () => void;
-  onAddPress?: () => void;
-  networkId?: string;
-};
-
-const AssetItem = ({
-  item,
-  isAdded,
-  isSelected = false,
-  selectionMode = false,
-  onPress,
-  onLongPress,
-  onAddPress,
-}: AssetItemProps) => {
+const AssetItem = ({ item, state, actions }: TAssetItemProps) => {
+  const { isAdded, isSelected, selectionMode } = state;
+  const { onPress, onLongPress, onAddPress } = actions;
   return (
     <Pressable
       className="flex-row items-center justify-between p-4 border-b border-light-matte-black/10"

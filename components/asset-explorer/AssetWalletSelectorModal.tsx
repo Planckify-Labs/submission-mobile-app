@@ -1,7 +1,6 @@
 import { Check, Info } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -14,8 +13,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { TAssetWalletSelectorModalProps } from "@/constants/types/assetTypes";
-import { TWallet } from "@/constants/types/walletTypes";
+import type { TAssetWalletSelectorModalProps } from "@/constants/types/assetTypes";
+import type { TWallet } from "@/constants/types/walletTypes";
 import { loadWalletAssets, saveWalletAssets } from "@/utils/assetUtils";
 import OptimizedImage from "../common/OptimizedImage";
 
@@ -24,13 +23,11 @@ const MODAL_HEIGHT = height * 0.67;
 
 const AssetWalletSelectorModal = ({
   visible,
+  data,
   onClose,
-  wallets,
-  asset,
-  assets,
   onConfirm,
-  activeNetwork,
 }: TAssetWalletSelectorModalProps) => {
+  const { asset, assets, wallets, activeNetwork } = data;
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
   

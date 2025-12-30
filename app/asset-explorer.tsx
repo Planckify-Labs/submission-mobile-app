@@ -162,18 +162,22 @@ export default function AssetExplorer() {
       return (
         <AssetItem
           item={adaptedItem}
-          isAdded={isAdded}
-          isSelected={isSelected}
-          selectionMode={selectionMode}
-          onPress={() => {
-            if (selectionMode) {
-              handleToggleAssetSelection(adaptedItem);
-            } else {
-              openWalletSelector(adaptedItem);
-            }
+          state={{
+            isAdded,
+            isSelected,
+            selectionMode,
           }}
-          onLongPress={() => handleAssetLongPress(adaptedItem)}
-          onAddPress={() => openWalletSelector(adaptedItem)}
+          actions={{
+            onPress: () => {
+              if (selectionMode) {
+                handleToggleAssetSelection(adaptedItem);
+              } else {
+                openWalletSelector(adaptedItem);
+              }
+            },
+            onLongPress: () => handleAssetLongPress(adaptedItem),
+            onAddPress: () => openWalletSelector(adaptedItem),
+          }}
         />
       );
     },
@@ -199,10 +203,12 @@ export default function AssetExplorer() {
         >
           <View className="flex-1 p-4">
             <AssetExplorerHeader
-              selectionMode={selectionMode}
-              selectedAssetsCount={selectedAssets.length}
-              cancelSelectionMode={cancelSelectionMode}
-              addSelectedAssets={handleAddSelectedAssets}
+              selection={{
+                selectionMode,
+                selectedAssetsCount: selectedAssets.length,
+              }}
+              onCancel={cancelSelectionMode}
+              onAdd={handleAddSelectedAssets}
             />
 
             {!selectionMode && <WalletInfo activeWallet={activeWallet} />}
@@ -218,10 +224,12 @@ export default function AssetExplorer() {
 
             {showAddToken && !selectionMode && (
               <AddTokenForm
-                tokenAddress={tokenAddress}
-                setTokenAddress={setTokenAddress}
-                addCustomToken={handleAddCustomToken}
-                isLoading={isLoading}
+                state={{
+                  tokenAddress,
+                  isLoading,
+                }}
+                onAddressChange={setTokenAddress}
+                onSubmit={handleAddCustomToken}
               />
             )}
 
@@ -232,18 +240,23 @@ export default function AssetExplorer() {
             />
 
             <AssetTabContent
-              activeTab={activeTab}
-              userAssets={userAssets}
-              setActiveTab={setActiveTab}
-              filteredUserAssets={filteredUserAssets}
-              filteredAvailableAssets={filteredAvailableAssets}
-              isAssetAdded={isAssetAdded}
-              addAsset={addAsset}
-              selectionMode={selectionMode}
-              searchQuery={searchQuery}
-              renderUserAssetItem={renderUserAssetItem}
-              renderAvailableAssetItem={renderAvailableAssetItem}
-              isLoading={isLoadingTokens && activeTab === "explore-assets"}
+              state={{
+                activeTab,
+                searchQuery,
+                isLoading: isLoadingTokens && activeTab === "explore-assets",
+              }}
+              data={{
+                userAssets,
+                filteredUserAssets,
+                filteredAvailableAssets,
+              }}
+              actions={{
+                setActiveTab,
+              }}
+              renderItems={{
+                renderUserAssetItem,
+                renderAvailableAssetItem,
+              }}
             />
           </View>
         </ScrollView>
@@ -254,10 +267,12 @@ export default function AssetExplorer() {
 
       <AssetWalletSelectorModal
         visible={walletSelectorVisible}
-        asset={currentAsset}
-        assets={selectionMode ? selectedAssets : undefined}
-        wallets={wallets}
-        activeNetwork={activeNetwork}
+        data={{
+          asset: currentAsset,
+          assets: selectionMode ? selectedAssets : undefined,
+          wallets,
+          activeNetwork,
+        }}
         onClose={closeWalletSelector}
         onConfirm={(walletIndices, selectedAsset, selectedAssets) => {
           if (selectionMode && selectedAssets) {
