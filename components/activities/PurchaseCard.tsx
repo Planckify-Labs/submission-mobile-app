@@ -117,13 +117,13 @@ const PurchaseCard = React.memo(
             </Text>
           </View>
           <View className="relative mt-4">
-            <Text className="text-light-primary-red bg-light-primary-red/10 font-bold text-center pb-2 border border-light-primary-red text-xs absolute -top-3 right-0 left-0 rounded-md p-2">
+            <Text className="text-light-primary-red hidden bg-light-primary-red/10 font-bold text-center pb-2 border border-light-primary-red text-xs absolute -top-3 right-0 left-0 rounded-md p-2">
               Discount Rp.70,000
             </Text>
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleRepurchase}
-              className="bg-light-primary-red px-8 py-2 rounded-md mt-3"
+              className="bg-light-primary-red px-8 py-4 rounded-md mt-3"
             >
               <Text className="text-white text-xs font-bold">Repurchase</Text>
             </TouchableOpacity>
