@@ -39,7 +39,7 @@ const DATE_FORMAT_OPTIONS: Record<TDateFormatPreset, Intl.DateTimeFormatOptions>
   },
 };
 
-const DEFAULT_LOCALE = "id-ID";
+const DEFAULT_LOCALE = "en-US";
 
 /**
  * Formats a date with preset formats
