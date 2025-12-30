@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import useRQGlobalState from "./useRQGlobalState";
 
 const PINNED_NETWORKS_KEY = "takumipay_pinned_networks";
@@ -35,11 +35,27 @@ const saveToStorage = async (networks: PinnedNetwork[]) => {
   }
 };
 
+let isStorageInitialized = false;
+
 export const usePinnedNetworks = () => {
   const { data: pinnedNetworks, setNewData } = useRQGlobalState<PinnedNetwork[]>({
     queryKey: QUERY_KEY,
     initialData: [],
   });
+
+  const hasInitialized = useRef(false);
+
+  useEffect(() => {
+    if (hasInitialized.current || isStorageInitialized) return;
+    hasInitialized.current = true;
+    isStorageInitialized = true;
+
+    loadFromStorage().then((stored) => {
+      if (stored.length > 0) {
+        setNewData(stored);
+      }
+    });
+  }, [setNewData]);
 
   const isPinned = useCallback(
     (networkId: string): boolean => {
@@ -80,17 +96,9 @@ export const usePinnedNetworks = () => {
     [pinnedNetworks, setNewData],
   );
 
-  const initFromStorage = useCallback(async () => {
-    const stored = await loadFromStorage();
-    if (stored.length > 0) {
-      setNewData(stored);
-    }
-  }, [setNewData]);
-
   return {
     pinnedNetworks: pinnedNetworks ?? [],
     isPinned,
     togglePin,
-    initFromStorage,
   };
 };
