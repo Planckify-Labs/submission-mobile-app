@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { TCryptoAsset } from "@/constants/types/assetTypes";
 import {
   addAsset,
@@ -12,27 +12,35 @@ import { useActiveNetwork } from "./useAssetExplorerState";
 import useRQGlobalState from "./useRQGlobalState";
 import { useWallet } from "./useWallet";
 
-const QUERY_KEY = ["userAssets"] as const;
-
 export const useUserAssets = () => {
   const { wallets, activeWalletIndex } = useWallet();
   const activeWallet = wallets[activeWalletIndex];
   const { activeNetwork } = useActiveNetwork();
 
+  const queryKey = useMemo(
+    () => ["userAssets", activeWallet?.address, activeNetwork] as const,
+    [activeWallet?.address, activeNetwork],
+  );
+
   const { data: userAssets, setNewData: setUserAssets } = useRQGlobalState<
     TCryptoAsset[]
   >({
-    queryKey: QUERY_KEY,
+    queryKey,
     initialData: [],
   });
+
+  const isLoadingRef = useRef(false);
+  const previousKeyRef = useRef<string | null>(null);
 
   const getStorageKey = useCallback(() => {
     return `wallet_assets_${activeWallet?.address}_${activeNetwork}`;
   }, [activeWallet?.address, activeNetwork]);
 
   const loadUserAssets = useCallback(async () => {
+    const storageKey = getStorageKey();
+    isLoadingRef.current = true;
+
     try {
-      const storageKey = getStorageKey();
       const storedAssets = await AsyncStorage.getItem(storageKey);
 
       if (storedAssets) {
@@ -42,17 +50,29 @@ export const useUserAssets = () => {
       }
     } catch (error) {
       console.error("Failed to load assets:", error);
+      setUserAssets([]);
+    } finally {
+      isLoadingRef.current = false;
+      previousKeyRef.current = storageKey;
     }
   }, [getStorageKey, setUserAssets]);
 
-  const saveUserAssets = useCallback(async () => {
-    try {
+  const saveUserAssets = useCallback(
+    async (assets: TCryptoAsset[]) => {
       const storageKey = getStorageKey();
-      await AsyncStorage.setItem(storageKey, JSON.stringify(userAssets));
-    } catch (error) {
-      console.error("Failed to save assets:", error);
-    }
-  }, [userAssets, getStorageKey]);
+
+      if (isLoadingRef.current || previousKeyRef.current !== storageKey) {
+        return;
+      }
+
+      try {
+        await AsyncStorage.setItem(storageKey, JSON.stringify(assets));
+      } catch (error) {
+        console.error("Failed to save assets:", error);
+      }
+    },
+    [getStorageKey],
+  );
 
   useEffect(() => {
     if (activeWallet?.address && activeNetwork) {
@@ -60,24 +80,22 @@ export const useUserAssets = () => {
     }
   }, [activeWallet?.address, activeNetwork, loadUserAssets]);
 
-  useEffect(() => {
-    if (activeWallet?.address && userAssets && userAssets.length > 0) {
-      saveUserAssets();
-    }
-  }, [activeWallet?.address, userAssets, saveUserAssets]);
-
   const handleAddAsset = useCallback(
     (asset: TCryptoAsset) => {
-      setUserAssets(addAsset(userAssets ?? [], asset));
+      const updatedAssets = addAsset(userAssets ?? [], asset);
+      setUserAssets(updatedAssets);
+      saveUserAssets(updatedAssets);
     },
-    [userAssets, setUserAssets],
+    [userAssets, setUserAssets, saveUserAssets],
   );
 
   const handleRemoveAsset = useCallback(
     (assetId: string) => {
-      setUserAssets(removeAsset(userAssets ?? [], assetId));
+      const updatedAssets = removeAsset(userAssets ?? [], assetId);
+      setUserAssets(updatedAssets);
+      saveUserAssets(updatedAssets);
     },
-    [userAssets, setUserAssets],
+    [userAssets, setUserAssets, saveUserAssets],
   );
 
   const handleAddCustomToken = useCallback(
@@ -87,15 +105,18 @@ export const useUserAssets = () => {
         tokenAddress,
       );
       setUserAssets(updatedAssets);
+      saveUserAssets(updatedAssets);
     },
-    [userAssets, setUserAssets],
+    [userAssets, setUserAssets, saveUserAssets],
   );
 
   const handleAddMultipleAssets = useCallback(
     (assetsToAdd: TCryptoAsset[]) => {
-      setUserAssets(addMultipleAssets(userAssets ?? [], assetsToAdd));
+      const updatedAssets = addMultipleAssets(userAssets ?? [], assetsToAdd);
+      setUserAssets(updatedAssets);
+      saveUserAssets(updatedAssets);
     },
-    [userAssets, setUserAssets],
+    [userAssets, setUserAssets, saveUserAssets],
   );
 
   const isAssetAdded = useCallback(
