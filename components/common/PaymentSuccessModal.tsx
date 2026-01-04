@@ -204,7 +204,7 @@ export default function PaymentSuccessModal({
                 onPress={handleGoHome}
               >
                 <View className="flex-row items-center justify-center">
-                  <Home size={20} stroke="#20222c" strokeWidth={2} />
+                  <Home size={20} stroke="#c71c4b" strokeWidth={2} />
                   <Text className="text-light-matte-black font-bold text-base ml-2">
                     Back to Home
                   </Text>
