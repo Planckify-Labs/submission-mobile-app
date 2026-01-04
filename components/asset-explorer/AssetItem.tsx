@@ -1,4 +1,4 @@
-import { Check, Plus } from "lucide-react-native";
+import { Check, Plus, TrendingUp } from "lucide-react-native";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import OptimizedImage from "@/components/common/OptimizedImage";
@@ -7,53 +7,97 @@ import type { TAssetItemProps } from "@/constants/types/assetTypes";
 const AssetItem = ({ item, state, actions }: TAssetItemProps) => {
   const { isAdded, isSelected, selectionMode } = state;
   const { onPress, onLongPress, onAddPress } = actions;
+
   return (
     <Pressable
-      className="flex-row items-center justify-between p-4 border-b border-light-matte-black/10"
+      className={`flex-row items-center p-4 mb-2 rounded-2xl ${
+        isSelected ? "bg-light-matte-black/5" : "bg-white"
+      }`}
+      style={{
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: isSelected ? 0 : 0.04,
+        shadowRadius: 6,
+        elevation: isSelected ? 0 : 2,
+      }}
       onPress={onPress}
       onLongPress={onLongPress}
     >
-      <View className="flex-row items-center flex-1">
-        <View className="w-10 h-10 rounded-full items-center justify-center mr-3 overflow-hidden">
-          <OptimizedImage
-            source={{ uri: item.logo }}
-            style={{ width: 30, height: 30 }}
-            contentFit="contain"
-            alt={`${item.name} logo`}
-          />
+      {/* Selection checkbox (left side when in selection mode) */}
+      {selectionMode && (
+        <View
+          className={`w-6 h-6 rounded-full mr-3 items-center justify-center ${
+            isSelected
+              ? "bg-light-matte-black"
+              : "border-2 border-light-matte-black/20"
+          }`}
+        >
+          {isSelected && <Check size={14} color="white" strokeWidth={3} />}
         </View>
-        <View className="flex-1">
-          <Text className="text-light-matte-black font-medium">
+      )}
+
+      {/* Token logo */}
+      <View
+        className="w-12 h-12 rounded-2xl items-center justify-center mr-3 overflow-hidden bg-gray-50"
+        style={{
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 4,
+          elevation: 2,
+        }}
+      >
+        <OptimizedImage
+          source={{ uri: item.logo }}
+          style={{ width: 32, height: 32 }}
+          contentFit="contain"
+          alt={`${item.name} logo`}
+        />
+      </View>
+
+      {/* Token info */}
+      <View className="flex-1">
+        <View className="flex-row items-center">
+          <Text className="text-light-matte-black font-bold text-base">
             {item.name}
           </Text>
-          <Text className="text-light-matte-black/60">
-            {item.symbol} • {item.balance} • ${item.value}
+          {isAdded && (
+            <View className="ml-2 px-2 py-0.5 rounded-full bg-green-500/10">
+              <Text className="text-xs text-green-600 font-medium">Added</Text>
+            </View>
+          )}
+        </View>
+        <View className="flex-row items-center mt-0.5">
+          <Text className="text-light-matte-black/50 text-sm font-medium">
+            {item.symbol}
+          </Text>
+          <View className="w-1 h-1 rounded-full bg-light-matte-black/30 mx-2" />
+          <Text className="text-light-matte-black/50 text-sm">
+            {item.balance}
           </Text>
         </View>
       </View>
 
-      {selectionMode ? (
-        <View
-          className={`w-6 h-6 rounded-full border-2 ${
-            isSelected
-              ? "bg-light-matte-black border-light-matte-black"
-              : "border-light-matte-black/30"
-          } items-center justify-center`}
-        >
-          {isSelected && <Check size={16} color="white" />}
-        </View>
-      ) : (
-        <View className="flex-row items-center">
-          {isAdded && (
-            <View className="px-2 py-1 rounded-full bg-light-matte-black/10 mr-2">
-              <Text className="text-xs text-light-matte-black/60">Added</Text>
-            </View>
-          )}
+      {/* Right side - Value or Add button */}
+      {!selectionMode && (
+        <View className="items-end">
+          <View className="flex-row items-center">
+            <Text className="text-light-matte-black font-bold text-base">
+              ${item.value}
+            </Text>
+          </View>
           <Pressable
-            className="w-8 h-8 rounded-full bg-light-matte-black items-center justify-center"
+            className="mt-1 w-8 h-8 rounded-xl bg-light-matte-black items-center justify-center active:scale-95"
             onPress={onAddPress}
+            style={{
+              shadowColor: "#20222c",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
           >
-            <Plus size={18} color="white" />
+            <Plus size={16} color="white" strokeWidth={2.5} />
           </Pressable>
         </View>
       )}

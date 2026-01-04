@@ -1,5 +1,12 @@
+import { Search, X } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, StatusBar, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StatusBar,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AddTokenForm from "@/components/asset-explorer/AddTokenForm";
 import AssetExplorerHeader from "@/components/asset-explorer/AssetExplorerHeader";
@@ -10,7 +17,6 @@ import NetworkRadioButtons from "@/components/asset-explorer/NetworkRadioButtons
 import NetworkSelectorModal from "@/components/asset-explorer/NetworkSelectorModal";
 import UserAssetList from "@/components/asset-explorer/UserAssetList";
 import WalletInfo from "@/components/asset-explorer/WalletInfo";
-import SearchBar from "@/components/common/SearchBar";
 import { SAMPLE_ASSETS } from "@/constants/dummyData/assets";
 import type { TCryptoAsset } from "@/constants/types/assetTypes";
 import { useTokens } from "@/hooks/queries/useTokens";
@@ -162,9 +168,9 @@ export default function AssetExplorer() {
         <ScrollView
           className="flex-1"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 120 }}
         >
-          <View className="flex-1 p-4">
+          <View className="flex-1 px-4 pt-2">
             <AssetExplorerHeader
               selection={{
                 selectionMode,
@@ -177,12 +183,54 @@ export default function AssetExplorer() {
             {!selectionMode && <WalletInfo activeWallet={activeWallet} />}
 
             {!selectionMode && (
-              <SearchBar
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                showAddToken={showAddToken}
-                setShowAddToken={setShowAddToken}
-              />
+              <View
+                className="flex-row items-center bg-white rounded-2xl px-4 py-1 my-3"
+                style={{
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 8,
+                  elevation: 2,
+                }}
+              >
+                <Search size={20} color="#9ca3af" />
+                <TextInput
+                  className="flex-1 py-3 px-3 text-light-matte-black text-base"
+                  placeholder="Search tokens..."
+                  placeholderTextColor="#9ca3af"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+                {searchQuery ? (
+                  <Pressable
+                    onPress={() => setSearchQuery("")}
+                    className="p-1"
+                  >
+                    <X size={18} color="#9ca3af" />
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={() => setShowAddToken(!showAddToken)}
+                    className={`px-3 py-1.5 rounded-xl ${
+                      showAddToken ? "bg-light-primary-red" : "bg-gray-100"
+                    }`}
+                  >
+                    <View className="flex-row items-center">
+                      <View
+                        className={`text-xs font-semibold ${
+                          showAddToken ? "text-white" : "text-light-matte-black"
+                        }`}
+                      >
+                        {showAddToken ? (
+                          <X size={14} color="#fff" />
+                        ) : (
+                          <View className="w-3 h-3 rounded-full bg-light-primary-red" />
+                        )}
+                      </View>
+                    </View>
+                  </Pressable>
+                )}
+              </View>
             )}
 
             {showAddToken && !selectionMode && (
@@ -193,6 +241,7 @@ export default function AssetExplorer() {
                 }}
                 onAddressChange={setTokenAddress}
                 onSubmit={handleAddCustomToken}
+                onClose={() => setShowAddToken(false)}
               />
             )}
 

@@ -1,6 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
-import { Copy } from "lucide-react-native";
+import { Check, Copy, Wallet } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { formatUnits } from "viem";
@@ -53,60 +53,73 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
     : "No wallet selected";
 
   return (
-    <View className="bg-light p-4 mb-4 rounded-2xl border-4 border-light-matte-black">
-      <View className="flex-row justify-between items-center mb-4">
-        <View>
-          <Text className="text-light-matte-black/60 text-xs mb-1">
-            Current Wallet
-          </Text>
-          <Text className="text-light-matte-black font-bold text-lg">
-            {activeWallet?.name || "My Wallet"}
-          </Text>
+    <View
+      className="rounded-3xl overflow-hidden my-2 bg-light-matte-black p-5"
+      style={{
+        shadowColor: "#20222c",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+        elevation: 8,
+      }}
+    >
+      {/* Top section - Wallet name and network */}
+      <View className="flex-row justify-between items-start mb-4">
+        <View className="flex-row items-center">
+          <View className="w-10 h-10 rounded-xl bg-white/10 items-center justify-center mr-3">
+            <Wallet size={20} color="#fff" />
+          </View>
+          <View>
+            <Text className="text-white/60 text-xs mb-0.5">Active Wallet</Text>
+            <Text className="text-white font-bold text-base">
+              {activeWallet?.name || "My Wallet"}
+            </Text>
+          </View>
         </View>
 
-        <View className="border border-light-primary-red/20 px-3 py-1 rounded-full">
-          <Text className="text-light-primary-red text-xs font-medium">
+        <View className="bg-light-primary-red/20 px-3 py-1.5 rounded-full border border-light-primary-red/30">
+          <Text className="text-light-primary-red text-xs font-semibold">
             {activeChain?.chain?.name || "Ethereum"}
           </Text>
         </View>
       </View>
 
+      {/* Balance display */}
+      <View className="mb-4">
+        <Text className="text-white/50 text-xs mb-1">Native Balance</Text>
+        <View className="flex-row items-end">
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#c71c4b" />
+          ) : (
+            <>
+              <Text className="text-white font-bold text-3xl">
+                {formatBalance(balance)}
+              </Text>
+              <Text className="text-white/60 text-lg ml-2 mb-0.5">
+                {activeChain?.chain?.nativeCurrency?.symbol || "ETH"}
+              </Text>
+            </>
+          )}
+        </View>
+      </View>
+
+      {/* Address copy button */}
       <Pressable
         onPress={copyAddress}
-        className="flex-row items-center mb-4 border border-light-matte-black/10 p-2.5 rounded-xl"
+        className="flex-row items-center bg-white/10 p-3 rounded-xl active:bg-white/20"
       >
-        <Text className="text-light-matte-black/80 flex-1 font-medium">
+        <Text className="text-white/80 flex-1 font-mono text-sm">
           {formattedAddress}
         </Text>
         {copied ? (
-          <Text className="text-light-matte-black/80 text-xs">Copied!</Text>
+          <View className="flex-row items-center">
+            <Check size={14} color="#22c55e" />
+            <Text className="text-green-400 text-xs ml-1">Copied!</Text>
+          </View>
         ) : (
           <Copy size={16} color="#c71c4b" />
         )}
       </Pressable>
-
-      <View className="border-t border-light-matte-black/10 pt-4">
-        <View className="flex-row justify-between items-center">
-          <Text className="text-light-matte-black/70 font-medium">
-            Native Balance
-          </Text>
-          <View className="border border-light-primary-red/20 px-2 py-1 rounded-full">
-            <Text className="text-light-primary-red text-xs">
-              {activeChain?.chain?.nativeCurrency?.symbol || "ETH"}
-            </Text>
-          </View>
-        </View>
-
-        <View className="mt-2">
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#c71c4b" />
-          ) : (
-            <Text className="text-light-primary-red font-bold text-2xl">
-              {formatBalance(balance)}
-            </Text>
-          )}
-        </View>
-      </View>
     </View>
   );
 };

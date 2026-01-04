@@ -1,12 +1,7 @@
-import { MoveDiagonal } from "lucide-react-native";
+import { BlurView } from "expo-blur";
+import { Maximize2 } from "lucide-react-native";
 import React, { useCallback, useEffect } from "react";
-import {
-  Platform,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useActiveNetwork, useActiveTab } from "@/hooks/useAssetExplorerState";
@@ -20,7 +15,7 @@ const NetworkRadioButtons = () => {
   const { data: blockchains, isLoading } = useBlockchains({ isActive: true });
   const { pinnedNetworks } = usePinnedNetworks();
   const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
+  const bottomOffset = Platform.OS === "ios" ? 24 : bottom > 0 ? bottom + 8 : 16;
 
   const { activeNetwork, selectNetwork } = useActiveNetwork();
   const { activeTab } = useActiveTab();
@@ -51,29 +46,15 @@ const NetworkRadioButtons = () => {
   }, [blockchains, pinnedNetworks]);
 
   const getAccentColor = () => {
-    return activeTab === "my-assets"
-      ? "bg-light-primary-red"
-      : "bg-light-matte-black";
-  };
-
-  const getBorderColor = () => {
-    return activeTab === "my-assets"
-      ? "border-light-primary-red"
-      : "border-light-matte-black";
-  };
-
-  const getAccentTextColor = () => {
-    return "text-white";
+    return activeTab === "my-assets" ? "#c71c4b" : "#20222c";
   };
 
   const getNetworkIdFromChainId = useCallback(
     (chainId: number): string => {
       const blockchain = blockchains?.find((b) => b.chainId === chainId);
-
       if (blockchain) {
         return blockchain.chainId.toString();
       }
-
       return "ethereum";
     },
     [blockchains],
@@ -82,7 +63,6 @@ const NetworkRadioButtons = () => {
   useEffect(() => {
     if (activeChain?.chain?.id) {
       const networkId = getNetworkIdFromChainId(activeChain.chain.id);
-
       const blockchain = blockchains?.find(
         (b) => b.chainId === activeChain.chain.id,
       );
@@ -102,65 +82,96 @@ const NetworkRadioButtons = () => {
   ]);
 
   const accentColor = getAccentColor();
-  const borderColor = getBorderColor();
-  const accentTextColor = getAccentTextColor();
 
   return (
     <View
-      className={`absolute bottom-4 flex-row justify-center bg-light rounded-full overflow-hidden border-4 ${borderColor}`}
+      className="absolute left-4 right-4 rounded-2xl overflow-hidden"
       style={{
         bottom: bottomOffset,
-        left: Platform.OS === "ios" ? 16 : 4,
-        right: Platform.OS === "ios" ? 16 : 4,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 8,
       }}
     >
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View className="flex-row p-1 pr-10 gap-2">
-          {isLoading ? (
-            <NetworkRadioButtonLoadingSkeletons />
-          ) : (
-            displayNetworks.map((network) => (
-              <TouchableOpacity
-                key={network.id}
-                activeOpacity={0.7}
-                onPress={() => selectNetwork(network.id, network.blockchainId)}
-                className={`px-3 py-2 rounded-full mx-1- flex-row items-center ${
-                  activeNetwork === network.id
-                    ? accentColor
-                    : "bg-light-main-container"
-                }`}
-              >
-                <View
-                  className={`w-3 h-3 rounded-full mr-2 ${
-                    activeNetwork === network.id
-                      ? "bg-white"
-                      : activeTab === "my-assets"
-                        ? "bg-light-primary-red/70"
-                        : "bg-light-matte-black/70"
-                  }`}
-                />
-                <Text
-                  className={`${
-                    activeNetwork === network.id
-                      ? accentTextColor
-                      : "text-light-matte-black"
-                  } font-medium text-xs`}
-                >
-                  {network.name}
-                </Text>
-              </TouchableOpacity>
-            ))
-          )}
+      <BlurView intensity={80} tint="light" className="flex-row items-center">
+        <View className="flex-1 flex-row items-center bg-white/80 py-2 pl-2 pr-1">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingRight: 8 }}
+          >
+            <View className="flex-row items-center gap-1.5">
+              {isLoading ? (
+                <NetworkRadioButtonLoadingSkeletons />
+              ) : (
+                displayNetworks.map((network) => {
+                  const isActive = activeNetwork === network.id;
+                  return (
+                    <TouchableOpacity
+                      key={network.id}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        selectNetwork(network.id, network.blockchainId)
+                      }
+                      className={`px-3.5 py-2.5 rounded-xl flex-row items-center ${
+                        isActive ? "" : "bg-gray-100/80"
+                      }`}
+                      style={
+                        isActive
+                          ? {
+                              backgroundColor: accentColor,
+                              shadowColor: accentColor,
+                              shadowOffset: { width: 0, height: 4 },
+                              shadowOpacity: 0.3,
+                              shadowRadius: 6,
+                              elevation: 4,
+                            }
+                          : {}
+                      }
+                    >
+                      <View
+                        className={`w-2 h-2 rounded-full mr-2`}
+                        style={{
+                          backgroundColor: isActive
+                            ? "#fff"
+                            : network.color || accentColor,
+                        }}
+                      />
+                      <Text
+                        className={`font-semibold text-xs ${
+                          isActive ? "text-white" : "text-light-matte-black"
+                        }`}
+                      >
+                        {network.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </View>
+          </ScrollView>
+
+          {/* Expand button */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={openModal}
+            className="w-11 h-11 rounded-xl items-center justify-center ml-1"
+            style={{
+              backgroundColor: accentColor,
+              shadowColor: accentColor,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 6,
+              elevation: 4,
+            }}
+            accessibilityLabel="Open network selection"
+          >
+            <Maximize2 size={18} color="white" />
+          </TouchableOpacity>
         </View>
-      </ScrollView>
-      <TouchableOpacity
-        activeOpacity={0.7}
-        className={`absolute bottom-[1px] top-[1px] right-[1px] aspect-square ${accentColor} rounded-full items-center justify-center`}
-        onPress={openModal}
-        accessibilityLabel="Open network selection"
-      >
-        <MoveDiagonal size={18} color="white" />
-      </TouchableOpacity>
+      </BlurView>
     </View>
   );
 };

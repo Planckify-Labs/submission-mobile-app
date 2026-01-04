@@ -1,3 +1,4 @@
+import { Coins, SearchX } from "lucide-react-native";
 import React from "react";
 import { Text, View } from "react-native";
 import type { TCryptoAsset } from "@/constants/types/assetTypes";
@@ -38,18 +39,37 @@ const AvailableAssetList = ({
 
   if (filteredAssets.length === 0) {
     return (
-      <View className="items-center justify-center py-10">
-        <Text className="text-light-matte-black/60 text-center">
+      <View className="items-center justify-center py-12 px-6">
+        <View
+          className={`w-16 h-16 rounded-2xl items-center justify-center mb-4 ${
+            searchQuery ? "bg-gray-100" : "bg-light-matte-black/5"
+          }`}
+        >
+          {searchQuery ? (
+            <SearchX size={28} color="#9ca3af" />
+          ) : (
+            <Coins size={28} color="#20222c" />
+          )}
+        </View>
+        <Text className="text-light-matte-black font-bold text-lg mb-1 text-center">
+          {searchQuery ? "No Results" : "No Assets Available"}
+        </Text>
+        <Text className="text-light-matte-black/50 text-center">
           {searchQuery
-            ? "No assets found matching your search"
-            : "No assets available"}
+            ? `No assets match "${searchQuery}"`
+            : "Check back later for new tokens"}
         </Text>
       </View>
     );
   }
 
   return (
-    <View>
+    <View className="gap-0">
+      {selectionMode && (
+        <Text className="text-light-matte-black/50 text-xs mb-3 px-1">
+          Long press to select multiple assets
+        </Text>
+      )}
       {filteredAssets.map((item) => (
         <AssetItem
           key={item.id}
