@@ -85,13 +85,13 @@ const NetworkRadioButtons = () => {
 
   return (
     <View
-      className="absolute left-4 right-4 rounded-2xl overflow-hidden"
+      className="absolute left-4 right-4 rounded-3xl overflow-hidden"
       style={{
         bottom: bottomOffset,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.15,
-        shadowRadius: 16,
+        shadowRadius: 10,
         elevation: 8,
       }}
     >
@@ -115,7 +115,7 @@ const NetworkRadioButtons = () => {
                       onPress={() =>
                         selectNetwork(network.id, network.blockchainId)
                       }
-                      className={`px-3.5 py-2.5 rounded-xl flex-row items-center ${
+                      className={`px-3.5 py-2.5 rounded-2xl flex-row items-center ${
                         isActive ? "" : "bg-gray-100/80"
                       }`}
                       style={
@@ -157,7 +157,7 @@ const NetworkRadioButtons = () => {
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={openModal}
-            className="w-11 h-11 rounded-xl items-center justify-center ml-1"
+            className="w-11 h-11 rounded-2xl items-center justify-center ml-1"
             style={{
               backgroundColor: accentColor,
               shadowColor: accentColor,
