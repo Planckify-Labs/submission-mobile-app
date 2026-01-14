@@ -186,7 +186,7 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
 
               <TouchableOpacity
                 activeOpacity={0.7}
-                hitSlop={40}
+                hitSlop={20}
                 onPress={() => {
                   Vibration.vibrate(100);
                   setShowBalance((prevValue) => !prevValue);
