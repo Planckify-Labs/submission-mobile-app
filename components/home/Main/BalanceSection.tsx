@@ -1,15 +1,14 @@
 import { useRouter } from "expo-router";
 import {
-  ArrowBigDown,
   ChevronDown,
   Copy,
   Eye,
   EyeOff,
-  PlusIcon,
   QrCode,
   Send,
-  Wallet,
 } from "lucide-react-native";
+import DepositIcon from "@/assets/icons/deposit-duotone.svg";
+import WithdrawIcon from "@/assets/icons/withdraw-duotone.svg";
 import React, {
   forwardRef,
   useCallback,
@@ -222,8 +221,8 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
                 onPress={() => router.push("/deposit")}
                 className="flex-1 min-w-[120px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center"
               >
-                <View className="bg-light-primary-red/10 rounded-full p-1.5 mr-2">
-                  <PlusIcon size={20} color="#c71c4b" />
+                <View className="mr-2">
+                  <DepositIcon width={32} height={32} />
                 </View>
                 <Text className="text-light-matte-black text-[10px] font-medium">
                   Deposit
@@ -235,11 +234,8 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
                 onPress={() => router.push("/withdraw")}
                 className="flex-1 min-w-[100px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center"
               >
-                <View className="bg-light-primary-red/10 rounded-full p-1.5 mr-2 relative">
-                  <Wallet size={20} color="#c71c4b" />
-                  <View className="absolute -right-1 -bottom-1 -rotate-45">
-                    <ArrowBigDown size={14} color="#c71c4b" />
-                  </View>
+                <View className="mr-2">
+                  <WithdrawIcon width={32} height={32} />
                 </View>
                 <Text className="text-light-matte-black text-[10px] font-medium">
                   Withdraw
