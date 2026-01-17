@@ -3,12 +3,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { erc20Abi, formatUnits } from "viem";
-import type { TCryptoAsset } from "@/constants/types/assetTypes";
+import { getPublicClient } from "@/utils/clients";
 import { formatTokenAmount } from "@/utils/helperUtils";
+import { useActiveNetwork } from "./useAssetExplorerState";
+import { useBlockchainsWithStorage } from "./useBlockchainsWithStorage";
 import { useUserAssets } from "./useUserAssets";
 import { useWallet } from "./useWallet";
 
-type AssetBalance = {
+type TAssetBalance = {
   assetId: string;
   balance: string;
   isLoading: boolean;
@@ -16,31 +18,57 @@ type AssetBalance = {
 
 export function useUserAssetsWithBalances() {
   const { userAssets, ...userAssetsMethods } = useUserAssets();
-  const { activeWallet, activeChain, getPublicClientForActiveChain } =
-    useWallet();
+  const { activeWallet } = useWallet();
   const queryClient = useQueryClient();
+
+  const { activeNetwork } = useActiveNetwork();
+  const { data: blockchains } = useBlockchainsWithStorage();
+
+  const selectedBlockchain = useMemo(() => {
+    if (!blockchains || !activeNetwork) return null;
+    return blockchains.find(
+      (b) => b.chainId.toString() === activeNetwork,
+    );
+  }, [blockchains, activeNetwork]);
+
+  const selectedChain = useMemo(() => {
+    if (!selectedBlockchain) return null;
+    return {
+      id: selectedBlockchain.chainId,
+      name: selectedBlockchain.name,
+      nativeCurrency: {
+        name: selectedBlockchain.tokens?.[0]?.name || "Ether",
+        symbol: selectedBlockchain.tokens?.[0]?.symbol || "ETH",
+        decimals: selectedBlockchain.tokens?.[0]?.decimals || 18,
+      },
+      rpcUrls: {
+        default: { http: [selectedBlockchain.rpcUrl] },
+        public: { http: [selectedBlockchain.rpcUrl] },
+      },
+    };
+  }, [selectedBlockchain]);
 
   const queryKey = useMemo(
     () =>
       [
         "userAssetsBalances",
         activeWallet?.address,
-        activeChain?.chain?.id,
+        activeNetwork,
         userAssets.map((a) => a.id).join(","),
       ] as const,
-    [activeWallet?.address, activeChain?.chain?.id, userAssets],
+    [activeWallet?.address, activeNetwork, userAssets],
   );
 
   const enabled = Boolean(
-    activeWallet?.address && activeChain?.chain && userAssets.length > 0,
+    activeWallet?.address && selectedChain && userAssets.length > 0,
   );
 
   const balancesQuery = useQuery({
     queryKey,
-    queryFn: async (): Promise<AssetBalance[]> => {
-      if (!activeWallet?.address || !activeChain?.chain) return [];
+    queryFn: async (): Promise<TAssetBalance[]> => {
+      if (!activeWallet?.address || !selectedChain) return [];
 
-      const publicClient = getPublicClientForActiveChain();
+      const publicClient = getPublicClient(selectedChain);
       if (!publicClient) return [];
 
       const balancePromises = userAssets.map(async (asset) => {
@@ -56,7 +84,7 @@ export function useUserAssetsWithBalances() {
             balance = await publicClient.getBalance({
               address: activeWallet.address as `0x${string}`,
             });
-            decimals = activeChain.chain.nativeCurrency?.decimals ?? 18;
+            decimals = selectedChain.nativeCurrency?.decimals ?? 18;
           } else {
             // ERC-20 token
             balance = (await publicClient.readContract({
