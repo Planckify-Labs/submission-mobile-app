@@ -44,6 +44,7 @@ export interface TProductVariantInPurchase {
 export interface TPurchase {
   id: string;
   transactionId: string;
+  transactionCreatedAt: string;
   productVariantId: string;
   bookingOrderId?: string;
   status: TTransactionStatus;

@@ -103,6 +103,7 @@ export type TPurchaseResponse = {
   id: string;
   status: "PENDING" | "COMPLETED" | "FAILED";
   transactionId: string;
+  transactionCreatedAt: string;
   productVariantId: string;
   refId: string;
   createdAt: string;
