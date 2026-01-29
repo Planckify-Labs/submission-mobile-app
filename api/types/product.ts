@@ -78,3 +78,5 @@ export type TProductInputFields = {
   productName: string;
   forms: TProductInputField[];
 };
+
+export type TPaymentFeatured = Record<string, { id: string }>;

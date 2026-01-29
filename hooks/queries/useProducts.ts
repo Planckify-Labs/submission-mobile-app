@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { productApi } from "@/api/endpoints/products";
 import type {
+  TPaymentFeatured,
   TProduct,
   TProductCategory,
   TProductDetail,
@@ -182,5 +183,19 @@ export const useProductInputFields = (productId: string) => {
       return failureCount < 3;
     },
     refetchOnWindowFocus: false,
+  });
+};
+
+export const usePaymentFeatured = () => {
+  return useQuery<TPaymentFeatured>({
+    queryKey: productsQueryKeys.paymentFeatured(),
+    queryFn: async () => {
+      const response = await productApi.getPaymentFeatured();
+      return response;
+    },
+    staleTime: 0,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 };

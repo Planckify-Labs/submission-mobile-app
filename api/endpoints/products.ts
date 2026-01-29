@@ -1,5 +1,6 @@
 import { api, publicApi } from "@/constants/configs/ky";
 import type {
+  TPaymentFeatured,
   TProduct,
   TProductCategory,
   TProductDetail,
@@ -80,6 +81,11 @@ export const productApi = {
     productId: string,
   ): Promise<TProductInputFields> => {
     const response = await publicApi.get(`products/${productId}/input-fields`);
+    return response.json();
+  },
+
+  getPaymentFeatured: async (): Promise<TPaymentFeatured> => {
+    const response = await publicApi.get("products/payment-featured");
     return response.json();
   },
 };

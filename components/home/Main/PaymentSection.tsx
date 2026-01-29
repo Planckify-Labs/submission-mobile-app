@@ -3,10 +3,12 @@ import { router } from "expo-router";
 import { MoveRight } from "lucide-react-native";
 import React from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
+import { usePaymentFeatured } from "@/hooks/queries/useProducts";
 
 const paymentItems = [
   {
     name: "Pulsa & Data Package",
+    displayName: "Pulsa & Data Package",
     icon: (
       <Image
         source={require("@/assets/icons/pulsa_data_package.png")}
@@ -15,9 +17,11 @@ const paymentItems = [
       />
     ),
     route: "/pulsa-data",
+    type: "route" as const,
   },
   {
     name: "Gaming",
+    displayName: "Gaming",
     icon: (
       <Image
         source={require("@/assets/icons/gaming_topup.png")}
@@ -25,11 +29,11 @@ const paymentItems = [
         resizeMode="contain"
       />
     ),
-    categoryId:
-      process.env.EXPO_PUBLIC_PAYMENT_CATEGORY_PRODUCT_ID?.split(",")[1],
+    type: "category" as const,
   },
   {
-    name: "PLN",
+    name: "Token PLN",
+    displayName: "PLN",
     icon: (
       <Image
         source={require("@/assets/icons/pln.png")}
@@ -37,28 +41,35 @@ const paymentItems = [
         resizeMode="contain"
       />
     ),
-    productId:
-      process.env.EXPO_PUBLIC_PAYMENT_CATEGORY_PRODUCT_ID?.split(",")[2],
+    type: "product" as const,
   },
 ];
 
 export default function PaymentSection() {
+  const { data: paymentFeatured } = usePaymentFeatured();
+
   const handleNavigate = (item: (typeof paymentItems)[0]) => {
-    if (item.route) {
+    if (item.type === "route" && item.route) {
       router.push(item.route as any);
-    } else if (item.categoryId) {
-      router.push({
-        pathname: "/view-all-item",
-        params: {
-          categoryId: item.categoryId,
-          categoryName: item.name,
-        },
-      });
-    } else {
-      router.push({
-        pathname: "/purchase-item",
-        params: { productId: item.productId },
-      });
+    } else if (item.type === "category") {
+      const categoryId = paymentFeatured?.[item.name]?.id;
+      if (categoryId) {
+        router.push({
+          pathname: "/view-all-item",
+          params: {
+            categoryId,
+            categoryName: item.displayName,
+          },
+        });
+      }
+    } else if (item.type === "product") {
+      const productId = paymentFeatured?.[item.name]?.id;
+      if (productId) {
+        router.push({
+          pathname: "/purchase-item",
+          params: { productId },
+        });
+      }
     }
   };
 
@@ -72,7 +83,7 @@ export default function PaymentSection() {
         {item.icon}
       </View>
       <Text className="text-[10px] text-center text-wrap max-w-16 mt-1">
-        {item.name}
+        {item.displayName}
       </Text>
     </TouchableOpacity>
   );
