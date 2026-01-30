@@ -38,13 +38,14 @@ export default function ItemWithoutInput({
   }
 
   if (error || !product) {
+    console.error("Error loading product:", error);
     return (
       <View className="flex-1 justify-center items-center p-6">
         <Text className="text-light-matte-black text-lg font-bold mb-2">
           Could not load product
         </Text>
         <Text className="text-light-error text-center mb-6">
-          {error instanceof Error ? error.message : "Unknown error"}
+          Something went wrong. Please try again.
         </Text>
         <TouchableOpacity
           activeOpacity={0.7}

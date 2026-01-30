@@ -212,12 +212,13 @@ export default function DappsBrowser() {
         true; // Required for injectJavaScript
       `);
     } catch (error: any) {
+      console.error("Ethereum request error:", error);
       const response = {
         id,
         result: null,
         error: {
           code: -32603,
-          message: error.message || "Internal error",
+          message: "Internal error",
         },
       };
 

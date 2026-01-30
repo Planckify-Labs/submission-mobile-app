@@ -40,10 +40,11 @@ export default function Login() {
         [{ text: "OK" }],
       );
     } catch (error: any) {
+      console.error("Google sign-in error:", error);
       if (error.message !== "Sign in cancelled") {
         Alert.alert(
           "Sign In Failed",
-          error.message || "Failed to sign in with Google. Please try again.",
+          "Failed to sign in with Google. Please try again.",
         );
       }
     }

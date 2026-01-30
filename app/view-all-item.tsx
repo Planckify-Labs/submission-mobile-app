@@ -168,11 +168,12 @@ export default function ViewAllItemScreen() {
   }
 
   if (error || !products) {
+    console.error("Error loading items:", error);
     return (
       <SafeAreaView className="flex-1 bg-light-main-container items-center justify-center">
         <Text>Failed to load items.</Text>
         <Text className="text-light-error mt-2">
-          {error instanceof Error ? error.message : "Category not found"}
+          Something went wrong. Please try again.
         </Text>
       </SafeAreaView>
     );

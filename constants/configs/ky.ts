@@ -103,9 +103,8 @@ const handleApiResponse = async (
       } else if (response.status === 404) {
         throw new Error("Resource not found.");
       } else {
-        throw new Error(
-          error.message || `HTTP ${response.status}: An error occurred`,
-        );
+        console.error("API error:", error.message);
+        throw new Error("An unexpected error occurred. Please try again.");
       }
     } catch (parseError) {
       console.error("Failed to parse error response:", parseError);

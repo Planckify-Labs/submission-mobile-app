@@ -465,9 +465,7 @@ export default function PaymentScreen() {
         setSuccessModalVisible(true);
       } catch (error) {
         console.error("Payment error:", error);
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error occurred";
-        setPaymentError(errorMessage);
+        setPaymentError("Payment failed. Please try again or contact support.");
         setErrorModalVisible(true);
       } finally {
         setIsLoading(false);
@@ -542,10 +540,7 @@ export default function PaymentScreen() {
         }, 100);
       } catch (error) {
         console.error("Error approving spending:", error);
-        console.error(
-          "Approval Failed:",
-          `Failed to approve token spending: ${error instanceof Error ? error.message : "Unknown error"}`,
-        );
+        console.error("Approval Failed: Could not approve token spending");
       } finally {
         setIsApprovingSpending(false);
       }
