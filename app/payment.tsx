@@ -14,12 +14,13 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { Address, erc20Abi, formatUnits } from "viem";
+import { Address, encodeFunctionData, erc20Abi, formatUnits } from "viem";
 import { exchangeRateApi } from "@/api/endpoints/exchange-rates";
 import { CustomerInfoItem } from "@/api/types/booking";
 import { TExchangeRate } from "@/api/types/exchange-rate";
 import type { TToken } from "@/api/types/token";
 import ChainSelector from "@/components/common/ChainSelector";
+import InsufficientFundsModal from "@/components/common/InsufficientFundsModal";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import PaymentErrorModal from "@/components/common/PaymentErrorModal";
@@ -96,6 +97,21 @@ export default function PaymentScreen() {
     refId: string;
     purchaseId: string;
   } | null>(null);
+  const [estimatedGasCost, setEstimatedGasCost] = useState<bigint>(BigInt(0));
+  const [isEstimatingGas, setIsEstimatingGas] = useState(false);
+  const [insufficientFundsModal, setInsufficientFundsModal] = useState<{
+    visible: boolean;
+    type: "gas" | "token";
+    requiredAmount: string;
+    currentBalance: string;
+    symbol: string;
+  }>({
+    visible: false,
+    type: "gas",
+    requiredAmount: "0",
+    currentBalance: "0",
+    symbol: "",
+  });
 
   const { variantId, customerInfo } = useLocalSearchParams<{
     variantId: string;
@@ -271,6 +287,68 @@ export default function PaymentScreen() {
     }
   }, [selectedToken, activeWallet.address, fetchTokenBalance]);
 
+  const estimateGasCost = useCallback(async () => {
+    if (!selectedToken || !activeWallet.address || !contractAddress || !purchaseAmount) {
+      setEstimatedGasCost(BigInt(0));
+      return;
+    }
+
+    setIsEstimatingGas(true);
+    try {
+      const publicClient = getPublicClientForActiveChain();
+      if (!publicClient) return;
+
+      const approvalAmount = BigInt(purchaseAmount);
+
+      // Encode the approve function call
+      const data = encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [contractAddress as `0x${string}`, approvalAmount],
+      });
+
+      // Estimate gas for the approve transaction
+      const estimatedGas = await publicClient.estimateGas({
+        account: activeWallet.address as `0x${string}`,
+        to: selectedToken.contractAddress as `0x${string}`,
+        data,
+      });
+
+      // Get current gas price
+      const gasPrice = await publicClient.getGasPrice();
+
+      // Calculate total gas cost with 20% buffer for safety
+      const gasCost = (estimatedGas * gasPrice * BigInt(120)) / BigInt(100);
+      setEstimatedGasCost(gasCost);
+    } catch (error) {
+      console.error("Error estimating gas:", error);
+      // Fallback to a reasonable estimate if estimation fails (e.g., insufficient balance)
+      // Use 100,000 gas units * estimated gas price as fallback
+      try {
+        const publicClient = getPublicClientForActiveChain();
+        if (publicClient) {
+          const gasPrice = await publicClient.getGasPrice();
+          const fallbackGasCost = BigInt(100000) * gasPrice;
+          setEstimatedGasCost(fallbackGasCost);
+        }
+      } catch {
+        // If even fallback fails, set a minimum estimate
+        setEstimatedGasCost(BigInt("100000000000000")); // 0.0001 ETH
+      }
+    } finally {
+      setIsEstimatingGas(false);
+    }
+  }, [selectedToken, activeWallet.address, contractAddress, purchaseAmount, getPublicClientForActiveChain]);
+
+  useEffect(() => {
+    if (selectedToken && activeWallet.address && contractAddress && purchaseAmount) {
+      const timer = setTimeout(() => {
+        estimateGasCost();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedToken, activeWallet.address, contractAddress, purchaseAmount, estimateGasCost]);
+
   const handleSelectWallet = (index: number) => {
     setActiveWallet(index);
     setWalletModalVisible(false);
@@ -281,8 +359,19 @@ export default function PaymentScreen() {
     setTokenModalVisible(false);
   };
 
-  const formatBalance = useCallback((rawBalance: bigint) => {
-    return parseFloat(formatUnits(rawBalance, 18)).toFixed(4);
+  const formatBalance = useCallback((rawBalance: bigint, minDecimals = 4) => {
+    const formatted = parseFloat(formatUnits(rawBalance, 18));
+    // For very small values, show more decimals to avoid "0.0000"
+    if (formatted > 0 && formatted < 0.0001) {
+      // Find first significant digit and show a few more
+      const str = formatted.toFixed(10);
+      const match = str.match(/^0\.0*[1-9]/);
+      if (match) {
+        const significantStart = match[0].length - 1;
+        return formatted.toFixed(Math.min(significantStart + 3, 10));
+      }
+    }
+    return formatted.toFixed(minDecimals);
   }, []);
 
   const executePayment = useCallback(
@@ -474,12 +563,58 @@ export default function PaymentScreen() {
 
   const { isAuthenticated } = useIsAuthenticated();
 
+  const hasInsufficientGas = useMemo(() => {
+    // Use estimated gas cost, with fallback minimum if estimation hasn't completed
+    const requiredGas = estimatedGasCost > BigInt(0)
+      ? estimatedGasCost
+      : BigInt("100000000000000"); // Fallback: 0.0001 ETH
+    return balance < requiredGas;
+  }, [balance, estimatedGasCost]);
+
+  const hasInsufficientTokenBalance = useMemo(() => {
+    if (!purchaseAmount || !selectedToken || !tokenBalance) return false;
+    const requiredAmount = BigInt(purchaseAmount);
+    const currentBalance = BigInt(
+      Math.floor(parseFloat(tokenBalance) * Math.pow(10, selectedToken.decimals))
+    );
+    return currentBalance < requiredAmount;
+  }, [purchaseAmount, selectedToken, tokenBalance]);
+
   const handlePaymentConfirmation = useCallback(async () => {
     if (!isAuthenticated) {
       console.error(
         "Authentication Required: Please sign in with your wallet before proceeding with checkout.",
       );
       router.push("/auth");
+      return;
+    }
+
+    // Check for insufficient gas balance
+    if (hasInsufficientGas) {
+      const nativeSymbol = getPublicClientForActiveChain()?.chain?.nativeCurrency.symbol || "ETH";
+      const estimatedGasFormatted = estimatedGasCost > BigInt(0)
+        ? formatBalance(estimatedGasCost, 6)
+        : "0.0001";
+      setInsufficientFundsModal({
+        visible: true,
+        type: "gas",
+        requiredAmount: estimatedGasFormatted,
+        currentBalance: formatBalance(balance),
+        symbol: nativeSymbol,
+      });
+      return;
+    }
+
+    // Check for insufficient token balance
+    if (hasInsufficientTokenBalance && selectedToken && purchaseAmount) {
+      const requiredAmount = formatUnits(BigInt(purchaseAmount), selectedToken.decimals);
+      setInsufficientFundsModal({
+        visible: true,
+        type: "token",
+        requiredAmount,
+        currentBalance: parseFloat(tokenBalance).toFixed(4),
+        symbol: selectedToken.symbol,
+      });
       return;
     }
 
@@ -526,6 +661,12 @@ export default function PaymentScreen() {
     purchaseAmount,
     shouldShowApprovalModal,
     getPublicClientForActiveChain,
+    hasInsufficientGas,
+    hasInsufficientTokenBalance,
+    tokenBalance,
+    estimatedGasCost,
+    formatBalance,
+    balance,
   ]);
 
   const handlePinSubmit = useCallback(
@@ -928,6 +1069,17 @@ export default function PaymentScreen() {
             // TODO: Implement contact support functionality
             console.log("Contact support");
           }}
+        />
+
+        <InsufficientFundsModal
+          visible={insufficientFundsModal.visible}
+          onClose={() =>
+            setInsufficientFundsModal((prev) => ({ ...prev, visible: false }))
+          }
+          type={insufficientFundsModal.type}
+          requiredAmount={insufficientFundsModal.requiredAmount}
+          currentBalance={insufficientFundsModal.currentBalance}
+          symbol={insufficientFundsModal.symbol}
         />
       </SafeAreaView>
     </>
