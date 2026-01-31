@@ -6,7 +6,7 @@ import {
   PROVIDER_CONFIG,
   type ProviderKey,
 } from "@/constants/ISP-list";
-import { useProductById } from "@/hooks/queries/useProducts";
+import { useProductById, useProductInputFields } from "@/hooks/queries/useProducts";
 import useRQGlobalState from "@/hooks/useRQGlobalState";
 
 const MAX_PHONE_LENGTH = 12;
@@ -103,6 +103,27 @@ export function usePhoneNumber() {
   const { data: productDetail, isLoading: isLoadingProductDetail } =
     useProductById(detectedProductId || "");
 
+  const { data: inputFields, isLoading: isLoadingInputFields } =
+    useProductInputFields(detectedProductId || "");
+
+  // Find the phone number field key from input fields
+  const phoneNumberFieldKey = useMemo(() => {
+    if (!inputFields?.forms) return null;
+    // Look for phone/number type field - check various possible type values
+    const phoneField = inputFields.forms.find((f) => {
+      const fieldType = f.type?.toUpperCase() || "";
+      return (
+        fieldType === "PHONE" ||
+        fieldType === "NUMBER" ||
+        fieldType === "NUMERIC" ||
+        fieldType === "TEXT" ||
+        fieldType.includes("PHONE") ||
+        fieldType.includes("NUMBER")
+      );
+    });
+    return phoneField?.key ?? null;
+  }, [inputFields?.forms]);
+
   const providerInfo = detectedProvider
     ? PROVIDER_CONFIG[detectedProvider]
     : null;
@@ -118,9 +139,10 @@ export function usePhoneNumber() {
     detectedProvider,
     productDetail,
     providerInfo,
-    isLoading: isLoadingProductDetail,
+    isLoading: isLoadingProductDetail || isLoadingInputFields,
     isValidPhoneNumber,
     showProviderNotDetected,
     showMinLengthError,
+    phoneNumberFieldKey,
   };
 }

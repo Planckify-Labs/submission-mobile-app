@@ -1,4 +1,4 @@
-import { AlertCircle, Home, RefreshCw, MessageCircle } from "lucide-react-native";
+import { AlertCircle, Home, RefreshCw } from "lucide-react-native";
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
@@ -17,7 +17,6 @@ type PaymentErrorModalProps = {
   onClose: () => void;
   errorMessage?: string;
   onRetry?: () => void;
-  onContactSupport?: () => void;
 };
 
 const MODAL_HEIGHT = 450;
@@ -27,7 +26,6 @@ export default function PaymentErrorModal({
   onClose,
   errorMessage = "An error occurred during the payment process",
   onRetry,
-  onContactSupport,
 }: PaymentErrorModalProps) {
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
@@ -98,13 +96,6 @@ export default function PaymentErrorModal({
     }
   };
 
-  const handleContactSupport = () => {
-    onClose();
-    if (onContactSupport) {
-      onContactSupport();
-    }
-  };
-
   const handleGoHome = () => {
     onClose();
     router.push("/");
@@ -171,10 +162,10 @@ export default function PaymentErrorModal({
             </View>
 
             {/* Action Buttons */}
-            <View className="space-y-3">
+            <View className="flex-row gap-3">
               {onRetry && (
                 <Pressable
-                  className="bg-light-primary-red p-4 rounded-full shadow-md"
+                  className="flex-1 bg-light-primary-red p-4 rounded-full shadow-md"
                   onPress={handleRetry}
                 >
                   <View className="flex-row items-center justify-center">
@@ -187,19 +178,7 @@ export default function PaymentErrorModal({
               )}
 
               <Pressable
-                className="bg-light-main-container p-4 rounded-full"
-                onPress={handleContactSupport}
-              >
-                <View className="flex-row items-center justify-center">
-                  <MessageCircle size={20} color="#c71c4b" strokeWidth={2} />
-                  <Text className="text-light-primary-red font-bold text-base ml-2">
-                    Contact Support
-                  </Text>
-                </View>
-              </Pressable>
-
-              <Pressable
-                className="bg-light-main-container p-4 rounded-full"
+                className="flex-1 bg-light-main-container p-4 rounded-full"
                 onPress={handleGoHome}
               >
                 <View className="flex-row items-center justify-center">

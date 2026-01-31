@@ -48,34 +48,35 @@ export const PackageVariantList = memo(function PackageVariantList() {
     isLoading,
     isValidPhoneNumber,
     detectedProvider,
+    phoneNumberFieldKey,
   } = usePhoneNumber();
 
   const handleVariantPress = useCallback(
     (variant: TProductVariant) => {
-      if (isValidPhoneNumber) {
+      if (isValidPhoneNumber && phoneNumberFieldKey) {
         router.push({
           pathname: "/payment",
           params: {
             variantId: variant.id,
             customerInfo: JSON.stringify([
-              { key: "no_hp", value: phoneNumber },
+              { key: phoneNumberFieldKey, value: phoneNumber },
             ]),
           },
         });
       }
     },
-    [phoneNumber, isValidPhoneNumber],
+    [phoneNumber, isValidPhoneNumber, phoneNumberFieldKey],
   );
 
   const renderItem = useCallback(
     ({ item }: { item: TProductVariant }) => (
       <PackageVariantItem
         variant={item}
-        disabled={!isValidPhoneNumber}
+        disabled={!isValidPhoneNumber || !phoneNumberFieldKey}
         onPress={handleVariantPress}
       />
     ),
-    [isValidPhoneNumber, handleVariantPress],
+    [isValidPhoneNumber, handleVariantPress, phoneNumberFieldKey],
   );
 
   const keyExtractor = useCallback((item: TProductVariant) => item.id, []);
