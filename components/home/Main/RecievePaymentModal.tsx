@@ -43,7 +43,12 @@ export default function RecievePaymentModal({
   isModalAnimationComplete,
 }: ReceivePaymentModalProps) {
   const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
+  const getBottomOffset = () => {
+    if (Platform.OS === "ios") return 16;
+    if (bottom > 0) return bottom + 8;
+    return 0;
+  };
+  const bottomOffset = getBottomOffset();
   return (
     <Modal
       transparent

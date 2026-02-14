@@ -13,7 +13,12 @@ export default function ScanToPayChatModeFloatingButtons({
   onChatModePress,
 }: ScanToPayChatModeFloatingButtonsProps) {
   const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 8 : bottom > 0 ? bottom : 2;
+  const getBottomOffset = () => {
+    if (Platform.OS === "ios") return 8;
+    if (bottom > 0) return bottom + 8;
+    return 2;
+  };
+  const bottomOffset = getBottomOffset();
 
   return (
     <View
@@ -32,7 +37,7 @@ export default function ScanToPayChatModeFloatingButtons({
             className="bg-light-primary-red/40 px-10 py-4 rounded-full flex-row items-center gap-2"
           >
             <QrCode size={22} color="#fff" />
-            <Text className="text-light font-bold text-xl">Scan To Pay</Text>
+            <Text className="text-light font-bold text-xl">Scan</Text>
           </TouchableOpacity>
         </BlurView>
         <TouchableOpacity
