@@ -11,7 +11,6 @@ const DEPOSIT_STATE_KEY = ["deposit", "state"] as const;
 interface DepositState {
   selectedToken?: TToken;
   amount: string;
-  fiatAmount: string;
   isLoading: boolean;
   transactionStatus: string;
 }
@@ -19,7 +18,6 @@ interface DepositState {
 const initialDepositState: DepositState = {
   selectedToken: undefined,
   amount: "",
-  fiatAmount: "",
   isLoading: false,
   transactionStatus: "",
 };
@@ -46,7 +44,6 @@ export function useDepositState() {
 
   const selectedToken = state?.selectedToken;
   const amount = state?.amount ?? "";
-  const fiatAmount = state?.fiatAmount ?? "";
   const isLoading = state?.isLoading ?? false;
   const transactionStatus = state?.transactionStatus ?? "";
 
@@ -59,7 +56,6 @@ export function useDepositState() {
         setState({
           selectedToken: stablecoinTokens[0],
           amount,
-          fiatAmount,
           isLoading,
           transactionStatus,
         });
@@ -68,90 +64,51 @@ export function useDepositState() {
       setState({
         selectedToken: undefined,
         amount,
-        fiatAmount,
         isLoading,
         transactionStatus,
       });
     }
   }, [stablecoinTokens]);
 
-  const getExchangeRate = useCallback((token?: TToken) => {
-    if (!token) return 1.0;
-    if (token.symbol === "USDT" || token.symbol === "USDC") {
-      return 1.0;
-    }
-    return 1.0;
-  }, []);
-
-  const exchangeRate = useMemo(
-    () => getExchangeRate(selectedToken),
-    [selectedToken, getExchangeRate]
-  );
-
   const setSelectedToken = useCallback(
     (token: TToken) => {
       setState({
         selectedToken: token,
         amount,
-        fiatAmount,
         isLoading,
         transactionStatus,
       });
     },
-    [amount, fiatAmount, isLoading, transactionStatus, setState]
+    [amount, isLoading, transactionStatus, setState]
   );
 
   const setAmount = useCallback(
     (value: string) => {
-      const newFiatAmount =
-        value && !isNaN(parseFloat(value))
-          ? (parseFloat(value) * exchangeRate).toFixed(2)
-          : "";
       setState({
         selectedToken,
         amount: value,
-        fiatAmount: newFiatAmount,
         isLoading,
         transactionStatus,
       });
     },
-    [selectedToken, isLoading, transactionStatus, setState, exchangeRate]
-  );
-
-  const setFiatAmount = useCallback(
-    (value: string) => {
-      const newAmount =
-        value && !isNaN(parseFloat(value))
-          ? (parseFloat(value) / exchangeRate).toFixed(2)
-          : "";
-      setState({
-        selectedToken,
-        amount: newAmount,
-        fiatAmount: value,
-        isLoading,
-        transactionStatus,
-      });
-    },
-    [selectedToken, isLoading, transactionStatus, setState, exchangeRate]
+    [selectedToken, isLoading, transactionStatus, setState]
   );
 
   const setQuickAmount = useCallback(
     (value: string) => {
-      const newFiatAmount = (parseFloat(value) * exchangeRate).toFixed(2);
       setState({
         selectedToken,
         amount: value,
-        fiatAmount: newFiatAmount,
         isLoading,
         transactionStatus,
       });
     },
-    [selectedToken, isLoading, transactionStatus, setState, exchangeRate]
+    [selectedToken, isLoading, transactionStatus, setState]
   );
 
   const validateInputs = useCallback(() => {
-    if (!amount || parseFloat(amount) <= 0) {
-      console.error("Error: Please enter a valid amount");
+    if (!amount || parseFloat(amount) < 15000) {
+      console.error("Error: Minimum is 15,000 points");
       return false;
     }
     return true;
@@ -163,16 +120,14 @@ export function useDepositState() {
     setState({
       selectedToken,
       amount,
-      fiatAmount,
       isLoading: true,
-      transactionStatus: "Preparing deposit instructions...",
+      transactionStatus: "Preparing deposit...",
     });
 
     try {
       setState({
         selectedToken,
         amount,
-        fiatAmount,
         isLoading: true,
         transactionStatus: "Generating deposit address...",
       });
@@ -181,15 +136,14 @@ export function useDepositState() {
       setState({
         selectedToken,
         amount,
-        fiatAmount,
         isLoading: true,
-        transactionStatus: "Waiting for deposit confirmation...",
+        transactionStatus: "Adding points...",
       });
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       console.log(
-        "Deposit Instructions Ready:",
-        `Send ${amount} ${selectedToken?.symbol || "tokens"} to your wallet address`
+        "Points Added:",
+        `${amount} points (${amount} ${selectedToken?.symbol || "tokens"})`
       );
       router.back();
     } catch (error) {
@@ -198,12 +152,11 @@ export function useDepositState() {
       setState({
         selectedToken,
         amount,
-        fiatAmount,
         isLoading: false,
         transactionStatus: "",
       });
     }
-  }, [selectedToken, amount, fiatAmount, setState, validateInputs]);
+  }, [selectedToken, amount, setState, validateInputs]);
 
   const resetState = useCallback(() => {
     setState(initialDepositState);
@@ -212,15 +165,12 @@ export function useDepositState() {
   return {
     selectedToken,
     amount,
-    fiatAmount,
     isLoading,
     transactionStatus,
-    exchangeRate,
     stablecoinTokens: stablecoinTokens ?? [],
     activeChain,
     setSelectedToken,
     setAmount,
-    setFiatAmount,
     setQuickAmount,
     handleDeposit,
     resetState,

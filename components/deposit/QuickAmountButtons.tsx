@@ -1,7 +1,7 @@
 import React, { memo } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
-const QUICK_AMOUNTS = ["10", "25", "50", "100", "500"];
+const QUICK_AMOUNTS = ["15000", "25000", "50000", "100000", "500000"];
 
 interface QuickAmountButtonsProps {
   onSelect: (value: string) => void;
@@ -19,7 +19,7 @@ export const QuickAmountButtons = memo<QuickAmountButtonsProps>(({ onSelect }) =
             onPress={() => onSelect(amount)}
           >
             <Text className="text-light-primary-red text-sm font-semibold">
-              ${amount}
+              {Number(amount).toLocaleString()}
             </Text>
           </TouchableOpacity>
         ))}

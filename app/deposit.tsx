@@ -29,19 +29,17 @@ import { useDepositState } from "@/hooks/deposit/useDepositState";
 import { useWallet } from "@/hooks/useWallet";
 
 export default function DepositScreen() {
-  const { wallets, activeWallet, activeWalletIndex, setActiveWallet } = useWallet();
+  const { wallets, activeWallet, activeWalletIndex, setActiveWallet } =
+    useWallet();
   const {
     selectedToken,
     amount,
-    fiatAmount,
     isLoading,
     transactionStatus,
-    exchangeRate,
     stablecoinTokens,
     activeChain,
     setSelectedToken,
     setAmount,
-    setFiatAmount,
     setQuickAmount,
     handleDeposit,
   } = useDepositState();
@@ -54,7 +52,7 @@ export default function DepositScreen() {
       setActiveWallet(index);
       setWalletModalVisible(false);
     },
-    [setActiveWallet]
+    [setActiveWallet],
   );
 
   const handleSelectToken = useCallback(
@@ -62,7 +60,7 @@ export default function DepositScreen() {
       setSelectedToken(token);
       setTokenModalVisible(false);
     },
-    [setSelectedToken]
+    [setSelectedToken],
   );
 
   const { bottom } = useSafeAreaInsets();
@@ -83,7 +81,7 @@ export default function DepositScreen() {
             <View className="bg-light rounded-xl mb-6 shadow-xs">
               {/* Wallet Selector */}
               <View className="mb-6 p-5">
-                <Text className="text-light-matte-black/70 mb-2">Deposit To</Text>
+                <Text className="text-light-matte-black/70 mb-2">Add To</Text>
                 <TouchableOpacity
                   activeOpacity={0.7}
                   className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between"
@@ -95,7 +93,9 @@ export default function DepositScreen() {
                     </Text>
                     <Text className="text-light-matte-black/60 text-xs">
                       {activeWallet?.address?.substring(0, 6)}...
-                      {activeWallet?.address?.substring(activeWallet.address.length - 4)}
+                      {activeWallet?.address?.substring(
+                        activeWallet.address.length - 4,
+                      )}
                     </Text>
                   </View>
                   <ChevronDown size={20} color="#c71c4b" />
@@ -122,36 +122,22 @@ export default function DepositScreen() {
                 </TouchableOpacity>
               </View>
 
-              {selectedToken && (
-                <ExchangeRateCard
-                  selectedToken={selectedToken}
-                  exchangeRate={exchangeRate}
-                />
-              )}
-
               <AmountInputSection
                 amount={amount}
-                fiatAmount={fiatAmount}
                 tokenSymbol={selectedToken?.symbol || ""}
                 onAmountChange={setAmount}
-                onFiatAmountChange={setFiatAmount}
               />
 
               <QuickAmountButtons onSelect={setQuickAmount} />
 
               <DepositButton isLoading={isLoading} onPress={handleDeposit} />
             </View>
-
-            <DepositInfoCard
-              tokenSymbol={selectedToken?.symbol || ""}
-              chainName={activeChain.chain.name}
-            />
           </ScrollView>
         </View>
 
         <LoadinngSpinnerPopup
           visible={isLoading}
-          title="Processing Deposit"
+          title="Adding Points"
           message={transactionStatus}
         />
 

@@ -15,7 +15,7 @@ export const DepositButton = memo<DepositButtonProps>(({ isLoading, onPress }) =
       disabled={isLoading}
     >
       <Text className="text-white font-bold text-center text-base">
-        {isLoading ? "Processing..." : "Continue to Deposit"}
+        {isLoading ? "Processing..." : "Add Points"}
       </Text>
     </TouchableOpacity>
   );

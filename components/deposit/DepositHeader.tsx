@@ -15,7 +15,7 @@ export const DepositHeader = memo(() => {
           <ArrowLeft color="#c71c4b" size={24} />
         </TouchableOpacity>
         <Text className="text-light-matte-black text-xl font-bold">
-          Deposit
+          Add Points
         </Text>
       </View>
       <TouchableOpacity

@@ -201,9 +201,14 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
 
             <View>
               {isShowBalance ? (
-                <Text className="text-light-primary-red font-bold text-4xl">
-                  {isFetching ? "..." : balance}
-                </Text>
+                <View>
+                  <Text className="text-light-primary-red font-bold text-4xl">
+                    {isFetching ? "..." : balance}
+                  </Text>
+                  <Text className="text-light-matte-black text-md font-light">
+                    123 points
+                  </Text>
+                </View>
               ) : (
                 <View className="flex-row items-center gap-2 py-2">
                   <View className="h-2 bg-light-primary-red w-16 rounded-full" />
@@ -225,14 +230,14 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
                   <DepositIcon width={32} height={32} />
                 </View>
                 <Text className="text-light-matte-black text-[10px] font-medium">
-                  Deposit
+                  Add points
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => router.push("/withdraw")}
-                className="flex-1 min-w-[100px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center"
+                className="flex-1 hidden min-w-[100px] bg-light-main-container rounded-xl py-3 px-3 flex-row items-center"
               >
                 <View className="mr-2">
                   <WithdrawIcon width={32} height={32} />
