@@ -47,14 +47,17 @@ export interface BalanceSectionRef {
 const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   const { activeWallet, activeChain, isLoading } = useWallet();
   const { isAuthenticated } = useIsAuthenticated();
-  const { data: pointBalance, isFetching: isPointsFetching } = usePointBalance();
+  const { data: pointBalance, isFetching: isPointsFetching, refetch: refetchPoints } = usePointBalance();
   const { balance, isFetching, refetch } = useWalletBalance(
     activeWallet?.address as `0x${string}` | string,
     activeChain,
   );
 
   useImperativeHandle(ref, () => ({
-    refetch,
+    refetch: () => {
+      refetch();
+      refetchPoints();
+    },
   }));
   const [isShowBalance, setShowBalance] = useState(false);
   const [selectedToken, setSelectedToken] = useState(
