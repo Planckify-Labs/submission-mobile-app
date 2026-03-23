@@ -22,13 +22,14 @@ import {
   ExchangeRateCard,
   QuickAmountButtons,
 } from "@/components/deposit";
+import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useDepositState } from "@/hooks/deposit/useDepositState";
 import { useWallet } from "@/hooks/useWallet";
 
 export default function DepositScreen() {
-  const { wallets, activeWallet, activeWalletIndex, setActiveWallet } =
+  const { wallets, activeWallet, activeWalletIndex, setActiveWallet, activeChain } =
     useWallet();
   const {
     selectedToken,
@@ -42,6 +43,11 @@ export default function DepositScreen() {
     isAuthenticated,
     hasContract,
     isContractFetching,
+    nativeBalanceFormatted,
+    tokenBalanceFormatted,
+    hasInsufficientNative,
+    hasInsufficientToken,
+    isFetchingBalances,
     setSelectedToken,
     setAmount,
     setQuickAmount,
@@ -50,6 +56,7 @@ export default function DepositScreen() {
 
   const [walletModalVisible, setWalletModalVisible] = useState(false);
   const [tokenModalVisible, setTokenModalVisible] = useState(false);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
 
   const handleSelectWallet = useCallback(
     (index: number) => {
@@ -65,6 +72,22 @@ export default function DepositScreen() {
       setTokenModalVisible(false);
     },
     [setSelectedToken],
+  );
+
+  const handleDepositPress = useCallback(() => {
+    if (isAuthenticated === false) {
+      handleDeposit(); // redirects to /auth
+      return;
+    }
+    setPinModalVisible(true);
+  }, [isAuthenticated, handleDeposit]);
+
+  const handlePinSubmit = useCallback(
+    async (_pin: string) => {
+      setPinModalVisible(false);
+      await handleDeposit();
+    },
+    [handleDeposit],
   );
 
   const { bottom } = useSafeAreaInsets();
@@ -136,6 +159,42 @@ export default function DepositScreen() {
                 </TouchableOpacity>
               </View>
 
+              {/* Wallet Balance */}
+              {selectedToken && (
+                <View className="mb-4 px-5">
+                  <Text className="text-light-matte-black/70 mb-2">Your Balance</Text>
+                  <View className="bg-light-main-container rounded-xl p-4 gap-2">
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-light-matte-black/60 text-sm">
+                        {activeChain.chain.nativeCurrency.symbol}
+                      </Text>
+                      <Text
+                        className={`text-sm font-medium ${hasInsufficientNative ? "text-red-500" : "text-light-matte-black"}`}
+                      >
+                        {isFetchingBalances ? "..." : nativeBalanceFormatted}
+                      </Text>
+                    </View>
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-light-matte-black/60 text-sm">
+                        {selectedToken.symbol}
+                      </Text>
+                      <Text
+                        className={`text-sm font-medium ${hasInsufficientToken ? "text-red-500" : "text-light-matte-black"}`}
+                      >
+                        {isFetchingBalances ? "..." : tokenBalanceFormatted}
+                      </Text>
+                    </View>
+                    {(hasInsufficientNative || hasInsufficientToken) && (
+                      <Text className="text-red-500 text-xs mt-1">
+                        {hasInsufficientNative
+                          ? `Insufficient ${activeChain.chain.nativeCurrency.symbol} for gas fees.`
+                          : `Insufficient ${selectedToken.symbol} balance.`}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )}
+
               <AmountInputSection
                 amount={amount}
                 tokenSymbol={selectedToken?.symbol || ""}
@@ -150,7 +209,11 @@ export default function DepositScreen() {
 
               <DepositButton
                 isLoading={isLoading}
-                onPress={handleDeposit}
+                onPress={handleDepositPress}
+                disabled={
+                  isAuthenticated !== false &&
+                  (hasInsufficientNative || hasInsufficientToken)
+                }
                 label={
                   isAuthenticated === false
                     ? "Sign In to Add Points"
@@ -183,6 +246,13 @@ export default function DepositScreen() {
           onSelectToken={handleSelectToken}
           tokens={stablecoinTokens}
           title="Select Token"
+        />
+
+        <PinConfirmationModal
+          visible={pinModalVisible}
+          onClose={() => setPinModalVisible(false)}
+          onConfirm={handlePinSubmit}
+          title="Confirm Deposit"
         />
       </SafeAreaView>
     </>

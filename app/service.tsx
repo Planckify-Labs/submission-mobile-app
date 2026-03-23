@@ -68,7 +68,7 @@ export default function ServiceScreen() {
     {
       type: "header",
       data: {
-        title: "Payments",
+        title: "Redeem",
       },
     },
     {
@@ -124,7 +124,7 @@ export default function ServiceScreen() {
 
   const renderServiceScreenItem = ({ item }: ListRenderItemInfo<ListItem>) => {
     if (item.type === "header") {
-      return <ServiceHeader title="Payments" />;
+      return <ServiceHeader title="Redeem" />;
     } else if (item.type === "searchBar") {
       return (
         <SearchBar

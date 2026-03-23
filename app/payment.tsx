@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, ChevronDown } from "lucide-react-native";
+import { ArrowLeft } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
@@ -14,104 +14,29 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { Address, encodeFunctionData, erc20Abi, formatUnits } from "viem";
-import { exchangeRateApi } from "@/api/endpoints/exchange-rates";
-import { CustomerInfoItem } from "@/api/types/booking";
-import { TExchangeRate } from "@/api/types/exchange-rate";
-import type { TToken } from "@/api/types/token";
-import ChainSelector from "@/components/common/ChainSelector";
-import InsufficientFundsModal from "@/components/common/InsufficientFundsModal";
+import type { CustomerInfoItem } from "@/api/types/booking";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
-import OptimizedImage from "@/components/common/OptimizedImage";
 import PaymentErrorModal from "@/components/common/PaymentErrorModal";
 import PaymentSuccessModal from "@/components/common/PaymentSuccessModal";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
-import SpendingApprovalModal from "@/components/common/SpendingApprovalModal";
-import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
-import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
-import { useTakumiWalletContract } from "@/contracts/hooks/useTakumiWalletContract";
-import type { TCreateTransactionParams } from "@/contracts/types/TTakumiWallet";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
-import { useBlockchains } from "@/hooks/queries/useBlockchains";
-import { useCreateBooking } from "@/hooks/queries/useBookings";
 import { useProductVariantById } from "@/hooks/queries/useProducts";
-import { useCreatePurchase } from "@/hooks/queries/usePurchases";
-import { useSmartContractByChain } from "@/hooks/queries/useSmartContracts";
-import { useTokens } from "@/hooks/queries/useTokens";
-import { useWallet } from "@/hooks/useWallet";
+import { usePointBalance } from "@/hooks/queries/usePoints";
+import { useExecuteRedemption, useRedemptionStatus } from "@/hooks/queries/useRedeem";
 
 export default function PaymentScreen() {
-  const {
-    wallets,
-    activeWallet,
-    activeWalletIndex,
-    setActiveWallet,
-    getPublicClientForActiveChain,
-    getClientForActiveWallet,
-    activeChain,
-  } = useWallet();
-  const [purchaseAmount, setPurchaseAmount] = useState("");
-
-  const { data: blockchains } = useBlockchains();
-  const activeBlockchain = useMemo(() => {
-    if (!blockchains || !activeChain) return null;
-    return blockchains.find((b) => b.chainId === activeChain.chain.id);
-  }, [blockchains, activeChain]);
-
-  const {
-    data: smartContract,
-    isLoading: isLoadingContract,
-    error: contractError,
-  } = useSmartContractByChain(activeBlockchain?.chainId || 0);
-
-  const contractAddress = smartContract?.address;
-
-  const { createTransaction, waitForTransaction } = useTakumiWalletContract({
-    contractAddress: contractAddress as `0x${string}`,
-  });
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [balance, setBalance] = useState<bigint>(BigInt(0));
-  const [tokenBalance, setTokenBalance] = useState<string>("0");
-  const [isLoadingTokenBalance, setIsLoadingTokenBalance] = useState(false);
-  const [walletModalVisible, setWalletModalVisible] = useState(false);
-  const [tokenModalVisible, setTokenModalVisible] = useState(false);
-  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
-  const [selectedToken, setSelectedToken] = useState<TToken | null>(null);
   const [transactionStatus, setTransactionStatus] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const [pinModalVisible, setPinModalVisible] = useState(false);
-  const [approvalModalVisible, setApprovalModalVisible] = useState(false);
-  const [shouldShowApprovalModal, setShouldShowApprovalModal] = useState(false);
-  const [isApprovingSpending, setIsApprovingSpending] = useState(false);
-  const [exchangeRate, setExchangeRate] = useState<TExchangeRate | null>(null);
-  const [isLoadingRate, setIsLoadingRate] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [paymentError, setPaymentError] = useState<string>("");
+  const [redemptionId, setRedemptionId] = useState<string | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState<{
     productName: string;
-    amount: string;
-    tokenSymbol: string;
-    bookingId: string;
-    txHash: string;
-    refId: string;
-    purchaseId: string;
+    pointsSpent: string;
+    redemptionId: string;
   } | null>(null);
-  const [estimatedGasCost, setEstimatedGasCost] = useState<bigint>(BigInt(0));
-  const [isEstimatingGas, setIsEstimatingGas] = useState(false);
-  const [insufficientFundsModal, setInsufficientFundsModal] = useState<{
-    visible: boolean;
-    type: "gas" | "token";
-    requiredAmount: string;
-    currentBalance: string;
-    symbol: string;
-  }>({
-    visible: false,
-    type: "gas",
-    requiredAmount: "0",
-    currentBalance: "0",
-    symbol: "",
-  });
 
   const { variantId, customerInfo } = useLocalSearchParams<{
     variantId: string;
@@ -128,617 +53,145 @@ export default function PaymentScreen() {
     }
   }, [customerInfo]);
 
+  const { isAuthenticated } = useIsAuthenticated();
   const { data: variantData, isLoading: isLoadingVariant } =
     useProductVariantById(variantId);
+  const { data: pointBalance, isFetching: isPointBalanceFetching } =
+    usePointBalance();
+  const { mutateAsync: executeRedemption } = useExecuteRedemption();
 
-  const { mutateAsync: createBooking } = useCreateBooking();
-  const { mutateAsync: createPurchase } = useCreatePurchase();
-
-  const { data: tokens } = useTokens({
-    blockchainId: activeBlockchain?.id,
-    isStablecoin: true,
-    isActive: true,
-  });
+  // Poll redemption status until terminal state
+  const { data: redemptionStatus } = useRedemptionStatus(redemptionId);
 
   useEffect(() => {
-    if (tokens && tokens.length > 0 && !selectedToken) {
-      const timer = setTimeout(() => {
-        setSelectedToken(tokens[0]);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [tokens, selectedToken]);
+    if (!redemptionStatus) return;
 
-  const fetchExchangeRate = useCallback(async () => {
-    if (!selectedToken) return;
-
-    setIsLoadingRate(true);
-    try {
-      const response = await exchangeRateApi.getLatestExchangeRate({
-        fromCurrency: selectedToken.symbol,
-        toCurrency: "IDR",
+    if (redemptionStatus.status === "COMPLETED") {
+      setIsLoading(false);
+      setTransactionStatus("");
+      setRedemptionId(null);
+      setPaymentSuccess({
+        productName: variantData?.name ?? "",
+        pointsSpent: redemptionStatus.pointsSpent,
+        redemptionId: redemptionStatus.id,
       });
-      setExchangeRate(response);
-    } catch (error) {
-      console.error("Error fetching exchange rate:", error);
-    } finally {
-      setIsLoadingRate(false);
-    }
-  }, [selectedToken]);
-
-  useEffect(() => {
-    if (selectedToken) {
-      const timer = setTimeout(() => {
-        fetchExchangeRate();
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedToken, fetchExchangeRate]);
-
-  const calculatedPurchaseAmount = useMemo(() => {
-    if (
-      !variantData?.ProductPrice?.[0]?.sellPrice ||
-      !exchangeRate?.rate ||
-      !selectedToken
-    ) {
-      return "";
-    }
-
-    const priceInIDR = parseInt(variantData.ProductPrice[0].sellPrice);
-    const tokenAmount = priceInIDR / exchangeRate.rate;
-    const tokenAmountInWei = Math.floor(
-      tokenAmount * Math.pow(10, selectedToken.decimals),
-    );
-
-    return tokenAmountInWei.toString();
-  }, [
-    variantData?.ProductPrice?.[0]?.sellPrice,
-    exchangeRate?.rate,
-    selectedToken,
-  ]);
-
-  useEffect(() => {
-    if (calculatedPurchaseAmount) {
-      setPurchaseAmount(calculatedPurchaseAmount);
-    }
-  }, [calculatedPurchaseAmount]);
-
-  const fetchBalance = useCallback(async () => {
-    if (!activeWallet.address) return;
-
-    setIsLoadingBalance(true);
-    try {
-      const publicClient = getPublicClientForActiveChain();
-      if (!publicClient) return;
-
-      const balanceValue = await publicClient.getBalance({
-        address: activeWallet.address as `0x${string}`,
-      });
-
-      setBalance(balanceValue);
-    } catch (error) {
-      console.error("Error fetching balance:", error);
-    } finally {
-      setIsLoadingBalance(false);
-    }
-  }, [activeWallet.address, getPublicClientForActiveChain]);
-
-  useEffect(() => {
-    if (activeWallet.address) {
-      const timer = setTimeout(() => {
-        fetchBalance();
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [activeWallet.address, fetchBalance]);
-
-  useEffect(() => {
-    if (
-      selectedToken &&
-      activeBlockchain &&
-      selectedToken.blockchainId !== activeBlockchain.id
-    ) {
-      console.log("Network changed, resetting selected token");
-      setSelectedToken(null);
-
-      if (tokens && tokens.length > 0) {
-        console.log("Auto-selecting token for new network:", tokens[0].symbol);
-        setSelectedToken(tokens[0]);
-      }
-    }
-  }, [activeBlockchain, selectedToken, tokens]);
-
-  const fetchTokenBalance = useCallback(async () => {
-    if (!selectedToken || !activeWallet.address) return;
-
-    setIsLoadingTokenBalance(true);
-    try {
-      const publicClient = getPublicClientForActiveChain();
-      if (!publicClient) return;
-
-      const balance = await publicClient.readContract({
-        address: selectedToken.contractAddress as `0x${string}`,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [activeWallet.address as `0x${string}`],
-      });
-
-      const formattedBalance = formatUnits(
-        balance as bigint,
-        selectedToken.decimals,
+      setSuccessModalVisible(true);
+    } else if (redemptionStatus.status === "REFUNDED") {
+      setIsLoading(false);
+      setTransactionStatus("");
+      setRedemptionId(null);
+      setPaymentError(
+        "Your redemption could not be fulfilled. Your points have been returned to your balance.",
       );
-      setTokenBalance(formattedBalance);
-    } catch (error) {
-      console.error("Error fetching token balance:", error);
-      setTokenBalance("0");
-    } finally {
-      setIsLoadingTokenBalance(false);
+      setErrorModalVisible(true);
+    } else if (
+      redemptionStatus.status === "PENDING" ||
+      redemptionStatus.status === "PROCESSING" ||
+      redemptionStatus.status === "FAILED"
+    ) {
+      setTransactionStatus(
+        redemptionStatus.status === "PROCESSING"
+          ? "Processing your order..."
+          : "Submitting your redemption...",
+      );
     }
-  }, [selectedToken, activeWallet.address, getPublicClientForActiveChain]);
+  }, [redemptionStatus, variantData?.name]);
 
-  useEffect(() => {
-    if (selectedToken && activeWallet.address) {
-      const timer = setTimeout(() => {
-        fetchTokenBalance();
-      }, 400);
-      return () => clearTimeout(timer);
-    } else {
-      setTokenBalance("0");
-    }
-  }, [selectedToken, activeWallet.address, fetchTokenBalance]);
-
-  const estimateGasCost = useCallback(async () => {
-    if (!selectedToken || !activeWallet.address || !contractAddress || !purchaseAmount) {
-      setEstimatedGasCost(BigInt(0));
+  const executePayment = useCallback(async () => {
+    if (!variantData?.id || !variantData.ProductPrice?.[0]?.id) {
+      console.error("Error: Missing variant or price data");
       return;
     }
 
-    setIsEstimatingGas(true);
-    try {
-      const publicClient = getPublicClientForActiveChain();
-      if (!publicClient) return;
-
-      const approvalAmount = BigInt(purchaseAmount);
-
-      // Encode the approve function call
-      const data = encodeFunctionData({
-        abi: erc20Abi,
-        functionName: "approve",
-        args: [contractAddress as `0x${string}`, approvalAmount],
-      });
-
-      // Estimate gas for the approve transaction
-      const estimatedGas = await publicClient.estimateGas({
-        account: activeWallet.address as `0x${string}`,
-        to: selectedToken.contractAddress as `0x${string}`,
-        data,
-      });
-
-      // Get current gas price
-      const gasPrice = await publicClient.getGasPrice();
-
-      // Calculate total gas cost with 20% buffer for safety
-      const gasCost = (estimatedGas * gasPrice * BigInt(120)) / BigInt(100);
-      setEstimatedGasCost(gasCost);
-    } catch (error) {
-      console.error("Error estimating gas:", error);
-      // Fallback to a reasonable estimate if estimation fails (e.g., insufficient balance)
-      // Use 100,000 gas units * estimated gas price as fallback
-      try {
-        const publicClient = getPublicClientForActiveChain();
-        if (publicClient) {
-          const gasPrice = await publicClient.getGasPrice();
-          const fallbackGasCost = BigInt(100000) * gasPrice;
-          setEstimatedGasCost(fallbackGasCost);
-        }
-      } catch {
-        // If even fallback fails, set a minimum estimate
-        setEstimatedGasCost(BigInt("100000000000000")); // 0.0001 ETH
-      }
-    } finally {
-      setIsEstimatingGas(false);
-    }
-  }, [selectedToken, activeWallet.address, contractAddress, purchaseAmount, getPublicClientForActiveChain]);
-
-  useEffect(() => {
-    if (selectedToken && activeWallet.address && contractAddress && purchaseAmount) {
-      const timer = setTimeout(() => {
-        estimateGasCost();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedToken, activeWallet.address, contractAddress, purchaseAmount, estimateGasCost]);
-
-  const handleSelectWallet = (index: number) => {
-    setActiveWallet(index);
-    setWalletModalVisible(false);
-  };
-
-  const handleSelectToken = (token: TToken) => {
-    setSelectedToken(token);
-    setTokenModalVisible(false);
-  };
-
-  const formatBalance = useCallback((rawBalance: bigint, minDecimals = 4) => {
-    const formatted = parseFloat(formatUnits(rawBalance, 18));
-    // For very small values, show more decimals to avoid "0.0000"
-    if (formatted > 0 && formatted < 0.0001) {
-      // Find first significant digit and show a few more
-      const str = formatted.toFixed(10);
-      const match = str.match(/^0\.0*[1-9]/);
-      if (match) {
-        const significantStart = match[0].length - 1;
-        return formatted.toFixed(Math.min(significantStart + 3, 10));
-      }
-    }
-    return formatted.toFixed(minDecimals);
-  }, []);
-
-  const executePayment = useCallback(
-    async (pin?: string) => {
-      if (
-        !activeWallet.address ||
-        !variantData?.id ||
-        !variantData.ProductPrice?.[0]?.id ||
-        !selectedToken ||
-        !activeBlockchain ||
-        !contractAddress
-      ) {
-        console.error("Error: Missing required data for payment");
-        return;
-      }
-
-      setIsLoading(true);
-      setTransactionStatus("Submitting your purchase...");
-
-      try {
-        const booking = await createBooking({
-          walletAddress: activeWallet.address,
-          productVariantId: variantId,
-          productPriceId: variantData.ProductPrice[0].id,
-          payment: {
-            tokenAddress: selectedToken.contractAddress,
-            blockchainId: activeBlockchain.id,
-            exchangeRateId: exchangeRate?.id ?? 0,
-          },
-          customerInfo: parsedCustomerInfo,
-        });
-
-        setTransactionStatus("Creating blockchain transaction...");
-
-        const refId = `${booking.id}-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-
-        const transactionParams: TCreateTransactionParams = {
-          bookingId: booking.id.toString(),
-          exchangeRateId: BigInt(exchangeRate?.id ?? 0),
-          productVariantId: variantId,
-          tokenAddress: selectedToken.contractAddress as Address,
-          refId,
-          amount: booking.payment.token.amount,
-          tokenDecimals: selectedToken.decimals,
-        };
-        setPurchaseAmount(booking.payment.token.amount);
-        setTransactionStatus("Sending transaction to blockchain...");
-
-        const txHash = await createTransaction.mutateAsync(transactionParams);
-        console.log("Transaction hash:", txHash);
-
-        setTransactionStatus("Creating purchase record...");
-
-        let purchaseId: string | undefined;
-        try {
-          const purchaseData = {
-            refId,
-            walletAddress: activeWallet.address,
-            bookingId: booking.id.toString(),
-            contractAddress: contractAddress,
-            networkId: activeBlockchain.id.toString(),
-            transactionHash: txHash,
-          };
-
-          const purchaseResponse = await createPurchase(purchaseData);
-          console.log("Purchase created:", purchaseResponse);
-          purchaseId = purchaseResponse.id?.toString();
-        } catch (purchaseError) {
-          console.error("Failed to create purchase:", purchaseError);
-          console.error(
-            "Warning: Purchase record creation failed, but transaction is proceeding. Please contact support if needed.",
-          );
-        }
-
-        setTransactionStatus("Confirming transaction...");
-
-        await waitForTransaction(txHash);
-
-        setTransactionStatus("Finalizing purchase...");
-
-        // Payment successful - show success modal
-        setPaymentSuccess({
-          productName: variantData.name,
-          amount: formatUnits(BigInt(purchaseAmount), selectedToken.decimals),
-          tokenSymbol: selectedToken.symbol,
-          bookingId: booking.id.toString(),
-          txHash,
-          refId,
-          purchaseId: purchaseId || "",
-        });
-        setSuccessModalVisible(true);
-      } catch (error) {
-        console.error("Payment error:", error);
-        setPaymentError("Payment failed. Please try again or contact support.");
-        setErrorModalVisible(true);
-      } finally {
-        setIsLoading(false);
-        setTransactionStatus("");
-      }
-    },
-    [
-      activeWallet.address,
-      variantId,
-      variantData,
-      purchaseAmount,
-      selectedToken,
-      createBooking,
-      createPurchase,
-      activeBlockchain,
-      parsedCustomerInfo,
-      exchangeRate,
-      contractAddress,
-      createTransaction,
-      waitForTransaction,
-    ],
-  );
-
-  const approveSpending = useCallback(
-    async (isUnlimited = false) => {
-      if (
-        !selectedToken ||
-        !activeWallet.address ||
-        !contractAddress ||
-        !purchaseAmount
-      ) {
-        console.error("Error: Missing required data for approval");
-        return;
-      }
-
-      setIsApprovingSpending(true);
-      try {
-        const publicClient = getPublicClientForActiveChain();
-        if (!publicClient) throw new Error("No public client available");
-
-        const walletClient = getClientForActiveWallet();
-        if (!walletClient) throw new Error("No wallet client available");
-
-        const approvalAmount = isUnlimited
-          ? BigInt(
-              "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-            )
-          : BigInt(purchaseAmount);
-
-        const hash = await walletClient.writeContract({
-          address: selectedToken.contractAddress as `0x${string}`,
-          abi: erc20Abi,
-          functionName: "approve",
-          args: [contractAddress as `0x${string}`, approvalAmount],
-          chain: walletClient.chain,
-          account: walletClient.account!,
-        });
-
-        await publicClient.waitForTransactionReceipt({ hash });
-
-        setApprovalModalVisible(false);
-        setShouldShowApprovalModal(false);
-        if (isUnlimited) {
-          console.log(
-            "Unlimited Allowance Approved:",
-            `You've granted unlimited spending permission to ${selectedToken.symbol}. Future transactions won't require approval.`,
-          );
-        }
-
-        setTimeout(() => {
-          executePayment();
-        }, 100);
-      } catch (error) {
-        console.error("Error approving spending:", error);
-        console.error("Approval Failed: Could not approve token spending");
-      } finally {
-        setIsApprovingSpending(false);
-      }
-    },
-    [
-      selectedToken,
-      activeWallet.address,
-      contractAddress,
-      purchaseAmount,
-      getPublicClientForActiveChain,
-      getClientForActiveWallet,
-      executePayment,
-    ],
-  );
-
-  const { isAuthenticated } = useIsAuthenticated();
-
-  const hasInsufficientGas = useMemo(() => {
-    // Use estimated gas cost, with fallback minimum if estimation hasn't completed
-    const requiredGas = estimatedGasCost > BigInt(0)
-      ? estimatedGasCost
-      : BigInt("100000000000000"); // Fallback: 0.0001 ETH
-    return balance < requiredGas;
-  }, [balance, estimatedGasCost]);
-
-  const hasInsufficientTokenBalance = useMemo(() => {
-    if (!purchaseAmount || !selectedToken || !tokenBalance) return false;
-    const requiredAmount = BigInt(purchaseAmount);
-    const currentBalance = BigInt(
-      Math.floor(parseFloat(tokenBalance) * Math.pow(10, selectedToken.decimals))
-    );
-    return currentBalance < requiredAmount;
-  }, [purchaseAmount, selectedToken, tokenBalance]);
-
-  const handlePaymentConfirmation = useCallback(async () => {
     if (!isAuthenticated) {
-      console.error(
-        "Authentication Required: Please sign in with your wallet before proceeding with checkout.",
-      );
       router.push("/auth");
       return;
     }
 
-    // Check for insufficient gas balance
-    if (hasInsufficientGas) {
-      const nativeSymbol = getPublicClientForActiveChain()?.chain?.nativeCurrency.symbol || "ETH";
-      const estimatedGasFormatted = estimatedGasCost > BigInt(0)
-        ? formatBalance(estimatedGasCost, 6)
-        : "0.0001";
-      setInsufficientFundsModal({
-        visible: true,
-        type: "gas",
-        requiredAmount: estimatedGasFormatted,
-        currentBalance: formatBalance(balance),
-        symbol: nativeSymbol,
+    setIsLoading(true);
+    setTransactionStatus("Submitting your redemption...");
+
+    try {
+      const result = await executeRedemption({
+        productVariantId: variantId,
+        productPriceId: variantData.ProductPrice[0].id,
+        customerInfo: parsedCustomerInfo,
       });
-      return;
-    }
 
-    // Check for insufficient token balance
-    if (hasInsufficientTokenBalance && selectedToken && purchaseAmount) {
-      const requiredAmount = formatUnits(BigInt(purchaseAmount), selectedToken.decimals);
-      setInsufficientFundsModal({
-        visible: true,
-        type: "token",
-        requiredAmount,
-        currentBalance: parseFloat(tokenBalance).toFixed(4),
-        symbol: selectedToken.symbol,
-      });
-      return;
-    }
+      // Start polling for status
+      setRedemptionId(result.id);
+      setTransactionStatus("Processing your order...");
+    } catch (error: any) {
+      console.error("Redemption error:", error);
 
-    if (
-      selectedToken &&
-      activeWallet.address &&
-      contractAddress &&
-      purchaseAmount
-    ) {
-      try {
-        const publicClient = getPublicClientForActiveChain();
-        if (publicClient) {
-          const allowance = await publicClient.readContract({
-            address: selectedToken.contractAddress as `0x${string}`,
-            abi: erc20Abi,
-            functionName: "allowance",
-            args: [
-              activeWallet.address as `0x${string}`,
-              contractAddress as `0x${string}`,
-            ],
-          });
-
-          const requiredAmount = BigInt(purchaseAmount);
-          if (
-            (allowance as bigint) < requiredAmount ||
-            shouldShowApprovalModal
-          ) {
-            setApprovalModalVisible(true);
-            setShouldShowApprovalModal(false);
-            return;
-          }
+      const status = error?.response?.status;
+      if (status === 400) {
+        const body = await error?.response?.json?.().catch(() => null);
+        const message = body?.message ?? "";
+        if (message.toLowerCase().includes("insufficient")) {
+          setPaymentError(
+            "You don't have enough points to complete this redemption. Please deposit more points.",
+          );
+        } else {
+          setPaymentError(message || "Invalid request. Please try again.");
         }
-      } catch (error) {
-        console.error("Error checking allowance:", error);
+      } else {
+        setPaymentError("Redemption failed. Please try again.");
       }
-    }
 
-    setPinModalVisible(true);
+      setIsLoading(false);
+      setTransactionStatus("");
+      setErrorModalVisible(true);
+    }
   }, [
     isAuthenticated,
-    selectedToken,
-    activeWallet.address,
-    contractAddress,
-    purchaseAmount,
-    shouldShowApprovalModal,
-    getPublicClientForActiveChain,
-    hasInsufficientGas,
-    hasInsufficientTokenBalance,
-    tokenBalance,
-    estimatedGasCost,
-    formatBalance,
-    balance,
+    variantId,
+    variantData,
+    parsedCustomerInfo,
+    executeRedemption,
   ]);
 
+  const handlePaymentConfirmation = useCallback(() => {
+    if (!isAuthenticated) {
+      router.push("/auth");
+      return;
+    }
+    setPinModalVisible(true);
+  }, [isAuthenticated]);
+
   const handlePinSubmit = useCallback(
-    async (pin: string) => {
-      try {
-        setPinModalVisible(false);
-        await executePayment(pin);
-      } catch (error) {
-        console.error("Payment failed:", error);
-        console.error("Payment Failed: Please try again");
-      }
+    async (_pin: string) => {
+      setPinModalVisible(false);
+      await executePayment();
     },
     [executePayment],
   );
 
+  const userPoints = parseInt(pointBalance?.balance ?? "0");
+  const requiredPoints = variantData?.ProductPrice?.[0]?.sellPrice
+    ? parseInt(variantData.ProductPrice[0].sellPrice)
+    : 0;
+  const hasInsufficientPoints =
+    !isPointBalanceFetching && requiredPoints > 0 && userPoints < requiredPoints;
+
   const buttonDisabled = useMemo(() => {
-    console.log("=== Button Disabled Debug ===");
-    console.log("isLoading:", isLoading);
-    console.log("isLoadingVariant:", isLoadingVariant);
-    console.log("activeWallet.address:", activeWallet.address);
-    console.log("selectedToken:", selectedToken);
-    console.log("activeBlockchain:", activeBlockchain);
-    console.log("variantData?.id:", variantData?.id);
-    console.log(
-      "variantData.ProductPrice?.[0]?.id:",
-      variantData?.ProductPrice?.[0]?.id,
-    );
-    console.log("exchangeRate?.rate:", exchangeRate?.rate);
-    console.log("contractAddress:", contractAddress);
-    console.log("contractError:", contractError);
-
-    const conditions = {
-      isLoading,
-      isLoadingVariant,
-      noWalletAddress: !activeWallet.address,
-      noSelectedToken: !selectedToken,
-      noActiveBlockchain: !activeBlockchain,
-      noVariantId: !variantData?.id,
-      noProductPriceId: !variantData?.ProductPrice?.[0]?.id,
-      noExchangeRate: !exchangeRate?.rate,
-      noContractAddress: !contractAddress,
-      hasContractError: !!contractError,
-    };
-
-    console.log("Individual conditions:", conditions);
-
-    const disabled =
+    return (
       isLoading ||
       isLoadingVariant ||
-      !activeWallet.address ||
-      !selectedToken ||
-      !activeBlockchain ||
       !variantData?.id ||
-      !variantData.ProductPrice?.[0]?.id ||
-      !exchangeRate?.rate ||
-      !contractAddress ||
-      !!contractError;
-
-    console.log("Button disabled result:", disabled);
-    console.log("=== End Debug ===");
-
-    return disabled;
+      !variantData?.ProductPrice?.[0]?.id ||
+      hasInsufficientPoints
+    );
   }, [
     isLoading,
     isLoadingVariant,
-    activeWallet.address,
-    selectedToken,
-    activeBlockchain,
-    variantData?.id,
-    variantData?.ProductPrice,
-    exchangeRate?.rate,
-    contractAddress,
-    contractError,
+    variantData,
+    hasInsufficientPoints,
   ]);
 
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 0 : bottom > 0 ? bottom : 0;
+
   return (
     <>
       <StatusBar barStyle="dark-content" />
@@ -757,26 +210,27 @@ export default function PaymentScreen() {
               <ArrowLeft color="#c71c4b" size={24} />
             </TouchableOpacity>
             <Text className="text-light-matte-black text-xl font-bold">
-              Confirm Purchase
+              Confirm Redemption
             </Text>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            {contractError && (
+            {hasInsufficientPoints && (
               <View className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4">
                 <Text className="text-red-800 font-medium text-sm mb-1">
-                  Contract Error
+                  Insufficient Points
                 </Text>
                 <Text className="text-red-600 text-sm">
-                  Unable to load Payment Processor contract for this network.
-                  Please try switching networks or contact support.
+                  You need {requiredPoints.toLocaleString()} points but only have{" "}
+                  {userPoints.toLocaleString()} points. Please deposit more
+                  points to continue.
                 </Text>
               </View>
             )}
 
             <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
               <Text className="text-light-matte-black font-bold text-lg mb-3">
-                Purchase Details
+                Redemption Details
               </Text>
 
               <View className="bg-light-main-container/50 rounded-xl p-3 mb-4">
@@ -807,170 +261,37 @@ export default function PaymentScreen() {
                     </Text>
                   </View>
                 </View>
-
-                <View className="bg-white rounded-lg p-3 shadow-sm">
-                  <View className="flex-row items-center justify-between mb-1">
-                    <Text className="text-light-matte-black/70 text-sm">
-                      Price
-                    </Text>
-                    <Text className="text-light-primary-red font-bold text-base">
-                      {variantData?.ProductPrice?.[0]?.sellPrice
-                        ? `Rp${parseInt(variantData.ProductPrice[0].sellPrice).toLocaleString("id-ID")}`
-                        : "Loading..."}
-                    </Text>
-                  </View>
-                </View>
               </View>
 
               <View className="bg-light-main-container/50 rounded-xl p-3">
                 <Text className="text-light-matte-black font-medium text-sm mb-2">
-                  Payment Details
+                  Point Details
                 </Text>
 
-                <View className="space-y-2">
-                  <View className="flex-row justify-between items-center">
-                    <Text className="text-light-matte-black/60 text-sm">
-                      Paying with
-                    </Text>
-                    <View className="flex-row items-center">
-                      <View className="bg-light-primary-red/10 w-5 h-5 rounded-full mr-2 items-center justify-center">
-                        <Text className="text-light-primary-red text-xs font-bold">
-                          {selectedToken?.symbol?.charAt(0) || "?"}
-                        </Text>
-                      </View>
-                      <Text className="text-light-matte-black text-sm font-medium">
-                        {purchaseAmount && selectedToken
-                          ? `${formatUnits(BigInt(purchaseAmount), selectedToken.decimals)} ${selectedToken.symbol}`
-                          : "Calculating..."}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View className="flex-row justify-between items-center">
-                    <Text className="text-light-matte-black/60 text-sm">
-                      Rate
-                    </Text>
-                    <Text className="text-light-matte-black text-sm">
-                      {isLoadingRate
-                        ? "Loading..."
-                        : `1 ${selectedToken?.symbol} ≈ Rp${exchangeRate?.rate ? exchangeRate.rate.toLocaleString() : "0"}`}
-                    </Text>
-                  </View>
-
-                  <View className="h-px bg-light-matte-black/5 my-2" />
-
-                  <View className="flex-row justify-between items-center">
-                    <Text className="text-light-matte-black font-medium">
-                      Total
-                    </Text>
-                    <View className="flex-row items-center">
-                      <View className="bg-light-primary-red/10 w-6 h-6 rounded-full mr-2 items-center justify-center">
-                        <Text className="text-light-primary-red text-xs font-bold">
-                          {selectedToken?.symbol?.charAt(0) || "?"}
-                        </Text>
-                      </View>
-                      <Text className="text-light-primary-red font-bold text-base">
-                        {purchaseAmount && selectedToken
-                          ? `${formatUnits(BigInt(purchaseAmount), selectedToken.decimals)} ${selectedToken.symbol}`
-                          : "Calculating..."}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-              <Text className="text-light-matte-black font-bold text-lg mb-4">
-                Payment Method
-              </Text>
-
-              <View className="mb-5">
-                <Text className="text-light-matte-black/70 text-sm mb-2">
-                  Wallet
-                </Text>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between border border-light-main-container/20"
-                  onPress={() => setWalletModalVisible(true)}
-                >
-                  <View className="flex-row items-center">
-                    <View>
-                      <Text className="text-light-matte-black font-medium">
-                        {activeWallet.name || "My Wallet"}
-                      </Text>
-                      <Text className="text-light-matte-black/60 text-xs">
-                        {activeWallet?.address?.substring(0, 6)}...
-                        {activeWallet?.address?.substring(
-                          activeWallet.address.length - 4,
-                        )}
-                      </Text>
-                    </View>
-                  </View>
-                  <ChevronDown size={20} color="#c71c4b" />
-                </TouchableOpacity>
-
-                <View className="flex-row items-center justify-between mt-3">
-                  <Text className="text-light-matte-black/60 text-xs">
-                    Balance:{" "}
-                    {isLoadingBalance
-                      ? "Loading..."
-                      : `${formatBalance(balance)} ${getPublicClientForActiveChain()?.chain?.nativeCurrency.symbol}`}
+                <View className="flex-row justify-between items-center mb-2">
+                  <Text className="text-light-matte-black/60 text-sm">
+                    Required
                   </Text>
-                  <ChainSelector />
+                  <Text className="text-light-primary-red font-bold text-base">
+                    {variantData?.ProductPrice?.[0]?.sellPrice
+                      ? `${parseInt(variantData.ProductPrice[0].sellPrice).toLocaleString()} points`
+                      : "Loading..."}
+                  </Text>
+                </View>
+
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-light-matte-black/60 text-sm">
+                    Yours
+                  </Text>
+                  <Text className="text-light-matte-black font-medium text-sm">
+                    {isPointBalanceFetching
+                      ? "Loading..."
+                      : `${userPoints.toLocaleString()} points`}
+                  </Text>
                 </View>
               </View>
-
-              <View>
-                <Text className="text-light-matte-black/70 text-sm mb-2">
-                  Payment Token
-                </Text>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  className="bg-light-main-container p-4 rounded-xl flex-row items-center justify-between border border-light-main-container/20"
-                  onPress={() => setTokenModalVisible(true)}
-                >
-                  <View className="flex-row items-center">
-                    <View className="rounded-full mr-3 overflow-hidden">
-                      <OptimizedImage
-                        source={{ uri: selectedToken?.logoUrl }}
-                        style={{ width: 35, height: 35 }}
-                        contentFit="contain"
-                      />
-                    </View>
-                    <View>
-                      <Text className="text-light-matte-black font-medium">
-                        {selectedToken
-                          ? `${selectedToken.symbol} - ${selectedToken.name}`
-                          : "Select a token"}
-                      </Text>
-                      <Text className="text-light-matte-black/60 text-xs">
-                        {isLoadingTokenBalance
-                          ? "Loading balance..."
-                          : selectedToken
-                            ? `Balance: ${parseFloat(tokenBalance).toFixed(4)} ${selectedToken.symbol}`
-                            : "Select a token"}
-                      </Text>
-                    </View>
-                  </View>
-                  <ChevronDown size={20} color="#c71c4b" />
-                </TouchableOpacity>
-
-                {selectedToken &&
-                  purchaseAmount !== "" &&
-                  parseFloat(purchaseAmount) > 0 && (
-                    <View className="mt-2 bg-light-primary-red/10 p-3 rounded-lg">
-                      <Text className="text-light-primary-red text-sm">
-                        You need{" "}
-                        {purchaseAmount && selectedToken
-                          ? `${formatUnits(BigInt(purchaseAmount), selectedToken.decimals)} ${selectedToken.symbol}`
-                          : "calculating amount..."}{" "}
-                        for this transaction.
-                      </Text>
-                    </View>
-                  )}
-              </View>
             </View>
+
             <TouchableOpacity
               activeOpacity={buttonDisabled ? 1 : 0.7}
               className={`p-4 rounded-full shadow-md mb-4 ${
@@ -980,7 +301,7 @@ export default function PaymentScreen() {
               disabled={buttonDisabled}
             >
               <Text className="font-bold text-center text-lg text-white">
-                Checkout
+                Redeem
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -989,66 +310,22 @@ export default function PaymentScreen() {
             visible={pinModalVisible}
             onClose={() => setPinModalVisible(false)}
             onConfirm={handlePinSubmit}
-            title="Confirm Payment"
+            title="Confirm Redemption"
           />
         </View>
 
         <LoadinngSpinnerPopup
           visible={isLoading}
-          title="Processing Payment"
+          title="Processing Redemption"
           message={transactionStatus}
         />
-
-        <WalletSelectorModal
-          visible={walletModalVisible}
-          onClose={() => setWalletModalVisible(false)}
-          wallets={wallets}
-          activeWalletIndex={activeWalletIndex}
-          onSelectWallet={handleSelectWallet}
-          title="Select Wallet"
-        />
-        {selectedToken && tokens && (
-          <TokenSelectorModal
-            visible={tokenModalVisible}
-            onClose={() => setTokenModalVisible(false)}
-            tokens={tokens}
-            selectedToken={selectedToken}
-            onSelectToken={handleSelectToken}
-            title="Select Payment Token"
-          />
-        )}
-
-        {selectedToken && contractAddress && purchaseAmount && (
-          <SpendingApprovalModal
-            visible={approvalModalVisible}
-            onClose={() => {
-              setApprovalModalVisible(false);
-              setShouldShowApprovalModal(true);
-            }}
-            onApprove={approveSpending}
-            onCancel={() => {
-              setApprovalModalVisible(false);
-              setShouldShowApprovalModal(true);
-            }}
-            token={selectedToken}
-            spenderAddress={contractAddress}
-            amount={purchaseAmount}
-            isLoading={isApprovingSpending}
-            spenderName="Takumi Wallet"
-            isInternalContract={true}
-          />
-        )}
 
         <PaymentSuccessModal
           visible={successModalVisible}
           onClose={() => setSuccessModalVisible(false)}
           productName={paymentSuccess?.productName}
-          amount={paymentSuccess?.amount}
-          tokenSymbol={paymentSuccess?.tokenSymbol}
-          bookingId={paymentSuccess?.bookingId}
-          txHash={paymentSuccess?.txHash}
-          refId={paymentSuccess?.refId}
-          purchaseId={paymentSuccess?.purchaseId}
+          pointsSpent={paymentSuccess?.pointsSpent}
+          redemptionId={paymentSuccess?.redemptionId}
         />
 
         <PaymentErrorModal
@@ -1059,22 +336,6 @@ export default function PaymentScreen() {
             setErrorModalVisible(false);
             handlePaymentConfirmation();
           }}
-          onContactSupport={() => {
-            setErrorModalVisible(false);
-            // TODO: Implement contact support functionality
-            console.log("Contact support");
-          }}
-        />
-
-        <InsufficientFundsModal
-          visible={insufficientFundsModal.visible}
-          onClose={() =>
-            setInsufficientFundsModal((prev) => ({ ...prev, visible: false }))
-          }
-          type={insufficientFundsModal.type}
-          requiredAmount={insufficientFundsModal.requiredAmount}
-          currentBalance={insufficientFundsModal.currentBalance}
-          symbol={insufficientFundsModal.symbol}
         />
       </SafeAreaView>
     </>

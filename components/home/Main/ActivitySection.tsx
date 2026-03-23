@@ -386,7 +386,7 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
                 <View className="bg-white/20 p-2.5 rounded-xl mb-2">
                   <ShoppingBag color="#ffffff" size={20} strokeWidth={2.5} />
                 </View>
-                <Text className="text-white font-bold text-sm">Shop</Text>
+                <Text className="text-white font-bold text-sm">Redemtions</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

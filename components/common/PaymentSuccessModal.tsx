@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { CheckCircle, ExternalLink, Home, Receipt, ReceiptTextIcon } from "lucide-react-native";
+import { CheckCircle, Home } from "lucide-react-native";
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
@@ -16,12 +16,8 @@ type PaymentSuccessModalProps = {
   visible: boolean;
   onClose: () => void;
   productName?: string;
-  amount?: string;
-  tokenSymbol?: string;
-  bookingId?: string;
-  txHash?: string;
-  refId?: string;
-  purchaseId?: string;
+  pointsSpent?: string;
+  redemptionId?: string;
   onViewActivity?: () => void;
 };
 
@@ -31,12 +27,8 @@ export default function PaymentSuccessModal({
   visible,
   onClose,
   productName,
-  amount,
-  tokenSymbol,
-  bookingId,
-  txHash,
-  refId,
-  purchaseId,
+  pointsSpent,
+  redemptionId,
   onViewActivity,
 }: PaymentSuccessModalProps) {
   const { bottom } = useSafeAreaInsets();
@@ -88,11 +80,8 @@ export default function PaymentSuccessModal({
     onClose();
     if (onViewActivity) {
       onViewActivity();
-    } else if (purchaseId) {
-      router.replace({
-        pathname: "/activity-detail",
-        params: { purchaseId },
-      });
+    } else {
+      router.replace("/activities");
     }
   };
 
@@ -100,10 +89,6 @@ export default function PaymentSuccessModal({
     onClose();
     router.replace("/");
   };
-
-  const txHashDisplay = txHash
-    ? `${txHash.substring(0, 6)}...${txHash.substring(txHash.length - 4)}`
-    : "";
 
   if (!visible) return null;
 
@@ -146,16 +131,16 @@ export default function PaymentSuccessModal({
                 <CheckCircle size={64} color="#10b981" strokeWidth={2} />
               </View>
               <Text className="text-light-matte-black font-bold text-2xl mb-2">
-                Payment Successful!
+                Redemption Successful!
               </Text>
               <Text className="text-light-matte-black/60 text-center text-sm">
-                Your purchase has been completed successfully
+                Your redemption has been completed successfully
               </Text>
             </Animated.View>
 
             <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
               <Text className="text-light-matte-black font-bold text-base mb-3">
-                Transaction Details
+                Redemption Details
               </Text>
 
               {productName && (
@@ -167,33 +152,21 @@ export default function PaymentSuccessModal({
                 </View>
               )}
 
-              {amount && tokenSymbol && (
+              {pointsSpent && (
                 <View className="flex-row justify-between items-center mb-2">
-                  <Text className="text-light-matte-black/60 text-sm">Amount Paid</Text>
+                  <Text className="text-light-matte-black/60 text-sm">Points Spent</Text>
                   <Text className="text-light-primary-red text-sm font-bold">
-                    {amount} {tokenSymbol}
+                    {parseInt(pointsSpent).toLocaleString()} points
                   </Text>
                 </View>
               )}
 
-              {bookingId && (
-                <View className="flex-row justify-between items-center mb-2">
-                  <Text className="text-light-matte-black/60 text-sm">Booking ID</Text>
-                  <Text className="text-light-matte-black text-sm font-mono">
-                    #{bookingId}
-                  </Text>
-                </View>
-              )}
-
-              {txHash && (
+              {redemptionId && (
                 <View className="flex-row justify-between items-center">
-                  <Text className="text-light-matte-black/60 text-sm">Transaction</Text>
-                  <View className="flex-row items-center">
-                    <Text className="text-light-matte-black text-sm font-mono mr-1">
-                      {txHashDisplay}
-                    </Text>
-                    <ExternalLink size={14} color="#c71c4b" />
-                  </View>
+                  <Text className="text-light-matte-black/60 text-sm">Redemption ID</Text>
+                  <Text className="text-light-matte-black text-xs font-mono" numberOfLines={1}>
+                    #{redemptionId.substring(0, 12)}...
+                  </Text>
                 </View>
               )}
             </View>

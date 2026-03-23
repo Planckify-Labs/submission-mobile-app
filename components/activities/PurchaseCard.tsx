@@ -54,7 +54,7 @@ const PurchaseCard = React.memo(
             </View>
             <View>
               <Text className="text-light-matte-black font-medium text-sm">
-                Purchase
+                Redemption
               </Text>
               <Text className="text-light-matte-black/50 text-xs">
                 {formatDate({ date: transaction.createdAt, preset: "short" })}
@@ -134,7 +134,7 @@ const PurchaseCard = React.memo(
               onPress={handleRepurchase}
               className="bg-light-primary-red px-8 py-4 rounded-md mt-3"
             >
-              <Text className="text-white text-xs font-bold">Repurchase</Text>
+              <Text className="text-white text-xs font-bold">Redeem Again</Text>
             </TouchableOpacity>
           </View>
         </View>

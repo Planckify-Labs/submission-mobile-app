@@ -108,7 +108,7 @@ const PaymentSection = forwardRef<PaymentSectionRef>((_, ref) => {
     <View className="px-4">
       <View className="bg-light rounded-[14px] w-full p-[22px] gap-4">
         <View className="flex-row px-[22px]-">
-          <Text className="text-light-matte-black text-sm">Payments</Text>
+          <Text className="text-light-matte-black text-sm">Redemtions</Text>
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => router.push("/service")}

@@ -11,6 +11,7 @@ export interface TToken {
   createdAt: string;
   updatedAt: string;
   isNativeCurrency: boolean;
+  peggedCurrency?: string | null;
 }
 
 export type TokenListResponse = TToken[];

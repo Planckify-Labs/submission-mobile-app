@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { router } from "expo-router";
-import { erc20Abi, parseUnits } from "viem";
+import { erc20Abi, formatUnits, parseUnits } from "viem";
+import { useQuery } from "@tanstack/react-query";
 import type { TToken } from "@/api/types/token";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useTokens } from "@/hooks/queries/useTokens";
@@ -44,11 +45,18 @@ export function useDepositState() {
     [blockchains, activeChain.chain.id],
   );
 
-  const { data: stablecoinTokens } = useTokens({
+  const { data: rawStablecoinTokens } = useTokens({
     isStablecoin: true,
     isActive: true,
     blockchainId: activeBackendChain?.id,
   });
+
+  // Only offer tokens that have a peggedCurrency configured on the server —
+  // tokens without it will return a 400 if used for deposits.
+  const stablecoinTokens = useMemo(
+    () => rawStablecoinTokens?.filter((t) => !!t.peggedCurrency) ?? [],
+    [rawStablecoinTokens],
+  );
 
   const selectedToken = state?.selectedToken;
   const amount = state?.amount ?? "";
@@ -122,6 +130,63 @@ export function useDepositState() {
     );
     return { human: humanTokenAmount, raw: rawAmount };
   }, [pointPrice, amount, selectedToken]);
+
+  // --- Wallet Balances ---
+  const { data: nativeBalance = BigInt(0), isFetching: isFetchingNativeBalance } =
+    useQuery({
+      queryKey: ["nativeBalance", activeWallet.address, activeChain.chain.id],
+      queryFn: async () => {
+        const publicClient = getPublicClientForActiveChain();
+        if (!publicClient || !activeWallet.address) return BigInt(0);
+        return publicClient.getBalance({
+          address: activeWallet.address as `0x${string}`,
+        });
+      },
+      enabled: !!activeWallet.address,
+      refetchInterval: 30_000,
+    });
+
+  const { data: tokenBalance = BigInt(0), isFetching: isFetchingTokenBalance } =
+    useQuery({
+      queryKey: [
+        "stablecoinBalance",
+        activeWallet.address,
+        selectedToken?.contractAddress,
+        activeChain.chain.id,
+      ],
+      queryFn: async () => {
+        const publicClient = getPublicClientForActiveChain();
+        if (!publicClient || !activeWallet.address || !selectedToken)
+          return BigInt(0);
+        return publicClient.readContract({
+          address: selectedToken.contractAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [activeWallet.address as `0x${string}`],
+        }) as Promise<bigint>;
+      },
+      enabled: !!activeWallet.address && !!selectedToken,
+      refetchInterval: 30_000,
+    });
+
+  const nativeBalanceFormatted = useMemo(
+    () => parseFloat(formatUnits(nativeBalance, 18)).toFixed(6),
+    [nativeBalance],
+  );
+
+  const tokenBalanceFormatted = useMemo(() => {
+    if (!selectedToken) return "0";
+    return parseFloat(
+      formatUnits(tokenBalance, selectedToken.decimals),
+    ).toFixed(4);
+  }, [tokenBalance, selectedToken]);
+
+  const hasInsufficientNative = nativeBalance === BigInt(0);
+  const hasInsufficientToken = useMemo(() => {
+    if (tokenBalance === BigInt(0)) return true;
+    if (tokenAmountNeeded && tokenBalance < tokenAmountNeeded.raw) return true;
+    return false;
+  }, [tokenBalance, tokenAmountNeeded]);
 
   const validateInputs = useCallback(() => {
     const minimumPoints = pointPrice?.minimumPoints ?? 15000;
@@ -232,10 +297,24 @@ export function useDepositState() {
       router.back();
     } catch (error: any) {
       console.error("Deposit error:", error);
+
+      let errorMessage = "Deposit failed. Please try again.";
+      try {
+        const body = await error?.response?.json?.();
+        const msg: string = body?.message ?? "";
+        if (msg.toLowerCase().includes("no pegged currency")) {
+          errorMessage = `${selectedToken?.symbol ?? "This token"} is not supported for point deposits. Please select a different token.`;
+        } else if (msg) {
+          errorMessage = msg;
+        }
+      } catch {
+        if (error?.message) errorMessage = error.message;
+      }
+
       updateState({
         isLoading: false,
         transactionStatus: "",
-        error: error?.message || "Deposit failed",
+        error: errorMessage,
       });
     } finally {
       updateState({ isLoading: false, transactionStatus: "" });
@@ -273,6 +352,14 @@ export function useDepositState() {
     isAuthenticated,
     hasContract: !!contractAddress,
     isContractFetching,
+    // Balances
+    nativeBalance,
+    nativeBalanceFormatted,
+    tokenBalance,
+    tokenBalanceFormatted,
+    hasInsufficientNative,
+    hasInsufficientToken,
+    isFetchingBalances: isFetchingNativeBalance || isFetchingTokenBalance,
     setSelectedToken,
     setAmount,
     setQuickAmount,
