@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
-import { RefreshControl, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ActivityDetailHeader from "@/components/activity-detail/ActivityDetailHeader";
 import RenderActivityDetailCards from "@/components/activity-detail/RenderActivityDetailCards";
@@ -155,6 +155,13 @@ export default function ActivityDetailScreen() {
     );
   }
 
+  // Per spec: COMPLETED + isVoucher=true + voucherCode=null means vendor hasn't
+  // confirmed yet. The hook auto-retries up to 4 times; show a waiting banner.
+  const isPendingVoucher =
+    redemption?.status === "COMPLETED" &&
+    redemption.product.isVoucher &&
+    redemption.voucherCode === null;
+
   const subtitle = redemption
     ? "Redemption Information"
     : purchase
@@ -184,6 +191,20 @@ export default function ActivityDetailScreen() {
         {redemption && <PurchasedProductHeading redemption={redemption} />}
         {purchase && <PurchasedProductHeading purchase={purchase} />}
         {transfer && <TransferDetailHeading transfer={transfer} />}
+        {isPendingVoucher && (
+          <View className="mx-4 mt-2 mb-1 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex-row items-center gap-3">
+            <ActivityIndicator size="small" color="#f59e0b" />
+            <View className="flex-1">
+              <Text className="text-yellow-800 font-semibold text-sm">
+                Voucher being confirmed
+              </Text>
+              <Text className="text-yellow-700 text-xs mt-0.5">
+                Your token code is being processed. This usually takes a few
+                seconds.
+              </Text>
+            </View>
+          </View>
+        )}
         <RenderActivityDetailCards
           purchase={purchase}
           transfer={transfer}

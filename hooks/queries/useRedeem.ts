@@ -8,12 +8,28 @@ import { pointsQueryKeys } from "@/constants/queryKeys/pointsQueryKeys";
 import { redeemQueryKeys } from "@/constants/queryKeys/redeemQueryKeys";
 
 // --- Redemption Detail (full, includes voucherCode) ---
+// Per spec: when status=COMPLETED and isVoucher=true but voucherCode is still null,
+// the vendor hasn't confirmed yet — retry every 3s, up to 4 times.
 export const useRedemptionById = (id: string | null) => {
   return useQuery({
     queryKey: redeemQueryKeys.detail(id ?? ""),
     queryFn: () => redeemApi.getById(id!),
     enabled: !!id,
     staleTime: 30 * 1000,
+    retry: 1,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (
+        data?.status === "COMPLETED" &&
+        data.product.isVoucher &&
+        data.voucherCode === null
+      ) {
+        // Stop after 4 automatic retries to avoid infinite polling
+        const fetchCount = query.state.dataUpdateCount ?? 0;
+        return fetchCount < 4 ? 3000 : false;
+      }
+      return false;
+    },
   });
 };
 
