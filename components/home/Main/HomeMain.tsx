@@ -50,7 +50,6 @@ export default function HomeMain() {
         <Header />
         <BalanceSection ref={balanceSectionRef} />
         <ActivitySection ref={activitySectionRef} />
-        <PaymentSection ref={paymentSectionRef} />
       </View>
     </ScrollView>
   );

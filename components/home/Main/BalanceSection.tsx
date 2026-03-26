@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { router } from "expo-router";
 import {
   ChevronDown,
   Copy,
@@ -34,8 +35,30 @@ import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { usePointBalance } from "@/hooks/queries/usePoints";
 import { copyToClipboard } from "@/utils/helperUtils";
+import { usePaymentFeatured } from "@/hooks/queries/useProducts";
 import BalanceSectionSkeleton from "./BalanceSectionSkeleton";
 import RecievePaymentModal from "./RecievePaymentModal";
+
+const quickPaymentItems = [
+  {
+    name: "Pulsa & Data Package",
+    displayName: "Phone",
+    icon: require("@/assets/icons/pulsa_data_package.png"),
+    type: "pulsa-data" as const,
+  },
+  {
+    name: "Gaming",
+    displayName: "Gaming",
+    icon: require("@/assets/icons/gaming_topup.png"),
+    type: "category" as const,
+  },
+  {
+    name: "Token PLN",
+    displayName: "PLN",
+    icon: require("@/assets/icons/pln.png"),
+    type: "product" as const,
+  },
+];
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.6;
@@ -48,6 +71,7 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   const { activeWallet, activeChain, isLoading } = useWallet();
   const { isAuthenticated } = useIsAuthenticated();
   const { data: pointBalance, isFetching: isPointsFetching, refetch: refetchPoints } = usePointBalance();
+  const { data: paymentFeatured, refetch: refetchPayment } = usePaymentFeatured();
   const { balance, isFetching, refetch } = useWalletBalance(
     activeWallet?.address as `0x${string}` | string,
     activeChain,
@@ -57,8 +81,43 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
     refetch: () => {
       refetch();
       refetchPoints();
+      refetchPayment();
     },
   }));
+
+  const handleQuickPaymentNavigate = async (item: (typeof quickPaymentItems)[0]) => {
+    let id = paymentFeatured?.[item.name]?.id;
+
+    if (!id) {
+      const maxRetries = 3;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        const { data: freshData } = await refetchPayment();
+        id = freshData?.[item.name]?.id;
+        if (id) break;
+      }
+      if (!id) return;
+    }
+
+    if (item.type === "pulsa-data") {
+      router.push({
+        pathname: "/pulsa-data",
+        params: { categoryId: id },
+      });
+    } else if (item.type === "category") {
+      router.push({
+        pathname: "/view-all-item",
+        params: {
+          categoryId: id,
+          categoryName: item.displayName,
+        },
+      });
+    } else if (item.type === "product") {
+      router.push({
+        pathname: "/purchase-item",
+        params: { productId: id },
+      });
+    }
+  };
   const [isShowBalance, setShowBalance] = useState(false);
   const [selectedToken, setSelectedToken] = useState(
     activeChain?.chain.nativeCurrency?.symbol || "ETH",
@@ -257,6 +316,28 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
                   Withdraw
                 </Text>
               </TouchableOpacity>
+
+              <View className="flex-row gap-3 justify-evenly mt-1 w-full">
+                {quickPaymentItems.map((item) => (
+                  <TouchableOpacity
+                    key={item.name}
+                    activeOpacity={0.7}
+                    className="items-center"
+                    onPress={() => handleQuickPaymentNavigate(item)}
+                  >
+                    <View className="rounded-xl border-2 border-light-matte-black w-12 aspect-square bg-light-main-container items-center justify-center">
+                      <Image
+                        source={item.icon}
+                        style={{ width: 28, height: 28 }}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <Text className="text-[10px] text-center text-wrap max-w-16 mt-1">
+                      {item.displayName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
             <View className="">
