@@ -8,6 +8,7 @@ import type {
   TProductInputFields,
   TProductVariant,
   TProductWithCategory,
+  TRecommendation,
 } from "@/api/types/product";
 import { productsQueryKeys } from "@/constants/queryKeys/productsQueryKeys";
 
@@ -183,6 +184,22 @@ export const useProductInputFields = (productId: string) => {
       return failureCount < 3;
     },
     refetchOnWindowFocus: false,
+  });
+};
+
+export const useRecommendations = (limit = 6) => {
+  return useQuery<TRecommendation[]>({
+    queryKey: productsQueryKeys.recommendations(limit),
+    queryFn: async () => {
+      try {
+        return await productApi.getRecommendations(limit);
+      } catch (error) {
+        console.error("API Error:", error);
+        throw error;
+      }
+    },
+    staleTime: 2 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 };
 

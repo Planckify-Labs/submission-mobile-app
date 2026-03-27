@@ -1,4 +1,4 @@
-import { api, publicApi } from "@/constants/configs/ky";
+import { api, optionalAuthApi, publicApi } from "@/constants/configs/ky";
 import type {
   TPaymentFeatured,
   TProduct,
@@ -7,6 +7,7 @@ import type {
   TProductInputFields,
   TProductVariant,
   TProductWithCategory,
+  TRecommendation,
 } from "../types/product";
 import { fetchList, searchItems } from "../utils/api-helpers";
 
@@ -86,6 +87,13 @@ export const productApi = {
 
   getPaymentFeatured: async (): Promise<TPaymentFeatured> => {
     const response = await publicApi.get("products/payment-featured");
+    return response.json();
+  },
+
+  getRecommendations: async (limit = 6): Promise<TRecommendation[]> => {
+    const response = await optionalAuthApi.get("products/recommendations", {
+      searchParams: { limit },
+    });
     return response.json();
   },
 };

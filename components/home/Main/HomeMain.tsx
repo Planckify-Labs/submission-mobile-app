@@ -10,12 +10,16 @@ import Header from "@/components/home/Main/Header";
 import PaymentSection, {
   PaymentSectionRef,
 } from "@/components/home/Main/PaymentSection";
+import RecommendationSection, {
+  RecommendationSectionRef,
+} from "@/components/home/Main/RecommendationSection";
 
 export default function HomeMain() {
   const [refreshing, setRefreshing] = useState(false);
   const balanceSectionRef = useRef<BalanceSectionRef>(null);
   const activitySectionRef = useRef<ActivitySectionRef>(null);
   const paymentSectionRef = useRef<PaymentSectionRef>(null);
+  const recommendationSectionRef = useRef<RecommendationSectionRef>(null);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -24,6 +28,7 @@ export default function HomeMain() {
     balanceSectionRef.current?.refetch();
     activitySectionRef.current?.refetch();
     paymentSectionRef.current?.refetch();
+    recommendationSectionRef.current?.refetch();
 
     // Wait a bit to ensure the refetch completes
     // This provides a better UX by not ending the refresh too quickly
@@ -49,6 +54,7 @@ export default function HomeMain() {
       <View className="flex-1 gap-4 py-4 pb-24">
         <Header />
         <BalanceSection ref={balanceSectionRef} />
+        <RecommendationSection ref={recommendationSectionRef} />
         <ActivitySection ref={activitySectionRef} />
       </View>
     </ScrollView>

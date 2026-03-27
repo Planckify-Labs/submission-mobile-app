@@ -80,3 +80,20 @@ export type TProductInputFields = {
 };
 
 export type TPaymentFeatured = Record<string, { id: string }>;
+
+export type TRecommendation = {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  code: string;
+  categoryId: string;
+  isVoucher: boolean;
+  category: {
+    id: string;
+    name: string;
+  };
+  startingPrice: {
+    amount: string;
+    currency: string;
+  } | null;
+};

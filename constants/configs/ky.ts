@@ -173,6 +173,43 @@ export const api = ky.create({
   },
 });
 
+export const optionalAuthApi = ky.create({
+  ...createBaseConfig(),
+  hooks: {
+    beforeRequest: [
+      async (request) => {
+        setupBaseHeaders(request, "optional-auth API");
+        try {
+          const indexStr = await SecureStore.getItemAsync(
+            "active_wallet_index",
+          );
+          const idx = indexStr ? parseInt(indexStr, 10) : 0;
+          const wallets = await walletService.loadWalletsFromStorage();
+          const activeAddr = wallets?.[idx]?.address?.toLowerCase() || null;
+
+          let token: string | null = null;
+          if (activeAddr) {
+            token = await getAccessTokenForWallet(activeAddr);
+          }
+          if (!token) {
+            const authedWallet =
+              (await getAuthenticatedWalletAddress())?.toLowerCase() || null;
+            if (authedWallet && authedWallet === activeAddr) {
+              token = await getAccessToken();
+            }
+          }
+          if (token) {
+            request.headers.set("Authorization", `Bearer ${token}`);
+          }
+        } catch {
+          // Silently continue without auth — endpoint degrades gracefully
+        }
+      },
+    ],
+    afterResponse: [handleApiResponse],
+  },
+});
+
 export const publicApi = ky.create({
   ...createBaseConfig(),
   hooks: {
