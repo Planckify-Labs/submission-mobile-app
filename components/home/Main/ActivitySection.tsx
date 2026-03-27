@@ -111,11 +111,10 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
         </View>
       </View>
       <Text
-        className="text-[10px] text-center max-w-16 mt-2"
-        numberOfLines={2}
-        ellipsizeMode="tail"
+        className="text-[10px] text-center max-w-16 mt-2 font-semibold text-light-primary-red"
+        numberOfLines={1}
       >
-        {item.product.variant.name}
+        {item.pointsSpent} points
       </Text>
     </TouchableOpacity>
   );
@@ -365,7 +364,7 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
                 No Activity Yet
               </Text>
               <Text className="text-light-matte-black/45 text-center text-sm leading-6 max-w-[260px]">
-                Start your journey by making a purchase or sending crypto
+                Start your journey by redeeming with points or sending crypto
               </Text>
             </View>
 
@@ -385,7 +384,7 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
                 <View className="bg-white/20 p-2.5 rounded-xl mb-2">
                   <ShoppingBag color="#ffffff" size={20} strokeWidth={2.5} />
                 </View>
-                <Text className="text-white font-bold text-sm">Redemtions</Text>
+                <Text className="text-white font-bold text-sm">Redemptions</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

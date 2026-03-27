@@ -383,7 +383,7 @@ export default function ItemWithInput({
             </Text>
           </View>
           <Text className="text-light-primary-red font-bold text-base ml-2">
-            Rp{parseInt(price).toLocaleString("id-ID")}
+            {parseInt(price).toLocaleString()} points
           </Text>
         </View>
       </TouchableOpacity>
@@ -621,8 +621,8 @@ export default function ItemWithInput({
 
       <LoadinngSpinnerPopup
         visible={isNavigating}
-        title="Preparing Payment"
-        message="Please wait while we prepare your payment..."
+        title="Preparing Redemption"
+        message="Please wait while we prepare your redemption..."
       />
     </>
   );

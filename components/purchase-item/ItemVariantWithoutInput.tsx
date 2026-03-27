@@ -105,7 +105,7 @@ export default function ItemWithoutInput({
                     {variant.name}
                   </Text>
                   <Text className="text-light-primary-red font-bold text-lg">
-                    Rp{parseInt(price).toLocaleString("id-ID")}
+                    {parseInt(price).toLocaleString()} points
                   </Text>
                   <Text className="text-light-matte-black/70 text-xs mt-1">
                     {variant.description}
@@ -143,7 +143,7 @@ export default function ItemWithoutInput({
             <View className="flex-row items-start">
               <Info size={18} color="#c71c4b" className="mr-2 mt-0.5" />
               <Text className="text-light-matte-black/80 text-sm flex-1">
-                This purchase will be linked to your account and cannot be
+                This redemption will be linked to your account and cannot be
                 transferred.
               </Text>
             </View>
@@ -193,15 +193,15 @@ export default function ItemWithoutInput({
           }}
         >
           <Text className="text-light font-bold text-lg">
-            Continue to Payment
+            Redeem with Points
           </Text>
         </TouchableOpacity>
       </View>
 
       <LoadinngSpinnerPopup
         visible={isNavigating}
-        title="Preparing Payment"
-        message="Please wait while we prepare your payment..."
+        title="Preparing Redemption"
+        message="Please wait while we prepare your redemption..."
       />
     </ScrollView>
   );
