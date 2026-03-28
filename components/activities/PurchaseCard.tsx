@@ -132,7 +132,7 @@ const PurchaseCard = React.memo(
         <View className="flex-row items-center justify-between border-t pt-2 border-gray-200">
           <View>
             <Text className="text-light-matte-black text-xs">Points Spent</Text>
-            <Text className="text-light-primary-red font-bold text-md">
+            <Text className="text-light-matte-black font-bold text-md">
               {Number(item.pointsSpent).toLocaleString()} points
             </Text>
           </View>

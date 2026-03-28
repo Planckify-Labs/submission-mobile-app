@@ -111,7 +111,7 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
         </View>
       </View>
       <Text
-        className="text-[10px] text-center max-w-16 mt-2 font-semibold text-light-primary-red"
+        className="text-[10px] text-center max-w-16 mt-2 font-semibold text-light-matte-black"
         numberOfLines={1}
       >
         {item.pointsSpent} points
