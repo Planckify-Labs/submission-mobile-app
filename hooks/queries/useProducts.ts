@@ -42,7 +42,7 @@ export const useProductsByCategories = (take?: number) => {
       }
     },
     staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
 };
 
@@ -199,7 +199,7 @@ export const useRecommendations = (limit = 6) => {
       }
     },
     staleTime: 2 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
 };
 

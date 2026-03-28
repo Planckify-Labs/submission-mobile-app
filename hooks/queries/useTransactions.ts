@@ -22,7 +22,7 @@ export const useTransactionHistory = (
       return response;
     },
     staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     enabled:
       options?.enabled !== false &&
       isAuthenticated === true &&
@@ -44,7 +44,7 @@ export const useTransaction = (id: string) => {
       return response;
     },
     staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     enabled: !!id && isAuthenticated === true && isLoading === false,
     retry: false,
   });

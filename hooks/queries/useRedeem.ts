@@ -73,5 +73,7 @@ export const useRedemptionHistory = (
     getNextPageParam: (lastPage) =>
       lastPage.hasMore ? lastPage.nextCursor ?? undefined : undefined,
     enabled: options?.enabled !== false,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
 };

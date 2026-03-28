@@ -23,6 +23,7 @@ export const usePointBalance = () => {
     queryKey: pointsQueryKeys.balance(),
     queryFn: () => pointsApi.getBalance(),
     staleTime: 30 * 1000, // 30s, matches API cache TTL
+    gcTime: 24 * 60 * 60 * 1000, // persist for offline display
   });
 };
 
@@ -62,5 +63,7 @@ export const usePointHistory = (params?: TPointHistoryParams) => {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) =>
       lastPage.hasMore ? lastPage.nextCursor ?? undefined : undefined,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
 };

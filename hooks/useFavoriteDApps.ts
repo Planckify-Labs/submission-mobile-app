@@ -1,5 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { storage } from "@/lib/storage/mmkv";
 
 const FAVORITE_DAPPS_KEY = "takumipay_favorite_dapps";
 
@@ -9,51 +9,33 @@ export type FavoriteDApp = {
   description: string;
   url: string;
   logoUrl: string;
-  timestamp: number; // When it was favorited
+  timestamp: number;
+};
+
+const loadFromStorage = (): FavoriteDApp[] => {
+  try {
+    const raw = storage.getString(FAVORITE_DAPPS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as FavoriteDApp[];
+    return parsed.sort((a, b) => b.timestamp - a.timestamp);
+  } catch {
+    return [];
+  }
 };
 
 export const useFavoriteDApps = () => {
-  const [favoriteDApps, setFavoriteDApps] = useState<FavoriteDApp[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Load favorites from storage on mount
-  useEffect(() => {
-    loadFavorites();
-  }, []);
-
-  const loadFavorites = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem(FAVORITE_DAPPS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as FavoriteDApp[];
-        // Sort by timestamp (most recent first)
-        const sorted = parsed.sort((a, b) => b.timestamp - a.timestamp);
-        setFavoriteDApps(sorted);
-      }
-    } catch (error) {
-      console.error("Failed to load favorite dApps:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const saveFavorites = useCallback(async (favorites: FavoriteDApp[]) => {
-    try {
-      await AsyncStorage.setItem(FAVORITE_DAPPS_KEY, JSON.stringify(favorites));
-    } catch (error) {
-      console.error("Failed to save favorite dApps:", error);
-    }
-  }, []);
+  // Synchronous MMKV read — data is ready on first render, no loading state needed
+  const [favoriteDApps, setFavoriteDApps] = useState<FavoriteDApp[]>(
+    loadFromStorage,
+  );
 
   const isFavorite = useCallback(
-    (dappId: string): boolean => {
-      return favoriteDApps.some((fav) => fav.id === dappId);
-    },
+    (dappId: string): boolean => favoriteDApps.some((fav) => fav.id === dappId),
     [favoriteDApps],
   );
 
   const toggleFavorite = useCallback(
-    async (dapp: {
+    (dapp: {
       id: string;
       name: string;
       description: string;
@@ -61,40 +43,28 @@ export const useFavoriteDApps = () => {
       logoUrl: string;
     }) => {
       const isCurrentlyFavorite = isFavorite(dapp.id);
-
-      let updatedFavorites: FavoriteDApp[];
-
-      if (isCurrentlyFavorite) {
-        // Remove from favorites
-        updatedFavorites = favoriteDApps.filter((fav) => fav.id !== dapp.id);
-      } else {
-        // Add to favorites
-        const newFavorite: FavoriteDApp = {
-          ...dapp,
-          timestamp: Date.now(),
-        };
-        updatedFavorites = [newFavorite, ...favoriteDApps];
-      }
+      const updatedFavorites = isCurrentlyFavorite
+        ? favoriteDApps.filter((fav) => fav.id !== dapp.id)
+        : [{ ...dapp, timestamp: Date.now() }, ...favoriteDApps];
 
       setFavoriteDApps(updatedFavorites);
-      await saveFavorites(updatedFavorites);
+      storage.set(FAVORITE_DAPPS_KEY, JSON.stringify(updatedFavorites));
 
-      return !isCurrentlyFavorite; // Return new favorite status
+      return !isCurrentlyFavorite;
     },
-    [favoriteDApps, isFavorite, saveFavorites],
+    [favoriteDApps, isFavorite],
   );
 
-  const clearAllFavorites = useCallback(async () => {
+  const clearAllFavorites = useCallback(() => {
     setFavoriteDApps([]);
-    await saveFavorites([]);
-  }, [saveFavorites]);
+    storage.set(FAVORITE_DAPPS_KEY, JSON.stringify([]));
+  }, []);
 
   return {
     favoriteDApps,
-    isLoading,
+    isLoading: false, // synchronous — never in a loading state
     isFavorite,
     toggleFavorite,
     clearAllFavorites,
   };
 };
-
