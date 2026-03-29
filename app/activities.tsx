@@ -69,17 +69,21 @@ const EmptyState = React.memo(
 
 export default function ActivitiesScreen() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: isAuthLoading } = useIsAuthenticated();
+  const { isAuthenticated, isLoading: isAuthLoading, hadPreviousSession } = useIsAuthenticated();
   const [activeActivity, setActiveActivity] = useState<
     "redemptions" | "transfers"
   >("redemptions");
   const horizontalScrollRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    if (isAuthenticated === false && !isAuthLoading) {
+    // Only auto-redirect if the user had a previous session that is now invalid
+    // (e.g. refresh token failed). New users (no tokens ever) stay on this screen
+    // and see the soft sign-in prompt. The 401 handler in ky.ts covers the
+    // "token expired mid-session" case independently.
+    if (isAuthenticated === false && !isAuthLoading && hadPreviousSession) {
       router.replace("/auth");
     }
-  }, [isAuthenticated, isAuthLoading, router]);
+  }, [isAuthenticated, isAuthLoading, hadPreviousSession, router]);
 
   const {
     data: transfersData,

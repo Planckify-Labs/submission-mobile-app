@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { publicApi } from "@/constants/configs/ky";
+import { publicApi, reset401Guard } from "@/constants/configs/ky";
 import { useWallet } from "@/hooks/useWallet";
 
 interface TNonceResponse {
@@ -169,6 +169,9 @@ export const useVerifySignature = () => {
             (response as any).walletAddress,
         );
 
+        // Allow future 401s to trigger redirect again now that we have fresh tokens
+        reset401Guard();
+
         return response;
       } catch (error) {
         console.error("Failed to verify signature:", error);
@@ -230,6 +233,9 @@ export const useRefreshToken = () => {
           );
         }
 
+        // Fresh access token obtained — allow future 401s to trigger redirect again
+        reset401Guard();
+
         return response;
       } catch (error) {
         console.error("Failed to refresh token:", error);
@@ -262,6 +268,7 @@ export const useRefreshToken = () => {
 export const useIsAuthenticated = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hadPreviousSession, setHadPreviousSession] = useState(false);
   const { refreshAccessToken } = useRefreshToken();
   const refreshAccessTokenRef = useRef(refreshAccessToken);
   const { activeWallet } = useWallet();
@@ -271,17 +278,26 @@ export const useIsAuthenticated = () => {
   }, [refreshAccessToken]);
 
   useEffect(() => {
+    // Reset immediately so no stale auth state from the previous wallet leaks
+    // through while the async SecureStore check is in flight.
+    setIsAuthenticated(null);
+    setHadPreviousSession(false);
+    setIsLoading(true);
+
     const checkAuthentication = async () => {
+      const currentWallet = activeWallet?.address?.toLowerCase() || null;
+
+      // Wallet not yet loaded — stay in loading state, don't mark as unauthenticated.
+      // The effect will re-run once activeWallet resolves.
+      if (!currentWallet) {
+        return;
+      }
+
       try {
         setIsLoading(true);
-        const currentWallet = activeWallet?.address?.toLowerCase() || null;
 
-        const perWalletAccess = currentWallet
-          ? await getAccessTokenForWallet(currentWallet)
-          : null;
-        const perWalletRefresh = currentWallet
-          ? await getRefreshTokenForWallet(currentWallet)
-          : null;
+        const perWalletAccess = await getAccessTokenForWallet(currentWallet);
+        const perWalletRefresh = await getRefreshTokenForWallet(currentWallet);
 
         let accessToken = perWalletAccess;
         let refreshToken = perWalletRefresh;
@@ -334,6 +350,11 @@ export const useIsAuthenticated = () => {
           }
         }
 
+        // True if the user previously authenticated for this wallet.
+        // Used by screens to distinguish "new user" (no session) from "expired session".
+        const hadSession = !!(accessToken || refreshToken);
+        setHadPreviousSession(hadSession);
+
         if (!accessToken && !refreshToken) {
           setIsAuthenticated(false);
           return;
@@ -384,6 +405,7 @@ export const useIsAuthenticated = () => {
   return {
     isAuthenticated,
     isLoading,
+    hadPreviousSession,
     logout,
   };
 };

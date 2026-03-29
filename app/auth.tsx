@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { ArrowLeft, Shield, Wallet2 } from "lucide-react-native";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
@@ -10,7 +10,7 @@ import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import SignMessageModal from "@/components/common/SignMessageModal";
 import { usePerformance } from "@/components/providers/PerformanceProvider";
 import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
-import { useVerifySignature } from "@/hooks/queries/useAuth";
+import { useNonce, useVerifySignature } from "@/hooks/queries/useAuth";
 import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { useWallet } from "@/hooks/useWallet";
 
@@ -44,12 +44,32 @@ export default function AuthScreen() {
     getClientForActiveWallet,
     getWalletAccount,
     activeWalletIndex,
+    isLoading: isWalletLoading,
   } = useWallet();
 
-  const { data: nonceData } = useRQGlobalState<NonceData>({
-    queryKey: ["auth", "nonce", activeWallet?.address, activeChain?.chain?.id],
-    initialData: { message: "" },
-  });
+  // Fetch nonce from the API — enabled once wallet address is available
+  const { data: fetchedNonce } = useNonce(
+    activeWallet?.address,
+    activeChain?.chain?.id,
+  );
+
+  const { data: nonceData, setNewData: setNonceData } =
+    useRQGlobalState<NonceData>({
+      queryKey: [
+        "auth",
+        "nonce",
+        activeWallet?.address,
+        activeChain?.chain?.id,
+      ],
+      initialData: { message: "" },
+    });
+
+  // Sync fetched nonce into global state so handleSignMessage can read it
+  useEffect(() => {
+    if (fetchedNonce?.message && fetchedNonce.message !== nonceData?.message) {
+      setNonceData({ message: fetchedNonce.message });
+    }
+  }, [fetchedNonce, nonceData?.message, setNonceData]);
 
   const { mutateAsync: verifySignature } = useVerifySignature();
 
@@ -285,9 +305,10 @@ export default function AuthScreen() {
 
           {!isLoading ? (
             <TouchableOpacity
-              className="bg-light-primary-red py-4 rounded-2xl items-center flex-row justify-center gap-3"
+              className={`py-4 rounded-2xl items-center flex-row justify-center gap-3 ${isWalletLoading || !activeWallet?.address ? "bg-light-primary-red/50" : "bg-light-primary-red"}`}
               onPress={startAuthentication}
               activeOpacity={0.8}
+              disabled={isWalletLoading || !activeWallet?.address}
               style={{
                 shadowColor: "#c71c4b",
                 shadowOffset: { width: 0, height: 4 },
@@ -298,7 +319,7 @@ export default function AuthScreen() {
             >
               <Shield color="#ffffff" size={20} strokeWidth={2} />
               <Text className="text-white font-bold text-base">
-                Sign & Continue
+                {isWalletLoading ? "Loading Wallet..." : "Sign & Continue"}
               </Text>
             </TouchableOpacity>
           ) : null}

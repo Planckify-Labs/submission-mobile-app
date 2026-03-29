@@ -13,6 +13,14 @@ interface ApiError {
   message?: string;
 }
 
+// Guard to prevent multiple concurrent 401 handlers from spamming redirects.
+// Once a 401 clears tokens and redirects, subsequent 401s are no-ops until reset.
+let isHandling401 = false;
+const reset401Guard = () => {
+  isHandling401 = false;
+};
+export { reset401Guard };
+
 const API_CONFIG = {
   url: process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, ""),
   key: process.env.EXPO_PUBLIC_API_KEY,
@@ -67,33 +75,36 @@ const handleApiResponse = async (
       console.error(`API Error Response for ${request.url}:`, error);
 
       if (response.status === 401) {
-        console.log(
-          "401 Unauthorized - Clearing tokens and redirecting to auth",
-        );
-
-        await clearTokens();
-
-        try {
-          const indexStr = await SecureStore.getItemAsync(
-            "active_wallet_index",
+        if (!isHandling401) {
+          isHandling401 = true;
+          console.log(
+            "401 Unauthorized - Clearing tokens and redirecting to auth",
           );
-          const idx = indexStr ? parseInt(indexStr, 10) : 0;
-          const wallets = await walletService.loadWalletsFromStorage();
-          const activeAddr = wallets?.[idx]?.address?.toLowerCase();
 
-          if (activeAddr) {
-            await SecureStore.deleteItemAsync(
-              `takumipay_access_token_${activeAddr}`,
+          await clearTokens();
+
+          try {
+            const indexStr = await SecureStore.getItemAsync(
+              "active_wallet_index",
             );
-            await SecureStore.deleteItemAsync(
-              `takumipay_refresh_token_${activeAddr}`,
-            );
+            const idx = indexStr ? parseInt(indexStr, 10) : 0;
+            const wallets = await walletService.loadWalletsFromStorage();
+            const activeAddr = wallets?.[idx]?.address?.toLowerCase();
+
+            if (activeAddr) {
+              await SecureStore.deleteItemAsync(
+                `takumipay_access_token_${activeAddr}`,
+              );
+              await SecureStore.deleteItemAsync(
+                `takumipay_refresh_token_${activeAddr}`,
+              );
+            }
+          } catch (clearError) {
+            console.error("Error clearing per-wallet tokens:", clearError);
           }
-        } catch (clearError) {
-          console.error("Error clearing per-wallet tokens:", clearError);
-        }
 
-        router.replace("/auth");
+          router.replace("/auth");
+        }
 
         throw new Error("Authentication expired. Please sign in again.");
       } else if (response.status === 403) {

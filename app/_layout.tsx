@@ -38,33 +38,19 @@ export const queryClient = new QueryClient({
 
 function InitializeApp() {
   const isRestoring = useIsRestoring();
-  const { wallets, isLoading, loadWallets } =
-    require("@/hooks/useWallet").useWallet();
+  const { wallets, isLoading } = require("@/hooks/useWallet").useWallet();
 
   useEffect(() => {
-    // Wait for PersistQueryClientProvider to finish restoring the cache.
-    // During restoration isLoading is false but data is empty — acting on
-    // that would incorrectly redirect to /login.
-    if (isRestoring) return;
+    // Wait for both the persisted query cache to be restored AND
+    // the wallets query to finish loading before making a decision.
+    if (isRestoring || isLoading) return;
 
-    async function prepare() {
-      try {
-        await loadWallets();
-
-        if (!isLoading && wallets.length === 0) {
-          router.replace("/login");
-        }
-      } catch (e) {
-        console.warn("Error loading wallet data:", e);
-      } finally {
-        setTimeout(() => {
-          SplashScreen.hideAsync();
-        }, 100);
-      }
+    if (wallets.length === 0) {
+      router.replace("/login");
     }
 
-    prepare();
-  }, [isRestoring, isLoading, wallets.length, loadWallets]);
+    SplashScreen.hideAsync();
+  }, [isRestoring, isLoading, wallets.length]);
 
   return null;
 }

@@ -10,6 +10,7 @@ const CACHE_KEY = "REACT_QUERY_CACHE";
 // Wallet queries are always reloaded from expo-secure-store on app start, so
 // persisting them to MMKV (unencrypted) is both unnecessary and a security concern.
 const EXCLUDED_QUERY_KEYS: string[] = [
+  "auth", // nonces are single-use — never cache stale nonces across sessions
   "wallet-balance", // live on-chain balance (15s polling)
   "wallets", // reloaded from expo-secure-store on every start
   "active-wallet", // reloaded from expo-secure-store
