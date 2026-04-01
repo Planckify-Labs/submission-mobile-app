@@ -14,6 +14,7 @@ export type TPointDepositRequest = {
   walletAddress: string;
   tokenAmount: string;
   expectedPoints: string;
+  currency?: string;
 };
 
 export type TPointHistoryParams = {

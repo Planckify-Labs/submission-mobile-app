@@ -19,7 +19,6 @@ import {
   AmountInputSection,
   DepositButton,
   DepositHeader,
-  ExchangeRateCard,
   QuickAmountButtons,
 } from "@/components/deposit";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
@@ -38,7 +37,6 @@ export default function DepositScreen() {
     transactionStatus,
     error,
     stablecoinTokens,
-    pointPrice,
     tokenAmountNeeded,
     isAuthenticated,
     hasContract,
@@ -197,7 +195,8 @@ export default function DepositScreen() {
 
               <AmountInputSection
                 amount={amount}
-                tokenSymbol={selectedToken?.symbol || ""}
+                tokenSymbol={selectedToken?.symbol ?? ""}
+                tokenAmountNeeded={tokenAmountNeeded}
                 onAmountChange={setAmount}
               />
 

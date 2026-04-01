@@ -288,6 +288,7 @@ export function useDepositState() {
         walletAddress: activeWallet.address,
         tokenAmount: tokenAmountNeeded.raw.toString(),
         expectedPoints: amount,
+        currency: DEFAULT_CURRENCY,
       });
 
       // Step 6: Done -- navigate back

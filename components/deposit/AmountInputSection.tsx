@@ -4,11 +4,12 @@ import { Text, TextInput, View } from "react-native";
 interface AmountInputSectionProps {
   amount: string;
   tokenSymbol: string;
+  tokenAmountNeeded: { human: number; raw: bigint } | null;
   onAmountChange: (value: string) => void;
 }
 
 export const AmountInputSection = memo<AmountInputSectionProps>(
-  ({ amount, tokenSymbol, onAmountChange }) => {
+  ({ amount, tokenSymbol, tokenAmountNeeded, onAmountChange }) => {
     return (
       <View className="mb-4 px-5">
         <Text className="text-light-matte-black/70 mb-2">Points</Text>
@@ -25,17 +26,18 @@ export const AmountInputSection = memo<AmountInputSectionProps>(
             points
           </Text>
         </View>
-        {amount &&
-        !isNaN(parseFloat(amount)) &&
-        parseFloat(amount) > 0 &&
-        parseFloat(amount) < 15000 ? (
+        {amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0 && parseFloat(amount) < 15000 ? (
           <Text className="text-red-500 text-xs mt-1.5 ml-1">
             Minimum 15,000 points
           </Text>
-        ) : amount && !isNaN(parseFloat(amount)) && parseFloat(amount) >= 15000 ? (
+        ) : tokenAmountNeeded && tokenSymbol ? (
           <Text className="text-light-matte-black/50 text-xs mt-1.5 ml-1">
-            Deposit {Number(amount).toLocaleString()} {tokenSymbol} to receive{" "}
-            {Number(amount).toLocaleString()} points
+            {Number.isInteger(tokenAmountNeeded.human)
+              ? tokenAmountNeeded.human.toLocaleString()
+              : tokenAmountNeeded.human < 1
+                ? tokenAmountNeeded.human.toFixed(6)
+                : tokenAmountNeeded.human.toFixed(4)}{" "}
+            {tokenSymbol} required
           </Text>
         ) : null}
       </View>
