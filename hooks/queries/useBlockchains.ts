@@ -5,8 +5,8 @@ import { storage } from "@/lib/storage/mmkv";
 
 const BLOCKCHAINS_KEY = "cached_blockchains";
 const BLOCKCHAINS_TIMESTAMP_KEY = "cached_blockchains_timestamp";
-const CACHE_INVALIDATION_TIME = 24 * 60 * 60 * 1000;
-const BACKGROUND_REFRESH_INTERVAL = 5 * 60 * 1000;
+const OFFLINE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — offline fallback only
+const STALE_TIME = 5 * 60 * 1000; // 5 minutes — after this, fetch from API on next mount
 
 interface TUseBlockchainsOptions {
   name?: string;
@@ -34,33 +34,33 @@ export const useBlockchains = (options?: TUseBlockchainsOptions) => {
         return await blockchainApi.searchBlockchains(options);
       }
 
-      // Synchronous MMKV read for the full list
       const cachedRaw = storage.getString(BLOCKCHAINS_KEY);
       const timestampStr = storage.getString(BLOCKCHAINS_TIMESTAMP_KEY);
       const now = Date.now();
       const timestamp = timestampStr ? parseInt(timestampStr, 10) : 0;
 
-      if (cachedRaw && now - timestamp < CACHE_INVALIDATION_TIME) {
-        if (now - timestamp > BACKGROUND_REFRESH_INTERVAL) {
-          // Background refresh — fire and forget
-          blockchainApi
-            .getBlockchainList()
-            .then((fresh) => {
-              storage.set(BLOCKCHAINS_KEY, JSON.stringify(fresh));
-              storage.set(BLOCKCHAINS_TIMESTAMP_KEY, now.toString());
-            })
-            .catch(console.error);
-        }
+      // Fast path: cache is still fresh (< 5 min) — no network needed
+      if (cachedRaw && now - timestamp < STALE_TIME) {
         return JSON.parse(cachedRaw) as TBlockchain[];
       }
 
-      const response = await blockchainApi.getBlockchainList();
-      storage.set(BLOCKCHAINS_KEY, JSON.stringify(response));
-      storage.set(BLOCKCHAINS_TIMESTAMP_KEY, now.toString());
-      return response;
+      // Cache is stale or missing — fetch from API
+      try {
+        const response = await blockchainApi.getBlockchainList();
+        storage.set(BLOCKCHAINS_KEY, JSON.stringify(response));
+        storage.set(BLOCKCHAINS_TIMESTAMP_KEY, Date.now().toString());
+        return response;
+      } catch (error) {
+        // Offline fallback: serve any MMKV data available, regardless of age
+        if (cachedRaw) {
+          return JSON.parse(cachedRaw) as TBlockchain[];
+        }
+        throw error;
+      }
     },
-    staleTime: BACKGROUND_REFRESH_INTERVAL,
-    gcTime: CACHE_INVALIDATION_TIME,
+    staleTime: STALE_TIME,
+    gcTime: OFFLINE_CACHE_TTL,
+    refetchOnMount: true,
   });
 };
 

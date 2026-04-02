@@ -19,7 +19,7 @@ LogBox.ignoreLogs([
   "Sending `onAnimatedValueUpdate` with no listeners registered",
 ]);
 
-const PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+const PERSIST_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,7 +29,7 @@ export const queryClient = new QueryClient({
       gcTime: PERSIST_MAX_AGE,
       retry: 1,
       refetchOnWindowFocus: false,
-      refetchOnMount: false,
+      refetchOnMount: true,
       // Re-enable reconnect refetch so stale data refreshes when coming back online
       refetchOnReconnect: true,
     },

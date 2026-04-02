@@ -45,7 +45,6 @@ export function useWallet() {
         return 0;
       }
     },
-    initialData: 0,
   });
 
   const { data: activeChain = supportedChains[0] } = useQuery({
@@ -62,7 +61,6 @@ export function useWallet() {
         return supportedChains[0];
       }
     },
-    initialData: supportedChains[0],
   });
 
   const activeWallet = useMemo(

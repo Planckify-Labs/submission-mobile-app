@@ -5,8 +5,8 @@ import { storage } from "@/lib/storage/mmkv";
 
 const TOKEN_STORAGE_KEY = "cached_tokens";
 const TOKEN_TIMESTAMP_KEY = "cached_tokens_timestamp";
-const CACHE_INVALIDATION_TIME = 24 * 60 * 60 * 1000;
-const BACKGROUND_REFRESH_INTERVAL = 5 * 60 * 1000;
+const OFFLINE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — offline fallback only
+const STALE_TIME = 5 * 60 * 1000; // 5 minutes — after this, fetch from API on next mount
 
 const filterTokens = (tokens: TToken[], options?: TTokenSearchParams) => {
   if (!options) return tokens;
@@ -41,28 +41,30 @@ export const useTokens = (options?: TTokenSearchParams) => {
         return await tokenApi.searchTokens(options);
       }
 
-      // Synchronous MMKV read — no await, no I/O waterfall
       const cachedRaw = storage.getString(TOKEN_STORAGE_KEY);
       const timestampStr = storage.getString(TOKEN_TIMESTAMP_KEY);
       const now = Date.now();
       const timestamp = timestampStr ? parseInt(timestampStr, 10) : 0;
 
-      if (cachedRaw && now - timestamp < CACHE_INVALIDATION_TIME) {
-        const allTokens: TToken[] = JSON.parse(cachedRaw);
-
-        // Background refresh if stale but not yet expired
-        if (now - timestamp > BACKGROUND_REFRESH_INTERVAL) {
-          fetchAndCacheTokens().catch(console.error);
-        }
-
-        return filterTokens(allTokens, options);
+      // Fast path: cache is still fresh (< 5 min) — no network needed
+      if (cachedRaw && now - timestamp < STALE_TIME) {
+        return filterTokens(JSON.parse(cachedRaw), options);
       }
 
-      // Cache miss or expired — fetch from API
-      const fresh = await fetchAndCacheTokens();
-      return filterTokens(fresh, options);
+      // Cache is stale or missing — fetch from API
+      try {
+        const fresh = await fetchAndCacheTokens();
+        return filterTokens(fresh, options);
+      } catch (error) {
+        // Offline fallback: serve any MMKV data available, regardless of age
+        if (cachedRaw) {
+          return filterTokens(JSON.parse(cachedRaw), options);
+        }
+        throw error;
+      }
     },
-    staleTime: BACKGROUND_REFRESH_INTERVAL,
-    gcTime: CACHE_INVALIDATION_TIME,
+    staleTime: STALE_TIME,
+    gcTime: OFFLINE_CACHE_TTL,
+    refetchOnMount: true,
   });
 };
