@@ -1,5 +1,13 @@
 import { Check, ChevronDown, X } from "lucide-react-native";
-import React, { memo, useCallback, useMemo, useRef, useState } from "react";
+import React, {
+  forwardRef,
+  memo,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -22,7 +30,11 @@ import { useWallet } from "@/hooks/useWallet";
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;
 
-const ChainSelector = memo(() => {
+export interface ChainSelectorRef {
+  open: () => void;
+}
+
+const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
 
@@ -104,6 +116,8 @@ const ChainSelector = memo(() => {
       }),
     ]).start();
   }, [fadeAnim, translateY]);
+
+  useImperativeHandle(ref, () => ({ open: openModal }), [openModal]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -285,5 +299,7 @@ const ChainSelector = memo(() => {
     </>
   );
 });
+
+const ChainSelector = memo(ChainSelectorBase);
 
 export default ChainSelector;

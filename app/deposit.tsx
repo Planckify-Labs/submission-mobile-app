@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react-native";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigationReady } from "@/hooks/useNavigationReady";
 import {
   Platform,
@@ -14,8 +14,11 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import type { TToken } from "@/api/types/token";
-import ChainSelector from "@/components/common/ChainSelector";
+import ChainSelector, {
+  type ChainSelectorRef,
+} from "@/components/common/ChainSelector";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import DepositUnsupportedChainModal from "@/components/common/DepositUnsupportedChainModal";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import {
   AmountInputSection,
@@ -60,9 +63,23 @@ export default function DepositScreen() {
     handleDeposit,
   } = useDepositState();
 
+  const chainSelectorRef = useRef<ChainSelectorRef>(null);
+
   const [walletModalVisible, setWalletModalVisible] = useState(false);
   const [tokenModalVisible, setTokenModalVisible] = useState(false);
   const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [unsupportedChainModalVisible, setUnsupportedChainModalVisible] =
+    useState(false);
+
+  // Show the unsupported chain modal once when the user is authenticated
+  // and the active chain has no contract, but only after fetching is done.
+  useEffect(() => {
+    if (isAuthenticated && !isContractFetching && !hasContract) {
+      setUnsupportedChainModalVisible(true);
+    } else {
+      setUnsupportedChainModalVisible(false);
+    }
+  }, [isAuthenticated, isContractFetching, hasContract]);
 
   const handleSelectWallet = useCallback(
     (index: number) => {
@@ -147,19 +164,9 @@ export default function DepositScreen() {
                   <ChevronDown size={20} color="#c71c4b" />
                 </TouchableOpacity>
                 <View className="flex-row items-center justify-end mt-2">
-                  <ChainSelector />
+                  <ChainSelector ref={chainSelectorRef} />
                 </View>
               </View>
-
-              {/* No contract warning banner — hidden while fetching to avoid flash on chain switch */}
-              {isAuthenticated && !isContractFetching && !hasContract && (
-                <View className="mx-5 mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                  <Text className="text-amber-700 text-sm font-medium">
-                    Point deposits are not available on this network. Please
-                    switch to a supported chain.
-                  </Text>
-                </View>
-              )}
 
               {/* Token Selector */}
               <View className="mb-4 px-5">
@@ -275,6 +282,13 @@ export default function DepositScreen() {
           onClose={() => setPinModalVisible(false)}
           onConfirm={handlePinSubmit}
           title="Confirm Deposit"
+        />
+
+        <DepositUnsupportedChainModal
+          visible={unsupportedChainModalVisible}
+          chainName={activeChain.chain.name}
+          onClose={() => setUnsupportedChainModalVisible(false)}
+          onSwitchNetwork={() => chainSelectorRef.current?.open()}
         />
       </SafeAreaView>
     </>

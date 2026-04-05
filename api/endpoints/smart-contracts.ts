@@ -48,12 +48,15 @@ export const smartContractApi = {
       "Failed to fetch smart contract list",
     ),
 
-  getSmartContractsByChain: (chainId: number) =>
-    publicApi
-      .get(`smart-contracts/chain/${chainId}`)
-      .json<TSmartContract>()
-      .catch((error) => {
-        console.error("Failed to fetch smart contract by chain:", error);
-        throw new Error("Failed to fetch smart contract by chain");
-      }),
+  getSmartContractsByChain: async (chainId: number) => {
+    try {
+      return await publicApi
+        .get(`smart-contracts/chain/${chainId}`)
+        .json<TSmartContract>();
+    } catch (error: any) {
+      if (error?.response?.status === 404) return null;
+      console.error("Failed to fetch smart contract by chain:", error);
+      throw error;
+    }
+  },
 };
