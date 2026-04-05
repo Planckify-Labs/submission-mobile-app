@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as SecureStore from "expo-secure-store";
+import { storage } from "@/lib/storage/mmkv";
 import { useCallback, useEffect, useMemo } from "react";
 import { InteractionManager } from "react-native";
 import type { Account, PublicClient, WalletClient } from "viem";
@@ -34,32 +34,19 @@ export function useWallet() {
 
   const { data: activeWalletIndex = 0 } = useQuery({
     queryKey: [QKEY_Wallets.activeWalletIndex],
-    queryFn: async () => {
-      try {
-        const storedIndex = await SecureStore.getItemAsync(
-          "active_wallet_index",
-        );
-        return storedIndex ? parseInt(storedIndex, 10) : 0;
-      } catch (error) {
-        console.error("Failed to load active wallet index:", error);
-        return 0;
-      }
+    queryFn: () => {
+      const storedIndex = storage.getString("active_wallet_index");
+      return storedIndex ? parseInt(storedIndex, 10) : 0;
     },
   });
 
   const { data: activeChain = supportedChains[0] } = useQuery({
     queryKey: [QKEY_Wallets.activeChain],
-    queryFn: async () => {
-      try {
-        const storedChain = await SecureStore.getItemAsync("active_chain");
-        if (storedChain) {
-          return JSON.parse(storedChain) as ChainConfig;
-        }
-        return supportedChains[0];
-      } catch (error) {
-        console.error("Failed to load active chain:", error);
-        return supportedChains[0];
-      }
+    queryFn: () => {
+      const storedChain = storage.getString("active_chain");
+      return storedChain
+        ? (JSON.parse(storedChain) as ChainConfig)
+        : supportedChains[0];
     },
   });
 
@@ -85,7 +72,7 @@ export function useWallet() {
 
   const setActiveWalletMutation = useMutation({
     mutationFn: async (index: number) => {
-      await SecureStore.setItemAsync("active_wallet_index", index.toString());
+      storage.set("active_wallet_index", index.toString());
       return index;
     },
     onSuccess: (index) => {
@@ -102,8 +89,7 @@ export function useWallet() {
 
   const setActiveChainMutation = useMutation({
     mutationFn: async (chain: ChainConfig) => {
-      await SecureStore.setItemAsync("active_chain", JSON.stringify(chain));
-      console.log("activeChain", chain.chain.id);
+      storage.set("active_chain", JSON.stringify(chain));
       return chain;
     },
     onSuccess: (chain) => {
