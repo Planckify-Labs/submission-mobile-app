@@ -52,7 +52,7 @@ export default function PurchaseItemScreen() {
     );
   }
 
-  if (error || !product || Object.keys(product).length === 0) {
+  if ((error && !product) || Object.keys(product ?? {}).length === 0) {
     console.error("Error loading product:", error);
     return (
       <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>

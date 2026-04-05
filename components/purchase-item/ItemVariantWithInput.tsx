@@ -453,7 +453,7 @@ export default function ItemWithInput({
     return <ItemVariantWithInputSkeleton />;
   }
 
-  if (error || !product) {
+  if (error && !product) {
     console.error("Error loading product:", error);
     return (
       <View className="flex-1 justify-center items-center p-6">

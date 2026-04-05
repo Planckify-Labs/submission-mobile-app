@@ -167,7 +167,7 @@ export default function ViewAllItemScreen() {
     );
   }
 
-  if (error || !products) {
+  if (error && !products) {
     console.error("Error loading items:", error);
     return (
       <SafeAreaView className="flex-1 bg-light-main-container items-center justify-center">
@@ -180,14 +180,14 @@ export default function ViewAllItemScreen() {
   }
 
   const filteredProducts = searchQuery
-    ? products.filter(
+    ? (products ?? []).filter(
         (product) =>
           product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           product.description
             ?.toLowerCase()
             .includes(searchQuery.toLowerCase()),
       )
-    : products;
+    : (products ?? []);
 
   return (
     <>
