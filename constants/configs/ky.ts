@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import ky from "ky";
+import type { NormalizedOptions } from "ky";
 import {
   clearTokens,
   getAccessToken,
@@ -8,6 +9,7 @@ import {
   getAuthenticatedWalletAddress,
 } from "@/hooks/queries/useAuth";
 import * as walletService from "@/services/walletService";
+import { ApiConflictError } from "@/api/types/errors";
 
 interface ApiError {
   message?: string;
@@ -57,7 +59,7 @@ const createBaseConfig = () => ({
   fetch: (input: RequestInfo | URL, init?: RequestInit) => {
     if (
       init?.signal &&
-      typeof (init.signal as any).throwIfAborted !== "function"
+      typeof (init.signal as AbortSignal & { throwIfAborted?: () => void }).throwIfAborted !== "function"
     ) {
       const { signal: _signal, ...restInit } = init;
       return fetch(input, restInit);
@@ -68,52 +70,53 @@ const createBaseConfig = () => ({
 
 const handleApiResponse = async (
   request: Request,
-  _options: any,
+  _options: NormalizedOptions,
   response: Response,
 ) => {
   if (!response.ok) {
+    // Parse the body separately so our status-code throws below are never
+    // accidentally swallowed by a catch that was only meant for JSON failures.
+    let error: ApiError = {};
     try {
-      const error = (await response.json()) as ApiError;
+      error = (await response.json()) as ApiError;
       console.error(`API Error Response for ${request.url}:`, error);
+    } catch {
+      console.error(`Failed to parse error body for ${request.url}`);
+    }
 
-      if (response.status === 401) {
-        if (!isHandling401) {
-          isHandling401 = true;
+    if (response.status === 401) {
+      if (!isHandling401) {
+        isHandling401 = true;
 
-          // USER_NOT_FOUND: JWT is cryptographically valid but the user row was deleted
-          // (e.g. DB reset). The user needs to re-sign to recreate their account.
-          // All other 401s mean the token itself is invalid/expired.
-          const isUserDeleted = error.code === "USER_NOT_FOUND";
-          console.log(
-            isUserDeleted
-              ? "401 USER_NOT_FOUND - user row deleted, redirecting to re-auth without clearing tokens"
-              : "401 Unauthorized - token invalid, redirecting to auth",
-          );
+        // USER_NOT_FOUND: JWT is cryptographically valid but the user row was deleted
+        // (e.g. DB reset). The user needs to re-sign to recreate their account.
+        // All other 401s mean the token itself is invalid/expired.
+        const isUserDeleted = error.code === "USER_NOT_FOUND";
+        console.log(
+          isUserDeleted
+            ? "401 USER_NOT_FOUND - user row deleted, redirecting to re-auth without clearing tokens"
+            : "401 Unauthorized - token invalid, redirecting to auth",
+        );
 
-          // Only clear tokens when the JWT itself is bad. If the user row is simply
-          // missing (DB reset / seeding), keep tokens — they'll be overwritten on
-          // successful re-sign and we avoid wiping state unnecessarily.
-          if (!isUserDeleted) {
-            await clearTokens();
-          }
-
-          router.replace("/auth");
+        if (!isUserDeleted) {
+          await clearTokens();
         }
 
-        throw new Error("Authentication expired. Please sign in again.");
-      } else if (response.status === 403) {
-        throw new Error(
-          "Access forbidden. You don't have permission for this resource.",
-        );
-      } else if (response.status === 404) {
-        throw new Error("Resource not found.");
-      } else {
-        console.error("API error:", error.message);
-        throw new Error("An unexpected error occurred. Please try again.");
+        router.replace("/auth");
       }
-    } catch (parseError) {
-      console.error("Failed to parse error response:", parseError);
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+      throw new Error("Authentication expired. Please sign in again.");
+    } else if (response.status === 403) {
+      throw new Error(
+        "Access forbidden. You don't have permission for this resource.",
+      );
+    } else if (response.status === 404) {
+      throw new Error("Resource not found.");
+    } else if (response.status === 409) {
+      throw new ApiConflictError();
+    } else {
+      console.error("API error:", error.message);
+      throw new Error("Something went wrong. Please try again.");
     }
   }
   console.log(`API Response Status for ${request.url}:`, response.status);

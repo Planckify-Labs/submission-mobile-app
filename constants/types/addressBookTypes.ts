@@ -1,6 +1,12 @@
 export type TAddressBookEntry = {
   id: string;
-  name: string;
+  userId?: string;
+  label: string;
   address: string;
-  createdAt: number;
+  ensName?: string | null;
+  notes?: string | null;
+  chainName?: string | null;
+  isEvm: boolean;
+  createdAt: string;
+  updatedAt: string;
 };

@@ -12,7 +12,7 @@ import Animated, {
 } from "react-native-reanimated";
 import type { TAddressBookEntry } from "@/constants/types/addressBookTypes";
 
-const ACTION_WIDTH = 136; // width of the revealed actions panel
+const ACTION_WIDTH = 136;
 
 type AddressBookItemProps = {
   entry: TAddressBookEntry;
@@ -22,13 +22,13 @@ type AddressBookItemProps = {
   onCopy: (address: string) => void;
 };
 
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
+function getInitials(label: string): string {
+  const words = label.trim().split(/\s+/);
   if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  return name.substring(0, 2).toUpperCase();
+  return label.substring(0, 2).toUpperCase();
 }
 
-function getAvatarColor(name: string): string {
+function getAvatarColor(label: string): string {
   const colors = [
     "#c71c4b",
     "#1c6bc7",
@@ -38,8 +38,8 @@ function getAvatarColor(name: string): string {
     "#c71c8e",
   ];
   let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < label.length; i++) {
+    hash = label.charCodeAt(i) + ((hash << 5) - hash);
   }
   return colors[Math.abs(hash) % colors.length];
 }
@@ -54,8 +54,8 @@ const AddressBookItem = memo(function AddressBookItem({
   const translateX = useSharedValue(0);
   const isOpen = useSharedValue(false);
 
-  const initials = useMemo(() => getInitials(entry.name), [entry.name]);
-  const avatarColor = useMemo(() => getAvatarColor(entry.name), [entry.name]);
+  const initials = useMemo(() => getInitials(entry.label), [entry.label]);
+  const avatarColor = useMemo(() => getAvatarColor(entry.label), [entry.label]);
   const shortAddress = useMemo(
     () =>
       `${entry.address.substring(0, 6)}...${entry.address.substring(entry.address.length - 4)}`,
@@ -83,6 +83,7 @@ const AddressBookItem = memo(function AddressBookItem({
       }
     });
 
+  // Animation-driven styles — must stay inline
   const rowStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
   }));
@@ -114,150 +115,78 @@ const AddressBookItem = memo(function AddressBookItem({
 
   return (
     <Animated.View
-      entering={FadeInDown.delay(index * 60)
-        .duration(350)
-        .springify()
-        .damping(14)}
+      entering={FadeInDown.delay(index * 60).duration(350).springify().damping(14)}
       className="mb-3 mx-4"
     >
-      {/* Action buttons behind the row */}
+      {/* Action buttons behind the row — opacity driven by animation, position fixed */}
       <Animated.View
-        style={[
-          {
-            position: "absolute",
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: ACTION_WIDTH,
-            flexDirection: "row",
-          },
-          actionsOpacity,
-        ]}
+        className="absolute right-0 top-0 bottom-0 flex-row"
+        style={[{ width: ACTION_WIDTH }, actionsOpacity]}
       >
         <Pressable
           onPress={handleEdit}
-          style={{
-            flex: 1,
-            backgroundColor: "#20222c",
-            borderRadius: 16,
-            marginRight: 4,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          className="flex-1 bg-light-matte-black rounded-2xl mr-1 items-center justify-center"
         >
           <Edit3 size={18} color="white" />
-          <Text
-            style={{
-              color: "white",
-              fontSize: 10,
-              fontWeight: "600",
-              marginTop: 2,
-            }}
-          >
-            Edit
-          </Text>
+          <Text className="text-white text-[10px] font-semibold mt-0.5">Edit</Text>
         </Pressable>
         <Pressable
           onPress={handleDelete}
-          style={{
-            flex: 1,
-            backgroundColor: "#c71c4b",
-            borderRadius: 16,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          className="flex-1 bg-light-primary-red rounded-2xl items-center justify-center"
         >
           <Trash2 size={18} color="white" />
-          <Text
-            style={{
-              color: "white",
-              fontSize: 10,
-              fontWeight: "600",
-              marginTop: 2,
-            }}
-          >
-            Delete
-          </Text>
+          <Text className="text-white text-[10px] font-semibold mt-0.5">Delete</Text>
         </Pressable>
       </Animated.View>
 
-      {/* Swipeable row */}
+      {/* Swipeable row — translateX driven by animation */}
       <GestureDetector gesture={pan}>
         <Animated.View
-          style={[
-            rowStyle,
-            {
-              backgroundColor: "#ffffff",
-              borderRadius: 16,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.05,
-              shadowRadius: 8,
-              elevation: 2,
-            },
-          ]}
+          className="bg-light rounded-2xl shadow-sm"
+          style={rowStyle}
         >
           <Pressable
             onPress={handleCopyPress}
-            style={{ flexDirection: "row", alignItems: "center", padding: 16 }}
+            className="flex-row items-center p-4"
           >
-            {/* Avatar */}
+            {/* Avatar — color is dynamic, keep inline */}
             <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 14,
-                backgroundColor: `${avatarColor}18`,
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: 12,
-              }}
+              className="w-11 h-11 rounded-xl items-center justify-center mr-3"
+              style={{ backgroundColor: `${avatarColor}18` }}
             >
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "700",
-                  color: avatarColor,
-                }}
-              >
+              <Text className="text-sm font-bold" style={{ color: avatarColor }}>
                 {initials}
               </Text>
             </View>
 
             {/* Info */}
-            <View style={{ flex: 1 }}>
+            <View className="flex-1">
               <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: "600",
-                  color: "#20222c",
-                  marginBottom: 2,
-                }}
+                className="text-[15px] font-semibold text-light-matte-black mb-0.5"
                 numberOfLines={1}
               >
-                {entry.name}
+                {entry.label}
               </Text>
               <Text
-                style={{
-                  fontSize: 12,
-                  color: "#20222c99",
-                  fontFamily: "monospace",
-                }}
+                className="text-xs text-light-matte-black/60"
+                style={{ fontFamily: "monospace" }}
+                numberOfLines={1}
               >
-                {shortAddress}
+                {entry.ensName ? entry.ensName : shortAddress}
               </Text>
+              {!!entry.notes && (
+                <Text
+                  className="text-[11px] text-light-matte-black/40 mt-0.5"
+                  numberOfLines={1}
+                >
+                  {entry.notes}
+                </Text>
+              )}
             </View>
 
-            {/* Copy hint */}
-            <View
-              style={{
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                backgroundColor: "#c71c4b12",
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ fontSize: 10, color: "#c71c4b", fontWeight: "600" }}>
+            {/* Copy badge */}
+            <View className="px-2 py-1 bg-light-primary-red/10 rounded-lg">
+              <Text className="text-[10px] text-light-primary-red font-semibold">
                 COPY
               </Text>
             </View>

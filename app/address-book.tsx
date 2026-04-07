@@ -6,6 +6,7 @@ import {
   FlatList,
   Platform,
   Pressable,
+  RefreshControl,
   StatusBar,
   Text,
   TextInput,
@@ -18,11 +19,12 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import AddContactModal from "@/components/address-book/AddContactModal";
 import AddressBookItem from "@/components/address-book/AddressBookItem";
 import EmptyState from "@/components/address-book/EmptyState";
+import type { TCreateAddressBookDto } from "@/api/types/addressBook";
 import type { TAddressBookEntry } from "@/constants/types/addressBookTypes";
 import { useAddressBook } from "@/hooks/useAddressBook";
 
 export default function AddressBook() {
-  const { contacts, search, setSearch, add, update, remove } = useAddressBook();
+  const { contacts, search, setSearch, add, update, remove, refetch, isRefetching, isAdding, isUpdating, addError } = useAddressBook();
   const [showModal, setShowModal] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TAddressBookEntry | null>(null);
   const searchRef = useRef<TextInput>(null);
@@ -47,35 +49,32 @@ export default function AddressBook() {
     (id: string) => {
       Alert.alert("Delete Contact", "Remove this contact from your address book?", [
         { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => remove(id),
-        },
+        { text: "Delete", style: "destructive", onPress: () => remove(id) },
       ]);
     },
     [remove],
   );
 
+  const handleCloseModal = useCallback(() => {
+    setShowModal(false);
+    setEditingEntry(null);
+  }, []);
+
   const handleSave = useCallback(
-    (name: string, address: string) => {
+    async (dto: TCreateAddressBookDto) => {
       if (editingEntry) {
-        update(editingEntry.id, { name, address });
+        await update(editingEntry.id, dto);
       } else {
-        add({ name, address });
+        await add(dto);
       }
+      handleCloseModal();
     },
-    [editingEntry, add, update],
+    [editingEntry, add, update, handleCloseModal],
   );
 
   const handleOpenAdd = useCallback(() => {
     setEditingEntry(null);
     setShowModal(true);
-  }, []);
-
-  const handleCloseModal = useCallback(() => {
-    setShowModal(false);
-    setEditingEntry(null);
   }, []);
 
   const renderItem = useCallback(
@@ -94,7 +93,7 @@ export default function AddressBook() {
   const keyExtractor = useCallback((item: TAddressBookEntry) => item.id, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView className="flex-1">
       <StatusBar barStyle="dark-content" />
       <SafeAreaView
         edges={["top"]}
@@ -108,19 +107,7 @@ export default function AddressBook() {
               <Pressable
                 onPress={() => router.back()}
                 hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 11,
-                  backgroundColor: "#ffffff",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.06,
-                  shadowRadius: 4,
-                  elevation: 2,
-                }}
+                className="w-9 h-9 rounded-xl bg-light items-center justify-center shadow-sm"
               >
                 <ArrowLeft size={18} color="#c71c4b" />
               </Pressable>
@@ -138,57 +125,25 @@ export default function AddressBook() {
 
             <Pressable
               onPress={handleOpenAdd}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 13,
-                backgroundColor: "#c71c4b",
-                alignItems: "center",
-                justifyContent: "center",
-                shadowColor: "#c71c4b",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.35,
-                shadowRadius: 8,
-                elevation: 6,
-              }}
+              className="w-10 h-10 rounded-[13px] bg-light-primary-red items-center justify-center shadow-md"
+              style={{ shadowColor: "#c71c4b" }}
             >
               <Plus size={20} color="white" />
             </Pressable>
           </View>
 
           {/* Search bar */}
-          <View
-            style={{
-              marginTop: 12,
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: "#ffffff",
-              borderRadius: 14,
-              paddingHorizontal: 14,
-              paddingVertical: 0,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.04,
-              shadowRadius: 4,
-              elevation: 1,
-            }}
-          >
+          <View className="mt-3 flex-row items-center bg-light rounded-2xl px-[14px] shadow-sm">
             <Search size={16} color="#20222c50" />
             <TextInput
               ref={searchRef}
               value={search}
               onChangeText={setSearch}
-              placeholder="Search by name or address..."
+              placeholder="Search by name, address or ENS..."
               placeholderTextColor="#20222c40"
               autoCapitalize="none"
               autoCorrect={false}
-              style={{
-                flex: 1,
-                marginLeft: 10,
-                paddingVertical: 13,
-                fontSize: 14,
-                color: "#20222c",
-              }}
+              className="flex-1 ml-[10px] py-[13px] text-sm text-light-matte-black"
             />
             {!!search && (
               <Pressable
@@ -207,20 +162,24 @@ export default function AddressBook() {
           renderItem={renderItem}
           keyExtractor={keyExtractor}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingTop: 4,
-            paddingBottom: 24,
-            flexGrow: 1,
-          }}
+          contentContainerStyle={{ paddingTop: 4, paddingBottom: 24, flexGrow: 1 }}
           ListEmptyComponent={<EmptyState isSearching={!!search} />}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={refetch}
+              tintColor="#c71c4b"
+              colors={["#c71c4b"]}
+            />
+          }
         />
 
-        {/* Hint for swipe */}
+        {/* Swipe hint */}
         {contacts.length > 0 && (
-          <View style={{ paddingBottom: 8, alignItems: "center" }}>
-            <Text style={{ fontSize: 11, color: "#20222c40" }}>
+          <View className="pb-2 items-center">
+            <Text className="text-[11px] text-light-matte-black/25">
               Swipe left on a contact to edit or delete
             </Text>
           </View>
@@ -232,6 +191,8 @@ export default function AddressBook() {
         onClose={handleCloseModal}
         onSave={handleSave}
         editing={editingEntry}
+        isSaving={isAdding || isUpdating}
+        saveError={addError as Error | null}
       />
     </GestureHandlerRootView>
   );
