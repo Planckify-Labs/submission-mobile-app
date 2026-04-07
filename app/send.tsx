@@ -9,6 +9,7 @@ import {
   Loader,
   Send,
 } from "lucide-react-native";
+
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -29,7 +30,7 @@ import ChainSelector from "@/components/common/ChainSelector";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
-import ContactPickerModal from "@/components/address-book/ContactPickerModal";
+import RecipientPickerModal from "@/components/send/RecipientPickerModal";
 import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useAddressBook } from "@/hooks/useAddressBook";
@@ -68,7 +69,6 @@ export default function SendScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [balance, setBalance] = useState<bigint>(BigInt(0));
   const [walletModalVisible, setWalletModalVisible] = useState(false);
-  const [recipientModalVisible, setRecipientModalVisible] = useState(false);
   const [isPinModalVisible, setIsPinModalVisible] = useState(false);
   const [isLoadingBalance, setIsLoadingBalance] = useState(true);
   const [isLoadingTokenBalance, setIsLoadingTokenBalance] = useState(false);
@@ -80,7 +80,7 @@ export default function SendScreen() {
     undefined,
   );
   const [tokenModalVisible, setTokenModalVisible] = useState(false);
-  const [contactPickerVisible, setContactPickerVisible] = useState(false);
+  const [recipientPickerVisible, setRecipientPickerVisible] = useState(false);
 
   const { contacts: addressBookContacts } = useAddressBook();
 
@@ -403,13 +403,6 @@ export default function SendScreen() {
     setWalletModalVisible(false);
   };
 
-  const handleSelectRecipient = (index: number) => {
-    if (wallets[index]) {
-      setRecipient(wallets[index].address);
-      setRecipientModalVisible(false);
-    }
-  };
-
   const formatBalance = (rawBalance: bigint) => {
     return parseFloat(formatUnits(rawBalance, nativeDecimals)).toFixed(4);
   };
@@ -514,29 +507,16 @@ export default function SendScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <View className="flex-row gap-2">
-                  {wallets.length > 1 && (
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      className="bg-light-primary-red/10 py-2 px-4 rounded-full"
-                      onPress={() => setRecipientModalVisible(true)}
-                    >
-                      <Text className="text-light-primary-red text-xs font-medium">
-                        My Wallets
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    className="bg-light-primary-red/10 py-2 px-4 rounded-full flex-row items-center gap-1"
-                    onPress={() => setContactPickerVisible(true)}
-                  >
-                    <BookUser size={12} color="#c71c4b" />
-                    <Text className="text-light-primary-red text-xs font-medium">
-                      Address Book
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  className="bg-light-primary-red/10 py-2 px-4 rounded-full flex-row items-center gap-1.5 self-start"
+                  onPress={() => setRecipientPickerVisible(true)}
+                >
+                  <BookUser size={12} color="#c71c4b" />
+                  <Text className="text-light-primary-red text-xs font-medium">
+                    Choose recipient
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <View className="mb-6">
@@ -652,15 +632,13 @@ export default function SendScreen() {
         title="Select Wallet"
       />
 
-      <WalletSelectorModal
-        visible={recipientModalVisible}
-        onClose={() => setRecipientModalVisible(false)}
+      <RecipientPickerModal
+        visible={recipientPickerVisible}
         wallets={wallets}
-        activeWalletIndex={-1}
-        onSelectWallet={handleSelectRecipient}
-        title="Select Recipient"
-        disabledWalletIndex={activeWalletIndex}
-        disabledLabel="Current wallet"
+        activeWalletIndex={activeWalletIndex}
+        contacts={addressBookContacts}
+        onClose={() => setRecipientPickerVisible(false)}
+        onSelect={(address) => setRecipient(address)}
       />
 
       <PinConfirmationModal
@@ -681,12 +659,6 @@ export default function SendScreen() {
         />
       )}
 
-      <ContactPickerModal
-        visible={contactPickerVisible}
-        contacts={addressBookContacts}
-        onClose={() => setContactPickerVisible(false)}
-        onSelect={(contact) => setRecipient(contact.address)}
-      />
     </>
   );
 }
