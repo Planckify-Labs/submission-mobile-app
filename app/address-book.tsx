@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { ArrowLeft, Plus, Search, X } from "lucide-react-native";
+import { ArrowLeft, BookUser, Plus, Search, Shield, X } from "lucide-react-native";
 import { useCallback, useRef, useState } from "react";
 import {
   Alert,
@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   ToastAndroid,
+  TouchableOpacity,
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
@@ -21,9 +22,11 @@ import AddressBookItem from "@/components/address-book/AddressBookItem";
 import EmptyState from "@/components/address-book/EmptyState";
 import type { TCreateAddressBookDto } from "@/api/types/addressBook";
 import type { TAddressBookEntry } from "@/constants/types/addressBookTypes";
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useAddressBook } from "@/hooks/useAddressBook";
 
 export default function AddressBook() {
+  const { isAuthenticated, isLoading: isAuthLoading, hadPreviousSession } = useIsAuthenticated();
   const { contacts, search, setSearch, add, update, remove, refetch, isRefetching, isAdding, isUpdating, addError } = useAddressBook();
   const [showModal, setShowModal] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TAddressBookEntry | null>(null);
@@ -91,6 +94,104 @@ export default function AddressBook() {
   );
 
   const keyExtractor = useCallback((item: TAddressBookEntry) => item.id, []);
+
+  // Show sign-in prompt for users who have never authenticated.
+  // If they had a prior session but auth is loading/uncertain, fall through to the normal screen
+  // so cached contacts are still visible.
+  if (!isAuthLoading && !isAuthenticated && !hadPreviousSession) {
+    return (
+      <GestureHandlerRootView className="flex-1">
+        <StatusBar barStyle="dark-content" />
+        <SafeAreaView edges={["top"]} className="flex-1 bg-light-main-container">
+          {/* Header */}
+          <View className="px-4 pt-2 pb-4">
+            <View className="flex-row items-center gap-3">
+              <Pressable
+                onPress={() => router.back()}
+                hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                className="w-9 h-9 rounded-xl bg-light items-center justify-center shadow-sm"
+              >
+                <ArrowLeft size={18} color="#c71c4b" />
+              </Pressable>
+              <Text className="text-light-matte-black text-2xl font-bold tracking-tight">
+                Address Book
+              </Text>
+            </View>
+          </View>
+
+          {/* Sign-in prompt */}
+          <View className="flex-1 items-center justify-center px-10">
+            <View className="mb-8 relative items-center justify-center h-32">
+              <View className="absolute w-28 h-28 bg-light-primary-red/5 rounded-full" />
+              <View className="absolute w-20 h-20 bg-light-primary-red/10 rounded-full" />
+              <View className="absolute -top-2 -left-8 w-3 h-3 bg-light-primary-red/30 rounded-full" />
+              <View className="absolute top-4 -right-10 w-2 h-2 bg-light-primary-red/40 rounded-full" />
+              <View className="absolute -bottom-2 left-6 w-2.5 h-2.5 bg-light-primary-red/25 rounded-full" />
+              <View
+                className="bg-white w-24 h-24 rounded-3xl items-center justify-center border-2 border-light-primary-red/20"
+                style={{
+                  shadowColor: "#c71c4b",
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 20,
+                  elevation: 10,
+                }}
+              >
+                <View className="absolute inset-2 bg-light-primary-red/5 rounded-2xl" />
+                <BookUser size={40} color="#c71c4b" />
+              </View>
+              <View className="absolute -top-1 -right-6 w-5 h-5 bg-light-primary-red rounded-full border-[3px] border-light-main-container items-center justify-center">
+                <View className="w-2 h-2 bg-white rounded-full" />
+              </View>
+            </View>
+
+            <View className="items-center max-w-[280px] mb-8">
+              <Text className="text-light-matte-black font-bold text-2xl mb-3 text-center">
+                Sign in to access your Address Book
+              </Text>
+              <Text className="text-light-matte-black/45 text-center text-sm leading-6">
+                Save and manage wallet addresses with friendly names. Sign in with Ethereum to get started.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => router.push("/auth")}
+              className="bg-light-primary-red py-4 px-8 rounded-2xl flex-row items-center gap-3 mb-6"
+              style={{
+                shadowColor: "#c71c4b",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 12,
+                elevation: 8,
+              }}
+            >
+              <Text className="text-white font-bold text-base">Sign In With Ethereum</Text>
+            </TouchableOpacity>
+
+            <View className="gap-2.5 w-full">
+              <View className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl bg-light">
+                <View className="bg-light-primary-red/10 p-1.5 rounded-lg">
+                  <Shield color="#c71c4b" size={14} strokeWidth={2.5} />
+                </View>
+                <Text className="text-light-matte-black/55 text-xs flex-1 font-medium">
+                  Secure & gasless authentication
+                </Text>
+              </View>
+              <View className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl bg-light">
+                <View className="bg-light-primary-red/10 p-1.5 rounded-lg">
+                  <BookUser color="#c71c4b" size={14} strokeWidth={2.5} />
+                </View>
+                <Text className="text-light-matte-black/55 text-xs flex-1 font-medium">
+                  Save addresses with friendly names
+                </Text>
+              </View>
+            </View>
+          </View>
+        </SafeAreaView>
+      </GestureHandlerRootView>
+    );
+  }
 
   return (
     <GestureHandlerRootView className="flex-1">
