@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import { Bell, ShieldAlert, UserRound } from "lucide-react-native";
+import { BookUser, ShieldAlert, UserRound } from "lucide-react-native";
 import { useState } from "react";
 import { Modal, Pressable, Text, TouchableOpacity, View } from "react-native";
 
@@ -21,10 +21,10 @@ export default function Header() {
         <TouchableOpacity
           activeOpacity={0.7}
           className="rounded-full bg-light items-center justify-center aspect-square w-[45px]"
-          onPress={() => router.push("/notification")}
+          onPress={() => router.push("/address-book")}
         >
           <View className="items-center justify-center p-1 aspect-square h-full w-full">
-            <Bell color="#20222c" size={20} />
+            <BookUser color="#20222c" size={20} />
           </View>
         </TouchableOpacity>
         <TouchableOpacity
