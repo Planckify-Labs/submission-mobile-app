@@ -1,5 +1,4 @@
 import { router } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import ky from "ky";
 import type { NormalizedOptions } from "ky";
 import {
@@ -10,6 +9,7 @@ import {
 } from "@/hooks/queries/useAuth";
 import * as walletService from "@/services/walletService";
 import { ApiConflictError } from "@/api/types/errors";
+import { storage } from "@/lib/storage/mmkv";
 
 interface ApiError {
   message?: string;
@@ -142,9 +142,7 @@ export const api = ky.create({
         setupBaseHeaders(request, "authenticated API");
 
         try {
-          const indexStr = await SecureStore.getItemAsync(
-            "active_wallet_index",
-          );
+          const indexStr = storage.getString("active_wallet_index");
           const idx = indexStr ? parseInt(indexStr, 10) : 0;
           const wallets = await walletService.loadWalletsFromStorage();
           const activeAddr = wallets?.[idx]?.address?.toLowerCase() || null;
@@ -188,9 +186,7 @@ export const optionalAuthApi = ky.create({
       async (request) => {
         setupBaseHeaders(request, "optional-auth API");
         try {
-          const indexStr = await SecureStore.getItemAsync(
-            "active_wallet_index",
-          );
+          const indexStr = storage.getString("active_wallet_index");
           const idx = indexStr ? parseInt(indexStr, 10) : 0;
           const wallets = await walletService.loadWalletsFromStorage();
           const activeAddr = wallets?.[idx]?.address?.toLowerCase() || null;
