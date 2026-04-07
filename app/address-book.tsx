@@ -103,7 +103,7 @@ export default function AddressBook() {
         {/* Header */}
         <View className="px-4 pt-2 pb-4">
           <View className="flex-row items-center justify-between mb-1">
-            <View className="flex-row items-center gap-3">
+            <View className="flex-row items-center gap-3 flex-1">
               <Pressable
                 onPress={() => router.back()}
                 hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
@@ -111,8 +111,8 @@ export default function AddressBook() {
               >
                 <ArrowLeft size={18} color="#c71c4b" />
               </Pressable>
-              <View>
-                <Text className="text-light-matte-black text-2xl font-bold tracking-tight">
+              <View className="flex-1">
+                <Text className="text-light-matte-black text-2xl font-bold tracking-tight" numberOfLines={1}>
                   Address Book
                 </Text>
                 <Text className="text-light-matte-black/50 text-xs">
