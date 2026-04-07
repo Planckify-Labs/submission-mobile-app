@@ -5,6 +5,12 @@ import type { TCreateAddressBookDto, TUpdateAddressBookDto } from "@/api/types/a
 import type { TAddressBookEntry } from "@/constants/types/addressBookTypes";
 import { addressBookQueryKeys } from "@/constants/queryKeys/addressBookQueryKeys";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
+import { storage } from "@/lib/storage/mmkv";
+
+const MMKV_KEY = "cached_address_book";
+const MMKV_TIMESTAMP_KEY = "cached_address_book_timestamp";
+const STALE_TIME = 5 * 60 * 1000;    // 5 min — after this, fetch from API on next mount
+const OFFLINE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 h — gcTime / offline fallback window
 
 export function useAddressBook() {
   const [search, setSearch] = useState("");
@@ -19,10 +25,35 @@ export function useAddressBook() {
     refetch,
   } = useQuery({
     queryKey: addressBookQueryKeys.list(),
-    queryFn: () => addressBookApi.getAll(),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
+    queryFn: async () => {
+      const cachedRaw = storage.getString(MMKV_KEY);
+      const timestampStr = storage.getString(MMKV_TIMESTAMP_KEY);
+      const now = Date.now();
+      const timestamp = timestampStr ? parseInt(timestampStr, 10) : 0;
+
+      // Fast path: MMKV cache is still fresh — skip network call entirely
+      if (cachedRaw && now - timestamp < STALE_TIME) {
+        return JSON.parse(cachedRaw) as TAddressBookEntry[];
+      }
+
+      // Cache is stale or missing — fetch from API and refresh MMKV
+      try {
+        const response = await addressBookApi.getAll();
+        storage.set(MMKV_KEY, JSON.stringify(response));
+        storage.set(MMKV_TIMESTAMP_KEY, now.toString());
+        return response;
+      } catch (error) {
+        // Offline fallback: serve any MMKV data available, regardless of age
+        if (cachedRaw) {
+          return JSON.parse(cachedRaw) as TAddressBookEntry[];
+        }
+        throw error;
+      }
+    },
+    staleTime: STALE_TIME,
+    gcTime: OFFLINE_CACHE_TTL,
     enabled: isAuthenticated === true && !isAuthLoading,
+    refetchOnMount: true,
     retry: false,
   });
 
@@ -80,6 +111,8 @@ export function useAddressBook() {
       }
     },
     onSettled: () => {
+      // Bust MMKV timestamp so the next queryFn call fetches fresh data from API
+      storage.remove(MMKV_TIMESTAMP_KEY);
       queryClient.invalidateQueries({ queryKey: addressBookQueryKeys.list() });
     },
   });
@@ -88,6 +121,7 @@ export function useAddressBook() {
     mutationFn: ({ id, dto }: { id: string; dto: TUpdateAddressBookDto }) =>
       addressBookApi.update(id, dto),
     onSuccess: (_data, { id }) => {
+      storage.remove(MMKV_TIMESTAMP_KEY);
       queryClient.invalidateQueries({ queryKey: addressBookQueryKeys.list() });
       queryClient.invalidateQueries({ queryKey: addressBookQueryKeys.detail(id) });
     },
@@ -118,6 +152,8 @@ export function useAddressBook() {
       }
     },
     onSettled: () => {
+      // Bust MMKV timestamp so the next queryFn call fetches fresh data from API
+      storage.remove(MMKV_TIMESTAMP_KEY);
       queryClient.invalidateQueries({ queryKey: addressBookQueryKeys.list() });
     },
   });
