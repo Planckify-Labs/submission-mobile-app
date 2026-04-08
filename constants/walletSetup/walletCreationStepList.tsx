@@ -3,7 +3,6 @@ import {
   ArrowLeftRight,
   Check,
   ChevronRight,
-  Coins,
   Info,
   Shield,
   Wallet,
@@ -257,15 +256,6 @@ export const createWalletSteps = (
               <ChevronRight size={16} color="#c71c4b" />
             </Pressable>
 
-            <Pressable className="p-4 flex-row items-center">
-              <View className="w-8 h-8 rounded-full bg-light-primary-red/10 items-center justify-center mr-3">
-                <Coins size={16} color="#c71c4b" />
-              </View>
-              <Text className="text-light-matte-black flex-1">
-                Earn rewards
-              </Text>
-              <ChevronRight size={16} color="#c71c4b" />
-            </Pressable>
           </View>
 
           <View className="bg-light-primary-red/10 p-4 rounded-lg w-full">
