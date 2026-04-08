@@ -38,8 +38,11 @@ export default function WalletSetup() {
       const correctWord = mnemonicWords[wordIndex];
       if (!correctWord) return [];
 
-      const otherWords = mnemonicWords
-        .filter((_, i) => i !== wordIndex)
+      const otherWords = [
+        ...new Set(
+          mnemonicWords.filter((w, i) => i !== wordIndex && w !== correctWord),
+        ),
+      ]
         .sort(() => 0.5 - Math.random())
         .slice(0, 2);
 
