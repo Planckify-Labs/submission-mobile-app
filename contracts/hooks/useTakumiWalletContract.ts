@@ -19,12 +19,7 @@ import type {
 interface TUseTakumiWalletContractProps {
   contractAddress: Address;
 }
-type TEventName =
-  | "AdminAdded"
-  | "AdminRemoved"
-  | "TransactionCreated"
-  | "NativeDeposit"
-  | "Withdraw";
+type TEventName = "TransactionCreated" | "NativeDeposit" | "Withdraw";
 
 export function useTakumiWalletContract({
   contractAddress,
@@ -54,38 +49,6 @@ export function useTakumiWalletContract({
       client: walletClient,
     });
   }, [contractAddress, walletClient]);
-
-  const getAllAdmins = useQuery({
-    queryKey: ["takumi-wallet", "admins", contractAddress],
-    queryFn: async () => {
-      return await readContract.read.getAllAdmins();
-    },
-    enabled: !!readContract,
-  });
-
-  const getOwner = useQuery({
-    queryKey: ["takumi-wallet", "owner", contractAddress],
-    queryFn: async () => {
-      return await readContract.read.owner();
-    },
-    enabled: !!readContract,
-  });
-
-  const getTxCounter = useQuery({
-    queryKey: ["takumi-wallet", "txCounter", contractAddress],
-    queryFn: async () => {
-      return await readContract.read.txCounter();
-    },
-    enabled: !!readContract,
-  });
-
-  const isAdmin = useCallback(
-    async (adminAddress: Address) => {
-      if (!readContract) throw new Error("Contract not initialized");
-      return await readContract.read.isAdmin([adminAddress]);
-    },
-    [readContract],
-  );
 
   const getTransactionByRef = useCallback(
     async (refId: string) => {
@@ -146,38 +109,6 @@ export function useTakumiWalletContract({
     },
     [readContract, activeWallet?.address],
   );
-
-  const addAdmin = useMutation({
-    mutationFn: async (adminAddress: Address) => {
-      if (!walletClient || !walletClient.account)
-        throw new Error("Wallet not connected");
-      const hash = await walletClient.writeContract({
-        address: contractAddress,
-        abi: AbiTakumiWallet,
-        functionName: "addAdmin",
-        args: [adminAddress],
-        chain: walletClient.chain,
-        account: walletClient.account,
-      });
-      return hash as Hash;
-    },
-  });
-
-  const removeAdmin = useMutation({
-    mutationFn: async (adminAddress: Address) => {
-      if (!walletClient || !walletClient.account)
-        throw new Error("Wallet not connected");
-      const hash = await walletClient.writeContract({
-        address: contractAddress,
-        abi: AbiTakumiWallet,
-        functionName: "removeAdmin",
-        args: [adminAddress],
-        chain: walletClient.chain,
-        account: walletClient.account,
-      });
-      return hash as Hash;
-    },
-  });
 
   const createTransaction = useMutation({
     mutationFn: async (params: TCreateTransactionParams) => {
@@ -286,54 +217,6 @@ export function useTakumiWalletContract({
     });
   };
 
-  const useWatchAdminAdded = (
-    onAdminAdded?: (log: any) => void,
-    enabled: boolean = true,
-  ) => {
-    return useQuery({
-      queryKey: ["takumi-wallet", "watchAdminAdded", contractAddress],
-      queryFn: async () => {
-        if (!publicClient || !onAdminAdded || !enabled) return null;
-
-        const unwatch = publicClient.watchContractEvent({
-          address: contractAddress,
-          abi: AbiTakumiWallet,
-          eventName: "AdminAdded",
-          onLogs: onAdminAdded,
-        });
-
-        return unwatch;
-      },
-      enabled: !!publicClient && !!onAdminAdded && enabled,
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-    });
-  };
-
-  const useWatchAdminRemoved = (
-    onAdminRemoved?: (log: any) => void,
-    enabled: boolean = true,
-  ) => {
-    return useQuery({
-      queryKey: ["takumi-wallet", "watchAdminRemoved", contractAddress],
-      queryFn: async () => {
-        if (!publicClient || !onAdminRemoved || !enabled) return null;
-
-        const unwatch = publicClient.watchContractEvent({
-          address: contractAddress,
-          abi: AbiTakumiWallet,
-          eventName: "AdminRemoved",
-          onLogs: onAdminRemoved,
-        });
-
-        return unwatch;
-      },
-      enabled: !!publicClient && !!onAdminRemoved && enabled,
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-    });
-  };
-
   const useWatchNativeDeposit = (
     onNativeDeposit?: (log: any) => void,
     enabled: boolean = true,
@@ -415,24 +298,16 @@ export function useTakumiWalletContract({
   return {
     readContract,
     writeContract,
-    getAllAdmins,
-    getOwner,
-    getTxCounter,
-    isAdmin,
     getTransactionByRef,
     getTransactionsByAddress,
     getTransactionsInRange,
     getUserTransactions,
     getUserTransactionCount,
-    addAdmin,
-    removeAdmin,
     createTransaction,
     depositPoints,
     withdraw,
     withdrawAll,
     useWatchTransactionCreated,
-    useWatchAdminAdded,
-    useWatchAdminRemoved,
     useWatchNativeDeposit,
     useWatchWithdraw,
     getTransaction,
