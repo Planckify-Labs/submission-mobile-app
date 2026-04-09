@@ -354,7 +354,7 @@ export default function SendScreen() {
               ).toString();
               await createTransaction({
                 contractAddress: selectedToken.contractAddress,
-                blockchainId: activeBackendChain?.id as string,
+                blockchainId: selectedToken.blockchainId,
                 type: "TRANSFER",
                 amount: rawAmount,
                 txHash: hash,
@@ -362,7 +362,9 @@ export default function SendScreen() {
                 toAddress: recipient,
               } as any);
             } else {
-              const nativeTokenId = tokenList?.[0]?.id;
+              const nativeTokenId =
+                selectedToken?.id ??
+                tokenList?.find((t) => t.isNativeCurrency)?.id;
               if (nativeTokenId) {
                 // Convert to raw token units (e.g., wei for 18 decimals)
                 const rawAmount = parseUnits(amount, nativeDecimals).toString();
