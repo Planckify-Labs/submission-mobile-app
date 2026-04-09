@@ -7,7 +7,7 @@ import BalanceSection, {
   BalanceSectionRef,
 } from "@/components/home/Main/BalanceSection";
 import Header from "@/components/home/Main/Header";
-import PaymentSection, {
+import {
   PaymentSectionRef,
 } from "@/components/home/Main/PaymentSection";
 import RecommendationSection, {

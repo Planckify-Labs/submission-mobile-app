@@ -100,7 +100,7 @@ function RedemptionDetailCard({
             {redemption.vendorRefId && (
               <View className="mt-2">
                 <Text className="text-light-matte-black/60 text-xs mb-1">
-                  Vendor Reference
+                  Reference
                 </Text>
                 <View className="flex-row items-center justify-between bg-white rounded-lg p-2">
                   <Text
@@ -113,7 +113,7 @@ function RedemptionDetailCard({
                     onPress={() =>
                       copyToClipboard(
                         redemption.vendorRefId!,
-                        "Vendor reference",
+                        "Reference",
                       )
                     }
                     className="ml-2 p-1"
@@ -165,7 +165,7 @@ function RedemptionDetailCard({
           <View className="flex-row items-center mb-3">
             <CreditCard size={16} color="#c71c4b" />
             <Text className="text-light-matte-black font-medium text-sm ml-2">
-              Payment Details
+              Points Summary
             </Text>
           </View>
           <View>
@@ -429,7 +429,7 @@ export default function PurchasedProductDetailCard({
           <View className="flex-row items-center mb-3">
             <CreditCard size={16} color="#c71c4b" />
             <Text className="text-light-matte-black font-medium text-sm ml-2">
-              Payment Details
+              Transaction Details
             </Text>
           </View>
 
