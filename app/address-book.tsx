@@ -148,7 +148,7 @@ export default function AddressBook() {
               >
                 <ArrowLeft size={18} color="#c71c4b" />
               </Pressable>
-              <Text className="text-light-matte-black text-2xl font-bold tracking-tight">
+              <Text className="text-light-matte-black text-2xl font-bold tracking-tight flex-1">
                 Address Book
               </Text>
             </View>
