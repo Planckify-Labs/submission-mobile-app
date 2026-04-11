@@ -255,7 +255,6 @@ export const createWalletSteps = (
               <Text className="text-light-matte-black flex-1">Swap tokens</Text>
               <ChevronRight size={16} color="#c71c4b" />
             </Pressable>
-
           </View>
 
           <View className="bg-light-primary-red/10 p-4 rounded-lg w-full">

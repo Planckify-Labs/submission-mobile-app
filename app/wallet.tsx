@@ -1,5 +1,10 @@
 import { router } from "expo-router";
-import { ChevronRight, Plus, Wallet as WalletIcon } from "lucide-react-native";
+import {
+  ChevronRight,
+  Plus,
+  Shield,
+  Wallet as WalletIcon,
+} from "lucide-react-native";
 import React, {
   useCallback,
   useEffect,
@@ -257,6 +262,46 @@ export default function Wallet() {
             setShowWalletInfo={setShowWalletInfo}
             animatedStyle={{ opacity: detailsOpacity }}
           />
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Agent Permissions"
+            accessibilityHint="View and revoke permissions granted to the AI agent"
+            className="bg-light rounded-2xl p-4 mt-4 mb-4 flex-row items-center justify-between mx-4"
+            onPress={() =>
+              // Cast: expo-router generates the typed routes file lazily
+              // via the dev server. `/agent-permissions` is a new file
+              // route that won't appear in the generated union until the
+              // dev server runs.
+              router.push("/agent-permissions" as never)
+            }
+            style={{
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.04,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+          >
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-light-primary-red/10 items-center justify-center mr-3">
+                <Shield size={20} color="#c71c4b" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-light-matte-black/50 text-xs mb-0.5">
+                  Settings
+                </Text>
+                <Text
+                  className="text-light-matte-black font-semibold text-base"
+                  numberOfLines={1}
+                >
+                  Agent Permissions
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={18} color="#c71c4b" />
+          </TouchableOpacity>
         </ScrollView>
 
         <WalletSwitcherModal

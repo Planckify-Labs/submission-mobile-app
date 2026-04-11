@@ -1,7 +1,4 @@
-import { useChat } from "@ai-sdk/react";
 import { FlashList, ListRenderItemInfo } from "@shopify/flash-list";
-import { DefaultChatTransport } from "ai";
-import { fetch as expoFetch } from "expo/fetch";
 import { BlurView } from "expo-blur";
 import { SquarePen } from "lucide-react-native";
 import React, {
@@ -22,14 +19,63 @@ import {
   ViewStyle,
 } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import ApprovalSheet, {
+  buildGrantOptions,
+  type GrantChoice,
+  specialWarning,
+} from "@/components/agent/ApprovalSheet";
 import { useAgentOnboarding } from "@/hooks/useAgentOnboarding";
+import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
+import { usePendingTxCards } from "@/hooks/usePendingTxCards";
+import { useWallet } from "@/hooks/useWallet";
+import {
+  assertRegistryParity,
+  type ExecutorContext,
+} from "@/services/agent-executors";
+import {
+  type AgentSession,
+  type AgentSessionUIBindings,
+  createAgentSession,
+  type ToolPendingPayload,
+  type WalletContext,
+} from "@/services/agentSession";
+import { PermissionGrantStore } from "@/services/permissionGrantStore";
+import {
+  type ConnectedWallet,
+  HOT_WALLET_POLICY,
+} from "@/services/resolveUxTreatment";
+import * as walletService from "@/services/walletService";
 import AgentOnboarding from "./AgentModeOnboarding/AgentOnboarding";
 import ChatInput from "./ChatInput";
 import ConversationHistory from "./ConversationHistory";
-import MessageContent from "./MessageContent";
+import MarkdownMessage from "./MarkdownMessage";
+import { PendingTxCard } from "./PendingTxCard";
+import PreviewCard from "./PreviewCard/PreviewCard";
 import QuickPrompts from "./QuickPrompts";
 
 const { width: screenWidth } = Dimensions.get("window");
+
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+};
+
+type InlinePreview = {
+  payload: ToolPendingPayload;
+  onConfirm: () => void;
+  onDismiss: () => void;
+};
+
+type ApprovalState = {
+  payload: ToolPendingPayload;
+  onApprove: () => void;
+  onReject: () => void;
+};
+
+function genId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export default function AgentMode() {
   const scrollViewRef = useRef<ScrollView>(null);
@@ -44,17 +90,95 @@ export default function AgentMode() {
     completeOnboarding,
   } = useAgentOnboarding();
 
-  const { messages, error, sendMessage, status, clearError } = useChat({
-    transport: new DefaultChatTransport({
-      fetch: expoFetch as unknown as typeof globalThis.fetch,
-      api: `${process.env.EXPO_PUBLIC_AI_API_URL}/chat?secrectApiKey=${process.env.EXPO_PUBLIC_SECRET_AI_KEY}`,
-    }),
-    onError: (chatError) => {
-      console.error(chatError, "Takumi agent chat error");
-    },
+  const { activeWallet, activeChain } = useWallet();
+  const { data: blockchains = [] } = useBlockchainsWithStorage({
+    isActive: true,
   });
 
-  type ChatMessage = (typeof messages)[number];
+  // ── Conversation state ────────────────────────────────────────────
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [currentStatus, setCurrentStatus] = useState<string | null>(null);
+  const [inlinePreview, setInlinePreview] = useState<InlinePreview | null>(
+    null,
+  );
+  const [approvalState, setApprovalState] = useState<ApprovalState | null>(
+    null,
+  );
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  // ── Refs used by the session (outside React render tree) ──────────
+  const sessionIdRef = useRef<string | null>(null);
+  const currentAssistantIdRef = useRef<string | null>(null);
+  const activeSessionRef = useRef<AgentSession | null>(null);
+  const grantStoreRef = useRef<{
+    address: `0x${string}`;
+    store: PermissionGrantStore;
+  } | null>(null);
+
+  // Registry parity check — crash loudly at mount time if the mobile
+  // executor registry drifted from the server tool list.
+  useEffect(() => {
+    try {
+      assertRegistryParity();
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  // Rebuild / reuse the wallet-scoped grant store whenever the active
+  // wallet changes. The store is lazy-loaded from SecureStore — keeping
+  // a ref means we don't re-hydrate on every render.
+  const grantStore = useMemo(() => {
+    const address = activeWallet?.address as `0x${string}` | undefined;
+    if (!address) return null;
+    if (grantStoreRef.current?.address === address) {
+      return grantStoreRef.current.store;
+    }
+    const store = PermissionGrantStore.conservative(address);
+    grantStoreRef.current = { address, store };
+    return store;
+  }, [activeWallet?.address]);
+
+  // ConnectedWallet — plumbed into `resolveUxTreatment` via the session.
+  const connectedWallet: ConnectedWallet | null = useMemo(() => {
+    const address = activeWallet?.address as `0x${string}` | undefined;
+    if (!address || !grantStore) return null;
+    return {
+      address,
+      approvalPolicy: HOT_WALLET_POLICY,
+      grantStore,
+    };
+  }, [activeWallet?.address, grantStore]);
+
+  // Executor context — forwarded to every mobile tool call.
+  // `activeChainId` is the fallback the executors use when the agent
+  // drops `chain_id` from a tool input (the server's mobile-tool
+  // schema is a permissive `{}` stub, so the LLM is not schema-bound
+  // to always include it).
+  const executorContext: ExecutorContext | null = useMemo(() => {
+    if (!activeWallet?.address) return null;
+    const account = walletService.getAccountForWallet(activeWallet);
+    return {
+      wallet: activeWallet,
+      account: account ?? null,
+      blockchains,
+      activeChainId: activeChain?.chain.id,
+    };
+  }, [activeWallet, blockchains, activeChain?.chain.id]);
+
+  // Wallet context sent on POST /chat — short-circuits if we don't yet
+  // have an active wallet / chain resolved.
+  const walletContext: WalletContext | null = useMemo(() => {
+    const address = activeWallet?.address as `0x${string}` | undefined;
+    if (!address || !activeChain?.chain) return null;
+    return {
+      address,
+      chain_id: activeChain.chain.id,
+      chain_name: activeChain.chain.name,
+      chain_symbol: activeChain.chain.nativeCurrency.symbol,
+      label: activeWallet?.name,
+    };
+  }, [activeWallet, activeChain]);
 
   const chatListRef = useRef<any>(null);
 
@@ -72,6 +196,14 @@ export default function AgentMode() {
     return () => clearTimeout(timeout);
   }, []);
 
+  // Tear down any in-flight session when the screen unmounts.
+  useEffect(() => {
+    return () => {
+      activeSessionRef.current?.stop();
+      activeSessionRef.current = null;
+    };
+  }, []);
+
   const handleScrollToChat = useCallback(() => {
     scrollViewRef.current?.scrollTo({ x: screenWidth, animated: true });
   }, []);
@@ -80,14 +212,98 @@ export default function AgentMode() {
     scrollViewRef.current?.scrollTo({ x: 0, animated: true });
   }, []);
 
-  const handleInputChange = useCallback(
-    (text: string) => {
-      if (error) {
-        clearError();
-      }
-      setInput(text);
-    },
-    [clearError, error],
+  const handleInputChange = useCallback((text: string) => {
+    setInput(text);
+  }, []);
+
+  // ── UI bindings the session dispatches into ──────────────────────
+  // These are re-created on every turn so they capture the current
+  // assistant message id and dispatch into React state. The session
+  // holds the callbacks for its lifetime, so this is safe.
+  const buildUiBindings = useCallback(
+    (assistantMessageId: string): AgentSessionUIBindings => ({
+      appendText: (delta) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId ? { ...m, text: m.text + delta } : m,
+          ),
+        );
+        setCurrentStatus(null);
+      },
+      showStatus: (message) => {
+        setCurrentStatus(message);
+      },
+      showPreviewCard: (payload, onConfirm, onDismiss) => {
+        setCurrentStatus(null);
+        setInlinePreview({
+          payload,
+          onConfirm: () => {
+            setInlinePreview((current) =>
+              current?.payload.tool_call_id === payload.tool_call_id
+                ? null
+                : current,
+            );
+            void onConfirm();
+          },
+          onDismiss: () => {
+            setInlinePreview((current) =>
+              current?.payload.tool_call_id === payload.tool_call_id
+                ? null
+                : current,
+            );
+            void onDismiss();
+          },
+        });
+      },
+      showApprovalSheet: (payload, onApprove, onReject) => {
+        setCurrentStatus(null);
+        setApprovalState({
+          payload,
+          onApprove: () => {
+            setApprovalState((current) =>
+              current?.payload.tool_call_id === payload.tool_call_id
+                ? null
+                : current,
+            );
+            void onApprove();
+          },
+          onReject: () => {
+            setApprovalState((current) =>
+              current?.payload.tool_call_id === payload.tool_call_id
+                ? null
+                : current,
+            );
+            void onReject();
+          },
+        });
+      },
+      showToolExecuted: () => {
+        // Non-onchain tool just completed server-side. Clear the
+        // status chip so the next event can paint its own label.
+        setCurrentStatus(null);
+      },
+      showError: (message, retryable) => {
+        // Route session / transport errors to the console only —
+        // transient fetch glitches and internal dispatcher logs are
+        // not user-facing. The chat UI stays clean; genuine user-
+        // visible failures should be surfaced via a dedicated toast
+        // or the terminal `error` SSE event handled by the session
+        // factory itself.
+        console.error(
+          `[AgentMode] session error (retryable=${retryable}): ${message}`,
+        );
+        setCurrentStatus(null);
+        setIsStreaming(false);
+      },
+      done: () => {
+        setCurrentStatus(null);
+        setIsStreaming(false);
+      },
+      onReconnecting: (attempt) => {
+        setCurrentStatus(`Reconnecting… (attempt ${attempt})`);
+      },
+    }),
+    [],
   );
 
   const sendTextMessage = useCallback(
@@ -95,23 +311,63 @@ export default function AgentMode() {
       const trimmed = text.trim();
       if (!trimmed) return;
 
+      if (!walletContext || !connectedWallet || !executorContext) {
+        console.warn(
+          "[AgentMode] sendTextMessage called before wallet context was ready",
+        );
+        return;
+      }
+
       const now = Date.now();
       const timeSinceLastSend = now - lastSendTimeRef.current;
       if (timeSinceLastSend < 1000) {
         console.log("Please wait before sending another message");
         return;
       }
-
       lastSendTimeRef.current = now;
 
+      // Close any prior session first — a new turn opens its own stream.
+      activeSessionRef.current?.stop();
+      activeSessionRef.current = null;
+
+      const userMessage: ChatMessage = {
+        id: genId(),
+        role: "user",
+        text: trimmed,
+      };
+      const assistantMessage: ChatMessage = {
+        id: genId(),
+        role: "assistant",
+        text: "",
+      };
+      currentAssistantIdRef.current = assistantMessage.id;
+      setMessages((prev) => [...prev, userMessage, assistantMessage]);
+      setIsStreaming(true);
+      setCurrentStatus("Thinking…");
+
+      const sessionId = sessionIdRef.current ?? genId();
+      sessionIdRef.current = sessionId;
+
+      const session = createAgentSession({
+        session_id: sessionId,
+        wallet_context: walletContext,
+        // Server-side schema accepts `{role, content}` ModelMessages.
+        messages: [{ role: "user", content: trimmed }],
+        executorContext,
+        connectedWallet,
+        ui: buildUiBindings(assistantMessage.id),
+      });
+      activeSessionRef.current = session;
+
       try {
-        await sendMessage({ text: trimmed });
+        await session.start();
       } catch (sendError) {
-        console.error(sendError, "Failed to send chat message");
-        throw sendError;
+        console.error("[AgentMode] Failed to stream agent turn", sendError);
+        setIsStreaming(false);
+        setCurrentStatus(null);
       }
     },
-    [sendMessage],
+    [walletContext, connectedWallet, executorContext, buildUiBindings],
   );
 
   const handleSend = useCallback(async () => {
@@ -129,10 +385,20 @@ export default function AgentMode() {
     [sendTextMessage],
   );
 
-  const chatMessages = useMemo(
-    () => messages.filter((message) => message.role !== "system"),
-    [messages],
-  );
+  // Reset conversation — new session id on next send.
+  const handleNewConversation = useCallback(() => {
+    activeSessionRef.current?.stop();
+    activeSessionRef.current = null;
+    sessionIdRef.current = null;
+    currentAssistantIdRef.current = null;
+    setMessages([]);
+    setCurrentStatus(null);
+    setInlinePreview(null);
+    setApprovalState(null);
+    setIsStreaming(false);
+  }, []);
+
+  const chatMessages = messages;
 
   const blurViewOpacity = scrollY.interpolate({
     inputRange: [50, 150],
@@ -154,18 +420,22 @@ export default function AgentMode() {
     ({ item }: ListRenderItemInfo<ChatMessage>) => {
       const isUser = item.role === "user";
 
+      if (isUser) {
+        return (
+          <View className="w-full mb-4 z-0 items-end">
+            <View className="bg-light-primary-red max-w-[85%] rounded-3xl px-4 py-3">
+              <Text className="text-sm leading-5 text-white">{item.text}</Text>
+            </View>
+          </View>
+        );
+      }
+
       return (
-        <View
-          className={`w-full mb-4 z-0 ${isUser ? "items-end" : "items-start"}`}
-        >
-          <View
-            className={`${
-              isUser
-                ? "bg-light-primary-red max-w-[85%] rounded-3xl px-4 py-3"
-                : "bg-white- border- border-light-primary-red/10-"
-            }`}
-          >
-            <MessageContent message={item} isUser={isUser} />
+        <View className="w-full mb-4 z-0 items-start">
+          <View>
+            {item.text.length > 0 ? (
+              <MarkdownMessage content={item.text} />
+            ) : null}
           </View>
         </View>
       );
@@ -173,43 +443,85 @@ export default function AgentMode() {
     [],
   );
 
-  const isLoading = status === "streaming" || status === "submitted";
+  const isLoading = isStreaming;
+
+  // Task 15: pending-tx cards from the agent-session dispatcher.
+  // The store is a singleton, so these survive navigation between
+  // the agent screen and the rest of the app.
+  const pendingTxCards = usePendingTxCards();
 
   const listFooterComponent = useMemo(() => {
-    if (!isLoading && !error) {
+    const hasPreview = inlinePreview !== null;
+    if (!isLoading && pendingTxCards.length === 0 && !hasPreview) {
       return null;
     }
 
     return (
       <View className="gap-2">
+        {hasPreview && inlinePreview ? (
+          <PreviewCard
+            key={inlinePreview.payload.tool_call_id}
+            summary={inlinePreview.payload.meta.human_summary}
+            onConfirm={inlinePreview.onConfirm}
+            onDismiss={inlinePreview.onDismiss}
+          />
+        ) : null}
+
+        {pendingTxCards.length > 0 && (
+          <View>
+            {pendingTxCards.map((record) => (
+              <PendingTxCard key={record.tx_hash} record={record} />
+            ))}
+          </View>
+        )}
+
         {isLoading && (
           <View className="self-start mt-2 bg-white/80 border border-light-primary-red/10 rounded-3xl px-4 py-2 flex-row items-center gap-2">
             <ActivityIndicator size="small" color="#c71c4b" />
             <Text className="text-xs text-light-matte-black">
-              Takumi is thinking...
-            </Text>
-          </View>
-        )}
-
-        {error && (
-          <View className="mt-2 bg-light-primary-red/10 border border-light-primary-red/40 rounded-3xl px-4 py-3">
-            <Text className="text-xs text-light-primary-red font-semibold mb-1">
-              {error.message.includes("overloaded") ||
-              error.message.includes("Overloaded")
-                ? "Service is busy right now"
-                : "Something went wrong"}
-            </Text>
-            <Text className="text-xs text-light-matte-black/70">
-              {error.message.includes("overloaded") ||
-              error.message.includes("Overloaded")
-                ? "The AI service is experiencing high demand. Please wait a moment and try again."
-                : "Please try sending your message again."}
+              {currentStatus ?? "Takumi is thinking..."}
             </Text>
           </View>
         )}
       </View>
     );
-  }, [error, isLoading]);
+  }, [isLoading, pendingTxCards, inlinePreview, currentStatus]);
+
+  // ── Approval sheet handlers ───────────────────────────────────────
+  const approvalGrantOptions = useMemo(() => {
+    if (!approvalState) return [];
+    return buildGrantOptions(
+      sessionIdRef.current ?? "no-session",
+      approvalState.payload.name,
+    );
+  }, [approvalState]);
+
+  const handleApprovalApprove = useCallback(
+    (choice: GrantChoice) => {
+      if (!approvalState) return;
+      const activeAddress = connectedWallet?.address;
+      // Persist grant (unless the user picked "once") so the next
+      // invocation inherits the delegation per §6.
+      if (
+        choice.lifetime.type !== "once" &&
+        activeAddress &&
+        grantStoreRef.current?.store
+      ) {
+        grantStoreRef.current.store.add({
+          scope: choice.scope,
+          lifetime: choice.lifetime,
+          wallet_address: activeAddress,
+          granted_at: Date.now(),
+        });
+      }
+      approvalState.onApprove();
+    },
+    [approvalState, connectedWallet?.address],
+  );
+
+  const handleApprovalReject = useCallback(() => {
+    approvalState?.onReject();
+  }, [approvalState]);
 
   return (
     <KeyboardProvider>
@@ -281,7 +593,10 @@ export default function AgentMode() {
               >
                 <View />
               </Animated.View>
-              <TouchableOpacity className="p-[10px] rounded-full">
+              <TouchableOpacity
+                onPress={handleNewConversation}
+                className="p-[10px] rounded-full"
+              >
                 <SquarePen size={20} color="#c71c4b" />
               </TouchableOpacity>
             </BlurView>
@@ -326,6 +641,17 @@ export default function AgentMode() {
           </View>
         </View>
       </ScrollView>
+
+      {approvalState ? (
+        <ApprovalSheet
+          title={approvalState.payload.name}
+          summary={approvalState.payload.meta.human_summary}
+          warning={specialWarning(approvalState.payload.name)}
+          grantOptions={approvalGrantOptions}
+          onApprove={handleApprovalApprove}
+          onReject={handleApprovalReject}
+        />
+      ) : null}
 
       {!isOnboardingLoading && (
         <AgentOnboarding

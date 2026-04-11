@@ -111,10 +111,7 @@ function RedemptionDetailCard({
                   </Text>
                   <TouchableOpacity
                     onPress={() =>
-                      copyToClipboard(
-                        redemption.vendorRefId!,
-                        "Reference",
-                      )
+                      copyToClipboard(redemption.vendorRefId!, "Reference")
                     }
                     className="ml-2 p-1"
                   >

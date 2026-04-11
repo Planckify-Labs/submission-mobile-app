@@ -11,9 +11,7 @@ const bundleId =
   Constants.expoConfig?.android?.package ??
   "";
 const isProductionBuild =
-  !__DEV__ &&
-  !bundleId.endsWith(".dev") &&
-  !bundleId.endsWith(".preview");
+  !__DEV__ && !bundleId.endsWith(".dev") && !bundleId.endsWith(".preview");
 
 interface ScanToPayChatModeFloatingButtonsProps {
   onChatModePress: () => void;

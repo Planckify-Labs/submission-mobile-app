@@ -1,0 +1,192 @@
+/**
+ * Pure helper functions backing the "Agent Permissions" settings screen.
+ *
+ * Extracted out of the screen component so they can be unit-tested with
+ * Node's `node:test` runner (same pattern as task 11/12) without pulling
+ * in a React Native renderer.
+ *
+ * Spec: `AGENT_PROTOCOL.md` §6 "App Settings: Managing Active Grants"
+ *       and §6 "Default Permission Mode".
+ */
+
+import type {
+  GrantLifetime,
+  GrantScope,
+  PermissionGrant,
+} from "./permissionGrantStore.ts";
+
+// --- Default mode ----------------------------------------------------------
+
+/**
+ * The three user-facing "default mode" presets described in §6.
+ *
+ * - `always_ask`   — a global `always_ask` grant is installed. Every write
+ *                    goes through the approval sheet regardless of policy.
+ * - `agent_decides` — no global override grant. The wallet's
+ *                     `ApprovalPolicy` drives every UX treatment decision.
+ * - `full_auto`    — a global `permanent` grant is installed. The agent
+ *                    executes writes silently until revoked. Power users.
+ */
+export type DefaultPermissionMode =
+  | "always_ask"
+  | "agent_decides"
+  | "full_auto";
+
+/**
+ * Derive the currently-selected default mode from the grants the user
+ * already has in their store.
+ *
+ * Precedence:
+ *   1. A global `always_ask` grant → "always_ask" (hard override, wins
+ *      over everything — matches the `resolveGrant()` priority in
+ *      `permissionGrantStore.ts`).
+ *   2. A global `permanent` grant → "full_auto".
+ *   3. Otherwise → "agent_decides" (the conservative default).
+ *
+ * Tool- and capability-scoped grants never flip the mode selector — they
+ * live alongside it. That means a user who has one `session` grant for a
+ * single tool still sees "Agent decides" as their mode, which is the
+ * correct mental model: the mode describes the *default*, not the
+ * individual per-tool overrides the user has accumulated.
+ */
+export function computeCurrentMode(
+  grants: PermissionGrant[],
+): DefaultPermissionMode {
+  for (const g of grants) {
+    if (g.scope.kind === "global" && g.lifetime.type === "always_ask") {
+      return "always_ask";
+    }
+  }
+  for (const g of grants) {
+    if (g.scope.kind === "global" && g.lifetime.type === "permanent") {
+      return "full_auto";
+    }
+  }
+  return "agent_decides";
+}
+
+// --- Scope label -----------------------------------------------------------
+
+/**
+ * Human-readable label for a grant scope.
+ *
+ * - `{ kind: "tool", key: "send_native_token" }` → "send_native_token"
+ * - `{ kind: "capability", key: "write" }`       → "blockchain_write"
+ * - `{ kind: "global" }`                         → "All actions"
+ */
+export function formatScopeLabel(scope: GrantScope): string {
+  switch (scope.kind) {
+    case "tool":
+      return scope.key;
+    case "capability":
+      return `blockchain_${scope.key}`;
+    case "global":
+      return "All actions";
+  }
+}
+
+// --- Lifetime label --------------------------------------------------------
+
+export interface LifetimeLabel {
+  /** Primary label: "Session", "1 hour", "Always", "Always ask". */
+  primary: string;
+  /** Secondary line: expiry time, grant date, session-id prefix. */
+  secondary: string;
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
+function formatTimeOfDay(ts: number): string {
+  const d = new Date(ts);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function formatDate(ts: number): string {
+  const d = new Date(ts);
+  // Locale-free compact format so tests are deterministic and don't
+  // depend on the host's `toLocaleDateString()` settings.
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+function formatDuration(ms: number): string {
+  if (ms <= 0) return "expired";
+  const hours = ms / (1000 * 60 * 60);
+  if (hours >= 1) {
+    const rounded = Math.round(hours);
+    return `${rounded} hour${rounded === 1 ? "" : "s"}`;
+  }
+  const minutes = Math.max(1, Math.round(ms / (1000 * 60)));
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
+/**
+ * Build the two-line lifetime label shown in the grants list.
+ *
+ * `nowMs` and `grantedAtMs` are passed explicitly so the function is pure
+ * and the tests don't have to freeze `Date.now()` globally.
+ *
+ * `once` is defensively handled (returns "Once") even though a `once`
+ * grant should never be persisted — callers should filter these out
+ * before rendering, but we never want a crash if one leaks through.
+ */
+export function formatLifetimeLabel(
+  lifetime: GrantLifetime,
+  nowMs: number,
+  grantedAtMs: number,
+): LifetimeLabel {
+  switch (lifetime.type) {
+    case "always_ask":
+      return { primary: "Always ask", secondary: "override" };
+    case "once":
+      return { primary: "Once", secondary: "" };
+    case "session": {
+      const prefix = lifetime.session_id.slice(0, 4);
+      return { primary: "Session", secondary: `session #${prefix}` };
+    }
+    case "timed": {
+      const remaining = lifetime.expires_at - nowMs;
+      return {
+        primary: formatDuration(remaining),
+        secondary: `expires ${formatTimeOfDay(lifetime.expires_at)}`,
+      };
+    }
+    case "permanent":
+      return {
+        primary: "Always",
+        secondary: `granted ${formatDate(grantedAtMs)}`,
+      };
+  }
+}
+
+// --- List computation ------------------------------------------------------
+
+/**
+ * Render-order for the list: filters out defensive `once` entries and
+ * returns a fresh array so the caller can feed it straight into a list
+ * component without aliasing the store's internal state.
+ *
+ * This is the "render helper" the task 17 acceptance bullet targets:
+ * extract it so `remove()` can be tested as a pure list transform
+ * without instantiating the UI.
+ */
+export function listRenderableGrants(
+  grants: PermissionGrant[],
+): PermissionGrant[] {
+  return grants.filter((g) => g.lifetime.type !== "once");
+}

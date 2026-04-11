@@ -1,0 +1,272 @@
+/**
+ * Write executors — all require a signing wallet client.
+ *
+ * The approval UX that gates these is task 13/14's concern; this file
+ * assumes the SSE dispatcher (task 09) has already passed approval and
+ * is now asking us to actually sign + submit. Every executor in this
+ * file returns `{ status: "success", tx_hash }` on submission — it does
+ * NOT wait for confirmation. The agent separately calls `get_transaction`
+ * later to see whether the tx was mined (AGENT_PROTOCOL §10 "Optimistic
+ * UI Pattern").
+ *
+ * TakumiPay-specific tools (execute_booking, cancel_booking,
+ * create_purchase) are stubbed as `not_implemented` — we don't yet have
+ * the vendor contract ABIs or the TakumiPay SDK binding needed to
+ * build the exact call payload. See the individual TODO(task-10)
+ * markers for what's still missing.
+ */
+
+import { type Abi, erc20Abi } from "viem";
+import { requireWalletClient, resolveChainClients } from "./chainRouter";
+import {
+  ExecutorError,
+  ExecutorErrorCode,
+  type MobileToolExecutor,
+  requireAddress,
+  requireBigInt,
+  requireString,
+  resolveChainId,
+  safeExecute,
+} from "./types";
+
+/**
+ * `send_native_token` — transfer native gas token (ETH, MATIC, BNB…).
+ * Server input: `{ chain_id, to, value_wei }`.
+ */
+export const sendNativeToken: MobileToolExecutor = (input, context) =>
+  safeExecute(async () => {
+    const chainId = resolveChainId(input, context);
+    const to = requireAddress(input, "to");
+    const value = requireBigInt(input, "value_wei");
+
+    const walletClient = requireWalletClient(chainId, context);
+    const { publicClient } = resolveChainClients(chainId, context);
+    // viem wallet clients require an explicit account + chain when the
+    // underlying account is a local signer. Pull both from the resolved
+    // client.
+    const account = walletClient.account;
+    if (!account) {
+      throw new ExecutorError(
+        ExecutorErrorCode.WalletCannotExecute,
+        "wallet client has no account",
+      );
+    }
+
+    const hash = await walletClient.sendTransaction({
+      account,
+      to,
+      value,
+      chain: walletClient.chain,
+    });
+    return {
+      status: "success",
+      tx_hash: hash,
+      tx_confirmed: false,
+      data: { chain_id: chainId, to, value_wei: value.toString() },
+      // Keep publicClient reference live for engines that may tree-shake
+      // unused reads — also lets a caller optionally poll the receipt.
+      ...(publicClient ? {} : {}),
+    };
+  });
+
+/**
+ * `transfer_erc20` — call `ERC20.transfer(to, amount)`.
+ * Server input: `{ chain_id, token_address, to, amount_wei }`.
+ */
+export const transferErc20: MobileToolExecutor = (input, context) =>
+  safeExecute(async () => {
+    const chainId = resolveChainId(input, context);
+    const tokenAddress = requireAddress(input, "token_address");
+    const to = requireAddress(input, "to");
+    const amount = requireBigInt(input, "amount_wei");
+
+    const walletClient = requireWalletClient(chainId, context);
+    const account = walletClient.account;
+    if (!account) {
+      throw new ExecutorError(
+        ExecutorErrorCode.WalletCannotExecute,
+        "wallet client has no account",
+      );
+    }
+
+    const hash = await walletClient.writeContract({
+      account,
+      chain: walletClient.chain,
+      address: tokenAddress,
+      abi: erc20Abi,
+      functionName: "transfer",
+      args: [to, amount],
+    });
+    return {
+      status: "success",
+      tx_hash: hash,
+      tx_confirmed: false,
+      data: {
+        chain_id: chainId,
+        token_address: tokenAddress,
+        to,
+        amount_wei: amount.toString(),
+      },
+    };
+  });
+
+/**
+ * `write_contract` — generic state-changing contract call.
+ * Server input:
+ *   { chain_id, contract_address, abi, function_name, args?, value_wei? }
+ */
+export const writeContract: MobileToolExecutor = (input, context) =>
+  safeExecute(async () => {
+    const chainId = resolveChainId(input, context);
+    const address = requireAddress(input, "contract_address");
+    const functionName = requireString(input, "function_name");
+    const abi = input.abi;
+    if (!Array.isArray(abi)) {
+      throw new ExecutorError(
+        ExecutorErrorCode.InvalidInput,
+        "missing_or_invalid_abi",
+      );
+    }
+    const args = Array.isArray(input.args) ? (input.args as unknown[]) : [];
+    const value =
+      input.value_wei !== undefined ? requireBigInt(input, "value_wei") : 0n;
+
+    const walletClient = requireWalletClient(chainId, context);
+    const account = walletClient.account;
+    if (!account) {
+      throw new ExecutorError(
+        ExecutorErrorCode.WalletCannotExecute,
+        "wallet client has no account",
+      );
+    }
+
+    const hash = await walletClient.writeContract({
+      account,
+      chain: walletClient.chain,
+      address,
+      abi: abi as Abi,
+      functionName,
+      args,
+      value,
+    });
+    return {
+      status: "success",
+      tx_hash: hash,
+      tx_confirmed: false,
+      data: {
+        chain_id: chainId,
+        contract_address: address,
+        function_name: functionName,
+      },
+    };
+  });
+
+/**
+ * `approve_erc20` — call `ERC20.approve(spender, amount)`.
+ * Server input: `{ chain_id, token_address, spender, amount_wei }`.
+ *
+ * NOTE: the spec specifically calls out that mobile should show an
+ * extra "infinite allowance" warning before approving this — that UI
+ * warning lives in task 13's approval sheet, not here. This executor
+ * just submits the transaction once the sheet has returned.
+ */
+export const approveErc20: MobileToolExecutor = (input, context) =>
+  safeExecute(async () => {
+    const chainId = resolveChainId(input, context);
+    const tokenAddress = requireAddress(input, "token_address");
+    const spender = requireAddress(input, "spender");
+    const amount = requireBigInt(input, "amount_wei");
+
+    const walletClient = requireWalletClient(chainId, context);
+    const account = walletClient.account;
+    if (!account) {
+      throw new ExecutorError(
+        ExecutorErrorCode.WalletCannotExecute,
+        "wallet client has no account",
+      );
+    }
+
+    const hash = await walletClient.writeContract({
+      account,
+      chain: walletClient.chain,
+      address: tokenAddress,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [spender, amount],
+    });
+    return {
+      status: "success",
+      tx_hash: hash,
+      tx_confirmed: false,
+      data: {
+        chain_id: chainId,
+        token_address: tokenAddress,
+        spender,
+        amount_wei: amount.toString(),
+      },
+    };
+  });
+
+// ---------------------------------------------------------------------------
+// TakumiPay on-chain write stubs
+// ---------------------------------------------------------------------------
+//
+// TODO(task-10): the following three executors are intentionally stubbed.
+// To complete them we need, at minimum:
+//   1. The TakumiPay payment contract ABI for each supported chain
+//      (deployed addresses live in the takumipay-api repo under
+//      `src/contracts/` — they are not yet exposed to the mobile app).
+//   2. A canonical mapping from { booking_id, payment_token } to the
+//      exact `pay(...)` / `cancel(...)` call on that contract. The
+//      mobile-app already has a `TakumiPay` client in `api/endpoints/`,
+//      but it only hits the REST backend — the on-chain payload
+//      construction lives server-side today.
+//   3. A decision on who computes the EIP-712 permit (if the vendor
+//      contract supports gasless approvals). The protocol says the
+//      mobile signs, but the permit *structure* is vendor-specific.
+//
+// Until those land, each stub returns `{ status: "failed",
+// error: "not_implemented" }` so the agent can surface a clear error
+// to the user rather than silently hanging.
+
+/**
+ * `execute_booking` — stub. See the TODO block above.
+ */
+export const executeBooking: MobileToolExecutor = async (_input, _context) => {
+  // TODO(task-10): wire this up once the TakumiPay contract ABI + address
+  // registry is exposed to the mobile app. The protocol sample in
+  // AGENT_PROTOCOL.md §10 references a `signAndSubmitPayment` helper
+  // that doesn't exist in this repo yet.
+  return { status: "failed", error: ExecutorErrorCode.NotImplemented };
+};
+
+/**
+ * `cancel_booking` — stub. See the TODO block above.
+ */
+export const cancelBooking: MobileToolExecutor = async (_input, _context) => {
+  // TODO(task-10): needs the vendor `cancel(bytes32 bookingId)` ABI and
+  // a decision on whether cancellation is on-chain or off-chain with
+  // an on-chain refund. Today it is server-only (see takumipay-api
+  // `bookings.service.ts`).
+  return { status: "failed", error: ExecutorErrorCode.NotImplemented };
+};
+
+/**
+ * `create_purchase` — stub. See the TODO block above.
+ */
+export const createPurchase: MobileToolExecutor = async (_input, _context) => {
+  // TODO(task-10): needs the "direct buy" contract ABI and the call
+  // shape the server expects (price is usually quoted via
+  // `get_latest_exchange_rate` first, then a `buy(...)` with a minOut).
+  return { status: "failed", error: ExecutorErrorCode.NotImplemented };
+};
+
+export const WRITE_EXECUTORS: Record<string, MobileToolExecutor> = {
+  send_native_token: sendNativeToken,
+  transfer_erc20: transferErc20,
+  write_contract: writeContract,
+  approve_erc20: approveErc20,
+  execute_booking: executeBooking,
+  cancel_booking: cancelBooking,
+  create_purchase: createPurchase,
+};
