@@ -78,7 +78,9 @@ import { classifyPointsError, sanitizeApiResponse } from "./utils";
 async function runApi<T>(
   fn: () => Promise<T>,
   shape: (raw: T) => unknown,
-): Promise<{ status: "success"; data: unknown } | { status: "failed"; error: string }> {
+): Promise<
+  { status: "success"; data: unknown } | { status: "failed"; error: string }
+> {
   try {
     const raw = await fn();
     return { status: "success", data: sanitizeApiResponse(shape(raw)) };
@@ -269,10 +271,7 @@ export const getPointsPrice: MobileToolExecutor = (input, _context) =>
  * endpoint requires auth on the backend (see §12 auth boundary table)
  * even though categories themselves aren't private — it's an API quirk.
  */
-export const getRedemptionCategories: MobileToolExecutor = (
-  _input,
-  _context,
-) =>
+export const getRedemptionCategories: MobileToolExecutor = (_input, _context) =>
   safeExecute(async () => {
     return runApi(
       () => productApi.getAllCategories(),
@@ -331,8 +330,12 @@ export const getPointsHistory: MobileToolExecutor = (input, _context) =>
           balance_before: t.balanceBefore,
           balance_after: t.balanceAfter,
           status: t.status,
-          ...(t.tokenAmount !== undefined ? { token_amount: t.tokenAmount } : {}),
-          ...(t.tokenSymbol !== undefined ? { token_symbol: t.tokenSymbol } : {}),
+          ...(t.tokenAmount !== undefined
+            ? { token_amount: t.tokenAmount }
+            : {}),
+          ...(t.tokenSymbol !== undefined
+            ? { token_symbol: t.tokenSymbol }
+            : {}),
           ...(t.txHash !== undefined ? { tx_hash: t.txHash } : {}),
           created_at: t.createdAt,
         })),
@@ -695,9 +698,8 @@ export const depositPoints: MobileToolExecutor = (input, context) =>
     const isTerminal =
       finalStatus.status === "COMPLETED" || finalStatus.status === "FAILED";
     return {
-      status: isTerminal && finalStatus.status === "FAILED"
-        ? "failed"
-        : "success",
+      status:
+        isTerminal && finalStatus.status === "FAILED" ? "failed" : "success",
       tx_hash: txHash,
       tx_confirmed: true,
       data: sanitizeApiResponse({

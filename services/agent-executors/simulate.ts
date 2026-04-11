@@ -203,9 +203,7 @@ export const requestAuthentication: MobileToolExecutor = async (
   _input,
   context,
 ) => {
-  const walletAddress = context.wallet?.address as
-    | `0x${string}`
-    | undefined;
+  const walletAddress = context.wallet?.address as `0x${string}` | undefined;
   if (!walletAddress) {
     return {
       status: "success",

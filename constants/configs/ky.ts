@@ -1,7 +1,7 @@
 import { router } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import type { NormalizedOptions } from "ky";
 import ky from "ky";
-import * as SecureStore from "expo-secure-store";
 import { ApiConflictError } from "@/api/types/errors";
 import {
   clearTokens,
@@ -253,10 +253,7 @@ const handleApiResponse = async (
           try {
             return await fetch(retried);
           } catch (retryErr) {
-            console.warn(
-              "[ky] silent-refresh retry fetch threw:",
-              retryErr,
-            );
+            console.warn("[ky] silent-refresh retry fetch threw:", retryErr);
             // Fall through to the existing clear-tokens path below.
           }
         }

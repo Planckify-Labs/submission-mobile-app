@@ -292,7 +292,11 @@ async function routeEvent(
  */
 function syncServerSessionId(event: AgentEvent, session: AgentSession): void {
   const maybeId = (event.data as { session_id?: unknown } | null)?.session_id;
-  if (typeof maybeId === "string" && maybeId && session.session_id !== maybeId) {
+  if (
+    typeof maybeId === "string" &&
+    maybeId &&
+    session.session_id !== maybeId
+  ) {
     session.session_id = maybeId;
     // Bubble the new id up to the chat screen so its `sessionIdRef`
     // (used by §10 "Try again" — task 06) follows the server's view.

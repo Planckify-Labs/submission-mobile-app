@@ -17,12 +17,12 @@
  */
 
 import { type Abi, erc20Abi, formatUnits } from "viem";
-import type { TBlockchain } from "@/api/types/blockchain";
-import type { TToken } from "@/api/types/token";
-import { pendingTxStore } from "../pendingTxStore";
 import { blockchainApi } from "@/api/endpoints/blockchains";
 import { tokenApi } from "@/api/endpoints/tokens";
+import type { TBlockchain } from "@/api/types/blockchain";
+import type { TToken } from "@/api/types/token";
 import { storage } from "@/lib/storage/mmkv";
+import { pendingTxStore } from "../pendingTxStore";
 import { resolveChainClients } from "./chainRouter";
 import {
   ExecutorError,
@@ -635,7 +635,9 @@ export const getWalletTokens: MobileToolExecutor = (input, context) =>
         chain_errors.push({
           chain_id: chainIds[i],
           error:
-            res.reason instanceof Error ? res.reason.message : String(res.reason),
+            res.reason instanceof Error
+              ? res.reason.message
+              : String(res.reason),
         });
       }
     });

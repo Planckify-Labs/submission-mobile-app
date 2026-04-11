@@ -48,7 +48,7 @@ export default function AssetExplorer() {
 
   const { activeTab, setActiveTab } = useActiveTab();
   const { activeNetwork, activeBlockchainId } = useActiveNetwork();
-  const { searchQuery, setSearchQuery } = useAssetSearchQuery();
+  const { searchQuery } = useAssetSearchQuery();
 
   const {
     userAssets,

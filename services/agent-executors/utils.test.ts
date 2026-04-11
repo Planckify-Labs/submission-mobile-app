@@ -156,7 +156,10 @@ describe("classifyPointsError — HTTP status mapping", () => {
   });
 
   it("maps 403 → authorization_denied", () => {
-    assert.equal(classifyPointsError(withResponse(403)), "authorization_denied");
+    assert.equal(
+      classifyPointsError(withResponse(403)),
+      "authorization_denied",
+    );
   });
 
   it("maps 429 → rate_limited", () => {
