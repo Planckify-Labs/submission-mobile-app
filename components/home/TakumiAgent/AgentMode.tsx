@@ -272,18 +272,60 @@ export default function AgentMode() {
 
   const chatListRef = useRef<any>(null);
 
+  // ── Auto-scroll state ───────────────────────────────────────────
+  const autoScrollEnabledRef = useRef(true);
+  const userScrollCountRef = useRef(0);
+  const scrollInactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetAutoScroll = useCallback(() => {
+    autoScrollEnabledRef.current = true;
+    userScrollCountRef.current = 0;
+    if (scrollInactivityTimerRef.current) {
+      clearTimeout(scrollInactivityTimerRef.current);
+      scrollInactivityTimerRef.current = null;
+    }
+  }, []);
+
+  const handleUserScrollBeginDrag = useCallback(() => {
+    userScrollCountRef.current += 1;
+
+    // After 2 manual scrolls, pause auto-scroll
+    if (userScrollCountRef.current >= 2) {
+      autoScrollEnabledRef.current = false;
+    }
+
+    // Reset inactivity timer — re-enable auto-scroll after 4s of no scrolling
+    if (scrollInactivityTimerRef.current) {
+      clearTimeout(scrollInactivityTimerRef.current);
+    }
+    scrollInactivityTimerRef.current = setTimeout(() => {
+      resetAutoScroll();
+    }, 4000);
+  }, [resetAutoScroll]);
+
+  // Auto-scroll to bottom when messages change or streaming status changes
+  useEffect(() => {
+    if (autoScrollEnabledRef.current && messages.length > 0) {
+      const timeout = setTimeout(() => {
+        chatListRef.current?.scrollToEnd({ animated: true });
+      }, 50);
+      return () => clearTimeout(timeout);
+    }
+  }, [messages, isStreaming, currentStatus, inlinePreview]);
+
+  // Cleanup inactivity timer on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollInactivityTimerRef.current) {
+        clearTimeout(scrollInactivityTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({ x: screenWidth, animated: false });
     }, 0);
-  }, []);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      chatListRef.current?.scrollToEnd({ animated: true });
-    }, 50);
-
-    return () => clearTimeout(timeout);
   }, []);
 
   // Tear down any in-flight session when the screen unmounts.
@@ -548,6 +590,7 @@ export default function AgentMode() {
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
       setIsStreaming(true);
       setCurrentStatus("Thinking…");
+      resetAutoScroll();
 
       const sessionId = sessionIdRef.current ?? genId();
       sessionIdRef.current = sessionId;
@@ -605,6 +648,7 @@ export default function AgentMode() {
       buildUiBindings,
       pointsAuthenticated,
       activeConversationId,
+      resetAutoScroll,
     ],
   );
 
@@ -960,6 +1004,7 @@ export default function AgentMode() {
                   [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                   { useNativeDriver: false },
                 )}
+                onScrollBeginDrag={handleUserScrollBeginDrag}
                 scrollEventThrottle={16}
                 ListEmptyComponent={
                   <View className="items-center px-4">
