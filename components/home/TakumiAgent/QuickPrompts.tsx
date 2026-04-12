@@ -1,14 +1,43 @@
 import { FlashList } from "@shopify/flash-list";
-import React from "react";
+import React, { useMemo } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
-import { AGENT_QUICK_PROMPTS } from "@/constants/agent";
+import { useAddressBook } from "@/hooks/useAddressBook";
+import { useRecommendations } from "@/hooks/queries/useProducts";
 
 export interface QuickPromptsProps {
   onSelectPrompt: (prompt: string) => void;
 }
 
 export default function QuickPrompts({ onSelectPrompt }: QuickPromptsProps) {
+  const { allContacts } = useAddressBook();
+  const { data: recommendations } = useRecommendations(1);
+
+  const prompts = useMemo(() => {
+    const latestContact = allContacts.length
+      ? [...allContacts].sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )[0]
+      : null;
+
+    const transferPrompt = latestContact
+      ? [{ id: "transfer-1", prompt: `Transfer USDT to ${latestContact.label}` }]
+      : [];
+
+    const redeemPrompt = recommendations?.[0]
+      ? [{ id: "redeem-1", prompt: `Redeem ${recommendations[0].name} with my points` }]
+      : [];
+
+    const staticPrompts = [
+      { id: "static-1", prompt: "how many points do i have?" },
+      { id: "static-2", prompt: "items i can redeem with my points" },
+      { id: "static-3", prompt: "Swap 1 ETH for USDC" },
+    ];
+
+    return [...transferPrompt, ...redeemPrompt, ...staticPrompts].slice(0, 5);
+  }, [allContacts, recommendations]);
+
   return (
     <View className="py-5 bg-light-main-container mb-[47px]">
       <Text className="text-lg font-semibold text-light-matte-black/80 mx-4 mb-2">
@@ -16,11 +45,11 @@ export default function QuickPrompts({ onSelectPrompt }: QuickPromptsProps) {
       </Text>
 
       <FlashList
-        data={AGENT_QUICK_PROMPTS}
+        data={prompts}
         nestedScrollEnabled
         renderItem={({ item }) => (
           <TouchableOpacity
-            className="min-w-[140px] border border-light-matte-black/10 max-w-[200px] px-3 py-3 rounded-full bg-light/10 justify-center items-center"
+            className="min-w-[140px] border border-light-matte-black/10 max-w-[200px]- px-3 py-3 rounded-full bg-light/10 justify-center items-center"
             onPress={() => onSelectPrompt(item.prompt)}
           >
             <Text
