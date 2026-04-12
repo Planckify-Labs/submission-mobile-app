@@ -20,6 +20,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import ApprovalSheet, {
   buildGrantOptions,
@@ -864,6 +865,7 @@ export default function AgentMode() {
   }, [approvalState]);
 
   return (
+    <GestureHandlerRootView className="flex-1">
     <KeyboardProvider>
       <ScrollView
         ref={scrollViewRef}
@@ -1003,5 +1005,6 @@ export default function AgentMode() {
         />
       )}
     </KeyboardProvider>
+    </GestureHandlerRootView>
   );
 }

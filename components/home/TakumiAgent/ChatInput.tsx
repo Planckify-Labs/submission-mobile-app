@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { TouchableOpacity as GHTouchableOpacity } from "react-native-gesture-handler";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -129,16 +130,20 @@ export default function ChatInput({
               )}
             </View>
 
-            <TouchableOpacity
-              className={`w-11 h-11 rounded-full justify-center items-center ${
-                isSendDisabled
-                  ? "bg-gray-300 opacity-60"
-                  : "bg-light-primary-red"
-              }`}
+            <GHTouchableOpacity
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 9999,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: isSendDisabled ? "#d1d5db" : "#c71c4b",
+                opacity: isSendDisabled ? 0.6 : 1,
+              }}
               onPress={() => {
                 void handleSend();
               }}
-              disabled={isSendDisabled}
+              enabled={!isSendDisabled}
             >
               {isLoading ? (
                 <ActivityIndicator size="small" color="#ffffff" />
@@ -150,7 +155,7 @@ export default function ChatInput({
                   color="#ffffff"
                 />
               )}
-            </TouchableOpacity>
+            </GHTouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
