@@ -29,6 +29,7 @@ import ApprovalSheet, {
 import { useAgentOnboarding } from "@/hooks/useAgentOnboarding";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { usePendingTxCards } from "@/hooks/usePendingTxCards";
+import { pendingTxStore } from "@/services/pendingTxStore";
 import { useWallet } from "@/hooks/useWallet";
 import type {
   ConversationCache,
@@ -316,6 +317,7 @@ export default function AgentMode() {
       setInlinePreview(null);
       setApprovalState(null);
       setIsStreaming(false);
+      pendingTxStore.clear();
 
       const cached = storage.getString(`chat:conv:${conversationId}`);
       if (cached) {
@@ -635,6 +637,7 @@ export default function AgentMode() {
     setRetryableError(null);
     setNonRetryableError(null);
     setActiveConversationId(null);
+    pendingTxStore.clear();
   }, []);
 
   // §10 — "Try again" handler. Re-issues the last user turn on the
