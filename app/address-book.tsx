@@ -49,7 +49,6 @@ export default function AddressBook() {
     update,
     remove,
     refetch,
-    isRefetching,
     isAdding,
     isUpdating,
     addError,
@@ -58,6 +57,7 @@ export default function AddressBook() {
   const [editingEntry, setEditingEntry] = useState<TAddressBookEntry | null>(
     null,
   );
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
   const searchRef = useRef<TextInput>(null);
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 0 : bottom > 0 ? bottom : 16;
@@ -111,6 +111,12 @@ export default function AddressBook() {
     setEditingEntry(null);
     setShowModal(true);
   }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setIsManualRefreshing(true);
+    await refetch();
+    setIsManualRefreshing(false);
+  }, [refetch]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: TAddressBookEntry; index: number }) => (
@@ -314,8 +320,8 @@ export default function AddressBook() {
           keyboardDismissMode="on-drag"
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
+              refreshing={isManualRefreshing}
+              onRefresh={handleRefresh}
               tintColor="#c71c4b"
               colors={["#c71c4b"]}
             />
