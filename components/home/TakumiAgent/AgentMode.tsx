@@ -1,5 +1,6 @@
 import { FlashList, ListRenderItemInfo } from "@shopify/flash-list";
 import { BlurView } from "expo-blur";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, RotateCcw, SquarePen } from "lucide-react-native";
 import React, {
   useCallback,
@@ -29,6 +30,13 @@ import { useAgentOnboarding } from "@/hooks/useAgentOnboarding";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { usePendingTxCards } from "@/hooks/usePendingTxCards";
 import { useWallet } from "@/hooks/useWallet";
+import type {
+  ConversationCache,
+  ConversationListCache,
+  StoredMessage,
+} from "@/hooks/queries/useConversations";
+import type { ConversationSummary } from "@/api/conversations.types";
+import { storage } from "@/lib/storage/mmkv";
 import {
   assertRegistryParity,
   type ExecutorContext,
@@ -79,6 +87,32 @@ function genId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function toStoredMessage(msg: ChatMessage): StoredMessage {
+  return {
+    role: msg.role,
+    content: msg.text,
+    raw: { role: msg.role, content: msg.text },
+    created_at: new Date().toISOString(),
+  };
+}
+
+function fromStoredMessage(msg: StoredMessage): ChatMessage {
+  return {
+    id: genId(),
+    role: msg.role === "tool" ? "assistant" : (msg.role as "user" | "assistant"),
+    text: msg.content,
+  };
+}
+
+function getLastAssistantText(msgs: ChatMessage[]): string {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === "assistant" && msgs[i].text) {
+      return msgs[i].text;
+    }
+  }
+  return "";
+}
+
 export default function AgentMode() {
   const scrollViewRef = useRef<ScrollView>(null);
   const [input, setInput] = useState("");
@@ -122,6 +156,10 @@ export default function AgentMode() {
     null,
   );
 
+  // ── Conversation persistence state (task 10) ─────────────────────
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
   // ── Refs used by the session (outside React render tree) ──────────
   const sessionIdRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -133,6 +171,12 @@ export default function AgentMode() {
     address: `0x${string}`;
     store: PermissionGrantStore;
   } | null>(null);
+
+  // Mirror of `messages` state for use inside memoized callbacks (task 10)
+  const messagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Registry parity check — crash loudly at mount time if the mobile
   // executor registry drifted from the server tool list.
@@ -260,6 +304,33 @@ export default function AgentMode() {
     setInput(text);
   }, []);
 
+  // ── Resume a past conversation from MMKV cache (task 10) ─────────
+  const resumeConversation = useCallback(
+    (conversationId: string) => {
+      activeSessionRef.current?.stop();
+      activeSessionRef.current = null;
+      sessionIdRef.current = null;
+      setRetryableError(null);
+      setNonRetryableError(null);
+      setCurrentStatus(null);
+      setInlinePreview(null);
+      setApprovalState(null);
+      setIsStreaming(false);
+
+      const cached = storage.getString(`chat:conv:${conversationId}`);
+      if (cached) {
+        const conv = JSON.parse(cached) as ConversationCache;
+        setMessages(conv.messages.map(fromStoredMessage));
+      } else {
+        setMessages([]);
+      }
+
+      setActiveConversationId(conversationId);
+      handleScrollToChat();
+    },
+    [handleScrollToChat],
+  );
+
   // ── UI bindings the session dispatches into ──────────────────────
   // These are re-created on every turn so they capture the current
   // assistant message id and dispatch into React state. The session
@@ -349,9 +420,58 @@ export default function AgentMode() {
         setCurrentStatus(null);
         setIsStreaming(false);
       },
-      done: () => {
+      done: (meta) => {
         setCurrentStatus(null);
         setIsStreaming(false);
+
+        if (!meta?.conversation_id) return;
+
+        const convId = meta.conversation_id;
+        const walletAddress = walletContext?.address;
+        if (!walletAddress) return;
+
+        // 1. Write individual conversation cache
+        const convCache: ConversationCache = {
+          id: convId,
+          title: meta.conversation_title,
+          messages: messagesRef.current.map(toStoredMessage),
+          cached_at: Date.now(),
+        };
+        storage.set(`chat:conv:${convId}`, JSON.stringify(convCache));
+
+        // 2. Upsert summary into list cache
+        const listKey = `chat:list:${walletAddress}`;
+        const listRaw = storage.getString(listKey);
+        const list: ConversationListCache = listRaw
+          ? JSON.parse(listRaw)
+          : { items: [], next_cursor: null, cached_at: Date.now() };
+
+        const existingIdx = list.items.findIndex((c) => c.id === convId);
+        const summary: ConversationSummary = {
+          id: convId,
+          title: meta.conversation_title,
+          wallet_address: walletAddress,
+          chain_id: activeChain?.chain.id ?? 0,
+          created_at:
+            existingIdx >= 0
+              ? list.items[existingIdx].created_at
+              : new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          message_count: messagesRef.current.length,
+          last_message_preview: getLastAssistantText(messagesRef.current).slice(0, 120),
+        };
+
+        if (existingIdx >= 0) list.items[existingIdx] = summary;
+        else list.items.unshift(summary);
+
+        list.cached_at = Date.now();
+        storage.set(listKey, JSON.stringify(list));
+
+        // 3. Keep activeConversationId in sync for the next turn
+        setActiveConversationId(convId);
+
+        // 4. Invalidate TanStack Query for background server sync
+        queryClient.invalidateQueries({ queryKey: ["conversations", walletAddress] });
       },
       onReconnecting: (attempt) => {
         setCurrentStatus(`Reconnecting… (attempt ${attempt})`);
@@ -364,7 +484,7 @@ export default function AgentMode() {
         sessionIdRef.current = id;
       },
     }),
-    [],
+    [walletContext, activeChain, queryClient],
   );
 
   const sendTextMessage = useCallback(
@@ -434,6 +554,7 @@ export default function AgentMode() {
         wallet_context: sendWalletContext,
         // Server-side schema accepts `{role, content}` ModelMessages.
         messages: [{ role: "user", content: trimmed }],
+        conversation_id: activeConversationId ?? undefined,
         executorContext,
         connectedWallet,
         ui: buildUiBindings(assistantMessage.id),
@@ -443,6 +564,32 @@ export default function AgentMode() {
       try {
         await session.start();
       } catch (sendError) {
+        // Stale conversation_id — the server no longer has this conversation
+        // (e.g. after a restart). Clear it and retry transparently so the
+        // user never sees an error for something they didn't cause.
+        if (String(sendError).includes("conversation_not_found") && activeConversationId) {
+          setActiveConversationId(null);
+          const retrySessionId = genId();
+          sessionIdRef.current = retrySessionId;
+          const retrySession = createAgentSession({
+            session_id: retrySessionId,
+            wallet_context: sendWalletContext,
+            messages: [{ role: "user", content: trimmed }],
+            conversation_id: undefined,
+            executorContext,
+            connectedWallet,
+            ui: buildUiBindings(assistantMessage.id),
+          });
+          activeSessionRef.current = retrySession;
+          try {
+            await retrySession.start();
+          } catch (retryError) {
+            console.error("[AgentMode] Retry after conversation_not_found failed", retryError);
+            setIsStreaming(false);
+            setCurrentStatus(null);
+          }
+          return;
+        }
         console.error("[AgentMode] Failed to stream agent turn", sendError);
         setIsStreaming(false);
         setCurrentStatus(null);
@@ -454,6 +601,7 @@ export default function AgentMode() {
       executorContext,
       buildUiBindings,
       pointsAuthenticated,
+      activeConversationId,
     ],
   );
 
@@ -486,6 +634,7 @@ export default function AgentMode() {
     setIsStreaming(false);
     setRetryableError(null);
     setNonRetryableError(null);
+    setActiveConversationId(null);
   }, []);
 
   // §10 — "Try again" handler. Re-issues the last user turn on the
@@ -722,7 +871,10 @@ export default function AgentMode() {
         className="flex-1 bg-light-main-container"
       >
         <View style={{ width: screenWidth }}>
-          <ConversationHistory onScrollToChat={handleScrollToChat} />
+          <ConversationHistory
+            onScrollToChat={handleScrollToChat}
+            onResumeConversation={resumeConversation}
+          />
         </View>
 
         <View

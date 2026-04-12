@@ -10,6 +10,7 @@ import {
 } from "lucide-react-native";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Modal,
@@ -22,6 +23,10 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import {
+  useConversationList,
+  useDeleteConversation,
+} from "@/hooks/queries/useConversations";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useTokens } from "@/hooks/queries/useTokens";
@@ -34,10 +39,12 @@ const MODAL_HEIGHT = height * 0.67;
 
 interface ConversationHistory {
   onScrollToChat?: () => void;
+  onResumeConversation: (conversationId: string) => void;
 }
 
 export default function ConversationHistory({
   onScrollToChat,
+  onResumeConversation,
 }: ConversationHistory) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showWalletSelector, setShowWalletSelector] = useState(false);
@@ -52,6 +59,16 @@ export default function ConversationHistory({
     setActiveWallet,
     changeActiveChain,
   } = useWallet();
+
+  const activeWallet = useMemo(
+    () => wallets[activeWalletIndex],
+    [wallets, activeWalletIndex],
+  );
+
+  const { data: convListData, isLoading: isLoadingConvs } = useConversationList(
+    activeWallet?.address,
+  );
+  const { mutate: deleteConv } = useDeleteConversation();
 
   const { data: blockchains, isLoading: isLoadingBlockchains } =
     useBlockchainsWithStorage();
@@ -82,15 +99,21 @@ export default function ConversationHistory({
     });
   }, [blockchains, nativeTokens]);
 
-  const activeWallet = useMemo(
-    () => wallets[activeWalletIndex],
-    [wallets, activeWalletIndex],
-  );
-
   const formattedAddress = useMemo(() => {
     if (!activeWallet?.address) return "...";
     return `${activeWallet.address.substring(0, 6)}...${activeWallet.address.substring(activeWallet.address.length - 4)}`;
   }, [activeWallet?.address]);
+
+  const filteredConversations = useMemo(() => {
+    const items = convListData?.items ?? [];
+    if (!searchQuery.trim()) return items;
+    const q = searchQuery.toLowerCase();
+    return items.filter(
+      (c) =>
+        c.title.toLowerCase().includes(q) ||
+        c.last_message_preview.toLowerCase().includes(q),
+    );
+  }, [convListData?.items, searchQuery]);
 
   const closeChainModal = useCallback(() => {
     Animated.parallel([
@@ -201,23 +224,57 @@ export default function ConversationHistory({
         </Text>
 
         <FlashList
-          data={["test"]}
-          keyExtractor={(item) => item}
-          renderItem={({ item }) => {
-            return (
-              <TouchableOpacity
-                onPress={() => {}}
-                className="rounded-lg px-4 py-3 mb-2"
-              >
+          data={filteredConversations}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              onPress={() => onResumeConversation(item.id)}
+              className="rounded-lg px-4 py-3 mb-2 flex-row items-start justify-between"
+            >
+              <View className="flex-1 mr-3">
                 <Text
                   className="text-light-matte-black font-normal text-base"
-                  numberOfLines={2}
+                  numberOfLines={1}
                 >
-                  {item}
+                  {item.title}
                 </Text>
+                {item.last_message_preview ? (
+                  <Text
+                    className="text-xs text-gray-500 mt-0.5"
+                    numberOfLines={1}
+                  >
+                    {item.last_message_preview}
+                  </Text>
+                ) : null}
+                <Text className="text-[10px] text-gray-400 mt-1">
+                  {format(new Date(item.updated_at), "MMM d, yyyy")}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() =>
+                  deleteConv({
+                    id: item.id,
+                    walletAddress: activeWallet?.address ?? "",
+                  })
+                }
+                hitSlop={8}
+                className="pt-1"
+              >
+                <X size={14} color="#9ca3af" />
               </TouchableOpacity>
-            );
-          }}
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            isLoadingConvs ? (
+              <View className="items-center py-8">
+                <ActivityIndicator size="small" color="#c71c4b" />
+              </View>
+            ) : (
+              <View className="items-center py-8">
+                <Text className="text-sm text-gray-400">No conversations yet</Text>
+              </View>
+            )
+          }
           scrollEnabled={true}
           showsVerticalScrollIndicator={false}
         />

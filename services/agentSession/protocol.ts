@@ -107,6 +107,10 @@ export interface DonePayload {
     prompt_tokens: number;
     completion_tokens: number;
   };
+  /** Set when the turn was tied to a persisted conversation. */
+  conversation_id?: string;
+  /** Title of the active conversation. */
+  conversation_title?: string;
 }
 
 /** `error` — terminal or transient failure surfaced from the agent loop. */
@@ -184,4 +188,6 @@ export interface ChatRequest {
   session_id?: string;
   messages: unknown[];
   wallet_context: WalletContext;
+  /** When resuming a persisted conversation, pass its id so the server loads prior context. */
+  conversation_id?: string;
 }

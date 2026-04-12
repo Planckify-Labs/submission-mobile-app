@@ -76,7 +76,7 @@ export interface AgentSessionUIBindings {
   ) => void;
   showToolExecuted?: (payload: ToolExecutedPayload) => void;
   showError?: (message: string, retryable: boolean) => void;
-  done?: (usage: DonePayload["usage"]) => void;
+  done?: (meta?: { conversation_id: string; conversation_title: string }) => void;
   onReconnecting?: (attempt: number, delayMs: number) => void;
   onSessionIdChanged?: (sessionId: string) => void;
 }
@@ -99,6 +99,8 @@ export interface CreateAgentSessionOptions {
   connectedWallet: ConnectedWallet;
   /** UI effect bindings injected by the chat screen. */
   ui: AgentSessionUIBindings;
+  /** When resuming a persisted conversation, pass its id. */
+  conversation_id?: string;
 }
 
 /**
@@ -147,6 +149,9 @@ export function createAgentSession(
         session_id: options.session_id,
         messages: options.messages,
         wallet_context: options.wallet_context,
+        ...(options.conversation_id !== undefined
+          ? { conversation_id: options.conversation_id }
+          : {}),
       };
 
       // Dynamic import keeps `sseClient.ts` (which pulls in
@@ -178,12 +183,17 @@ export function createAgentSession(
           await routeEvent(event, session);
         }
       } catch (err) {
-        if (!stopped) {
-          options.ui.showError?.(
-            `[agentSession] SSE stream failed: ${String(err)}`,
-            true,
-          );
+        if (stopped) return;
+        // conversation_not_found means the caller passed a stale
+        // conversation_id. Re-throw so the caller can clear it and retry
+        // without surfacing an error to the user.
+        if (String(err).includes("conversation_not_found")) {
+          throw err;
         }
+        options.ui.showError?.(
+          `[agentSession] SSE stream failed: ${String(err)}`,
+          true,
+        );
       }
     },
 
@@ -339,7 +349,14 @@ function handleToolExecuted(
 
 function handleDone(data: DonePayload, session: AgentSession): void {
   try {
-    session.ui.done?.(data.usage);
+    const meta =
+      data.conversation_id && data.conversation_title
+        ? {
+            conversation_id: data.conversation_id,
+            conversation_title: data.conversation_title,
+          }
+        : undefined
+    session.ui.done?.(meta)
   } catch (err) {
     console.warn(`[agentSession] done handler threw: ${String(err)}`);
   }
