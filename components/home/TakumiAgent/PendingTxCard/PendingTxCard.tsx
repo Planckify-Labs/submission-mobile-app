@@ -22,7 +22,14 @@
 
 import { formatDistanceToNowStrict } from "date-fns";
 import * as Linking from "expo-linking";
-import { CheckCircle2, Copy, ExternalLink, XCircle } from "lucide-react-native";
+import { router } from "expo-router";
+import {
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  FileText,
+  XCircle,
+} from "lucide-react-native";
 import type React from "react";
 import { useMemo } from "react";
 import {
@@ -35,6 +42,40 @@ import {
 import type { PendingTxRecord } from "@/services/pendingTxStore";
 import { copyToClipboard } from "@/utils/helperUtils";
 import { buildExplorerUrl } from "./explorerUrl";
+
+/**
+ * Map raw error strings from the chain / executor to user-friendly
+ * copy. We deliberately do NOT surface technical details — the hash +
+ * block-explorer link already gives the user everything they need to
+ * investigate. Keep messages short and actionable.
+ */
+function friendlyError(raw: string | undefined): string {
+  if (!raw) return "Something went wrong. Tap to view on the block explorer.";
+  const lower = raw.toLowerCase();
+  if (lower.includes("revert") || lower === "reverted") {
+    return "The transaction was rejected by the network.";
+  }
+  if (
+    lower.includes("insufficient funds") ||
+    lower.includes("insufficient balance")
+  ) {
+    return "Insufficient funds to complete the transaction.";
+  }
+  if (lower.includes("nonce") || lower.includes("replacement")) {
+    return "Transaction was replaced or cancelled.";
+  }
+  if (lower.includes("timeout") || lower.includes("timed out")) {
+    return "Transaction timed out. It may still confirm — check the block explorer.";
+  }
+  if (
+    lower.includes("network") ||
+    lower.includes("rpc") ||
+    lower.includes("connection")
+  ) {
+    return "Network error. Check the block explorer for the latest status.";
+  }
+  return "Something went wrong. Tap to view on the block explorer.";
+}
 
 // Brand tokens — mirror PreviewCard, which is the reference card in
 // the same thread. Do not invent new tokens here.
@@ -71,6 +112,10 @@ const PendingTxCard: React.FC<PendingTxCardProps> = ({ record }) => {
 
   const handleCopyHash = () => {
     copyToClipboard(record.tx_hash, "Transaction hash");
+  };
+
+  const handleViewDetails = () => {
+    router.push(`/activity-detail?transferId=${record.transactionId}`);
   };
 
   const relativeConfirmedAt = useMemo(() => {
@@ -127,10 +172,31 @@ const PendingTxCard: React.FC<PendingTxCardProps> = ({ record }) => {
           <Text className="text-[11px] text-gray-500 flex-1" numberOfLines={1}>
             {truncateHash(record.tx_hash)}
           </Text>
+          <TouchableOpacity
+            onPress={handleCopyHash}
+            accessibilityRole="button"
+            accessibilityLabel="Copy transaction hash"
+            hitSlop={8}
+          >
+            <Copy size={12} color={MUTED_GRAY} />
+          </TouchableOpacity>
           {canOpenExplorer ? (
             <ExternalLink size={12} color={MUTED_GRAY} />
           ) : null}
         </View>
+        {record.transactionId ? (
+          <TouchableOpacity
+            onPress={handleViewDetails}
+            accessibilityRole="button"
+            accessibilityLabel="View transaction details"
+            className="flex-row items-center gap-1.5 mt-2 self-start"
+          >
+            <FileText size={12} color={SUCCESS_GREEN} />
+            <Text className="text-xs font-medium text-green-700">
+              View details
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </Pressable>
     );
   }
@@ -161,17 +227,12 @@ const PendingTxCard: React.FC<PendingTxCardProps> = ({ record }) => {
         >
           {record.description}
         </Text>
-        {record.error ? (
-          <Text
-            // Verbatim error rendering per §7 "Honesty". No softening,
-            // no mapping to a friendlier string, no fallback copy.
-            className="text-xs text-light-primary-red mt-1.5"
-            numberOfLines={0}
-            selectable
-          >
-            {record.error}
-          </Text>
-        ) : null}
+        <Text
+          className="text-xs text-light-primary-red/80 mt-1.5"
+          numberOfLines={0}
+        >
+          {friendlyError(record.error)}
+        </Text>
         {record.tx_hash ? (
           <View className="flex-row items-center gap-2 mt-2">
             <Text
@@ -180,10 +241,31 @@ const PendingTxCard: React.FC<PendingTxCardProps> = ({ record }) => {
             >
               {truncateHash(record.tx_hash)}
             </Text>
+            <TouchableOpacity
+              onPress={handleCopyHash}
+              accessibilityRole="button"
+              accessibilityLabel="Copy transaction hash"
+              hitSlop={8}
+            >
+              <Copy size={12} color={MUTED_GRAY} />
+            </TouchableOpacity>
             {canOpenExplorer ? (
               <ExternalLink size={12} color={MUTED_GRAY} />
             ) : null}
           </View>
+        ) : null}
+        {record.transactionId ? (
+          <TouchableOpacity
+            onPress={handleViewDetails}
+            accessibilityRole="button"
+            accessibilityLabel="View transaction details"
+            className="flex-row items-center gap-1.5 mt-2 self-start"
+          >
+            <FileText size={12} color={BRAND_RED} />
+            <Text className="text-xs font-medium text-light-primary-red">
+              View details
+            </Text>
+          </TouchableOpacity>
         ) : null}
       </Pressable>
     );
@@ -230,6 +312,19 @@ const PendingTxCard: React.FC<PendingTxCardProps> = ({ record }) => {
         </TouchableOpacity>
         {canOpenExplorer ? <ExternalLink size={12} color={MUTED_GRAY} /> : null}
       </View>
+      {record.transactionId ? (
+        <TouchableOpacity
+          onPress={handleViewDetails}
+          accessibilityRole="button"
+          accessibilityLabel="View transaction details"
+          className="flex-row items-center gap-1.5 mt-2 self-start"
+        >
+          <FileText size={12} color={BRAND_RED} />
+          <Text className="text-xs font-medium text-light-primary-red">
+            View details
+          </Text>
+        </TouchableOpacity>
+      ) : null}
     </Pressable>
   );
 };

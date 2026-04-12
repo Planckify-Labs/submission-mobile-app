@@ -199,9 +199,11 @@ async function runNonInteractive(
   // dispatcher. For write tools we drop a "submitted" card the moment
   // a hash comes back, and a "failed" card if the executor returned a
   // failure WITH a hash (reverted-but-submitted) so the UI can still
-  // surface the explorer link. The read-path (`get_transaction`) is
-  // responsible for the later submitted → confirmed / failed
-  // transition — see `services/agent-executors/reads.ts`.
+  // surface the explorer link.
+  //
+  // After a successful submission we also kick off a background receipt
+  // poller so the card auto-transitions to confirmed/failed without
+  // requiring the agent to call `get_transaction` explicitly.
   if (payload.meta.capability === "write" && result.tx_hash) {
     const chainIdRaw = payload.input.chain_id;
     const chainId = typeof chainIdRaw === "number" ? chainIdRaw : 0;
@@ -211,7 +213,20 @@ async function runNonInteractive(
       description: payload.meta.human_summary,
       state: result.status === "failed" ? "failed" : "submitted",
       error: result.status === "failed" ? result.error : undefined,
+      transactionId: result.transaction_id,
     });
+
+    if (result.status === "success") {
+      const txHash = result.tx_hash;
+      // Fire-and-forget — we do NOT await this. The poller updates the
+      // store via `markConfirmed` / `markFailed` as a side-effect;
+      // errors inside `pollReceipt` are swallowed there.
+      import("./receiptPoller.ts")
+        .then(({ pollReceipt }) => {
+          pollReceipt(txHash, chainId, session.executorContext).catch(() => {});
+        })
+        .catch(() => {});
+    }
   }
 
   try {

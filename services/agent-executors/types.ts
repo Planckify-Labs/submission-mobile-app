@@ -45,6 +45,14 @@ export interface ToolResult {
   tx_confirmed?: boolean;
   data?: unknown;
   error?: string;
+  /**
+   * Backend transaction record id created after a successful write.
+   * Present when the executor successfully called `transactionApi.createTransaction`
+   * (mirrors the send.tsx history-recording path). The dispatcher threads
+   * this into `pendingTxStore` so the PendingTxCard can link to the
+   * activity-detail screen.
+   */
+  transaction_id?: string;
 }
 
 /**

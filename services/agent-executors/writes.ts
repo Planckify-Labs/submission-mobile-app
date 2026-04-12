@@ -16,7 +16,9 @@
  * markers for what's still missing.
  */
 
-import { type Abi, erc20Abi } from "viem";
+import { type Abi, erc20Abi, parseUnits } from "viem";
+import { tokenApi } from "@/api/endpoints/tokens";
+import { transactionApi } from "@/api/endpoints/transactions";
 import { requireWalletClient, resolveChainClients } from "./chainRouter";
 import {
   ExecutorError,
@@ -28,6 +30,41 @@ import {
   resolveChainId,
   safeExecute,
 } from "./types";
+
+/**
+ * Resolve a token amount to a bigint, mirroring the `send.tsx` pattern:
+ *   parseUnits(amount, decimals)
+ *
+ * Accepts two input shapes so the LLM can avoid doing
+ * `amount × 10^decimals` arithmetic (which it gets wrong for non-18
+ * decimal tokens like IDRX with 2 decimals):
+ *
+ *   Preferred: { token_amount: "98000", token_decimals: 2 }
+ *              → parseUnits("98000", 2) = 9800000n
+ *
+ *   Fallback:  { amount_wei: "9800000" }
+ *              → BigInt("9800000")
+ *
+ * Both paths produce the same bigint — the preferred path is just more
+ * reliable because the LLM doesn't need to multiply.
+ */
+function resolveTokenAmount(input: Parameters<MobileToolExecutor>[0]): bigint {
+  if (
+    typeof input.token_amount === "string" &&
+    input.token_amount.length > 0 &&
+    typeof input.token_decimals === "number"
+  ) {
+    try {
+      return parseUnits(input.token_amount, input.token_decimals);
+    } catch {
+      throw new ExecutorError(
+        ExecutorErrorCode.InvalidInput,
+        `invalid token_amount "${input.token_amount}" with token_decimals ${input.token_decimals}`,
+      );
+    }
+  }
+  return requireBigInt(input, "amount_wei");
+}
 
 /**
  * `send_native_token` — transfer native gas token (ETH, MATIC, BNB…).
@@ -58,27 +95,51 @@ export const sendNativeToken: MobileToolExecutor = (input, context) =>
       value,
       chain: walletClient.chain,
     });
+
+    // Record transfer history — mirrors send.tsx native-token path.
+    // Failure here must NOT fail the executor; the tx is already on chain.
+    let transactionId: string | undefined;
+    try {
+      const blockchain = context.blockchains.find(
+        (b) => b.chainId === chainId && b.isEVM,
+      );
+      const nativeToken = blockchain?.tokens?.find((t) => t.isNativeCurrency);
+      if (nativeToken?.id) {
+        const record = await transactionApi.createTransaction({
+          tokenId: nativeToken.id,
+          type: "TRANSFER",
+          amount: value.toString(),
+          txHash: hash,
+          fromAddress: context.wallet.address,
+          toAddress: to,
+        });
+        transactionId = record?.id;
+      }
+    } catch (histErr) {
+      console.warn("[sendNativeToken] failed to record history:", histErr);
+    }
+
     return {
       status: "success",
       tx_hash: hash,
       tx_confirmed: false,
+      transaction_id: transactionId,
       data: { chain_id: chainId, to, value_wei: value.toString() },
-      // Keep publicClient reference live for engines that may tree-shake
-      // unused reads — also lets a caller optionally poll the receipt.
       ...(publicClient ? {} : {}),
     };
   });
 
 /**
  * `transfer_erc20` — call `ERC20.transfer(to, amount)`.
- * Server input: `{ chain_id, token_address, to, amount_wei }`.
+ * Server input: `{ chain_id, contract_address, to, token_amount, token_decimals }`
+ * or legacy: `{ chain_id, contract_address, to, amount_wei }`.
  */
 export const transferErc20: MobileToolExecutor = (input, context) =>
   safeExecute(async () => {
     const chainId = resolveChainId(input, context);
-    const tokenAddress = requireAddress(input, "token_address");
+    const tokenAddress = requireAddress(input, "contract_address");
     const to = requireAddress(input, "to");
-    const amount = requireBigInt(input, "amount_wei");
+    const amount = resolveTokenAmount(input);
 
     const walletClient = requireWalletClient(chainId, context);
     const account = walletClient.account;
@@ -97,13 +158,46 @@ export const transferErc20: MobileToolExecutor = (input, context) =>
       functionName: "transfer",
       args: [to, amount],
     });
+
+    // Record transfer history — mirrors send.tsx ERC20 path.
+    // Uses tokenApi.searchTokens to resolve tokenId from contractAddress +
+    // blockchainId, exactly as useCreateTransaction does in the hook.
+    // Failure must NOT fail the executor; the tx is already on chain.
+    let transactionId: string | undefined;
+    try {
+      const blockchain = context.blockchains.find(
+        (b) => b.chainId === chainId && b.isEVM,
+      );
+      if (blockchain) {
+        const tokens = await tokenApi.searchTokens({
+          contractAddress: tokenAddress,
+          blockchainId: blockchain.id,
+        });
+        const tokenId = tokens?.[0]?.id;
+        if (tokenId) {
+          const record = await transactionApi.createTransaction({
+            tokenId,
+            type: "TRANSFER",
+            amount: amount.toString(),
+            txHash: hash,
+            fromAddress: context.wallet.address,
+            toAddress: to,
+          });
+          transactionId = record?.id;
+        }
+      }
+    } catch (histErr) {
+      console.warn("[transferErc20] failed to record history:", histErr);
+    }
+
     return {
       status: "success",
       tx_hash: hash,
       tx_confirmed: false,
+      transaction_id: transactionId,
       data: {
         chain_id: chainId,
-        token_address: tokenAddress,
+        contract_address: tokenAddress,
         to,
         amount_wei: amount.toString(),
       },
@@ -163,7 +257,8 @@ export const writeContract: MobileToolExecutor = (input, context) =>
 
 /**
  * `approve_erc20` — call `ERC20.approve(spender, amount)`.
- * Server input: `{ chain_id, token_address, spender, amount_wei }`.
+ * Server input: `{ chain_id, contract_address, spender, token_amount, token_decimals }`
+ * or legacy: `{ chain_id, contract_address, spender, amount_wei }`.
  *
  * NOTE: the spec specifically calls out that mobile should show an
  * extra "infinite allowance" warning before approving this — that UI
@@ -173,9 +268,9 @@ export const writeContract: MobileToolExecutor = (input, context) =>
 export const approveErc20: MobileToolExecutor = (input, context) =>
   safeExecute(async () => {
     const chainId = resolveChainId(input, context);
-    const tokenAddress = requireAddress(input, "token_address");
+    const tokenAddress = requireAddress(input, "contract_address");
     const spender = requireAddress(input, "spender");
-    const amount = requireBigInt(input, "amount_wei");
+    const amount = resolveTokenAmount(input);
 
     const walletClient = requireWalletClient(chainId, context);
     const account = walletClient.account;

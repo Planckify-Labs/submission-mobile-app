@@ -13,14 +13,15 @@
  * the gate that catches drift.
  *
  * Tool names enumerated from
- *   takumi-agent-api/src/tools/registry.ts @ 2026-04-11
- * (15 tools total — if you add more on the server, grep for
+ *   takumi-agent-api/src/tools/registry.ts @ 2026-04-12
+ * (28 tools total — if you add more on the server, grep for
  * `executor: 'mobile'` there and update both sides together).
  */
 
 export * from "./chainRouter";
 export * from "./types";
 
+import { ADDRESS_BOOK_EXECUTORS } from "./addressBook";
 import { POINTS_EXECUTORS } from "./points";
 import { READ_EXECUTORS } from "./reads";
 import { SIMULATE_EXECUTORS } from "./simulate";
@@ -43,6 +44,7 @@ export const EXECUTORS: Record<string, MobileToolExecutor> = {
   ...SIMULATE_EXECUTORS,
   ...WRITE_EXECUTORS,
   ...POINTS_EXECUTORS,
+  ...ADDRESS_BOOK_EXECUTORS,
 };
 
 /**
@@ -87,6 +89,10 @@ export const EXPECTED_MOBILE_TOOLS: ReadonlyArray<string> = [
   "execute_redemption",
   // points simulate — SIWE login flow (task 17)
   "request_authentication",
+  // address book reads
+  "get_address_book",
+  "get_address_book_entry",
+  "search_address_book",
 ];
 
 /**

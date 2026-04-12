@@ -146,6 +146,8 @@ export interface ToolResult {
   tx_confirmed?: boolean;
   data?: unknown;
   error?: string;
+  /** Backend transaction record id, set when the executor recorded history. */
+  transaction_id?: string;
 }
 
 /**

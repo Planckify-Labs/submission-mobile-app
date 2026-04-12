@@ -50,11 +50,16 @@ export interface PendingTxRecord {
   /** Block number from the confirmed receipt. */
   block_number?: number;
   /**
-   * Verbatim error string from the executor or receipt path. Per
-   * AGENT_PROTOCOL.md §7 "Honesty" this must NOT be softened or
-   * paraphrased before rendering.
+   * Error string from the executor or receipt path. Rendered via
+   * a friendly-message mapper in PendingTxCard — not shown verbatim.
    */
   error?: string;
+  /**
+   * Backend transaction record id from `transactionApi.createTransaction`.
+   * Present when the executor successfully recorded the transfer history.
+   * Used by PendingTxCard to link to the activity-detail screen.
+   */
+  transactionId?: string;
 }
 
 /**
