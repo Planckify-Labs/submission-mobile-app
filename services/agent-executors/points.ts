@@ -53,6 +53,7 @@ import { smartContractApi } from "@/api/endpoints/smart-contracts";
 import type { TProductInputField } from "@/api/types/product";
 import AbiTakumiPointDeposit from "@/contracts/abis/AbiTakumiPointDeposit";
 import { requireWalletClient, resolveChainClients } from "./chainRouter";
+import { loadCachedTokens } from "./reads";
 import {
   ExecutorError,
   ExecutorErrorCode,
@@ -520,9 +521,29 @@ export const depositPoints: MobileToolExecutor = (input, context) =>
         `chain_id ${chainId} is not supported by this wallet`,
       );
     }
-    const token = blockchain.tokens?.find(
+    // blockchain.tokens only contains the native currency (eagerly
+    // loaded from /blockchains). ERC20 tokens like stablecoins live in
+    // the MMKV-cached token list — same cache the wallet's Send and
+    // Deposit screens use via useTokens.
+    let token = blockchain.tokens?.find(
       (t) => t.symbol.toLowerCase() === tokenSymbol.toLowerCase(),
     );
+    if (!token || !token.contractAddress) {
+      // Fall back to the full cached token list (same source
+      // get_wallet_tokens uses) to find ERC20 stablecoins.
+      try {
+        const allTokens = await loadCachedTokens();
+        token = allTokens.find(
+          (t) =>
+            t.blockchainId === blockchain.id &&
+            t.isActive !== false &&
+            t.symbol.toLowerCase() === tokenSymbol.toLowerCase() &&
+            !!t.contractAddress,
+        );
+      } catch {
+        // Cache unavailable — fall through to the error below.
+      }
+    }
     if (!token || !token.contractAddress) {
       return { status: "failed", error: "product_unavailable" };
     }

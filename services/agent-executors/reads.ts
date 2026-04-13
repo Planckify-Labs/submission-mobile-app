@@ -314,6 +314,7 @@ export const getSupportedChains: MobileToolExecutor = (_input, context) =>
  * balance fetch only have one code path.
  */
 interface NormalizedToken {
+  token_id?: string;
   symbol: string;
   name: string;
   address: `0x${string}`;
@@ -321,6 +322,7 @@ interface NormalizedToken {
   is_native: boolean;
   is_stable_coin: boolean;
   logo_url?: string;
+  pegged_currency?: string;
 }
 
 const ZERO_ADDRESS =
@@ -370,7 +372,7 @@ const TOKEN_STORAGE_KEY = "cached_tokens";
 const TOKEN_TIMESTAMP_KEY = "cached_tokens_timestamp";
 const TOKEN_STALE_TIME = 5 * 60 * 1000; // 5 min — mirrors useTokens
 
-async function loadCachedTokens(): Promise<TToken[]> {
+export async function loadCachedTokens(): Promise<TToken[]> {
   const cachedRaw = storage.getString(TOKEN_STORAGE_KEY);
   const timestampStr = storage.getString(TOKEN_TIMESTAMP_KEY);
   const now = Date.now();
@@ -491,6 +493,7 @@ async function scanChainTokens(
 
   // ---- Normalize + optionally prepend native -----------------------
   let tokens: NormalizedToken[] = erc20Rows.map((t) => ({
+    token_id: t.id,
     symbol: t.symbol,
     name: t.name,
     address: (t.contractAddress || ZERO_ADDRESS) as `0x${string}`,
@@ -498,6 +501,7 @@ async function scanChainTokens(
     is_native: false,
     is_stable_coin: t.isStablecoin ?? false,
     logo_url: t.logoUrl || undefined,
+    pegged_currency: t.peggedCurrency ?? undefined,
   }));
 
   if (includeNative) {
@@ -576,6 +580,7 @@ async function scanChainTokens(
       }
 
       return {
+        ...(token.token_id !== undefined ? { token_id: token.token_id } : {}),
         symbol: token.symbol,
         name: token.name,
         address: token.address,
@@ -583,6 +588,9 @@ async function scanChainTokens(
         is_native: token.is_native,
         is_stable_coin: token.is_stable_coin,
         ...(token.logo_url !== undefined ? { logo_url: token.logo_url } : {}),
+        ...(token.pegged_currency !== undefined
+          ? { pegged_currency: token.pegged_currency }
+          : {}),
         ...(balance_wei !== undefined ? { balance_wei } : {}),
         ...(balance_display !== undefined ? { balance_display } : {}),
       };
