@@ -1,9 +1,8 @@
 import { FlashList } from "@shopify/flash-list";
 import React, { useMemo } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-
-import { useAddressBook } from "@/hooks/useAddressBook";
 import { useRecommendations } from "@/hooks/queries/useProducts";
+import { useAddressBook } from "@/hooks/useAddressBook";
 
 export interface QuickPromptsProps {
   onSelectPrompt: (prompt: string) => void;
@@ -22,11 +21,21 @@ export default function QuickPrompts({ onSelectPrompt }: QuickPromptsProps) {
       : null;
 
     const transferPrompt = latestContact
-      ? [{ id: "transfer-1", prompt: `Transfer USDT to ${latestContact.label}` }]
+      ? [
+          {
+            id: "transfer-1",
+            prompt: `Transfer USDT to ${latestContact.label}`,
+          },
+        ]
       : [];
 
     const redeemPrompt = recommendations?.[0]
-      ? [{ id: "redeem-1", prompt: `Redeem ${recommendations[0].name} with my points` }]
+      ? [
+          {
+            id: "redeem-1",
+            prompt: `Redeem ${recommendations[0].name} with my points`,
+          },
+        ]
       : [];
 
     const staticPrompts = [

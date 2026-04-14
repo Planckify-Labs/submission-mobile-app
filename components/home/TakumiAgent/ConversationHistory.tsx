@@ -23,12 +23,12 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import OptimizedImage from "@/components/common/OptimizedImage";
+import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import {
   useConversationList,
   useDeleteConversation,
 } from "@/hooks/queries/useConversations";
-import OptimizedImage from "@/components/common/OptimizedImage";
-import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { useWallet } from "@/hooks/useWallet";
@@ -186,7 +186,7 @@ export default function ConversationHistory({
   ).current;
 
   const handleWalletSwitch = (index: number) => {
-    setActiveWallet(index);
+    setActiveWallet(index, { source: "agent" });
     setShowWalletSelector(false);
   };
 
@@ -271,7 +271,9 @@ export default function ConversationHistory({
               </View>
             ) : (
               <View className="items-center py-8">
-                <Text className="text-sm text-gray-400">No conversations yet</Text>
+                <Text className="text-sm text-gray-400">
+                  No conversations yet
+                </Text>
               </View>
             )
           }

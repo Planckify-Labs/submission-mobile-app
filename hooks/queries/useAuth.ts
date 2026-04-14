@@ -3,6 +3,10 @@ import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { publicApi, reset401Guard } from "@/constants/configs/ky";
 import { useWallet } from "@/hooks/useWallet";
+import { clearChatStateForWallet } from "@/lib/storage/chatKeys";
+import { storage } from "@/lib/storage/mmkv";
+import { activeConvRegistry } from "@/services/activeConvRegistry";
+import { pendingTxStore } from "@/services/pendingTxStore";
 
 interface TNonceResponse {
   nonce: string;
@@ -428,10 +432,29 @@ export const useIsAuthenticated = () => {
     checkAuthentication();
   }, [activeWallet?.address]);
 
+  const queryClient = useQueryClient();
   const logout = useCallback(async () => {
     await clearTokens();
+    // Drop in-memory pending-tx cards so a subsequent sign-in can't see
+    // the previous user's in-flight transaction hashes.
+    pendingTxStore.clear();
+    // Drop the in-memory active-conversation registry for the same
+    // reason — a re-login (different user, same device) must start
+    // from nothing.
+    activeConvRegistry.clearAll();
+    // Purge this wallet's chat caches (list + active pointer + every
+    // cached conversation) so no messages from the signed-out session
+    // remain on disk.
+    const addr = activeWallet?.address;
+    if (addr) {
+      clearChatStateForWallet(storage, addr);
+    }
+    // Evict the TanStack Query cache for conversations — otherwise the
+    // old wallet's list stays in memory and leaks into the next
+    // authenticated session.
+    queryClient.removeQueries({ queryKey: ["conversations"] });
     setIsAuthenticated(false);
-  }, []);
+  }, [activeWallet?.address, queryClient]);
 
   return {
     isAuthenticated,

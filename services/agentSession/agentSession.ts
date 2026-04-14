@@ -76,7 +76,10 @@ export interface AgentSessionUIBindings {
   ) => void;
   showToolExecuted?: (payload: ToolExecutedPayload) => void;
   showError?: (message: string, retryable: boolean) => void;
-  done?: (meta?: { conversation_id: string; conversation_title: string }) => void;
+  done?: (meta?: {
+    conversation_id: string;
+    conversation_title: string;
+  }) => void;
   onReconnecting?: (attempt: number, delayMs: number) => void;
   onSessionIdChanged?: (sessionId: string) => void;
 }
@@ -355,8 +358,8 @@ function handleDone(data: DonePayload, session: AgentSession): void {
             conversation_id: data.conversation_id,
             conversation_title: data.conversation_title,
           }
-        : undefined
-    session.ui.done?.(meta)
+        : undefined;
+    session.ui.done?.(meta);
   } catch (err) {
     console.warn(`[agentSession] done handler threw: ${String(err)}`);
   }

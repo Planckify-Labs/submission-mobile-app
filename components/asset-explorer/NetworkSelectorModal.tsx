@@ -218,10 +218,11 @@ const NetworkSelectorModal = () => {
                     displayNetworks.map((item) => (
                       <Pressable
                         key={item.id}
-                        className={`flex-row items-center p-3.5 mb-3 rounded-xl ${activeNetwork === item.id
-                          ? "bg-light-primary-red/10"
-                          : "bg-light"
-                          }`}
+                        className={`flex-row items-center p-3.5 mb-3 rounded-xl ${
+                          activeNetwork === item.id
+                            ? "bg-light-primary-red/10"
+                            : "bg-light"
+                        }`}
                         onPress={() => {
                           selectNetwork(item.id, item.blockchainId);
                           handleClose();

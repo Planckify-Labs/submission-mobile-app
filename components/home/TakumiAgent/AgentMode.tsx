@@ -1,6 +1,6 @@
 import { FlashList, ListRenderItemInfo } from "@shopify/flash-list";
-import { BlurView } from "expo-blur";
 import { useQueryClient } from "@tanstack/react-query";
+import { BlurView } from "expo-blur";
 import { AlertTriangle, RotateCcw, SquarePen } from "lucide-react-native";
 import React, {
   useCallback,
@@ -22,23 +22,25 @@ import {
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import type { ConversationSummary } from "@/api/conversations.types";
 import ApprovalSheet, {
   buildGrantOptions,
   type GrantChoice,
   specialWarning,
 } from "@/components/agent/ApprovalSheet";
-import { useAgentOnboarding } from "@/hooks/useAgentOnboarding";
-import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
-import { usePendingTxCards } from "@/hooks/usePendingTxCards";
-import { pendingTxStore } from "@/services/pendingTxStore";
-import { useWallet } from "@/hooks/useWallet";
 import type {
   ConversationCache,
   ConversationListCache,
   StoredMessage,
 } from "@/hooks/queries/useConversations";
-import type { ConversationSummary } from "@/api/conversations.types";
+import { useAgentBusyPublisher } from "@/hooks/useAgentBusy";
+import { useAgentOnboarding } from "@/hooks/useAgentOnboarding";
+import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
+import { usePendingTxCards } from "@/hooks/usePendingTxCards";
+import { useWallet } from "@/hooks/useWallet";
+import { chatConvKey, chatListKey } from "@/lib/storage/chatKeys";
 import { storage } from "@/lib/storage/mmkv";
+import { activeConvRegistry } from "@/services/activeConvRegistry";
 import {
   assertRegistryParity,
   type ExecutorContext,
@@ -51,6 +53,7 @@ import {
   type ToolPendingPayload,
   type WalletContext,
 } from "@/services/agentSession";
+import { pendingTxStore } from "@/services/pendingTxStore";
 import { PermissionGrantStore } from "@/services/permissionGrantStore";
 import {
   type ConnectedWallet,
@@ -101,7 +104,8 @@ function toStoredMessage(msg: ChatMessage): StoredMessage {
 function fromStoredMessage(msg: StoredMessage): ChatMessage {
   return {
     id: genId(),
-    role: msg.role === "tool" ? "assistant" : (msg.role as "user" | "assistant"),
+    role:
+      msg.role === "tool" ? "assistant" : (msg.role as "user" | "assistant"),
     text: msg.content,
   };
 }
@@ -159,7 +163,9 @@ export default function AgentMode() {
   );
 
   // ── Conversation persistence state (task 10) ─────────────────────
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<
+    string | null
+  >(null);
   const queryClient = useQueryClient();
 
   // ── Refs used by the session (outside React render tree) ──────────
@@ -173,6 +179,17 @@ export default function AgentMode() {
     address: `0x${string}`;
     store: PermissionGrantStore;
   } | null>(null);
+  // Mirrors of preview/approval state so `sendTextMessage` and the
+  // cross-screen cancel handler can read the latest value without
+  // re-creating their useCallback on every state change.
+  const inlinePreviewRef = useRef<InlinePreview | null>(null);
+  const approvalStateRef = useRef<ApprovalState | null>(null);
+  useEffect(() => {
+    inlinePreviewRef.current = inlinePreview;
+  }, [inlinePreview]);
+  useEffect(() => {
+    approvalStateRef.current = approvalState;
+  }, [approvalState]);
 
   // Mirror of `messages` state for use inside memoized callbacks (task 10)
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -275,7 +292,9 @@ export default function AgentMode() {
   // ── Auto-scroll state ───────────────────────────────────────────
   const autoScrollEnabledRef = useRef(true);
   const userScrollCountRef = useRef(0);
-  const scrollInactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollInactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const resetAutoScroll = useCallback(() => {
     autoScrollEnabledRef.current = true;
@@ -311,7 +330,7 @@ export default function AgentMode() {
       }, 50);
       return () => clearTimeout(timeout);
     }
-  }, [messages, isStreaming, currentStatus, inlinePreview]);
+  }, [messages]);
 
   // Cleanup inactivity timer on unmount
   useEffect(() => {
@@ -335,6 +354,151 @@ export default function AgentMode() {
       activeSessionRef.current = null;
     };
   }, []);
+
+  // Shared "reject any open preview/approval" step — the callbacks
+  // post a typed `user_declined` to the server via a fresh fetch
+  // (independent of SSE) so the conversation history records the
+  // cancellation cleanly even after we close the stream.
+  const rejectOpenPrompts = useCallback(() => {
+    const stalePreview = inlinePreviewRef.current;
+    const staleApproval = approvalStateRef.current;
+    if (stalePreview) {
+      try {
+        stalePreview.onDismiss();
+      } catch (err) {
+        console.warn("[AgentMode] preview dismiss threw", err);
+      }
+    }
+    if (staleApproval) {
+      try {
+        staleApproval.onReject();
+      } catch (err) {
+        console.warn("[AgentMode] approval reject threw", err);
+      }
+    }
+  }, []);
+
+  // SOFT stop — used by the chat "stop" button. Closes the current
+  // turn but preserves the conversation so the user can keep chatting:
+  //   • messages stay rendered (including the partial assistant reply)
+  //   • activeConversationId stays so the next send continues the
+  //     same server-side thread
+  //   • sessionIdRef stays so "Try again" still works
+  //   • pendingTxStore stays so an already-broadcast tx remains
+  //     visible on its explorer card
+  // What we DO clear: the SSE stream, streaming flags, any open
+  // preview/approval (rejected as user_declined).
+  const stopAgent = useCallback(() => {
+    rejectOpenPrompts();
+    activeSessionRef.current?.stop();
+    activeSessionRef.current = null;
+    setCurrentStatus(null);
+    setInlinePreview(null);
+    setApprovalState(null);
+    setIsStreaming(false);
+  }, [rejectOpenPrompts]);
+
+  // HARD reset — used by the "New conversation" button, the
+  // wallet-change effect, and the cross-screen "Cancel task & switch"
+  // dialog. Drops every piece of chat state so the next send starts a
+  // fresh server-side conversation with no carry-over.
+  const hardResetAgent = useCallback(() => {
+    rejectOpenPrompts();
+    activeSessionRef.current?.stop();
+    activeSessionRef.current = null;
+    sessionIdRef.current = null;
+    currentAssistantIdRef.current = null;
+    lastUserMessageRef.current = "";
+    pendingTxStore.clear();
+    setMessages([]);
+    setCurrentStatus(null);
+    setInlinePreview(null);
+    setApprovalState(null);
+    setIsStreaming(false);
+    setRetryableError(null);
+    setNonRetryableError(null);
+    setActiveConversationId(null);
+  }, [rejectOpenPrompts]);
+
+  // ── Busy state publisher + cancel-handler registration ───────────
+  // Exposes the agent's busy state globally so the wallet / chain
+  // switchers (and anything else) can gate destructive actions with a
+  // dialog. `cancelHandler` is a stable ref so publishing doesn't
+  // churn when callers only care that `isBusy` flipped.
+  const busy = useAgentBusyPublisher();
+  const cancelHandlerRef = useRef<() => void>(() => hardResetAgent());
+  useEffect(() => {
+    cancelHandlerRef.current = () => hardResetAgent();
+  }, [hardResetAgent]);
+
+  useEffect(() => {
+    const reason = isStreaming
+      ? "thinking"
+      : approvalState
+        ? "awaiting_approval"
+        : inlinePreview
+          ? "awaiting_preview"
+          : null;
+    busy.publish({
+      isBusy: reason !== null,
+      reason,
+      cancelHandler: reason !== null ? () => cancelHandlerRef.current() : null,
+    });
+  }, [isStreaming, approvalState, inlinePreview, busy]);
+
+  // Publish `hasActiveChat` separately — it changes on message append
+  // (every streaming delta), so colocating it with the busy-reason
+  // effect would cause extra writes for no behavioural benefit. The
+  // soft wallet-switch dialog reads this to decide whether switching
+  // is disruptive enough to warrant a confirmation prompt.
+  useEffect(() => {
+    const hasActiveChat = messages.length > 0 || activeConversationId !== null;
+    busy.publish({ hasActiveChat });
+  }, [messages.length, activeConversationId, busy]);
+
+  // On unmount, drop the busy snapshot so other screens don't think a
+  // vanished session is still running.
+  useEffect(() => {
+    return () => busy.reset();
+  }, [busy]);
+
+  // ── Per-wallet partitioning ──────────────────────────────────────
+  // When the active wallet changes, the previous wallet's chat state
+  // (messages, activeConversationId, pending approvals, pendingTx
+  // cards) must NOT remain in memory — they were produced with a
+  // different signer, a different points-auth JWT, and potentially a
+  // different chain. After clearing, re-hydrate from the new wallet's
+  // scoped MMKV entries so toggling between wallets feels like
+  // switching tabs rather than losing work.
+  const hydratedWalletRef = useRef<string | null>(null);
+  useEffect(() => {
+    const addr = activeWallet?.address as `0x${string}` | undefined;
+    if (!addr) {
+      hydratedWalletRef.current = null;
+      return;
+    }
+    const normalized = addr.toLowerCase();
+    if (hydratedWalletRef.current === normalized) return;
+    hydratedWalletRef.current = normalized;
+
+    hardResetAgent();
+
+    // Read the last active conversation from the in-memory registry
+    // (NOT from MMKV). This is intentional — on cold start the
+    // registry is empty, so the user gets a fresh chat. Only
+    // in-session wallet toggles hydrate a prior thread here.
+    const lastActive = activeConvRegistry.get(addr);
+    if (!lastActive) return;
+    const cached = storage.getString(chatConvKey(addr, lastActive));
+    if (!cached) return;
+    try {
+      const conv = JSON.parse(cached) as ConversationCache;
+      setMessages(conv.messages.map(fromStoredMessage));
+      setActiveConversationId(lastActive);
+    } catch (err) {
+      console.warn("[AgentMode] failed to hydrate wallet chat cache", err);
+    }
+  }, [activeWallet?.address, hardResetAgent]);
 
   const handleScrollToChat = useCallback(() => {
     scrollViewRef.current?.scrollTo({ x: screenWidth, animated: true });
@@ -362,7 +526,10 @@ export default function AgentMode() {
       setIsStreaming(false);
       pendingTxStore.clear();
 
-      const cached = storage.getString(`chat:conv:${conversationId}`);
+      const walletAddress = activeWallet?.address as `0x${string}` | undefined;
+      const cached = walletAddress
+        ? storage.getString(chatConvKey(walletAddress, conversationId))
+        : null;
       if (cached) {
         const conv = JSON.parse(cached) as ConversationCache;
         setMessages(conv.messages.map(fromStoredMessage));
@@ -371,9 +538,12 @@ export default function AgentMode() {
       }
 
       setActiveConversationId(conversationId);
+      if (walletAddress) {
+        activeConvRegistry.set(walletAddress, conversationId);
+      }
       handleScrollToChat();
     },
-    [handleScrollToChat],
+    [handleScrollToChat, activeWallet?.address],
   );
 
   // ── UI bindings the session dispatches into ──────────────────────
@@ -482,10 +652,19 @@ export default function AgentMode() {
           messages: messagesRef.current.map(toStoredMessage),
           cached_at: Date.now(),
         };
-        storage.set(`chat:conv:${convId}`, JSON.stringify(convCache));
+        storage.set(
+          chatConvKey(walletAddress, convId),
+          JSON.stringify(convCache),
+        );
+        activeConvRegistry.set(walletAddress, convId);
 
-        // 2. Upsert summary into list cache
-        const listKey = `chat:list:${walletAddress}`;
+        // 2. Upsert summary into list cache. Must go through
+        // `chatListKey()` so the write matches `useConversationList`'s
+        // read — the helper lowercases the address; a raw
+        // `chat:list:${walletAddress}` write would land at a
+        // checksum-cased key the reader never looks at, silently
+        // dropping the most-recent turn from the history panel.
+        const listKey = chatListKey(walletAddress);
         const listRaw = storage.getString(listKey);
         const list: ConversationListCache = listRaw
           ? JSON.parse(listRaw)
@@ -503,7 +682,10 @@ export default function AgentMode() {
               : new Date().toISOString(),
           updated_at: new Date().toISOString(),
           message_count: messagesRef.current.length,
-          last_message_preview: getLastAssistantText(messagesRef.current).slice(0, 120),
+          last_message_preview: getLastAssistantText(messagesRef.current).slice(
+            0,
+            120,
+          ),
         };
 
         if (existingIdx >= 0) list.items[existingIdx] = summary;
@@ -512,11 +694,41 @@ export default function AgentMode() {
         list.cached_at = Date.now();
         storage.set(listKey, JSON.stringify(list));
 
-        // 3. Keep activeConversationId in sync for the next turn
+        // 3. Optimistically seed the TanStack Query cache so the
+        // history panel updates in the same tick the turn completes —
+        // not on the next server round-trip. Mirrors the pattern used
+        // by `useDeleteConversation` / `useRenameConversation`. Without
+        // this, the placeholderData path is only consulted when the
+        // query has no data yet; once the server list is cached, fresh
+        // MMKV writes are ignored until `invalidateQueries` refetches.
+        queryClient.setQueryData<ConversationListCache>(
+          ["conversations", walletAddress],
+          (old) => {
+            const base =
+              old ??
+              ({
+                items: [],
+                next_cursor: null,
+                cached_at: 0,
+              } as ConversationListCache);
+            const idx = base.items.findIndex((c) => c.id === convId);
+            const nextItems =
+              idx >= 0
+                ? base.items.map((c) => (c.id === convId ? summary : c))
+                : [summary, ...base.items];
+            return { ...base, items: nextItems, cached_at: Date.now() };
+          },
+        );
+
+        // 4. Keep activeConversationId in sync for the next turn
         setActiveConversationId(convId);
 
-        // 4. Invalidate TanStack Query for background server sync
-        queryClient.invalidateQueries({ queryKey: ["conversations", walletAddress] });
+        // 5. Invalidate TanStack Query for background server sync —
+        // server is the source of truth; the optimistic row above is
+        // replaced by the canonical one on the next refetch.
+        queryClient.invalidateQueries({
+          queryKey: ["conversations", walletAddress],
+        });
       },
       onReconnecting: (attempt) => {
         setCurrentStatus(`Reconnecting… (attempt ${attempt})`);
@@ -565,6 +777,31 @@ export default function AgentMode() {
       }
       lastSendTimeRef.current = now;
 
+      // Dismiss any stale preview / approval from a prior turn BEFORE
+      // opening a new stream. These hold callbacks bound to the
+      // about-to-be-stopped session; leaving them rendered lets the
+      // user tap "Approve" on a stale card and trigger an executor the
+      // new turn did not authorize. Invoking the wrapped onReject /
+      // onDismiss both nulls the React state AND posts a typed
+      // `user_declined` to the server so conversation history stays
+      // clean.
+      const stalePreview = inlinePreviewRef.current;
+      const staleApproval = approvalStateRef.current;
+      if (stalePreview) {
+        try {
+          stalePreview.onDismiss();
+        } catch (err) {
+          console.warn("[AgentMode] stale preview dismiss threw", err);
+        }
+      }
+      if (staleApproval) {
+        try {
+          staleApproval.onReject();
+        } catch (err) {
+          console.warn("[AgentMode] stale approval reject threw", err);
+        }
+      }
+
       // Close any prior session first — a new turn opens its own stream.
       activeSessionRef.current?.stop();
       activeSessionRef.current = null;
@@ -588,6 +825,8 @@ export default function AgentMode() {
       };
       currentAssistantIdRef.current = assistantMessage.id;
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
+      setInlinePreview(null);
+      setApprovalState(null);
       setIsStreaming(true);
       setCurrentStatus("Thinking…");
       resetAutoScroll();
@@ -613,7 +852,10 @@ export default function AgentMode() {
         // Stale conversation_id — the server no longer has this conversation
         // (e.g. after a restart). Clear it and retry transparently so the
         // user never sees an error for something they didn't cause.
-        if (String(sendError).includes("conversation_not_found") && activeConversationId) {
+        if (
+          String(sendError).includes("conversation_not_found") &&
+          activeConversationId
+        ) {
           setActiveConversationId(null);
           const retrySessionId = genId();
           sessionIdRef.current = retrySessionId;
@@ -630,7 +872,10 @@ export default function AgentMode() {
           try {
             await retrySession.start();
           } catch (retryError) {
-            console.error("[AgentMode] Retry after conversation_not_found failed", retryError);
+            console.error(
+              "[AgentMode] Retry after conversation_not_found failed",
+              retryError,
+            );
             setIsStreaming(false);
             setCurrentStatus(null);
           }
@@ -667,23 +912,15 @@ export default function AgentMode() {
     [sendTextMessage],
   );
 
-  // Reset conversation — new session id on next send.
+  // Reset conversation — new session id on next send. Also drops
+  // the in-memory active-conversation pointer so a subsequent wallet
+  // toggle doesn't silently rehydrate the thread the user just
+  // abandoned.
   const handleNewConversation = useCallback(() => {
-    activeSessionRef.current?.stop();
-    activeSessionRef.current = null;
-    sessionIdRef.current = null;
-    currentAssistantIdRef.current = null;
-    lastUserMessageRef.current = "";
-    setMessages([]);
-    setCurrentStatus(null);
-    setInlinePreview(null);
-    setApprovalState(null);
-    setIsStreaming(false);
-    setRetryableError(null);
-    setNonRetryableError(null);
-    setActiveConversationId(null);
-    pendingTxStore.clear();
-  }, []);
+    const addr = activeWallet?.address as `0x${string}` | undefined;
+    if (addr) activeConvRegistry.clear(addr);
+    hardResetAgent();
+  }, [activeWallet?.address, hardResetAgent]);
 
   // §10 — "Try again" handler. Re-issues the last user turn on the
   // *same* session_id (sessionIdRef stays intact across retries) so
@@ -910,146 +1147,147 @@ export default function AgentMode() {
 
   return (
     <GestureHandlerRootView className="flex-1">
-    <KeyboardProvider>
-      <ScrollView
-        ref={scrollViewRef}
-        horizontal
-        pagingEnabled
-        scrollEventThrottle={16}
-        showsHorizontalScrollIndicator={false}
-        className="flex-1 bg-light-main-container"
-      >
-        <View style={{ width: screenWidth }}>
-          <ConversationHistory
-            onScrollToChat={handleScrollToChat}
-            onResumeConversation={resumeConversation}
-          />
-        </View>
-
-        <View
-          style={{ width: screenWidth }}
-          className="flex-1 bg-light-main-container relative"
+      <KeyboardProvider>
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          pagingEnabled
+          scrollEventThrottle={16}
+          showsHorizontalScrollIndicator={false}
+          className="flex-1 bg-light-main-container"
         >
-          <View className="flex-row justify-between z-50 px-4 absolute top-0 left-0 w-full">
-            <BlurView
-              intensity={20}
-              experimentalBlurMethod="dimezisBlurView"
-              className="overflow-hidden rounded-full"
-            >
-              <Animated.View
-                style={{ opacity: blurViewOpacity }}
-                className="absolute bg-light w-full h-full left-0 right-0 rounded-full"
-              >
-                <View />
-              </Animated.View>
-              <TouchableOpacity
-                onPress={handleScrollToHistory}
-                className="p-4 aspect-square rounded-full gap-[4px] relative w-[38px]"
-              >
-                <View className="border border-light-primary-red w-[15px] absolute top-[15px] rounded-full left-[12px]" />
-                <View className="border border-light-primary-red w-[10px] absolute top-[21px] rounded-full left-[12px]" />
-              </TouchableOpacity>
-            </BlurView>
-            <BlurView
-              intensity={20}
-              experimentalBlurMethod="dimezisBlurView"
-              className="overflow-hidden rounded-full"
-            >
-              <Animated.View
-                style={{
-                  opacity: blurViewOpacity,
-                }}
-                className="absolute bg-white w-full h-full left-0 right-0 rounded-full"
-              >
-                <View />
-              </Animated.View>
-              <View className="px-4 pt-3 rounded-full">
-                <Text className="font-semibold text-light-matte-black/80">
-                  Takumi Agent
-                </Text>
-              </View>
-            </BlurView>
-            <BlurView
-              intensity={20}
-              experimentalBlurMethod="dimezisBlurView"
-              className="overflow-hidden rounded-full"
-            >
-              <Animated.View
-                style={{
-                  opacity: blurViewOpacity,
-                }}
-                className="absolute bg-light w-full h-full left-0 right-0 rounded-full"
-              >
-                <View />
-              </Animated.View>
-              <TouchableOpacity
-                onPress={handleNewConversation}
-                className="p-[10px] rounded-full"
-              >
-                <SquarePen size={20} color="#c71c4b" />
-              </TouchableOpacity>
-            </BlurView>
-          </View>
-
-          <View className="flex-1">
-            <View className="flex-1 px-4">
-              <FlashList
-                ref={chatListRef}
-                data={chatMessages}
-                renderItem={renderChatMessage}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={chatContentContainerStyle as ViewStyle}
-                showsVerticalScrollIndicator={false}
-                onScroll={Animated.event(
-                  [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                  { useNativeDriver: false },
-                )}
-                onScrollBeginDrag={handleUserScrollBeginDrag}
-                scrollEventThrottle={16}
-                ListEmptyComponent={
-                  <View className="items-center px-4">
-                    <Text className="text-sm text-light-matte-black/70 text-center mt-3">
-                      Welcome to Takumi Agent!
-                    </Text>
-                  </View>
-                }
-                ListFooterComponent={listFooterComponent}
-              />
-            </View>
-
-            {chatMessages.length === 0 && (
-              <QuickPrompts onSelectPrompt={handlePromptSelect} />
-            )}
-
-            <ChatInput
-              value={input}
-              onChangeText={handleInputChange}
-              onSend={handleSend}
-              isLoading={isLoading}
-              placeholder="Ask me anything..."
+          <View style={{ width: screenWidth }}>
+            <ConversationHistory
+              onScrollToChat={handleScrollToChat}
+              onResumeConversation={resumeConversation}
             />
           </View>
-        </View>
-      </ScrollView>
 
-      {approvalState ? (
-        <ApprovalSheet
-          title={approvalState.payload.name}
-          summary={approvalState.payload.meta.human_summary}
-          warning={specialWarning(approvalState.payload.name)}
-          grantOptions={approvalGrantOptions}
-          onApprove={handleApprovalApprove}
-          onReject={handleApprovalReject}
-        />
-      ) : null}
+          <View
+            style={{ width: screenWidth }}
+            className="flex-1 bg-light-main-container relative"
+          >
+            <View className="flex-row justify-between z-50 px-4 absolute top-0 left-0 w-full">
+              <BlurView
+                intensity={20}
+                experimentalBlurMethod="dimezisBlurView"
+                className="overflow-hidden rounded-full"
+              >
+                <Animated.View
+                  style={{ opacity: blurViewOpacity }}
+                  className="absolute bg-light w-full h-full left-0 right-0 rounded-full"
+                >
+                  <View />
+                </Animated.View>
+                <TouchableOpacity
+                  onPress={handleScrollToHistory}
+                  className="p-4 aspect-square rounded-full gap-[4px] relative w-[38px]"
+                >
+                  <View className="border border-light-primary-red w-[15px] absolute top-[15px] rounded-full left-[12px]" />
+                  <View className="border border-light-primary-red w-[10px] absolute top-[21px] rounded-full left-[12px]" />
+                </TouchableOpacity>
+              </BlurView>
+              <BlurView
+                intensity={20}
+                experimentalBlurMethod="dimezisBlurView"
+                className="overflow-hidden rounded-full"
+              >
+                <Animated.View
+                  style={{
+                    opacity: blurViewOpacity,
+                  }}
+                  className="absolute bg-white w-full h-full left-0 right-0 rounded-full"
+                >
+                  <View />
+                </Animated.View>
+                <View className="px-4 pt-3 rounded-full">
+                  <Text className="font-semibold text-light-matte-black/80">
+                    Takumi Agent
+                  </Text>
+                </View>
+              </BlurView>
+              <BlurView
+                intensity={20}
+                experimentalBlurMethod="dimezisBlurView"
+                className="overflow-hidden rounded-full"
+              >
+                <Animated.View
+                  style={{
+                    opacity: blurViewOpacity,
+                  }}
+                  className="absolute bg-light w-full h-full left-0 right-0 rounded-full"
+                >
+                  <View />
+                </Animated.View>
+                <TouchableOpacity
+                  onPress={handleNewConversation}
+                  className="p-[10px] rounded-full"
+                >
+                  <SquarePen size={20} color="#c71c4b" />
+                </TouchableOpacity>
+              </BlurView>
+            </View>
 
-      {!isOnboardingLoading && (
-        <AgentOnboarding
-          visible={shouldShowOnboarding}
-          onComplete={completeOnboarding}
-        />
-      )}
-    </KeyboardProvider>
+            <View className="flex-1">
+              <View className="flex-1 px-4">
+                <FlashList
+                  ref={chatListRef}
+                  data={chatMessages}
+                  renderItem={renderChatMessage}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={chatContentContainerStyle as ViewStyle}
+                  showsVerticalScrollIndicator={false}
+                  onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                    { useNativeDriver: false },
+                  )}
+                  onScrollBeginDrag={handleUserScrollBeginDrag}
+                  scrollEventThrottle={16}
+                  ListEmptyComponent={
+                    <View className="items-center px-4">
+                      <Text className="text-sm text-light-matte-black/70 text-center mt-3">
+                        Welcome to Takumi Agent!
+                      </Text>
+                    </View>
+                  }
+                  ListFooterComponent={listFooterComponent}
+                />
+              </View>
+
+              {chatMessages.length === 0 && (
+                <QuickPrompts onSelectPrompt={handlePromptSelect} />
+              )}
+
+              <ChatInput
+                value={input}
+                onChangeText={handleInputChange}
+                onSend={handleSend}
+                isLoading={isLoading}
+                onCancel={stopAgent}
+                placeholder="Ask me anything..."
+              />
+            </View>
+          </View>
+        </ScrollView>
+
+        {approvalState ? (
+          <ApprovalSheet
+            title={approvalState.payload.name}
+            summary={approvalState.payload.meta.human_summary}
+            warning={specialWarning(approvalState.payload.name)}
+            grantOptions={approvalGrantOptions}
+            onApprove={handleApprovalApprove}
+            onReject={handleApprovalReject}
+          />
+        ) : null}
+
+        {!isOnboardingLoading && (
+          <AgentOnboarding
+            visible={shouldShowOnboarding}
+            onComplete={completeOnboarding}
+          />
+        )}
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

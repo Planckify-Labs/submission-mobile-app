@@ -1,4 +1,10 @@
-import { ArrowUp, Maximize2, Mic, Minimize2 } from "lucide-react-native";
+import {
+  ArrowUp,
+  Maximize2,
+  Mic,
+  Minimize2,
+  Square,
+} from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,6 +24,13 @@ export interface ChatInputProps {
   onSend: () => Promise<void> | void;
   isLoading?: boolean;
   placeholder?: string;
+  /**
+   * Optional cancel handler. When provided AND `isLoading` is true,
+   * the send button switches to a stop button that invokes this
+   * instead. The text field stays read-only while loading so the user
+   * can read the streaming reply without accidentally sending.
+   */
+  onCancel?: () => void | Promise<void>;
 }
 
 export default function ChatInput({
@@ -26,6 +39,7 @@ export default function ChatInput({
   onSend,
   isLoading = false,
   placeholder = "Ask me anything...",
+  onCancel,
 }: ChatInputProps) {
   const [contentHeight, setContentHeight] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -48,15 +62,21 @@ export default function ChatInput({
   };
 
   const hasEnoughLines = Math.ceil(contentHeight / 20) >= 5;
-  const isSendDisabled = isLoading || !value.trim();
+  const canCancel = isLoading && !!onCancel;
+  // Button is disabled when not cancellable AND the send payload is
+  // empty / loading. When cancellable, the button is *always* tappable
+  // so the user can stop the agent.
+  const isSendDisabled = canCancel ? false : isLoading || !value.trim();
 
   const handleSend = useCallback(() => {
+    if (canCancel) {
+      return Promise.resolve(onCancel!());
+    }
     if (isSendDisabled) {
       return Promise.resolve();
     }
-
     return Promise.resolve(onSend());
-  }, [isSendDisabled, onSend]);
+  }, [canCancel, isSendDisabled, onCancel, onSend]);
 
   return (
     <>
@@ -140,12 +160,16 @@ export default function ChatInput({
                 backgroundColor: isSendDisabled ? "#d1d5db" : "#c71c4b",
                 opacity: isSendDisabled ? 0.6 : 1,
               }}
+              activeOpacity={1}
               onPress={() => {
                 void handleSend();
               }}
-              enabled={!isSendDisabled}
+              disabled={isSendDisabled}
+              accessibilityLabel={canCancel ? "Stop agent" : "Send message"}
             >
-              {isLoading ? (
+              {canCancel ? (
+                <Square size={16} color="#ffffff" fill="#ffffff" />
+              ) : isLoading ? (
                 <ActivityIndicator size="small" color="#ffffff" />
               ) : (
                 <ArrowUp
