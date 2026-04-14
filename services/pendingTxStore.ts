@@ -136,15 +136,23 @@ export const pendingTxStore = {
       return;
     }
 
+    // When the dispatcher seeds a record that an executor already
+    // confirmed (e.g. `deposit_points` waits for its own receipt), it
+    // passes `state: "confirmed"` + `confirmed_at`. Preserve any prior
+    // values if already set so reconnect re-adds don't nuke them.
     const record: PendingTxRecord = {
       tx_hash: input.tx_hash,
       chain_id: input.chain_id,
       description: input.description,
       state: incomingState,
       submitted_at: existing?.submitted_at ?? Date.now(),
-      confirmed_at: existing?.confirmed_at,
-      block_number: existing?.block_number,
+      confirmed_at:
+        input.confirmed_at ??
+        existing?.confirmed_at ??
+        (incomingState === "confirmed" ? Date.now() : undefined),
+      block_number: input.block_number ?? existing?.block_number,
       error: input.error ?? existing?.error,
+      transactionId: input.transactionId ?? existing?.transactionId,
     };
     records.set(key, record);
     emit();

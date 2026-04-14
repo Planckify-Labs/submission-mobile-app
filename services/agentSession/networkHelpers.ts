@@ -18,6 +18,7 @@
 
 import type {
   MobileResponse,
+  ProgressRequest,
   ToolPendingPayload,
   ToolResult,
 } from "./protocol.ts";
@@ -143,6 +144,34 @@ export async function rejectTool(
     throw new Error(
       `[agentSession] POST /chat/respond (reject) failed: ${response.status} ${text}`,
     );
+  }
+}
+
+/**
+ * POST a delay-hint ping to `/chat/progress`. Fire-and-forget: the
+ * server streams its reassurance back on the open SSE, and a network
+ * failure here is non-fatal (the user just misses one hint). We swallow
+ * non-2xx responses intentionally — the caller does not care.
+ */
+export async function postProgress(
+  sessionId: string,
+  toolCallId: string,
+  reason: string = "slow_tool",
+): Promise<void> {
+  const body: ProgressRequest = {
+    session_id: sessionId,
+    tool_call_id: toolCallId,
+    reason,
+  };
+
+  try {
+    await fetch(buildUrl("/chat/progress"), {
+      method: "POST",
+      headers: buildHeaders(),
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // Best-effort — delay hints are UX sugar, never load-bearing.
   }
 }
 

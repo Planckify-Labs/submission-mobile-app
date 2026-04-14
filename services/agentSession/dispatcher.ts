@@ -27,8 +27,16 @@ import {
   type UXTreatment,
 } from "../resolveUxTreatment.ts";
 import type { AgentSession } from "./agentSession.ts";
-import { postRespond, rejectTool } from "./networkHelpers.ts";
+import { postProgress, postRespond, rejectTool } from "./networkHelpers.ts";
 import type { ToolPendingPayload, ToolResult } from "./protocol.ts";
+
+/**
+ * Delay after which we ping the server with a progress hint so it can
+ * emit a natural "please wait" message on the SSE. Kept short so the
+ * user gets acknowledgement before they assume the app froze, but long
+ * enough that fast tool calls never pay for a mini inference.
+ */
+const DELAY_HINT_MS = 3000;
 
 /**
  * Entry point called by the SSE event loop. Never throws — all errors
@@ -168,6 +176,16 @@ async function runNonInteractive(
   payload: ToolPendingPayload,
   session: AgentSession,
 ): Promise<void> {
+  // Start the delay-hint timer BEFORE kicking off the executor. If the
+  // executor resolves (success or failure) within DELAY_HINT_MS we
+  // cancel the timer and no hint is sent; otherwise the timer fires
+  // once, the server streams a "please wait" message on the SSE, and
+  // the executor keeps running in parallel. Fire-and-forget — we never
+  // await the hint POST.
+  const hintTimer = setTimeout(() => {
+    void postProgress(session.session_id, payload.tool_call_id);
+  }, DELAY_HINT_MS);
+
   let result: ToolResult;
   try {
     // Dynamic import keeps `../agent-executors/retry.ts` — which
@@ -192,6 +210,8 @@ async function runNonInteractive(
       status: "failed",
       error: `unexpected_executor_error: ${String(err)}`,
     };
+  } finally {
+    clearTimeout(hintTimer);
   }
 
   // --- Task 15: optimistic pending-tx UI hook ----------------------
@@ -205,18 +225,40 @@ async function runNonInteractive(
   // poller so the card auto-transitions to confirmed/failed without
   // requiring the agent to call `get_transaction` explicitly.
   if (payload.meta.capability === "write" && result.tx_hash) {
+    // Agent may omit `chain_id` from the tool input (common for points
+    // tools that infer it from wallet context), so fall back to the
+    // executor context's active chain — otherwise the card is stuck
+    // on "submitting" forever because pollReceipt early-exits on
+    // chain_id 0.
     const chainIdRaw = payload.input.chain_id;
-    const chainId = typeof chainIdRaw === "number" ? chainIdRaw : 0;
+    const chainId =
+      typeof chainIdRaw === "number" && chainIdRaw > 0
+        ? chainIdRaw
+        : (session.executorContext.activeChainId ?? 0);
+
+    // Some executors (e.g. `deposit_points`) wait for the receipt
+    // themselves before returning. Respect their `tx_confirmed` flag
+    // so the card goes straight to the terminal state — no need to
+    // re-poll what the executor already verified.
+    const confirmedByExecutor =
+      result.status === "success" && result.tx_confirmed === true;
+
     pendingTxStore.add({
       tx_hash: result.tx_hash,
       chain_id: chainId,
       description: payload.meta.human_summary,
-      state: result.status === "failed" ? "failed" : "submitted",
+      state:
+        result.status === "failed"
+          ? "failed"
+          : confirmedByExecutor
+            ? "confirmed"
+            : "submitted",
       error: result.status === "failed" ? result.error : undefined,
       transactionId: result.transaction_id,
+      confirmed_at: confirmedByExecutor ? Date.now() : undefined,
     });
 
-    if (result.status === "success") {
+    if (result.status === "success" && !confirmedByExecutor) {
       const txHash = result.tx_hash;
       // Fire-and-forget — we do NOT await this. The poller updates the
       // store via `markConfirmed` / `markFailed` as a side-effect;

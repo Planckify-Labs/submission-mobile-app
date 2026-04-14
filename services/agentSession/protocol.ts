@@ -177,6 +177,20 @@ export type MobileResponse =
 // --- POST /chat request body ------------------------------------------------
 
 /**
+ * Body of `POST /chat/progress` — sent by the mobile when a tool call
+ * has been pending on the device for longer than the client-side delay
+ * threshold (~3s). The server answers with a short natural-voice "please
+ * wait" streamed as `text_delta` events on the already-open SSE.
+ * See AGENT_PROTOCOL.md §8.5.
+ */
+export interface ProgressRequest {
+  session_id: string;
+  tool_call_id: string;
+  /** Optional hint; free-form string for forward compatibility. */
+  reason?: string;
+}
+
+/**
  * Body of the initial `POST /chat` request that opens the SSE stream.
  * `messages` is a loose `unknown[]` because mobile-side message shapes
  * come from the `ai` SDK and vary by user input; the server validates.
