@@ -215,8 +215,8 @@ const SpendingApprovalModal: React.FC<SpendingApprovalModalProps> = ({
                 </Text>
                 <Text className="text-light-matte-black/70 text-center text-sm">
                   {isInternalContract
-                    ? `${spenderName} needs permission to process your payment securely`
-                    : "This contract needs permission to spend your tokens for this transaction"}
+                    ? `${spenderName} needs permission to use your tokens for this action`
+                    : "This contract needs permission to spend your tokens for this action"}
                 </Text>
               </View>
 
@@ -280,13 +280,13 @@ const SpendingApprovalModal: React.FC<SpendingApprovalModalProps> = ({
                           className="mr-2 mt-0.5"
                         />
                         <Text className="text-green-800 font-medium text-sm mb-1">
-                          Secure Payment
+                          Trusted Contract
                         </Text>
                       </View>
                       <View className="flex-1">
                         <Text className="text-green-700 text-xs">
                           This is a trusted Takumi Wallet contract that will
-                          securely process your payment. Your {token.symbol}{" "}
+                          securely handle this action. Your {token.symbol}{" "}
                           tokens will be used only for this transaction.
                         </Text>
                       </View>
