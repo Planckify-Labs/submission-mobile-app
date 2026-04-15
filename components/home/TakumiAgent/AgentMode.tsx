@@ -36,7 +36,6 @@ import type {
 import { useAgentBusyPublisher } from "@/hooks/useAgentBusy";
 import { useAgentOnboarding } from "@/hooks/useAgentOnboarding";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
-import { usePendingTxCards } from "@/hooks/usePendingTxCards";
 import { useWallet } from "@/hooks/useWallet";
 import { chatConvKey, chatListKey } from "@/lib/storage/chatKeys";
 import { storage } from "@/lib/storage/mmkv";
@@ -46,6 +45,14 @@ import {
   type ExecutorContext,
 } from "@/services/agent-executors";
 import { checkPointsAuth } from "@/services/agent-executors/pointsAuth";
+import {
+  type ServerModelMessage,
+  toAgentMessages,
+} from "@/services/agent-messages/translate";
+import type {
+  AgentMessage,
+  AgentMessagePart,
+} from "@/services/agent-messages/types";
 import {
   type AgentSession,
   type AgentSessionUIBindings,
@@ -63,18 +70,36 @@ import * as walletService from "@/services/walletService";
 import AgentOnboarding from "./AgentModeOnboarding/AgentOnboarding";
 import ChatInput from "./ChatInput";
 import ConversationHistory from "./ConversationHistory";
-import MarkdownMessage from "./MarkdownMessage";
-import { PendingTxCard } from "./PendingTxCard";
-import PreviewCard from "./PreviewCard/PreviewCard";
+import MessageContent from "./MessageContent";
 import QuickPrompts from "./QuickPrompts";
 
 const { width: screenWidth } = Dimensions.get("window");
 
-type ChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-};
+type ChatMessage = AgentMessage;
+
+function getMessageText(msg: ChatMessage): string {
+  return msg.parts
+    .filter(
+      (p): p is Extract<AgentMessagePart, { type: "text" }> =>
+        p.type === "text",
+    )
+    .map((p) => p.text)
+    .join("");
+}
+
+function appendDeltaToParts(
+  parts: AgentMessagePart[],
+  delta: string,
+): AgentMessagePart[] {
+  if (parts.length === 0) {
+    return [{ type: "text", text: delta }];
+  }
+  const last = parts[parts.length - 1];
+  if (last.type === "text") {
+    return [...parts.slice(0, -1), { type: "text", text: last.text + delta }];
+  }
+  return [...parts, { type: "text", text: delta }];
+}
 
 type InlinePreview = {
   payload: ToolPendingPayload;
@@ -93,30 +118,86 @@ function genId(): string {
 }
 
 function toStoredMessage(msg: ChatMessage): StoredMessage {
+  // Persist parts so a later reload can render real cards.
+  const text = getMessageText(msg);
   return {
-    role: msg.role,
-    content: msg.text,
-    raw: { role: msg.role, content: msg.text },
-    created_at: new Date().toISOString(),
+    role: msg.role === "system" ? "assistant" : msg.role,
+    content: text,
+    raw: {
+      id: msg.id,
+      role: msg.role,
+      content: msg.parts,
+      created_at: msg.createdAt,
+    },
+    created_at: msg.createdAt || new Date().toISOString(),
   };
 }
 
-function fromStoredMessage(msg: StoredMessage): ChatMessage {
-  return {
+// Parts-aware history loading. If the StoredMessage's `raw` carries the
+// canonical ModelMessage parts, run them through the translator. Otherwise
+// fall back to a single text part derived from `content`.
+function fromStoredMessages(stored: StoredMessage[]): ChatMessage[] {
+  const serverMessages: ServerModelMessage[] = [];
+  let hasRichRaw = false;
+  for (const s of stored) {
+    const raw = s.raw as
+      | {
+          id?: string;
+          role?: string;
+          content?: unknown;
+          created_at?: string;
+        }
+      | null
+      | undefined;
+    if (
+      raw &&
+      typeof raw === "object" &&
+      Array.isArray((raw as { content?: unknown }).content)
+    ) {
+      hasRichRaw = true;
+      serverMessages.push({
+        role: (raw.role ?? s.role) as "user" | "assistant" | "tool" | "system",
+        content: raw.content as ServerModelMessage["content"],
+        id: raw.id,
+        created_at: raw.created_at ?? s.created_at,
+      } as ServerModelMessage);
+    } else {
+      serverMessages.push({
+        role: s.role === "tool" ? "assistant" : s.role,
+        content: s.content,
+        created_at: s.created_at,
+      } as ServerModelMessage);
+    }
+  }
+  if (hasRichRaw) {
+    return toAgentMessages(serverMessages).map((m) => ({
+      ...m,
+      id: m.id || genId(),
+    }));
+  }
+  // Legacy text-only cache fallback.
+  return stored.map((m) => ({
     id: genId(),
-    role:
-      msg.role === "tool" ? "assistant" : (msg.role as "user" | "assistant"),
-    text: msg.content,
-  };
+    role: m.role === "tool" ? "assistant" : (m.role as "user" | "assistant"),
+    parts: [{ type: "text", text: m.content }],
+    createdAt: m.created_at,
+  }));
 }
 
 function getLastAssistantText(msgs: ChatMessage[]): string {
   for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i].role === "assistant" && msgs[i].text) {
-      return msgs[i].text;
-    }
+    if (msgs[i].role !== "assistant") continue;
+    const text = getMessageText(msgs[i]);
+    if (text) return text;
   }
   return "";
+}
+
+function resolveMode(
+  message: ChatMessage,
+  streamingMessageId: string | null,
+): "live" | "historical" {
+  return message.id === streamingMessageId ? "live" : "historical";
 }
 
 export default function AgentMode() {
@@ -147,6 +228,9 @@ export default function AgentMode() {
     null,
   );
   const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
+    null,
+  );
 
   // §10 — retryable / non-retryable SSE error UX. The spec splits errors
   // into two buckets:
@@ -184,6 +268,12 @@ export default function AgentMode() {
   // re-creating their useCallback on every state change.
   const inlinePreviewRef = useRef<InlinePreview | null>(null);
   const approvalStateRef = useRef<ApprovalState | null>(null);
+  // Registry of dispatcher callbacks keyed by `tool_call_id`. The inline
+  // StructuredUI card resolves via `addToolResult`; we look up the
+  // stashed onConfirm/onDismiss here and call the right one.
+  const toolDecisionsRef = useRef<
+    Map<string, { onConfirm: () => void; onDismiss: () => void }>
+  >(new Map());
   useEffect(() => {
     inlinePreviewRef.current = inlinePreview;
   }, [inlinePreview]);
@@ -396,6 +486,7 @@ export default function AgentMode() {
     setInlinePreview(null);
     setApprovalState(null);
     setIsStreaming(false);
+    setStreamingMessageId(null);
   }, [rejectOpenPrompts]);
 
   // HARD reset — used by the "New conversation" button, the
@@ -415,6 +506,7 @@ export default function AgentMode() {
     setInlinePreview(null);
     setApprovalState(null);
     setIsStreaming(false);
+    setStreamingMessageId(null);
     setRetryableError(null);
     setNonRetryableError(null);
     setActiveConversationId(null);
@@ -493,7 +585,7 @@ export default function AgentMode() {
     if (!cached) return;
     try {
       const conv = JSON.parse(cached) as ConversationCache;
-      setMessages(conv.messages.map(fromStoredMessage));
+      setMessages(fromStoredMessages(conv.messages));
       setActiveConversationId(lastActive);
     } catch (err) {
       console.warn("[AgentMode] failed to hydrate wallet chat cache", err);
@@ -524,6 +616,7 @@ export default function AgentMode() {
       setInlinePreview(null);
       setApprovalState(null);
       setIsStreaming(false);
+      setStreamingMessageId(null);
       pendingTxStore.clear();
 
       const walletAddress = activeWallet?.address as `0x${string}` | undefined;
@@ -532,7 +625,7 @@ export default function AgentMode() {
         : null;
       if (cached) {
         const conv = JSON.parse(cached) as ConversationCache;
-        setMessages(conv.messages.map(fromStoredMessage));
+        setMessages(fromStoredMessages(conv.messages));
       } else {
         setMessages([]);
       }
@@ -555,34 +648,69 @@ export default function AgentMode() {
       appendText: (delta) => {
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantMessageId ? { ...m, text: m.text + delta } : m,
+            m.id === assistantMessageId
+              ? { ...m, parts: appendDeltaToParts(m.parts, delta) }
+              : m,
           ),
         );
         setCurrentStatus(null);
+      },
+      upsertToolPart: (part) => {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== assistantMessageId) return m;
+            const existingIdx = m.parts.findIndex(
+              (p) => p.type === "tool" && p.toolCallId === part.toolCallId,
+            );
+            const nextPart: AgentMessagePart = {
+              type: "tool",
+              toolCallId: part.toolCallId,
+              toolName: part.toolName,
+              input: part.input,
+              state: part.state,
+              ...(part.output !== undefined ? { output: part.output } : {}),
+              ...(part.error ? { error: part.error } : {}),
+            };
+            if (existingIdx >= 0) {
+              const nextParts = [...m.parts];
+              nextParts[existingIdx] = nextPart;
+              return { ...m, parts: nextParts };
+            }
+            return { ...m, parts: [...m.parts, nextPart] };
+          }),
+        );
       },
       showStatus: (message) => {
         setCurrentStatus(message);
       },
       showPreviewCard: (payload, onConfirm, onDismiss) => {
         setCurrentStatus(null);
+        const wrappedConfirm = () => {
+          setInlinePreview((current) =>
+            current?.payload.tool_call_id === payload.tool_call_id
+              ? null
+              : current,
+          );
+          toolDecisionsRef.current.delete(payload.tool_call_id);
+          void onConfirm();
+        };
+        const wrappedDismiss = () => {
+          setInlinePreview((current) =>
+            current?.payload.tool_call_id === payload.tool_call_id
+              ? null
+              : current,
+          );
+          toolDecisionsRef.current.delete(payload.tool_call_id);
+          void onDismiss();
+        };
+        toolDecisionsRef.current.set(payload.tool_call_id, {
+          onConfirm: wrappedConfirm,
+          onDismiss: wrappedDismiss,
+        });
         setInlinePreview({
           payload,
-          onConfirm: () => {
-            setInlinePreview((current) =>
-              current?.payload.tool_call_id === payload.tool_call_id
-                ? null
-                : current,
-            );
-            void onConfirm();
-          },
-          onDismiss: () => {
-            setInlinePreview((current) =>
-              current?.payload.tool_call_id === payload.tool_call_id
-                ? null
-                : current,
-            );
-            void onDismiss();
-          },
+          onConfirm: wrappedConfirm,
+          onDismiss: wrappedDismiss,
         });
       },
       showApprovalSheet: (payload, onApprove, onReject) => {
@@ -634,10 +762,12 @@ export default function AgentMode() {
         }
         setCurrentStatus(null);
         setIsStreaming(false);
+        setStreamingMessageId(null);
       },
       done: (meta) => {
         setCurrentStatus(null);
         setIsStreaming(false);
+        setStreamingMessageId(null);
 
         if (!meta?.conversation_id) return;
 
@@ -813,17 +943,21 @@ export default function AgentMode() {
       setRetryableError(null);
       setNonRetryableError(null);
 
+      const nowIso = new Date().toISOString();
       const userMessage: ChatMessage = {
         id: genId(),
         role: "user",
-        text: trimmed,
+        parts: [{ type: "text", text: trimmed }],
+        createdAt: nowIso,
       };
       const assistantMessage: ChatMessage = {
         id: genId(),
         role: "assistant",
-        text: "",
+        parts: [],
+        createdAt: nowIso,
       };
       currentAssistantIdRef.current = assistantMessage.id;
+      setStreamingMessageId(assistantMessage.id);
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
       setInlinePreview(null);
       setApprovalState(null);
@@ -877,12 +1011,14 @@ export default function AgentMode() {
               retryError,
             );
             setIsStreaming(false);
+            setStreamingMessageId(null);
             setCurrentStatus(null);
           }
           return;
         }
         console.error("[AgentMode] Failed to stream agent turn", sendError);
         setIsStreaming(false);
+        setStreamingMessageId(null);
         setCurrentStatus(null);
       }
     },
@@ -957,15 +1093,34 @@ export default function AgentMode() {
     [chatMessages.length],
   );
 
+  const handleAddToolResult = useCallback(
+    (toolCallId: string, output: unknown) => {
+      const decision = toolDecisionsRef.current.get(toolCallId);
+      if (!decision) return;
+      const userDecision =
+        output && typeof output === "object" && "user_decision" in output
+          ? (output as { user_decision?: string }).user_decision
+          : undefined;
+      if (userDecision === "rejected") {
+        decision.onDismiss();
+      } else {
+        decision.onConfirm();
+      }
+    },
+    [],
+  );
+
   const renderChatMessage = useCallback(
     ({ item }: ListRenderItemInfo<ChatMessage>) => {
       const isUser = item.role === "user";
+      const mode = resolveMode(item, streamingMessageId);
 
       if (isUser) {
+        const userText = getMessageText(item);
         return (
           <View className="w-full mb-4 z-0 items-end">
             <View className="bg-light-primary-red max-w-[85%] rounded-3xl px-4 py-3">
-              <Text className="text-sm leading-5 text-white">{item.text}</Text>
+              <Text className="text-sm leading-5 text-white">{userText}</Text>
             </View>
           </View>
         );
@@ -973,57 +1128,37 @@ export default function AgentMode() {
 
       return (
         <View className="w-full mb-4 z-0 items-start">
-          <View>
-            {item.text.length > 0 ? (
-              <MarkdownMessage content={item.text} />
-            ) : null}
-          </View>
+          <MessageContent
+            message={item}
+            mode={mode}
+            addToolResult={handleAddToolResult}
+          />
         </View>
       );
     },
-    [],
+    [streamingMessageId, handleAddToolResult],
   );
 
   const isLoading = isStreaming;
 
-  // Task 15: pending-tx cards from the agent-session dispatcher.
-  // The store is a singleton, so these survive navigation between
-  // the agent screen and the rest of the app.
-  const pendingTxCards = usePendingTxCards();
-
   const listFooterComponent = useMemo(() => {
-    const hasPreview = inlinePreview !== null;
     const hasRetryableError = retryableError !== null;
     const hasNonRetryableError = nonRetryableError !== null;
     if (
       !isLoading &&
-      pendingTxCards.length === 0 &&
-      !hasPreview &&
       !hasRetryableError &&
       !hasNonRetryableError
     ) {
       return null;
     }
 
+    // Note: PreviewCard and PendingTxCard used to render here as a
+    // footer side-channel. They now render inline as `tool` parts on
+    // the assistant message via the StructuredUI registry
+    // (generative-ui-spec §4.3), so new user turns stack below them
+    // correctly.
     return (
       <View className="gap-2">
-        {hasPreview && inlinePreview ? (
-          <PreviewCard
-            key={inlinePreview.payload.tool_call_id}
-            summary={inlinePreview.payload.meta.human_summary}
-            onConfirm={inlinePreview.onConfirm}
-            onDismiss={inlinePreview.onDismiss}
-          />
-        ) : null}
-
-        {pendingTxCards.length > 0 && (
-          <View>
-            {pendingTxCards.map((record) => (
-              <PendingTxCard key={record.tx_hash} record={record} />
-            ))}
-          </View>
-        )}
-
         {isLoading && (
           <View className="self-start mt-2 bg-white/80 border border-light-primary-red/10 rounded-3xl px-4 py-2 flex-row items-center gap-2">
             <ActivityIndicator size="small" color="#c71c4b" />
@@ -1100,8 +1235,6 @@ export default function AgentMode() {
     );
   }, [
     isLoading,
-    pendingTxCards,
-    inlinePreview,
     currentStatus,
     retryableError,
     nonRetryableError,

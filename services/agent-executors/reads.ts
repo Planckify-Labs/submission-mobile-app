@@ -654,11 +654,29 @@ export const getWalletTokens: MobileToolExecutor = (input, context) =>
     // `tokens`) for backwards compatibility with any agent reasoning
     // already keyed on the flat shape. Multi-chain emits the `chains[]`
     // wrapper per the schema extension.
+    //
+    // `data` is the compact agent-facing slice — just enough for the
+    // model to reason ("does the user hold USDC on polygon?"). The
+    // rich per-token rows go in `display`, which the server strips
+    // before feeding the result to the LLM. See `protocol.ts::ToolResult`.
+    const toAgentSlice = (group: (typeof chains)[number]) => ({
+      chain_id: group.chain_id,
+      chain_name: group.chain_name,
+      tokens: group.tokens.map((t) => ({
+        symbol: t.symbol,
+        is_native: t.is_native,
+        ...(t.balance_display !== undefined
+          ? { balance_display: t.balance_display }
+          : {}),
+      })),
+    });
+
     if (chainIds.length === 1 && chain_errors.length === 0) {
       const only = chains[0];
       return {
         status: "success",
-        data: {
+        data: toAgentSlice(only),
+        display: {
           chain_id: only.chain_id,
           tokens: only.tokens,
         },
@@ -668,6 +686,10 @@ export const getWalletTokens: MobileToolExecutor = (input, context) =>
     return {
       status: "success",
       data: {
+        chains: chains.map(toAgentSlice),
+        ...(chain_errors.length > 0 ? { chain_errors } : {}),
+      },
+      display: {
         chains,
         ...(chain_errors.length > 0 ? { chain_errors } : {}),
       },

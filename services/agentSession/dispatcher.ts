@@ -59,6 +59,22 @@ export async function handleToolPending(
   // Reserve the slot BEFORE any async work.
   session.pending_approvals.set(toolCallId, payload);
 
+  // Inline the tool as a part on the current assistant message so the
+  // registered StructuredUI card renders at the correct position in
+  // the thread (generative-ui-spec §4.3). State flips to
+  // `output-available` / `output-error` when the tool resolves in
+  // `runNonInteractive`.
+  try {
+    session.ui.upsertToolPart?.({
+      toolCallId,
+      toolName: payload.name,
+      input: payload.input,
+      state: "input-available",
+    });
+  } catch (err) {
+    console.warn(`[agentSession] upsertToolPart(pending) threw: ${String(err)}`);
+  }
+
   const wallet = getConnectedWallet(session);
   if (!wallet) {
     // No wallet bound — we can't reason about policy. Reject the
@@ -103,6 +119,15 @@ export async function handleToolPending(
       };
       const onDismiss = async () => {
         session.pending_approvals.delete(toolCallId);
+        try {
+          session.ui.upsertToolPart?.({
+            toolCallId,
+            toolName: payload.name,
+            input: payload.input,
+            state: "output-error",
+            error: "user_declined",
+          });
+        } catch {}
         await safeReject(payload, session, "user_declined");
       };
       try {
@@ -126,6 +151,15 @@ export async function handleToolPending(
       };
       const onReject = async () => {
         session.pending_approvals.delete(toolCallId);
+        try {
+          session.ui.upsertToolPart?.({
+            toolCallId,
+            toolName: payload.name,
+            input: payload.input,
+            state: "output-error",
+            error: "user_declined",
+          });
+        } catch {}
         await safeReject(payload, session, "user_declined");
       };
       try {
@@ -269,6 +303,23 @@ async function runNonInteractive(
         })
         .catch(() => {});
     }
+  }
+
+  // Mirror the tool result into the message parts so MessageContent
+  // re-renders the inline card with `state: output-available` (or
+  // `output-error`). The registered component then transitions from
+  // the preview/pending UI to the terminal receipt.
+  try {
+    session.ui.upsertToolPart?.({
+      toolCallId: payload.tool_call_id,
+      toolName: payload.name,
+      input: payload.input,
+      state: result.status === "failed" ? "output-error" : "output-available",
+      output: result,
+      error: result.status === "failed" ? result.error : undefined,
+    });
+  } catch (err) {
+    console.warn(`[agentSession] upsertToolPart(result) threw: ${String(err)}`);
   }
 
   try {

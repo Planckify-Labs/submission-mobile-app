@@ -78,13 +78,31 @@ import { classifyPointsError, sanitizeApiResponse } from "./utils";
  */
 async function runApi<T>(
   fn: () => Promise<T>,
-  shape: (raw: T) => unknown,
+  shape: (raw: T) => unknown | { data: unknown; display?: unknown },
 ): Promise<
-  { status: "success"; data: unknown } | { status: "failed"; error: string }
+  | { status: "success"; data: unknown; display?: unknown }
+  | { status: "failed"; error: string }
 > {
   try {
     const raw = await fn();
-    return { status: "success", data: sanitizeApiResponse(shape(raw)) };
+    const shaped = shape(raw);
+    // Detect the split-payload shape. Opt-in marker is the `display`
+    // key: if present, treat `shaped` as `{ data, display }`. Legacy
+    // transformers return the data blob directly and stay unchanged.
+    if (
+      shaped !== null &&
+      typeof shaped === "object" &&
+      "display" in (shaped as object) &&
+      "data" in (shaped as object)
+    ) {
+      const split = shaped as { data: unknown; display: unknown };
+      return {
+        status: "success",
+        data: sanitizeApiResponse(split.data),
+        display: sanitizeApiResponse(split.display),
+      };
+    }
+    return { status: "success", data: sanitizeApiResponse(shaped) };
   } catch (err) {
     return { status: "failed", error: classifyPointsError(err) };
   }
@@ -114,10 +132,15 @@ function optionalInt(input: ToolInput, key: string): number | undefined {
 export const getRedemptionCatalog: MobileToolExecutor = (input, _context) =>
   safeExecute(async () => {
     const take = optionalInt(input, "take");
+    // `data` is the compact agent-facing slice: category names + product
+    // ids so the agent can say "pick a product id and I'll pull details"
+    // without re-narrating the full list. Rich UI data (images,
+    // descriptions) goes in `display` and is stripped before the LLM
+    // sees it — see `protocol.ts::ToolResult`.
     return runApi(
       () => productApi.getProductsByCategories(take),
-      (raw) => ({
-        groups: raw.map((g) => ({
+      (raw) => {
+        const displayGroups = raw.map((g) => ({
           category: { id: g.category.id, name: g.category.name },
           products: g.products.map((p) => ({
             id: p.id,
@@ -127,8 +150,18 @@ export const getRedemptionCatalog: MobileToolExecutor = (input, _context) =>
             code: p.code,
             input_type: p.inputType ?? null,
           })),
-        })),
-      }),
+        }));
+        return {
+          data: {
+            groups: displayGroups.map((g) => ({
+              category: g.category,
+              product_ids: g.products.map((p) => p.id),
+              product_count: g.products.length,
+            })),
+          },
+          display: { groups: displayGroups },
+        };
+      },
     );
   });
 
@@ -146,8 +179,8 @@ export const searchRedemptionCatalog: MobileToolExecutor = (input, _context) =>
     };
     return runApi(
       () => productApi.searchProducts(params),
-      (raw) => ({
-        products: raw.map((p) => ({
+      (raw) => {
+        const displayProducts = raw.map((p) => ({
           id: p.id,
           name: p.name,
           description: p.description,
@@ -155,8 +188,15 @@ export const searchRedemptionCatalog: MobileToolExecutor = (input, _context) =>
           code: p.code,
           category_id: p.categoryId,
           input_type: p.inputType ?? null,
-        })),
-      }),
+        }));
+        return {
+          data: {
+            product_ids: displayProducts.map((p) => p.id),
+            product_count: displayProducts.length,
+          },
+          display: { products: displayProducts },
+        };
+      },
     );
   });
 

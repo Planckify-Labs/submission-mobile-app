@@ -148,7 +148,23 @@ export interface ToolResult {
   status: "success" | "failed";
   tx_hash?: `0x${string}`;
   tx_confirmed?: boolean;
+  /**
+   * Agent-facing payload. Should stay compact — ids, counts, filters —
+   * because the whole thing lands in the LLM context window on every
+   * subsequent turn. Rich, UI-specific data belongs in `display`.
+   */
   data?: unknown;
+  /**
+   * UI-facing payload. The mobile executor puts the full rich object
+   * here (product grids, balance rows, swap quotes, …). The server
+   * strips this slice before feeding tool results to `streamText`, so
+   * it never enters LLM context — but it IS persisted in `contentJson`
+   * so historical replay renders the same card on reload.
+   *
+   * Cards read `output.display ?? output.data ?? output` so absence is
+   * a no-op.
+   */
+  display?: unknown;
   error?: string;
   /** Backend transaction record id, set when the executor recorded history. */
   transaction_id?: string;

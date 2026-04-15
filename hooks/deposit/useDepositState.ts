@@ -287,10 +287,7 @@ export function useDepositState() {
         address: selectedToken.contractAddress as `0x${string}`,
         abi: erc20Abi,
         functionName: "allowance",
-        args: [
-          activeWallet.address as `0x${string}`,
-          contractAddress,
-        ],
+        args: [activeWallet.address as `0x${string}`, contractAddress],
       })) as bigint;
       return {
         ok: true,
@@ -312,194 +309,195 @@ export function useDepositState() {
     updateState,
   ]);
 
-  const handleDeposit = useCallback(async (options?: {
-    approvalMode?: "exact" | "unlimited";
-  }) => {
-    // Redirect to auth if not signed in
-    if (!isAuthenticated) {
-      router.push("/auth");
-      return;
-    }
+  const handleDeposit = useCallback(
+    async (options?: { approvalMode?: "exact" | "unlimited" }) => {
+      // Redirect to auth if not signed in
+      if (!isAuthenticated) {
+        router.push("/auth");
+        return;
+      }
 
-    // Warn if no contract found for this chain
-    if (!contractAddress) {
-      updateState({
-        error:
-          "Point deposits are not available on this network. Please switch to a supported chain.",
-      });
-      return;
-    }
-
-    if (!validateInputs()) return;
-    if (!selectedToken || !tokenAmountNeeded || !activeBackendChain) return;
-
-    const walletClient = getClientForActiveWallet();
-    const publicClient = getPublicClientForActiveChain();
-    if (!walletClient || !walletClient.account) {
-      updateState({ error: "Wallet not connected" });
-      return;
-    }
-
-    const refId = `pt_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-
-    try {
-      // Step 1: Check ERC20 allowance
-      updateState({
-        isLoading: true,
-        transactionStatus: "Checking allowance...",
-        error: undefined,
-      });
-
-      const currentAllowance = await publicClient.readContract({
-        address: selectedToken.contractAddress as `0x${string}`,
-        abi: erc20Abi,
-        functionName: "allowance",
-        args: [walletClient.account.address, contractAddress],
-      });
-
-      // Persist the user's trust choice so future deposits from this wallet
-      // can skip the modal when on-chain allowance is still sufficient.
-      if (options?.approvalMode === "unlimited") {
-        const trustKey = buildTrustKey(
-          activeWallet.address,
-          activeChain.chain.id,
-          contractAddress,
-          selectedToken.contractAddress,
-        );
+      // Warn if no contract found for this chain
+      if (!contractAddress) {
         updateState({
-          trustedSpenders: {
-            ...(state?.trustedSpenders ?? {}),
-            [trustKey]: true,
-          },
+          error:
+            "Point deposits are not available on this network. Please switch to a supported chain.",
         });
+        return;
       }
 
-      // Step 2: Decide the approve target.
-      //
-      // ERC-20 `approve(spender, value)` overwrites the current allowance
-      // (EIP-20), so when the user explicitly picks a mode we always write
-      // that exact value — "exact" can therefore reduce a residual
-      // unlimited allowance down to just the amount this deposit needs.
-      // Without an explicit mode (trusted + allowance sufficient path), we
-      // only top up when the current allowance falls short.
-      let approvalAmount: bigint | null = null;
-      if (options?.approvalMode === "unlimited") {
-        approvalAmount = currentAllowance === maxUint256 ? null : maxUint256;
-      } else if (options?.approvalMode === "exact") {
-        approvalAmount =
-          currentAllowance === tokenAmountNeeded.raw
-            ? null
-            : tokenAmountNeeded.raw;
-      } else if (currentAllowance < tokenAmountNeeded.raw) {
-        approvalAmount = tokenAmountNeeded.raw;
+      if (!validateInputs()) return;
+      if (!selectedToken || !tokenAmountNeeded || !activeBackendChain) return;
+
+      const walletClient = getClientForActiveWallet();
+      const publicClient = getPublicClientForActiveChain();
+      if (!walletClient || !walletClient.account) {
+        updateState({ error: "Wallet not connected" });
+        return;
       }
 
-      if (approvalAmount !== null) {
+      const refId = `pt_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+
+      try {
+        // Step 1: Check ERC20 allowance
         updateState({
           isLoading: true,
-          transactionStatus: "Approving token spend...",
+          transactionStatus: "Checking allowance...",
+          error: undefined,
         });
 
-        const approveHash = await walletClient.writeContract({
+        const currentAllowance = await publicClient.readContract({
           address: selectedToken.contractAddress as `0x${string}`,
           abi: erc20Abi,
-          functionName: "approve",
-          args: [contractAddress, approvalAmount],
-          chain: walletClient.chain,
-          account: walletClient.account,
+          functionName: "allowance",
+          args: [walletClient.account.address, contractAddress],
         });
 
-        await publicClient.waitForTransactionReceipt({ hash: approveHash });
-      }
-
-      // Step 3: Call depositPoints on smart contract
-      updateState({
-        isLoading: true,
-        transactionStatus: "Depositing to contract...",
-      });
-
-      const txHash = await depositPoints.mutateAsync({
-        tokenAddress: selectedToken.contractAddress as `0x${string}`,
-        refId,
-        amount: tokenAmountNeeded.raw.toString(),
-        tokenDecimals: selectedToken.decimals,
-      });
-
-      // Step 4: Wait for transaction receipt
-      updateState({
-        isLoading: true,
-        transactionStatus: "Waiting for confirmation...",
-      });
-      await waitForTransaction(txHash);
-
-      // Step 5: Submit to API for verification
-      updateState({
-        isLoading: true,
-        transactionStatus: "Submitting for verification...",
-      });
-
-      await submitDeposit.mutateAsync({
-        refId,
-        txHash,
-        tokenId: selectedToken.id,
-        blockchainId: activeBackendChain.id,
-        contractAddress,
-        walletAddress: activeWallet.address,
-        tokenAmount: tokenAmountNeeded.raw.toString(),
-        expectedPoints: amount,
-        currency: DEFAULT_CURRENCY,
-      });
-
-      // Step 6: Done -- navigate back
-      updateState({
-        isLoading: true,
-        transactionStatus: "Points are being credited...",
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      router.back();
-    } catch (error: any) {
-      console.error("Deposit error:", error);
-
-      let errorMessage = "Deposit failed. Please try again.";
-      try {
-        const body = await error?.response?.json?.();
-        const msg: string = body?.message ?? "";
-        if (msg.toLowerCase().includes("no pegged currency")) {
-          errorMessage = `${selectedToken?.symbol ?? "This token"} is not supported for point deposits. Please select a different token.`;
-        } else if (msg) {
-          errorMessage = msg;
+        // Persist the user's trust choice so future deposits from this wallet
+        // can skip the modal when on-chain allowance is still sufficient.
+        if (options?.approvalMode === "unlimited") {
+          const trustKey = buildTrustKey(
+            activeWallet.address,
+            activeChain.chain.id,
+            contractAddress,
+            selectedToken.contractAddress,
+          );
+          updateState({
+            trustedSpenders: {
+              ...(state?.trustedSpenders ?? {}),
+              [trustKey]: true,
+            },
+          });
         }
-      } catch {
-        if (error?.message) errorMessage = error.message;
-      }
 
-      updateState({
-        isLoading: false,
-        transactionStatus: "",
-        error: errorMessage,
-      });
-    } finally {
-      updateState({ isLoading: false, transactionStatus: "" });
-    }
-  }, [
-    validateInputs,
-    selectedToken,
-    contractAddress,
-    tokenAmountNeeded,
-    activeBackendChain,
-    activeWallet,
-    activeChain.chain.id,
-    depositPoints,
-    submitDeposit,
-    waitForTransaction,
-    getClientForActiveWallet,
-    getPublicClientForActiveChain,
-    amount,
-    updateState,
-    isAuthenticated,
-    state?.trustedSpenders,
-  ]);
+        // Step 2: Decide the approve target.
+        //
+        // ERC-20 `approve(spender, value)` overwrites the current allowance
+        // (EIP-20), so when the user explicitly picks a mode we always write
+        // that exact value — "exact" can therefore reduce a residual
+        // unlimited allowance down to just the amount this deposit needs.
+        // Without an explicit mode (trusted + allowance sufficient path), we
+        // only top up when the current allowance falls short.
+        let approvalAmount: bigint | null = null;
+        if (options?.approvalMode === "unlimited") {
+          approvalAmount = currentAllowance === maxUint256 ? null : maxUint256;
+        } else if (options?.approvalMode === "exact") {
+          approvalAmount =
+            currentAllowance === tokenAmountNeeded.raw
+              ? null
+              : tokenAmountNeeded.raw;
+        } else if (currentAllowance < tokenAmountNeeded.raw) {
+          approvalAmount = tokenAmountNeeded.raw;
+        }
+
+        if (approvalAmount !== null) {
+          updateState({
+            isLoading: true,
+            transactionStatus: "Approving token spend...",
+          });
+
+          const approveHash = await walletClient.writeContract({
+            address: selectedToken.contractAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [contractAddress, approvalAmount],
+            chain: walletClient.chain,
+            account: walletClient.account,
+          });
+
+          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        }
+
+        // Step 3: Call depositPoints on smart contract
+        updateState({
+          isLoading: true,
+          transactionStatus: "Depositing to contract...",
+        });
+
+        const txHash = await depositPoints.mutateAsync({
+          tokenAddress: selectedToken.contractAddress as `0x${string}`,
+          refId,
+          amount: tokenAmountNeeded.raw.toString(),
+          tokenDecimals: selectedToken.decimals,
+        });
+
+        // Step 4: Wait for transaction receipt
+        updateState({
+          isLoading: true,
+          transactionStatus: "Waiting for confirmation...",
+        });
+        await waitForTransaction(txHash);
+
+        // Step 5: Submit to API for verification
+        updateState({
+          isLoading: true,
+          transactionStatus: "Submitting for verification...",
+        });
+
+        await submitDeposit.mutateAsync({
+          refId,
+          txHash,
+          tokenId: selectedToken.id,
+          blockchainId: activeBackendChain.id,
+          contractAddress,
+          walletAddress: activeWallet.address,
+          tokenAmount: tokenAmountNeeded.raw.toString(),
+          expectedPoints: amount,
+          currency: DEFAULT_CURRENCY,
+        });
+
+        // Step 6: Done -- navigate back
+        updateState({
+          isLoading: true,
+          transactionStatus: "Points are being credited...",
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        router.back();
+      } catch (error: any) {
+        console.error("Deposit error:", error);
+
+        let errorMessage = "Deposit failed. Please try again.";
+        try {
+          const body = await error?.response?.json?.();
+          const msg: string = body?.message ?? "";
+          if (msg.toLowerCase().includes("no pegged currency")) {
+            errorMessage = `${selectedToken?.symbol ?? "This token"} is not supported for point deposits. Please select a different token.`;
+          } else if (msg) {
+            errorMessage = msg;
+          }
+        } catch {
+          if (error?.message) errorMessage = error.message;
+        }
+
+        updateState({
+          isLoading: false,
+          transactionStatus: "",
+          error: errorMessage,
+        });
+      } finally {
+        updateState({ isLoading: false, transactionStatus: "" });
+      }
+    },
+    [
+      validateInputs,
+      selectedToken,
+      contractAddress,
+      tokenAmountNeeded,
+      activeBackendChain,
+      activeWallet,
+      activeChain.chain.id,
+      depositPoints,
+      submitDeposit,
+      waitForTransaction,
+      getClientForActiveWallet,
+      getPublicClientForActiveChain,
+      amount,
+      updateState,
+      isAuthenticated,
+      state?.trustedSpenders,
+    ],
+  );
 
   const resetState = useCallback(() => {
     setState(initialDepositState);

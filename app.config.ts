@@ -25,7 +25,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: getAppName(),
   slug: "takumiwallet",
-  version: "1.3.0",
+  version: "1.4.0",
   orientation: "portrait",
   icon: "./assets/images/takumipay-logo.png",
   scheme: getScheme(),

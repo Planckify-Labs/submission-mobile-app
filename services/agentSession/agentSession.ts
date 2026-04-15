@@ -63,6 +63,28 @@ import type { SseClientHandle } from "./sseClient.ts";
  */
 export interface AgentSessionUIBindings {
   appendText: (delta: string) => void;
+  /**
+   * Append or update a `tool` part on the current assistant message so
+   * the registered StructuredUI card renders inline at the position the
+   * agent emitted it (generative-ui-spec §4.3). Called by the dispatcher
+   * on `tool_pending` (state: 'input-available') and again on
+   * `tool_result` (state: 'output-available' | 'output-error').
+   *
+   * Upsert is keyed on `toolCallId`: a second call with the same id
+   * updates the existing part rather than appending a duplicate.
+   */
+  upsertToolPart: (part: {
+    toolCallId: string;
+    toolName: string;
+    input: unknown;
+    state:
+      | "input-streaming"
+      | "input-available"
+      | "output-available"
+      | "output-error";
+    output?: unknown;
+    error?: string;
+  }) => void;
   showStatus: (message: string) => void;
   showPreviewCard: (
     payload: ToolPendingPayload,
