@@ -1,17 +1,9 @@
 import { BlurView } from "expo-blur";
-import Constants from "expo-constants";
 import { router } from "expo-router";
-import { AudioLines, MessageCircle, Mic, QrCode } from "lucide-react-native";
+import { AudioLines, QrCode } from "lucide-react-native";
 import React from "react";
 import { Platform, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const bundleId =
-  Constants.expoConfig?.ios?.bundleIdentifier ??
-  Constants.expoConfig?.android?.package ??
-  "";
-const isProductionBuild =
-  !__DEV__ && !bundleId.endsWith(".dev") && !bundleId.endsWith(".preview");
 
 interface ScanToPayChatModeFloatingButtonsProps {
   onChatModePress: () => void;
@@ -48,15 +40,13 @@ export default function ScanToPayChatModeFloatingButtons({
             <Text className="text-light font-bold text-xl">Scan</Text>
           </TouchableOpacity>
         </BlurView>
-        {!isProductionBuild && (
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={onChatModePress}
-            className="items-center justify-center border-[6px] border-light bg-light-matte-black main rounded-full p-2 aspect-square"
-          >
-            <AudioLines size={20} color="#fff" stroke="#fff" strokeWidth={3} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={onChatModePress}
+          className="items-center justify-center border-[6px] border-light bg-light-matte-black main rounded-full p-2 aspect-square"
+        >
+          <AudioLines size={20} color="#fff" stroke="#fff" strokeWidth={3} />
+        </TouchableOpacity>
       </View>
     </View>
   );
