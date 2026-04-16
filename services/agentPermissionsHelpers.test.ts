@@ -76,14 +76,18 @@ describe("formatScopeLabel", () => {
     );
   });
 
-  it("capability scope renders as blockchain_<key>", () => {
+  it("capability scope renders as user-facing category labels", () => {
     assert.equal(
       formatScopeLabel({ kind: "capability", key: "write" }),
-      "blockchain_write",
+      "Write actions",
     );
     assert.equal(
       formatScopeLabel({ kind: "capability", key: "read" }),
-      "blockchain_read",
+      "Read actions",
+    );
+    assert.equal(
+      formatScopeLabel({ kind: "capability", key: "simulate" }),
+      "Simulate actions",
     );
   });
 

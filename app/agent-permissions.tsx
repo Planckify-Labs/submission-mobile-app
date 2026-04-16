@@ -19,8 +19,12 @@ import {
   AlertTriangle,
   ArrowLeft,
   ChevronDown,
+  ChevronRight,
+  Eye,
+  PlayCircle,
   Shield,
   ShieldOff,
+  SlidersHorizontal,
   Trash2,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -29,6 +33,7 @@ import {
   Pressable,
   ScrollView,
   StatusBar,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -43,6 +48,7 @@ import {
   type DefaultPermissionMode,
   formatLifetimeLabel,
   formatScopeLabel,
+  isCapabilityAutoApproved,
   listRenderableGrants,
 } from "@/services/agentPermissionsHelpers";
 import {
@@ -80,6 +86,46 @@ const MODES: ModeMeta[] = [
     subtitle: "Agent executes writes silently until revoked.",
     accessibilityHint:
       "The agent can sign and submit transactions without asking.",
+  },
+];
+
+// --- Capability auto-approve metadata --------------------------------------
+
+/**
+ * "Always allow" toggles surfaced as a separate section. These map onto
+ * capability-scoped permanent grants in `PermissionGrantStore` and are
+ * orthogonal to the global mode selector — a user can be in
+ * "Agent decides" AND have read actions auto-approved.
+ *
+ * Write is intentionally NOT exposed here. Auto-approving every write
+ * is exactly what "Full auto" mode does, and that path warrants the
+ * existing destructive confirmation dialog. Splitting it across two
+ * controls would invite users to bypass the warning.
+ */
+interface CapabilityMeta {
+  capability: "read" | "simulate";
+  label: string;
+  subtitle: string;
+  icon: typeof Eye;
+  accessibilityHint: string;
+}
+
+const AUTO_APPROVE_CAPABILITIES: CapabilityMeta[] = [
+  {
+    capability: "read",
+    label: "Auto-approve read actions",
+    subtitle: "Agent reads balances, history, and prices without asking.",
+    icon: Eye,
+    accessibilityHint:
+      "When on, the agent can perform read-only actions without prompting.",
+  },
+  {
+    capability: "simulate",
+    label: "Auto-approve simulations",
+    subtitle: "Agent estimates gas and dry-runs calls silently.",
+    icon: PlayCircle,
+    accessibilityHint:
+      "When on, gas estimates and contract simulations run without prompting.",
   },
 ];
 
@@ -127,7 +173,7 @@ export default function AgentPermissionsScreen() {
   const [selectedWalletIndex, setSelectedWalletIndex] =
     useState<number>(activeWalletIndex);
   const [showWalletPicker, setShowWalletPicker] = useState(false);
-  const [, forceRender] = useState(0);
+  const [renderKey, forceRender] = useState(0);
 
   // If the tab-level active wallet changes, follow it.
   useEffect(() => {
@@ -159,7 +205,8 @@ export default function AgentPermissionsScreen() {
   const grants = useMemo(() => {
     if (!store || !address) return [];
     return listRenderableGrants(store.list(address));
-  }, [store, address]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- renderKey triggers recalc after store mutations
+  }, [store, address, renderKey]);
 
   const currentMode = useMemo(() => computeCurrentMode(grants), [grants]);
 
@@ -223,7 +270,23 @@ export default function AgentPermissionsScreen() {
           granted_at: now,
         });
       } else if (mode === "agent_decides") {
-        store.revokeAll(address);
+        // Clear ONLY the global-scope grant — capability/tool grants
+        // are user-managed via the auto-approve section and the active
+        // grants list, and shouldn't disappear because the user moved
+        // the global default. Mirrors `revokeAll` semantics but
+        // narrowed to scope: global.
+        store.remove({
+          scope: { kind: "global" },
+          lifetime: { type: "permanent" },
+          wallet_address: address,
+          granted_at: now,
+        });
+        store.remove({
+          scope: { kind: "global" },
+          lifetime: { type: "always_ask" },
+          wallet_address: address,
+          granted_at: now,
+        });
       } else {
         // full_auto
         store.add({
@@ -231,6 +294,31 @@ export default function AgentPermissionsScreen() {
           lifetime: { type: "permanent" },
           wallet_address: address,
           granted_at: now,
+        });
+      }
+      refresh();
+    },
+    [store, address, refresh],
+  );
+
+  const applyCapabilityAutoApprove = useCallback(
+    (capability: "read" | "simulate", enabled: boolean) => {
+      if (!store || !address) return;
+      if (enabled) {
+        store.add({
+          scope: { kind: "capability", key: capability },
+          lifetime: { type: "permanent" },
+          wallet_address: address,
+          granted_at: Date.now(),
+        });
+      } else {
+        // `remove` matches by scope; lifetime/granted_at are ignored by
+        // the comparator (see `permissionGrantStore.remove`).
+        store.remove({
+          scope: { kind: "capability", key: capability },
+          lifetime: { type: "permanent" },
+          wallet_address: address,
+          granted_at: 0,
         });
       }
       refresh();
@@ -270,12 +358,11 @@ export default function AgentPermissionsScreen() {
       // agent_decides
       Alert.alert(
         "Switch to Agent decides?",
-        "This clears every active grant for this wallet. The agent will fall back to your wallet's approval policy.",
+        "This removes the global override and falls back to your wallet's approval policy. Your auto-approve toggles and per-tool grants stay as-is.",
         [
           { text: "Cancel", style: "cancel" },
           {
-            text: "Clear and switch",
-            style: "destructive",
+            text: "Switch",
             onPress: () => applyMode(mode),
           },
         ],
@@ -473,6 +560,98 @@ export default function AgentPermissionsScreen() {
                 })
               )}
             </View>
+          </View>
+
+          {/* Auto-approve by category */}
+          <View className="mx-4 mb-6">
+            <Text className="text-light-matte-black/50 text-xs uppercase tracking-wide mb-2 ml-1">
+              Auto-approve by category
+            </Text>
+            <View
+              className="bg-light rounded-2xl overflow-hidden"
+              style={{
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.04,
+                shadowRadius: 6,
+                elevation: 1,
+              }}
+            >
+              {AUTO_APPROVE_CAPABILITIES.map((meta, index) => {
+                const isOn = isCapabilityAutoApproved(grants, meta.capability);
+                const Icon = meta.icon;
+                return (
+                  <View
+                    key={meta.capability}
+                    accessible
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: isOn }}
+                    accessibilityLabel={meta.label}
+                    accessibilityHint={meta.accessibilityHint}
+                    className={`px-4 py-3 flex-row items-center ${index > 0 ? "border-t border-light-matte-black/5" : ""}`}
+                  >
+                    <View className="w-9 h-9 rounded-xl bg-light-primary-red/10 items-center justify-center mr-3">
+                      <Icon size={18} color="#c71c4b" />
+                    </View>
+                    <View className="flex-1 pr-3">
+                      <Text className="text-light-matte-black font-semibold">
+                        {meta.label}
+                      </Text>
+                      <Text className="text-light-matte-black/60 text-xs mt-0.5">
+                        {meta.subtitle}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={isOn}
+                      onValueChange={(next) =>
+                        applyCapabilityAutoApprove(meta.capability, next)
+                      }
+                      trackColor={{ false: "#E5E7EB", true: "#c71c4b" }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+                );
+              })}
+            </View>
+            <Text className="text-light-matte-black/50 text-xs mt-2 ml-1 leading-4">
+              Toggles add a permanent grant for that category. They override
+              the default mode for matching tools.
+            </Text>
+          </View>
+
+          {/* Transfer thresholds link */}
+          <View className="mx-4 mb-6">
+            <Text className="text-light-matte-black/50 text-xs uppercase tracking-wide mb-2 ml-1">
+              Transfer auto-approve
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.push("/transfer-thresholds")}
+              accessibilityRole="button"
+              accessibilityLabel="Open transfer thresholds settings"
+              className="bg-light rounded-2xl px-4 py-3 flex-row items-center"
+              style={{
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.04,
+                shadowRadius: 6,
+                elevation: 1,
+              }}
+            >
+              <View className="w-9 h-9 rounded-xl bg-light-primary-red/10 items-center justify-center mr-3">
+                <SlidersHorizontal size={18} color="#c71c4b" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-light-matte-black font-semibold">
+                  Transfer thresholds
+                </Text>
+                <Text className="text-light-matte-black/60 text-xs mt-0.5">
+                  Auto-approve transfers below a USD limit. Per-token
+                  overrides supported.
+                </Text>
+              </View>
+              <ChevronRight size={18} color="#c71c4b" />
+            </TouchableOpacity>
           </View>
 
           {/* Default mode selector */}

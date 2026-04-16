@@ -24,8 +24,10 @@ import { pendingTxStore } from "../pendingTxStore.ts";
 import {
   type ConnectedWallet,
   resolveUXTreatment,
+  type TransferInfo,
   type UXTreatment,
 } from "../resolveUxTreatment.ts";
+import { NATIVE_TOKEN_KEY } from "../transferThresholdStore.ts";
 import type { AgentSession } from "./agentSession.ts";
 import { postProgress, postRespond, rejectTool } from "./networkHelpers.ts";
 import type { ToolPendingPayload, ToolResult } from "./protocol.ts";
@@ -94,6 +96,7 @@ export async function handleToolPending(
       wallet,
       session.session_id,
       payload.meta.amount_usd,
+      extractTransferInfo(payload),
     );
   } catch (err) {
     session.pending_approvals.delete(toolCallId);
@@ -370,4 +373,52 @@ async function safeReject(
  */
 function getConnectedWallet(session: AgentSession): ConnectedWallet | null {
   return session.connectedWallet ?? null;
+}
+
+/**
+ * Pull `TransferInfo` (chain id + token) out of the tool payload for
+ * value-moving tools so the resolver can consult per-token thresholds.
+ *
+ * Returns `undefined` for any tool that isn't a recognised transfer —
+ * the resolver then falls back to the policy's legacy single-threshold
+ * logic. We intentionally only handle `send_native_token` and
+ * `transfer_erc20`: those are the two tools whose payloads carry an
+ * unambiguous transfer-target token. `write_contract` could in theory
+ * also move value, but inferring "this is a transfer" from arbitrary
+ * calldata is the kind of guesswork that produces wrong-bucket
+ * thresholds — better to leave those on the legacy path until the
+ * server tags them explicitly.
+ */
+function extractTransferInfo(
+  payload: ToolPendingPayload,
+): TransferInfo | undefined {
+  const input = payload.input as Record<string, unknown>;
+  const chainIdRaw = input.chain_id;
+  const chainId =
+    typeof chainIdRaw === "number" && Number.isInteger(chainIdRaw)
+      ? chainIdRaw
+      : undefined;
+  if (chainId === undefined || chainId <= 0) return undefined;
+
+  if (payload.name === "send_native_token") {
+    return {
+      chainId,
+      contractAddressOrNative: NATIVE_TOKEN_KEY,
+      isNative: true,
+    };
+  }
+
+  if (payload.name === "transfer_erc20") {
+    const contract = input.contract_address;
+    if (typeof contract !== "string" || !contract.startsWith("0x")) {
+      return undefined;
+    }
+    return {
+      chainId,
+      contractAddressOrNative: contract.toLowerCase(),
+      isNative: false,
+    };
+  }
+
+  return undefined;
 }

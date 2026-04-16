@@ -659,11 +659,17 @@ export const getWalletTokens: MobileToolExecutor = (input, context) =>
     // model to reason ("does the user hold USDC on polygon?"). The
     // rich per-token rows go in `display`, which the server strips
     // before feeding the result to the LLM. See `protocol.ts::ToolResult`.
+    // Include `address` and `decimals` so the agent can construct
+    // ERC20 transfers / approvals / contract calls without a second
+    // round-trip. Without these, `transfer_erc20` and `approve_erc20`
+    // calls fail with "I don't know the contract address".
     const toAgentSlice = (group: (typeof chains)[number]) => ({
       chain_id: group.chain_id,
       chain_name: group.chain_name,
       tokens: group.tokens.map((t) => ({
         symbol: t.symbol,
+        address: t.address,
+        decimals: t.decimals,
         is_native: t.is_native,
         ...(t.balance_display !== undefined
           ? { balance_display: t.balance_display }

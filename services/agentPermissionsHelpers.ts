@@ -65,21 +65,63 @@ export function computeCurrentMode(
   return "agent_decides";
 }
 
+// --- Capability auto-approve ----------------------------------------------
+
+/**
+ * Check whether a capability has an active "always allow" grant —
+ * i.e. a permanent grant scoped to `{ kind: "capability", key }`.
+ *
+ * Distinct from `computeCurrentMode`: that derives the global default
+ * from global-scope grants, while this answers "does the user have a
+ * standing pre-approval for this capability bucket?". The two are
+ * orthogonal — a user can be in "Agent decides" mode AND have read
+ * actions auto-approved at the capability level.
+ *
+ * Capability-permanent beats global `always_ask` because `resolveGrant`
+ * checks tool > capability > global in that order and returns the
+ * first non-empty match. So this toggle is a per-bucket override the
+ * user opts into deliberately.
+ */
+export function isCapabilityAutoApproved(
+  grants: PermissionGrant[],
+  capability: "read" | "simulate" | "write",
+): boolean {
+  return grants.some(
+    (g) =>
+      g.scope.kind === "capability" &&
+      (g.scope as { key: string }).key === capability &&
+      g.lifetime.type === "permanent",
+  );
+}
+
 // --- Scope label -----------------------------------------------------------
 
 /**
  * Human-readable label for a grant scope.
  *
  * - `{ kind: "tool", key: "send_native_token" }` → "send_native_token"
- * - `{ kind: "capability", key: "write" }`       → "blockchain_write"
+ * - `{ kind: "capability", key: "read" }`        → "Read actions"
  * - `{ kind: "global" }`                         → "All actions"
+ *
+ * Capability labels were previously the raw "blockchain_<key>" form
+ * mirrored from server logs. The settings screen now renders these
+ * as user-facing rows next to the auto-approve toggles, so they need
+ * to match the toggle labels.
  */
 export function formatScopeLabel(scope: GrantScope): string {
   switch (scope.kind) {
     case "tool":
       return scope.key;
     case "capability":
-      return `blockchain_${scope.key}`;
+      switch (scope.key) {
+        case "read":
+          return "Read actions";
+        case "simulate":
+          return "Simulate actions";
+        case "write":
+          return "Write actions";
+      }
+      return `blockchain_${(scope as { key: string }).key}`;
     case "global":
       return "All actions";
   }

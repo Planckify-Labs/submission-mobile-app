@@ -66,6 +66,7 @@ import {
   type ConnectedWallet,
   HOT_WALLET_POLICY,
 } from "@/services/resolveUxTreatment";
+import { getTransferThresholdStore } from "@/services/transferThresholdStore";
 import * as walletService from "@/services/walletService";
 import AgentOnboarding from "./AgentModeOnboarding/AgentOnboarding";
 import ChatInput from "./ChatInput";
@@ -311,6 +312,26 @@ export default function AgentMode() {
     return store;
   }, [activeWallet?.address]);
 
+  // Snapshot the wallet's transfer thresholds. Re-snapshots whenever
+  // the active wallet changes OR the store emits a change event (the
+  // settings screen mutates the same per-wallet store instance via
+  // `getTransferThresholdStore`, so edits propagate here without any
+  // explicit cross-screen wiring).
+  const [thresholdRev, bumpThresholdRev] = useState(0);
+  useEffect(() => {
+    const address = activeWallet?.address as `0x${string}` | undefined;
+    if (!address) return;
+    const store = getTransferThresholdStore(address);
+    return store.subscribe(() => bumpThresholdRev((n) => n + 1));
+  }, [activeWallet?.address]);
+
+  const transferThresholdsSnapshot = useMemo(() => {
+    const address = activeWallet?.address as `0x${string}` | undefined;
+    if (!address) return undefined;
+    return getTransferThresholdStore(address).snapshot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- thresholdRev is the explicit re-snapshot trigger
+  }, [activeWallet?.address, thresholdRev]);
+
   // ConnectedWallet — plumbed into `resolveUxTreatment` via the session.
   const connectedWallet: ConnectedWallet | null = useMemo(() => {
     const address = activeWallet?.address as `0x${string}` | undefined;
@@ -319,8 +340,9 @@ export default function AgentMode() {
       address,
       approvalPolicy: HOT_WALLET_POLICY,
       grantStore,
+      transferThresholds: transferThresholdsSnapshot,
     };
-  }, [activeWallet?.address, grantStore]);
+  }, [activeWallet?.address, grantStore, transferThresholdsSnapshot]);
 
   // Executor context — forwarded to every mobile tool call.
   // `activeChainId` is the fallback the executors use when the agent

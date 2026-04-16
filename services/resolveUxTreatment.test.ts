@@ -302,3 +302,172 @@ describe("resolveFromPolicy — unit coverage of the pure helper", () => {
     );
   });
 });
+
+// --- Per-token transfer thresholds ----------------------------------------
+
+describe("resolveFromPolicy with transfer thresholds", () => {
+  const baseHot: ApprovalPolicy = {
+    read: "silent",
+    simulate: "preview",
+    write: "confirm",
+  };
+
+  it("uses native default when transferring native and no override exists", () => {
+    // $3 < $5 default → preview
+    assert.equal(
+      resolveFromPolicy(
+        baseHot,
+        "write",
+        "send_native_token",
+        3,
+        {
+          default_native_usd: 5,
+          default_token_usd: 25,
+          overrides: {},
+        },
+        { chainId: 1, contractAddressOrNative: "native", isNative: true },
+      ),
+      "preview",
+    );
+  });
+
+  it("uses token default when transferring ERC-20 and no override exists", () => {
+    // $20 < $25 default → preview
+    assert.equal(
+      resolveFromPolicy(
+        baseHot,
+        "write",
+        "transfer_erc20",
+        20,
+        {
+          default_native_usd: 5,
+          default_token_usd: 25,
+          overrides: {},
+        },
+        {
+          chainId: 1,
+          contractAddressOrNative:
+            "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          isNative: false,
+        },
+      ),
+      "preview",
+    );
+  });
+
+  it("per-token override beats the default (whitelist scenario)", () => {
+    // Default = $0 (always ask) but USDC has a $200 override
+    const policy = baseHot;
+    const treatment = resolveFromPolicy(
+      policy,
+      "write",
+      "transfer_erc20",
+      150, // below the override
+      {
+        default_native_usd: 0,
+        default_token_usd: 0,
+        overrides: {
+          "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
+            chainId: 1,
+            contractAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            symbol: "USDC",
+            isNative: false,
+            threshold_usd: 200,
+          },
+        },
+      },
+      {
+        chainId: 1,
+        contractAddressOrNative:
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        isNative: false,
+      },
+    );
+    assert.equal(treatment, "preview");
+  });
+
+  it("per-token override of 0 forces always-ask (blacklist scenario)", () => {
+    // Token default would auto-approve $20, but USDC override = $0
+    const treatment = resolveFromPolicy(
+      baseHot,
+      "write",
+      "transfer_erc20",
+      20,
+      {
+        default_native_usd: 5,
+        default_token_usd: 100,
+        overrides: {
+          "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
+            chainId: 1,
+            contractAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            symbol: "USDC",
+            isNative: false,
+            threshold_usd: 0,
+          },
+        },
+      },
+      {
+        chainId: 1,
+        contractAddressOrNative:
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        isNative: false,
+      },
+    );
+    assert.equal(treatment, "confirm");
+  });
+
+  it("amount equal to threshold falls through to confirm (strict less-than)", () => {
+    assert.equal(
+      resolveFromPolicy(
+        baseHot,
+        "write",
+        "send_native_token",
+        25, // == threshold, not <
+        {
+          default_native_usd: 25,
+          default_token_usd: 50,
+          overrides: {},
+        },
+        { chainId: 1, contractAddressOrNative: "native", isNative: true },
+      ),
+      "confirm",
+    );
+  });
+
+  it("falls back to legacy auto_approve_below_usd when no thresholds passed", () => {
+    // No thresholds + legacy field set → legacy path runs
+    const policy: ApprovalPolicy = {
+      ...baseHot,
+      auto_approve_below_usd: 50,
+    };
+    assert.equal(
+      resolveFromPolicy(policy, "write", "send_native_token", 10),
+      "preview",
+    );
+  });
+
+  it("threshold path overrides legacy field when both are configured", () => {
+    // Legacy says auto-approve below $100, but new thresholds say $5 native.
+    // $50 < $100 (legacy would preview) but $50 > $5 (thresholds say confirm)
+    // → thresholds win.
+    const policy: ApprovalPolicy = {
+      ...baseHot,
+      auto_approve_below_usd: 100,
+    };
+    assert.equal(
+      resolveFromPolicy(
+        policy,
+        "write",
+        "send_native_token",
+        50,
+        {
+          default_native_usd: 5,
+          default_token_usd: 25,
+          overrides: {},
+        },
+        { chainId: 1, contractAddressOrNative: "native", isNative: true },
+      ),
+      "confirm",
+    );
+  });
+});

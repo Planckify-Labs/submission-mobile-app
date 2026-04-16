@@ -18,6 +18,29 @@ import {
   resolveGrant,
   type ToolCapability,
 } from "./permissionGrantStore.ts";
+import {
+  resolveTransferThreshold,
+  type TransferThresholds,
+} from "./transferThresholdStore.ts";
+
+/**
+ * Optional transfer context passed to `resolveUXTreatment` when the
+ * tool being dispatched is a value-moving transfer (`send_native_token`
+ * or `transfer_erc20`). Populated by the dispatcher from the tool
+ * payload — see `extractTransferInfo` there.
+ *
+ * The fields here are exactly what `resolveTransferThreshold` needs to
+ * pick the right per-token override or default. Decoupled from the
+ * tool input shape so this resolver doesn't have to know about every
+ * future transfer-style tool's schema.
+ */
+export interface TransferInfo {
+  chainId: number;
+  /** Lowercased contract address, or `"native"` for the chain's native currency. */
+  contractAddressOrNative: string;
+  symbol?: string;
+  isNative: boolean;
+}
 
 // --- Types ------------------------------------------------------------------
 
@@ -66,6 +89,19 @@ export interface ConnectedWallet {
   address: `0x${string}`;
   approvalPolicy: ApprovalPolicy;
   grantStore: PermissionGrantStore;
+  /**
+   * Snapshot of the wallet's transfer auto-approve thresholds.
+   *
+   * Optional — when absent, the resolver falls back to the policy's
+   * single `auto_approve_below_usd` value (the legacy single-threshold
+   * behaviour). Present when the dispatcher reads from
+   * `getTransferThresholdStore(wallet)` at session bootstrap.
+   *
+   * A snapshot rather than a live store reference because the resolver
+   * is pure and we want every call from the dispatcher to use the
+   * snapshot consistent with that tool_pending event.
+   */
+  transferThresholds?: TransferThresholds;
 }
 
 // --- Built-in policies ------------------------------------------------------
@@ -135,6 +171,7 @@ export function resolveUXTreatment(
   wallet: ConnectedWallet,
   sessionId: string,
   amountUsd?: number,
+  transferInfo?: TransferInfo,
 ): UXTreatment {
   const grant = resolveGrant(
     toolName,
@@ -162,6 +199,8 @@ export function resolveUXTreatment(
         capability,
         toolName,
         amountUsd,
+        wallet.transferThresholds,
+        transferInfo,
       );
   }
 }
@@ -174,25 +213,55 @@ export function resolveUXTreatment(
  * Order of precedence:
  *   1. `tool_overrides[toolName]` — absolute win if set.
  *   2. `policy[capability]` — the base treatment.
- *   3. Downgrade `confirm` → `preview` when
- *      `auto_approve_below_usd` is configured AND the call's
- *      `amountUsd` is strictly below that threshold.
+ *   3. Downgrade `confirm` → `preview` when:
+ *      a. transfer thresholds are configured AND `transferInfo` is
+ *         present — use `resolveTransferThreshold` to find the
+ *         per-token override or per-kind default.
+ *      b. otherwise fall back to the legacy single-threshold
+ *         `auto_approve_below_usd` field on the policy.
+ *
+ * The transfer-threshold path takes priority over the legacy field
+ * when both are configured. That gives users who upgrade the new
+ * granular control without losing the old behaviour for non-transfer
+ * tools.
  */
 export function resolveFromPolicy(
   policy: ApprovalPolicy,
   capability: ToolCapability,
   toolName: string,
   amountUsd?: number,
+  thresholds?: TransferThresholds,
+  transferInfo?: TransferInfo,
 ): UXTreatment {
   const override = policy.tool_overrides?.[toolName];
   if (override) return override;
 
   const base = policy[capability];
 
+  if (base !== "confirm" || amountUsd === undefined) {
+    return base;
+  }
+
+  // Path A — granular per-token thresholds. Only consulted for transfer-style
+  // tools where the dispatcher could extract the token info.
+  if (thresholds && transferInfo) {
+    const resolved = resolveTransferThreshold(
+      thresholds,
+      transferInfo.chainId,
+      transferInfo.contractAddressOrNative,
+      transferInfo.isNative,
+    );
+    if (resolved.threshold_usd > 0 && amountUsd < resolved.threshold_usd) {
+      return "preview";
+    }
+    return base;
+  }
+
+  // Path B — legacy single-threshold fallback. Preserves existing
+  // behaviour for tools that aren't transfers (or wallets that haven't
+  // configured the granular thresholds yet).
   if (
-    base === "confirm" &&
     policy.auto_approve_below_usd !== undefined &&
-    amountUsd !== undefined &&
     amountUsd < policy.auto_approve_below_usd
   ) {
     return "preview";
