@@ -73,9 +73,7 @@ describe("decodeCalldata — edge cases", () => {
 
   it("returns partial info for an unknown selector", () => {
     // Random 4-byte selector + arg bytes.
-    const d = decodeCalldata(
-      `0xdeadbeef${"00".repeat(64)}` as `0x${string}`,
-    );
+    const d = decodeCalldata(`0xdeadbeef${"00".repeat(64)}` as `0x${string}`);
     assert.ok(d);
     assert.equal(d.selector, "0xdeadbeef");
     assert.equal(d.signature, null);
@@ -96,5 +94,90 @@ describe("decodeCalldata — edge cases", () => {
     assert.equal(d.selector, "0xa9059cbb");
     // signature may be null (decode failed) or populated (viem tolerates
     // some shortness). Either way — must not throw.
+  });
+});
+
+describe("decodeCalldata — TWV-2026-009 risk classification", () => {
+  const OPERATOR = "0x1234567890123456789012345678901234567890" as const;
+  const SPENDER = "0xabcdef0123456789abcdef0123456789abcdef01" as const;
+  const UINT256_MAX = (1n << 256n) - 1n;
+
+  it("flags setApprovalForAll(operator, true) as a distinct risk variant", () => {
+    const data = encode(
+      "function setApprovalForAll(address operator, bool approved)",
+      [OPERATOR, true],
+    );
+    const d = decodeCalldata(data);
+    assert.ok(d);
+    assert.equal(d.risk?.kind, "setApprovalForAll");
+    if (d.risk?.kind === "setApprovalForAll") {
+      assert.equal(d.risk.operator.toLowerCase(), OPERATOR);
+      assert.equal(d.risk.approved, true);
+    }
+  });
+
+  it("flags setApprovalForAll(operator, false) as a distinct revoke variant", () => {
+    const data = encode(
+      "function setApprovalForAll(address operator, bool approved)",
+      [OPERATOR, false],
+    );
+    const d = decodeCalldata(data);
+    assert.ok(d);
+    assert.equal(d.risk?.kind, "setApprovalForAll");
+    if (d.risk?.kind === "setApprovalForAll") {
+      assert.equal(d.risk.approved, false);
+    }
+  });
+
+  it("flags approve(spender, uint256.max) as unlimited", () => {
+    const data = encode(
+      "function approve(address spender, uint256 amount)",
+      [SPENDER, UINT256_MAX],
+    );
+    const d = decodeCalldata(data);
+    assert.ok(d);
+    assert.equal(d.risk?.kind, "approve");
+    if (d.risk?.kind === "approve") {
+      assert.equal(d.risk.isUnlimited, true);
+      assert.equal(d.risk.spender.toLowerCase(), SPENDER);
+    }
+  });
+
+  it("flags approve(spender, half-of-max) as unlimited (>= threshold)", () => {
+    const half = UINT256_MAX / 2n;
+    const data = encode(
+      "function approve(address spender, uint256 amount)",
+      [SPENDER, half],
+    );
+    const d = decodeCalldata(data);
+    assert.ok(d);
+    if (d.risk?.kind === "approve") {
+      assert.equal(d.risk.isUnlimited, true);
+    } else {
+      assert.fail("expected approve risk");
+    }
+  });
+
+  it("does NOT flag approve(spender, small) as unlimited", () => {
+    const data = encode(
+      "function approve(address spender, uint256 amount)",
+      [SPENDER, 1_000_000n],
+    );
+    const d = decodeCalldata(data);
+    assert.ok(d);
+    assert.equal(d.risk?.kind, "approve");
+    if (d.risk?.kind === "approve") {
+      assert.equal(d.risk.isUnlimited, false);
+    }
+  });
+
+  it("does NOT attach risk metadata to plain transfer calldata", () => {
+    const data = encode("function transfer(address to, uint256 amount)", [
+      OPERATOR,
+      1n,
+    ]);
+    const d = decodeCalldata(data);
+    assert.ok(d);
+    assert.equal(d.risk, undefined);
   });
 });

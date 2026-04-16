@@ -7,10 +7,10 @@
  */
 
 import * as SQLite from "expo-sqlite";
+import { getAddress } from "viem";
+import { supportedChains } from "@/constants/configs/chainConfig";
 // expo-file-system used for image caching
 import { getPublicClient } from "@/utils/clients";
-import { supportedChains } from "@/constants/configs/chainConfig";
-import { getAddress } from "viem";
 
 const IPFS_GATEWAYS = [
   "https://gateway.pinata.cloud/ipfs/",
@@ -57,7 +57,7 @@ function getDb(): SQLite.SQLiteDatabase {
         "attributes TEXT, " +
         "cached_at INTEGER NOT NULL, " +
         "PRIMARY KEY (contract_address, token_id, chain_id)" +
-        ");"
+        ");",
     );
   }
   return db;
@@ -68,7 +68,11 @@ export interface NFTMetadata {
   description?: string;
   imageUrl?: string;
   animationUrl?: string;
-  attributes: Array<{ traitType: string; value: string | number; displayType?: string }>;
+  attributes: Array<{
+    traitType: string;
+    value: string | number;
+    displayType?: string;
+  }>;
 }
 
 export async function resolveMetadata(
@@ -104,7 +108,8 @@ async function fetchTokenURI(
   const client = getPublicClient(chain);
 
   try {
-    const abi = tokenType === "ERC-721" ? ERC721_TOKEN_URI_ABI : ERC1155_URI_ABI;
+    const abi =
+      tokenType === "ERC-721" ? ERC721_TOKEN_URI_ABI : ERC1155_URI_ABI;
     const functionName = tokenType === "ERC-721" ? "tokenURI" : "uri";
 
     const result = await client.readContract({
@@ -125,7 +130,9 @@ async function fetchMetadataFromURI(uri: string): Promise<NFTMetadata | null> {
   if (!resolvedUrl) return null;
 
   try {
-    const response = await fetch(resolvedUrl, { signal: AbortSignal.timeout(10_000) });
+    const response = await fetch(resolvedUrl, {
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!response.ok) return null;
 
     const json = await response.json();
@@ -147,18 +154,28 @@ async function fetchMetadataFromURI(uri: string): Promise<NFTMetadata | null> {
 
 function resolveURI(uri: string | undefined | null): string | undefined {
   if (!uri) return undefined;
-  if (uri.startsWith("ipfs://")) return `${IPFS_GATEWAYS[0]}${uri.replace("ipfs://", "")}`;
-  if (uri.startsWith("ar://")) return `${ARWEAVE_GATEWAY}${uri.replace("ar://", "")}`;
+  if (uri.startsWith("ipfs://"))
+    return `${IPFS_GATEWAYS[0]}${uri.replace("ipfs://", "")}`;
+  if (uri.startsWith("ar://"))
+    return `${ARWEAVE_GATEWAY}${uri.replace("ar://", "")}`;
   if (uri.startsWith("http://") || uri.startsWith("https://")) return uri;
   if (uri.startsWith("data:")) return uri;
   return undefined;
 }
 
-function getCachedMetadata(contractAddress: string, tokenId: string, chainId: number): NFTMetadata | null {
+function getCachedMetadata(
+  contractAddress: string,
+  tokenId: string,
+  chainId: number,
+): NFTMetadata | null {
   const database = getDb();
   const row = database.getFirstSync<{
-    name: string; description: string | null; image_url: string | null;
-    animation_url: string | null; attributes: string; cached_at: number;
+    name: string;
+    description: string | null;
+    image_url: string | null;
+    animation_url: string | null;
+    attributes: string;
+    cached_at: number;
   }>(
     "SELECT * FROM metadata WHERE contract_address = ? AND token_id = ? AND chain_id = ?",
     [contractAddress, tokenId, chainId],
@@ -173,16 +190,33 @@ function getCachedMetadata(contractAddress: string, tokenId: string, chainId: nu
   };
 }
 
-function cacheMetadata(contractAddress: string, tokenId: string, chainId: number, metadata: NFTMetadata): void {
+function cacheMetadata(
+  contractAddress: string,
+  tokenId: string,
+  chainId: number,
+  metadata: NFTMetadata,
+): void {
   const database = getDb();
   database.runSync(
     "INSERT OR REPLACE INTO metadata (contract_address, token_id, chain_id, name, description, image_url, animation_url, attributes, cached_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [contractAddress, tokenId, chainId, metadata.name, metadata.description ?? null,
-     metadata.imageUrl ?? null, metadata.animationUrl ?? null, JSON.stringify(metadata.attributes), Date.now()],
+    [
+      contractAddress,
+      tokenId,
+      chainId,
+      metadata.name,
+      metadata.description ?? null,
+      metadata.imageUrl ?? null,
+      metadata.animationUrl ?? null,
+      JSON.stringify(metadata.attributes),
+      Date.now(),
+    ],
   );
 }
 
-export async function cacheImage(_imageUrl: string, _key: string): Promise<string | null> {
+export async function cacheImage(
+  _imageUrl: string,
+  _key: string,
+): Promise<string | null> {
   // Image caching deferred — will use expo-image's built-in cache
   // which handles download + disk persistence automatically.
   // Returning the original URL for now; expo-image caches it internally.

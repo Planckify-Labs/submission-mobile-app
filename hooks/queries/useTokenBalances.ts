@@ -4,16 +4,19 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { indexerRegistry } from "@/services/indexer/registry";
 import { getCached, setCache } from "@/services/indexer/cache";
+import { indexerRegistry } from "@/services/indexer/registry";
 import type { TokenBalance } from "@/services/indexer/types";
 import { checkSpam } from "@/services/tokens/spamFilter";
 import {
-  isDefaultToken,
   getAllTokenPrefs,
   getUserTokens,
+  isDefaultToken,
 } from "@/services/tokens/tokenList";
-import type { GroupedTokenBalances, TokenBalanceItem } from "@/services/tokens/types";
+import type {
+  GroupedTokenBalances,
+  TokenBalanceItem,
+} from "@/services/tokens/types";
 
 export const tokenBalancesQueryKeys = {
   grouped: (address: string, chainId: number) =>
@@ -52,10 +55,7 @@ function groupTokens(items: TokenBalanceItem[]): GroupedTokenBalances {
   for (const item of items) {
     if (item.isHidden || item.isSpam) {
       hidden.push(item);
-    } else if (
-      item.source === "auto-discovered" &&
-      !item.isPinned
-    ) {
+    } else if (item.source === "auto-discovered" && !item.isPinned) {
       discovered.push(item);
     } else {
       main.push(item);
@@ -80,13 +80,23 @@ export function useGroupedTokenBalances(
 ) {
   return useQuery({
     queryKey: tokenBalancesQueryKeys.grouped(address ?? "", chainId),
-    queryFn: async (): Promise<{ data: GroupedTokenBalances; isStale: boolean }> => {
+    queryFn: async (): Promise<{
+      data: GroupedTokenBalances;
+      isStale: boolean;
+    }> => {
       if (!address) {
-        return { data: { main: [], discovered: [], hidden: [] }, isStale: false };
+        return {
+          data: { main: [], discovered: [], hidden: [] },
+          isStale: false,
+        };
       }
 
       // Check cache
-      const cached = getCached<TokenBalance[]>("tokenBalances", address, chainId);
+      const cached = getCached<TokenBalance[]>(
+        "tokenBalances",
+        address,
+        chainId,
+      );
 
       let balances: TokenBalance[];
       let isStale = false;
@@ -103,7 +113,10 @@ export function useGroupedTokenBalances(
           balances = cached.data;
           isStale = true;
         } else {
-          return { data: { main: [], discovered: [], hidden: [] }, isStale: false };
+          return {
+            data: { main: [], discovered: [], hidden: [] },
+            isStale: false,
+          };
         }
       }
 

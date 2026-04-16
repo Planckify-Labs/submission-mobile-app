@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect } from "react";
-import { View, Text, Pressable } from "react-native";
-import { authenticateBiometric, isBiometricAvailable } from "@/services/security/appLock";
+import { Pressable, Text, View } from "react-native";
+import {
+  authenticateBiometric,
+  isBiometricAvailable,
+} from "@/services/security/appLock";
 
 interface BiometricPromptProps {
   reason?: string;
@@ -9,7 +12,12 @@ interface BiometricPromptProps {
   onCancel?: () => void;
 }
 
-export function BiometricPrompt({ reason, onSuccess, onFallbackToPin, onCancel }: BiometricPromptProps) {
+export function BiometricPrompt({
+  reason,
+  onSuccess,
+  onFallbackToPin,
+  onCancel,
+}: BiometricPromptProps) {
   const attempt = useCallback(async () => {
     const available = await isBiometricAvailable();
     if (!available) {
@@ -38,12 +46,17 @@ export function BiometricPrompt({ reason, onSuccess, onFallbackToPin, onCancel }
         {reason ?? "Authenticate to continue"}
       </Text>
 
-      <Pressable onPress={attempt} className="bg-blue-600 rounded-xl py-4 px-8 mb-4">
+      <Pressable
+        onPress={attempt}
+        className="bg-blue-600 rounded-xl py-4 px-8 mb-4"
+      >
         <Text className="text-white font-semibold">Try Again</Text>
       </Pressable>
 
       <Pressable onPress={onFallbackToPin}>
-        <Text className="text-blue-600 dark:text-blue-400 font-medium">Use PIN Instead</Text>
+        <Text className="text-blue-600 dark:text-blue-400 font-medium">
+          Use PIN Instead
+        </Text>
       </Pressable>
 
       {onCancel && (

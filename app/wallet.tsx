@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import {
   ChevronRight,
+  Info,
   Plus,
   Shield,
   Wallet as WalletIcon,
@@ -297,6 +298,45 @@ export default function Wallet() {
                   numberOfLines={1}
                 >
                   Agent Permissions
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={18} color="#c71c4b" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="About Takumi Wallet"
+            accessibilityHint="Show bundle IDs, signing certificate fingerprint, and official distribution links"
+            className="bg-light rounded-2xl p-4 mb-4 flex-row items-center justify-between mx-4"
+            onPress={() =>
+              // Cast rationale: same as the Agent Permissions row —
+              // `/about` is a new route and the typed-routes union only
+              // refreshes once the dev server runs.
+              router.push("/about" as never)
+            }
+            style={{
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.04,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+          >
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-light-primary-red/10 items-center justify-center mr-3">
+                <Info size={20} color="#c71c4b" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-light-matte-black/50 text-xs mb-0.5">
+                  Settings
+                </Text>
+                <Text
+                  className="text-light-matte-black font-semibold text-base"
+                  numberOfLines={1}
+                >
+                  About
                 </Text>
               </View>
             </View>

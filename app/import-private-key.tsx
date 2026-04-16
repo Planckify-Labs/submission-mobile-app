@@ -17,39 +17,70 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import Bip39PasteWarningModal from "@/components/security/Bip39PasteWarningModal";
+import VanityPrefixWarningModal from "@/components/security/VanityPrefixWarningModal";
 import { useWallet } from "@/hooks/useWallet";
+import { looksLikeBip39 } from "@/services/security/sensitivePaste";
+import { checkVanityPrefixRisk } from "@/services/security/vanityPrefix";
+import { createWalletFromParams } from "@/utils/walletUtils";
 
 export default function ImportPrivateKeyScreen() {
   const [privateKey, setPrivateKey] = useState<string>("");
   const [showPrivateKey, setShowPrivateKey] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
+  const [pendingPaste, setPendingPaste] = useState<string | null>(null);
+  const [vanityWarning, setVanityWarning] = useState<{
+    address: string;
+    description: string;
+    privateKey: string;
+  } | null>(null);
   const { addWallet } = useWallet();
+
+  // TWV-2026-063 — commit a pasted private key. Private keys are also
+  // sensitive even when the warning is specifically BIP-39-shaped, so we
+  // clear the clipboard after any successful paste on this screen.
+  const commitPrivateKeyPaste = (text: string) => {
+    const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
+    if (!privateKeyRegex.test(text)) {
+      console.error("Invalid Private Key: Please paste a valid private key");
+      return;
+    }
+    setPrivateKey(text);
+  };
 
   const handlePasteFromClipboard = async () => {
     try {
       const text = await Clipboard.getStringAsync();
-
-      const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
-      if (!privateKeyRegex.test(text)) {
-        console.error("Invalid Private Key: Please paste a valid private key");
+      // Someone may paste a seed phrase onto the private-key screen by
+      // mistake. The warning is still appropriate — steer them to the
+      // seed-import screen rather than let the clipboard read pass
+      // silently.
+      if (looksLikeBip39(text)) {
+        setPendingPaste(text);
         return;
       }
-
-      setPrivateKey(text);
+      commitPrivateKeyPaste(text);
+      await Clipboard.setStringAsync("").catch(() => {});
     } catch (error) {
       console.error(error);
       console.error("Error: Failed to paste from clipboard");
     }
   };
 
-  const handleImport = () => {
-    const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
-    if (!privateKeyRegex.test(privateKey)) {
-      console.error("Invalid Private Key: Please enter a valid private key");
-      return;
-    }
+  const handlePasteAnyway = async () => {
+    const text = pendingPaste ?? "";
+    setPendingPaste(null);
+    commitPrivateKeyPaste(text);
+    await Clipboard.setStringAsync("").catch(() => {});
+  };
 
+  const handleTypeInstead = async () => {
+    setPendingPaste(null);
+    await Clipboard.setStringAsync("").catch(() => {});
+  };
+
+  const finalizeImport = (pk: string) => {
     setIsLoading(true);
     setLoadingMessage("Importing your wallet...");
 
@@ -63,7 +94,7 @@ export default function ImportPrivateKeyScreen() {
 
     addWallet({
       source: "PrivateKey",
-      privateKey: privateKey,
+      privateKey: pk,
       name: "My Wallet",
     })
       .then((success) => {
@@ -83,6 +114,44 @@ export default function ImportPrivateKeyScreen() {
         );
       });
   };
+
+  const handleImport = () => {
+    const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
+    if (!privateKeyRegex.test(privateKey)) {
+      console.error("Invalid Private Key: Please enter a valid private key");
+      return;
+    }
+
+    // TWV-2026-040 — check the derived address against the Profanity-
+    // class heuristic. This is the highest-leverage screen for the
+    // check because Profanity was itself a private-key generator.
+    const draft = createWalletFromParams({
+      source: "PrivateKey",
+      privateKey: privateKey,
+      name: "My Wallet",
+    });
+    if (draft) {
+      const risk = checkVanityPrefixRisk(draft.address);
+      if (risk.flagged && risk.description) {
+        setVanityWarning({
+          address: draft.address,
+          description: risk.description,
+          privateKey,
+        });
+        return;
+      }
+    }
+
+    finalizeImport(privateKey);
+  };
+
+  const handleVanityAcknowledge = () => {
+    const pending = vanityWarning;
+    setVanityWarning(null);
+    if (pending) finalizeImport(pending.privateKey);
+  };
+
+  const handleVanityCancel = () => setVanityWarning(null);
   return (
     <>
       <StatusBar barStyle="dark-content" />
@@ -155,6 +224,20 @@ export default function ImportPrivateKeyScreen() {
           visible={isLoading}
           title="Setting Up Your Wallet"
           message={loadingMessage}
+        />
+
+        <Bip39PasteWarningModal
+          visible={pendingPaste !== null}
+          onPasteAnyway={handlePasteAnyway}
+          onTypeInstead={handleTypeInstead}
+        />
+
+        <VanityPrefixWarningModal
+          visible={vanityWarning !== null}
+          address={vanityWarning?.address ?? ""}
+          description={vanityWarning?.description ?? ""}
+          onAcknowledge={handleVanityAcknowledge}
+          onCancel={handleVanityCancel}
         />
       </SafeAreaView>
     </>

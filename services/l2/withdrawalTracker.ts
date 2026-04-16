@@ -4,7 +4,11 @@
 
 import * as SQLite from "expo-sqlite";
 
-export type WithdrawalStatus = "pending" | "challenge-period" | "ready-to-finalize" | "finalized";
+export type WithdrawalStatus =
+  | "pending"
+  | "challenge-period"
+  | "ready-to-finalize"
+  | "finalized";
 
 export interface TrackedWithdrawal {
   hash: string;
@@ -34,19 +38,30 @@ function getDb(): SQLite.SQLiteDatabase {
         "hash TEXT PRIMARY KEY, chain_id INTEGER NOT NULL, l1_chain_id INTEGER NOT NULL, " +
         "from_addr TEXT NOT NULL, value TEXT NOT NULL, status TEXT NOT NULL, " +
         "submitted_at INTEGER NOT NULL, challenge_end_at INTEGER, finalized_at INTEGER" +
-        ");"
+        ");",
     );
   }
   return db;
 }
 
-export function trackWithdrawal(w: Omit<TrackedWithdrawal, "status" | "challengeEndAt">): void {
+export function trackWithdrawal(
+  w: Omit<TrackedWithdrawal, "status" | "challengeEndAt">,
+): void {
   const database = getDb();
   const period = CHALLENGE_PERIODS[w.chainId] ?? 7 * 86_400_000;
   const challengeEndAt = w.submittedAt + period;
   database.runSync(
     "INSERT OR REPLACE INTO withdrawals (hash, chain_id, l1_chain_id, from_addr, value, status, submitted_at, challenge_end_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    [w.hash, w.chainId, w.l1ChainId, w.from, w.value, "pending", w.submittedAt, challengeEndAt],
+    [
+      w.hash,
+      w.chainId,
+      w.l1ChainId,
+      w.from,
+      w.value,
+      "pending",
+      w.submittedAt,
+      challengeEndAt,
+    ],
   );
 }
 
@@ -75,7 +90,10 @@ function updateStatus(w: TrackedWithdrawal): TrackedWithdrawal {
   if (w.challengeEndAt && Date.now() >= w.challengeEndAt) {
     w.status = "ready-to-finalize";
     const database = getDb();
-    database.runSync("UPDATE withdrawals SET status = ? WHERE hash = ?", ["ready-to-finalize", w.hash]);
+    database.runSync("UPDATE withdrawals SET status = ? WHERE hash = ?", [
+      "ready-to-finalize",
+      w.hash,
+    ]);
   } else if (w.challengeEndAt) {
     w.status = "challenge-period";
   }
@@ -84,9 +102,12 @@ function updateStatus(w: TrackedWithdrawal): TrackedWithdrawal {
 
 function rowToWithdrawal(row: Record<string, unknown>): TrackedWithdrawal {
   return {
-    hash: row.hash as string, chainId: row.chain_id as number,
-    l1ChainId: row.l1_chain_id as number, from: row.from_addr as string,
-    value: row.value as string, status: row.status as WithdrawalStatus,
+    hash: row.hash as string,
+    chainId: row.chain_id as number,
+    l1ChainId: row.l1_chain_id as number,
+    from: row.from_addr as string,
+    value: row.value as string,
+    status: row.status as WithdrawalStatus,
     submittedAt: row.submitted_at as number,
     challengeEndAt: (row.challenge_end_at as number) ?? undefined,
     finalizedAt: (row.finalized_at as number) ?? undefined,

@@ -3,9 +3,13 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchTokenPrices, computePortfolioTotal, getCurrencyPreference } from "@/services/tokens/prices";
-import type { PortfolioSummary } from "@/services/tokens/prices";
 import type { TokenPrice } from "@/services/indexer/types";
+import type { PortfolioSummary } from "@/services/tokens/prices";
+import {
+  computePortfolioTotal,
+  fetchTokenPrices,
+  getCurrencyPreference,
+} from "@/services/tokens/prices";
 import type { TokenBalanceItem } from "@/services/tokens/types";
 
 export const priceQueryKeys = {

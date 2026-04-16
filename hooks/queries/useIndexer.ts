@@ -4,11 +4,9 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { indexerRegistry } from "@/services/indexer/registry";
+import type { CacheCategory } from "@/services/indexer/cache";
 import { getCached, setCache } from "@/services/indexer/cache";
-import type {
-  CacheCategory,
-} from "@/services/indexer/cache";
+import { indexerRegistry } from "@/services/indexer/registry";
 import type {
   ENSResolution,
   HistoryOpts,
@@ -88,7 +86,9 @@ export function useTokenBalances(address: string | undefined, chainId: number) {
 
 export function useTransactionHistory(opts: HistoryOpts | null) {
   return useQuery({
-    queryKey: indexerQueryKeys.transactionHistory(opts ?? { address: "", chainId: 0 }),
+    queryKey: indexerQueryKeys.transactionHistory(
+      opts ?? { address: "", chainId: 0 },
+    ),
     queryFn: async () => {
       const result = await cachedCall<PaginatedResult<WalletTransaction>>(
         "transactionHistory",
@@ -120,7 +120,10 @@ export function useNFTs(opts: NFTOpts | null) {
   });
 }
 
-export function useTokenApprovals(address: string | undefined, chainId: number) {
+export function useTokenApprovals(
+  address: string | undefined,
+  chainId: number,
+) {
   return useQuery({
     queryKey: indexerQueryKeys.tokenApprovals(address ?? "", chainId),
     queryFn: async () => {
@@ -154,7 +157,10 @@ export function useTokenPrices(addresses: string[], chainId: number) {
   });
 }
 
-export function useENSResolution(nameOrAddress: string | undefined, chainId: number) {
+export function useENSResolution(
+  nameOrAddress: string | undefined,
+  chainId: number,
+) {
   return useQuery({
     queryKey: indexerQueryKeys.ens(nameOrAddress ?? "", chainId),
     queryFn: async () => {

@@ -28,6 +28,21 @@ export function SheetModal({ onDismiss, children }: Props): React.ReactElement {
           edges={["bottom"]}
           className="bg-white rounded-t-2xl max-h-[92%]"
         >
+          {/*
+            TWV-2026-064 — trusted-UI indicator. Renders above the WebView
+            in the RN view hierarchy; a dApp page cannot forge this strip
+            because it's drawn native and the WebView fullscreen API is
+            disabled (see `injectedJavaScript` in `app/dapps-browser.tsx`).
+          */}
+          <View
+            accessibilityLabel="Takumi Wallet trusted prompt"
+            className="flex-row items-center px-3 py-1.5 bg-black rounded-t-2xl"
+          >
+            <View className="w-2 h-2 rounded-full bg-green-400 mr-2" />
+            <Text className="text-[11px] text-white font-semibold">
+              Takumi Wallet · signed prompt
+            </Text>
+          </View>
           <View className="flex-row justify-end px-2 pt-2">
             <TouchableOpacity
               onPress={onDismiss}

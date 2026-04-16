@@ -5,6 +5,7 @@ import type {
   ApprovalIntent,
 } from "@/services/bridge/approval";
 import type { SolanaSignMessagePayload } from "@/services/chains/solana/payloads";
+import { useScreenshotGuard } from "@/services/security/screenshotGuard";
 import { ApprovalShell } from "./ApprovalShell";
 import { PrimaryActions, SheetModal } from "./SheetModal";
 
@@ -17,6 +18,7 @@ export function SolanaSignMessageSheet({
   intent,
   onDecision,
 }: Props): React.ReactElement {
+  useScreenshotGuard();
   const p = intent.payload;
   return (
     <SheetModal

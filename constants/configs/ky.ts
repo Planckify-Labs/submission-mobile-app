@@ -1,5 +1,4 @@
 import { router } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import type { NormalizedOptions } from "ky";
 import ky from "ky";
 import { ApiConflictError } from "@/api/types/errors";
@@ -12,6 +11,7 @@ import {
   getRefreshTokenForWallet,
 } from "@/hooks/queries/useAuth";
 import { storage } from "@/lib/storage/mmkv";
+import { walletSecureSet } from "@/services/security/walletSecureStore";
 import * as walletService from "@/services/walletService";
 
 interface ApiError {
@@ -175,12 +175,9 @@ async function attemptSilentRefresh(): Promise<string | null> {
       // Persist the new token (per-wallet + legacy slot) so
       // subsequent `beforeRequest` hooks read it.
       if (activeAddr) {
-        await SecureStore.setItemAsync(
-          accessKeyFor(activeAddr),
-          parsed.access_token,
-        );
+        await walletSecureSet(accessKeyFor(activeAddr), parsed.access_token);
       }
-      await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, parsed.access_token);
+      await walletSecureSet(ACCESS_TOKEN_KEY, parsed.access_token);
 
       // Re-open the 401 guard so future stale tokens get another
       // refresh attempt / redirect.

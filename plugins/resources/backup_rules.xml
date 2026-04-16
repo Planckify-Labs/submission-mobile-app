@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TWV-2026-059 — legacy `fullBackupContent` rules (API 23–30).
+
+  Matches the API 31+ `data_extraction_rules.xml` intent: exclude
+  every data domain wholesale. `<full-backup-content>` is OR-semantics
+  with `<exclude>` — an empty `<include>` list with all-domain excludes
+  yields a no-op backup archive.
+-->
+<full-backup-content>
+  <exclude domain="root" />
+  <exclude domain="file" />
+  <exclude domain="database" />
+  <exclude domain="sharedpref" />
+  <exclude domain="external" />
+</full-backup-content>

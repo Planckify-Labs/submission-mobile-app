@@ -29,10 +29,7 @@ export class IndexerRegistry {
    * IndexerNotSupportedError or any runtime error, falling through
    * to the next. If all fail, throw the last error.
    */
-  async call<T>(
-    method: keyof IndexerProvider,
-    ...args: unknown[]
-  ): Promise<T> {
+  async call<T>(method: keyof IndexerProvider, ...args: unknown[]): Promise<T> {
     let lastError: Error | undefined;
 
     for (const provider of this.providers) {

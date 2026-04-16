@@ -1,11 +1,13 @@
 import type { TypedDataDefinition } from "viem";
 import { type DecodedPermit, tryDecodeErc2612 } from "./erc2612";
+import { isKnownSpender, type KnownSpender } from "./knownSpenders";
 import { type DecodedPermit2, tryDecodePermit2 } from "./permit2";
 
 export { tryDecodeErc2612, tryDecodePermit2 };
 export { decodeCalldata } from "./calldata";
 export { tryParseSiwe } from "./siwe";
-export type { DecodedPermit, DecodedPermit2 };
+export { isKnownSpender };
+export type { DecodedPermit, DecodedPermit2, KnownSpender };
 export type { DecodedArg, DecodedCalldata } from "./calldata";
 export type { ParsedSiwe } from "./siwe";
 

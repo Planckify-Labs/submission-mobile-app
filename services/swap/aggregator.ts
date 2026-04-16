@@ -38,15 +38,24 @@ export async function getSwapRoute(params: SwapParams): Promise<SwapRoute> {
   return response;
 }
 
-export function getPriceImpactSeverity(impact: number): "safe" | "warn" | "danger" {
+export function getPriceImpactSeverity(
+  impact: number,
+): "safe" | "warn" | "danger" {
   if (Math.abs(impact) < 2) return "safe";
   if (Math.abs(impact) < 10) return "warn";
   return "danger";
 }
 
-export function validateSlippage(slippage: number): { valid: boolean; warning?: string } {
+export function validateSlippage(slippage: number): {
+  valid: boolean;
+  warning?: string;
+} {
   if (slippage < 0.01) return { valid: false, warning: "Slippage too low" };
   if (slippage > 50) return { valid: false, warning: "Slippage too high" };
-  if (slippage > 1) return { valid: true, warning: "High slippage — you may receive significantly less" };
+  if (slippage > 1)
+    return {
+      valid: true,
+      warning: "High slippage — you may receive significantly less",
+    };
   return { valid: true };
 }

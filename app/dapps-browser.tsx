@@ -1,7 +1,18 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Keyboard, StatusBar, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
+
+// TWV-2026-015 — generate a per-session nonce from the OS CSPRNG via
+// the polyfill installed in `pollyfills.ts`. 16 random bytes → 32 hex
+// chars; uniqueness across navigations is what matters.
+function generateSessionNonce(): string {
+  const buf = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(buf);
+  return Array.from(buf)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 import BrowserAddressBar from "@/components/dapps-browser/BrowserAddressBar";
 import BrowserNavigationControls from "@/components/dapps-browser/BrowserNavigationControls";
 import DAppsHub from "@/components/dapps-browser/DAppsHub";
@@ -45,17 +56,27 @@ export default function DappsBrowser() {
     isSecure: true,
   });
 
+  // TWV-2026-015 — per-session nonce. Rotated on every top-frame nav
+  // (see `handleNavigate` below). Stamped into the injected provider's
+  // closure scope so sub-frame postMessage forgery is rejected by the
+  // bridge.
+  const [sessionNonce, setSessionNonce] = useState<string>(() =>
+    generateSessionNonce(),
+  );
+
   const ctxRef = useRef<AdapterContext>({
     activeWallet: null,
     wallets: [],
     setActiveWallet: () => {},
     getAccount: getAccountForWallet,
+    sessionNonce,
   });
   ctxRef.current = {
     activeWallet: activeWallet && activeWallet.address ? activeWallet : null,
     wallets,
     setActiveWallet,
     getAccount: getAccountForWallet,
+    sessionNonce,
   };
 
   const bridge = useMemo(
@@ -146,11 +167,36 @@ export default function DappsBrowser() {
 
   const injectedJavaScript = useMemo(() => {
     const adapters = ChainAdapterRegistry.list();
-    if (adapters.length === 0) return "true;";
-    return `${adapters.map((a) => a.getInjectedScript(ctxRef.current)).join("\n")}\ntrue;`;
-    // Rebuild when the active wallet/chain changes so the injected state
-    // matches what the new adapter context sees.
-  }, [activeWallet?.address, activeChain?.chain?.id]);
+    // TWV-2026-064 — neutralise the JS fullscreen API BEFORE any dApp
+    // script runs. Without this a hostile dApp can `requestFullscreen`
+    // and paint a pixel-perfect signer-prompt spoof over the whole
+    // screen. Signer UI is rendered as a native RN modal above the
+    // WebView (`ApprovalHost`), so a dApp should never need fullscreen
+    // anyway. Return a rejected promise so polyfills behave.
+    const disableFullscreen = `
+      (function() {
+        try {
+          var reject = function() {
+            return Promise.reject(new Error("fullscreen disabled by wallet"));
+          };
+          var proto = Element && Element.prototype;
+          if (proto) {
+            proto.requestFullscreen = reject;
+            proto.webkitRequestFullscreen = reject;
+            proto.mozRequestFullScreen = reject;
+            proto.msRequestFullscreen = reject;
+          }
+          Object.defineProperty(document, "fullscreenEnabled", { get: function(){ return false; } });
+          Object.defineProperty(document, "webkitFullscreenEnabled", { get: function(){ return false; } });
+        } catch (e) {}
+      })();
+    `;
+    if (adapters.length === 0) return `${disableFullscreen}\ntrue;`;
+    return `${disableFullscreen}\n${adapters.map((a) => a.getInjectedScript(ctxRef.current)).join("\n")}\ntrue;`;
+    // TWV-2026-015 — `sessionNonce` in the dep list so a fresh nonce
+    // (rotated by `handleNavigate`) actually re-renders the script and
+    // gets re-injected on the next nav.
+  }, [activeWallet?.address, activeChain?.chain?.id, sessionNonce]);
 
   const handleNavigate = useCallback(
     (navState: {
@@ -171,6 +217,10 @@ export default function DappsBrowser() {
       }));
       setAddressBarText(navState.url);
       bridge.onNavigate(navState.url, navState.title);
+      // TWV-2026-015 — rotate the session nonce on every top-frame nav.
+      const nextNonce = generateSessionNonce();
+      setSessionNonce(nextNonce);
+      bridge.setSessionNonce(nextNonce);
     },
     [bridge],
   );
@@ -181,6 +231,12 @@ export default function DappsBrowser() {
       setIsAddressBarAutoFocus(false);
     }
   }, [isAddressBarAutoFocus]);
+
+  // TWV-2026-015 — seed the bridge with the initial nonce on mount so
+  // the first page load (before any nav callback fires) is gated too.
+  useEffect(() => {
+    bridge.setSessionNonce(sessionNonce);
+  }, [bridge, sessionNonce]);
 
   if (!ready) {
     return (
@@ -218,7 +274,12 @@ export default function DappsBrowser() {
             // `window.ethereum` and 6963 listener are in place when the
             // dApp's bundle wakes up.
             injectedJavaScriptBeforeContentLoaded={injectedJavaScript}
-            injectedJavaScriptForMainFrameOnly={false}
+            // TWV-2026-013 — never install the EIP-1193 provider into
+            // cross-origin iframes. CVE-2020-6506-class universal-XSS
+            // makes any sub-frame an attacker-controlled JS context;
+            // restricting injection to the top frame keeps the provider
+            // out of their reach.
+            injectedJavaScriptForMainFrameOnly={true}
             // Also replay on every DOM load — SPAs with client-side routing
             // don't re-inject the pre-content script between route changes,
             // and our provider script is idempotent (guarded by
@@ -246,10 +307,18 @@ export default function DappsBrowser() {
             startInLoadingState
             scalesPageToFit
             allowsInlineMediaPlayback
+            // TWV-2026-064 — video stays inline; dApps cannot take over
+            // the full screen to paint a fake signer prompt. The JS
+            // fullscreen API is also neutralised (see injection above).
+            allowsFullscreenVideo={false}
             mediaPlaybackRequiresUserAction={false}
             allowsBackForwardNavigationGestures
-            sharedCookiesEnabled
-            thirdPartyCookiesEnabled
+            // TWV-2026-013 — only https. http and file schemes are
+            // banned wholesale; mixed content is never loaded.
+            originWhitelist={["https://*"]}
+            mixedContentMode="never"
+            sharedCookiesEnabled={false}
+            thirdPartyCookiesEnabled={false}
             androidLayerType="hardware"
             setSupportMultipleWindows={false}
             cacheEnabled

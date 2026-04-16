@@ -3,10 +3,16 @@
  */
 
 import { router } from "expo-router";
-import { parseEIP681, type EIP681Intent } from "./eip681";
+import { type EIP681Intent, parseEIP681 } from "./eip681";
 
 export type DeepLinkResult =
-  | { type: "send"; to: string; amount?: string; chainId?: number; eip681?: EIP681Intent }
+  | {
+      type: "send";
+      to: string;
+      amount?: string;
+      chainId?: number;
+      eip681?: EIP681Intent;
+    }
   | { type: "wc"; uri: string }
   | { type: "dapp"; url: string }
   | { type: "unknown"; raw: string };

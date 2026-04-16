@@ -4,8 +4,11 @@
  */
 
 import * as Notifications from "expo-notifications";
+import {
+  addListener,
+  type PendingTx,
+} from "@/services/history/PendingTxTracker";
 import { isChannelEnabled, type NotificationChannel } from "./channels";
-import { addListener, type PendingTx } from "@/services/history/PendingTxTracker";
 
 let initialized = false;
 

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TWV-2026-059 — Android 12+ data-extraction rules.
+
+  `<cloud-backup>` governs Google Backup Service (Auto Backup).
+  `<device-transfer>` governs Seamless Device-to-Device transfer.
+
+  Both are <disabled> wholesale because the wallet's private state
+  (SecureStore-wrapped seed / key material, session tokens, PIN hash,
+  pending-intent store) must NEVER leave the device except through an
+  explicit, user-initiated export flow with a user-chosen passphrase.
+
+  If a component ever legitimately needs backup, add a specific
+  `<include />` inside the relevant block — never relax to `disabled=false`.
+-->
+<data-extraction-rules>
+  <cloud-backup disableIfNoEncryptionCapabilities="true">
+    <exclude domain="root" />
+    <exclude domain="file" />
+    <exclude domain="database" />
+    <exclude domain="sharedpref" />
+    <exclude domain="external" />
+  </cloud-backup>
+  <device-transfer>
+    <exclude domain="root" />
+    <exclude domain="file" />
+    <exclude domain="database" />
+    <exclude domain="sharedpref" />
+    <exclude domain="external" />
+  </device-transfer>
+</data-extraction-rules>

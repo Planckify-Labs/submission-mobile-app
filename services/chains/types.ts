@@ -28,6 +28,12 @@ export interface AdapterContext {
   wallets: TWallet[];
   setActiveWallet: (index: number) => void;
   getAccount: (wallet: TWallet) => unknown;
+  /**
+   * TWV-2026-015 — current per-session nonce. Threaded through to the
+   * injected provider's closure scope so every outbound bridge message
+   * carries it. Rotated on every top-frame navigation.
+   */
+  sessionNonce?: string;
 }
 
 export interface ChainAdapter {

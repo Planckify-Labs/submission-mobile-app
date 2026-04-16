@@ -2,9 +2,9 @@
  * L1 data fee estimation for OP Stack chains.
  */
 
-import { getPublicClient } from "@/utils/clients";
+import { formatEther, getAddress, parseAbi } from "viem";
 import { supportedChains } from "@/constants/configs/chainConfig";
-import { getAddress, formatEther, parseAbi } from "viem";
+import { getPublicClient } from "@/utils/clients";
 
 // OP Stack GasPriceOracle precompile address
 const GAS_PRICE_ORACLE = "0x420000000000000000000000000000000000000F";

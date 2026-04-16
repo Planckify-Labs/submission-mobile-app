@@ -5,13 +5,24 @@
 
 import type { ENSResolution } from "@/services/indexer/types";
 
-const UD_EXTENSIONS = new Set([".crypto", ".wallet", ".nft", ".blockchain", ".x", ".888", ".dao", ".zil"]);
+const UD_EXTENSIONS = new Set([
+  ".crypto",
+  ".wallet",
+  ".nft",
+  ".blockchain",
+  ".x",
+  ".888",
+  ".dao",
+  ".zil",
+]);
 
 export function isUnstoppableDomain(name: string): boolean {
   return UD_EXTENSIONS.has(`.${name.split(".").pop()?.toLowerCase()}`);
 }
 
-export async function resolveUnstoppable(name: string): Promise<ENSResolution | null> {
+export async function resolveUnstoppable(
+  name: string,
+): Promise<ENSResolution | null> {
   // Unstoppable Domains resolution via their public API
   // Falls back gracefully if unavailable
   try {

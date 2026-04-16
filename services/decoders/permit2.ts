@@ -63,6 +63,49 @@ export function tryDecodePermit2(
       };
     }
 
+    // Permit2 signature-transfer variants — no allowance is granted, but
+    // the user authorises a specific spender to pull an exact amount.
+    if (primaryType === "PermitTransferFrom" && types?.PermitTransferFrom) {
+      const permitted = message.permitted as {
+        token: `0x${string}`;
+        amount: string | bigint;
+      };
+      const amount = BigInt(permitted.amount);
+      return {
+        standard: "Permit2",
+        verifyingContract: (domain.verifyingContract as `0x${string}`) ?? "0x",
+        spender: message.spender,
+        tokens: [{ address: permitted.token, amount, expiration: 0n }],
+        sigDeadline: BigInt(message.deadline ?? message.sigDeadline ?? 0),
+        nonce: BigInt(message.nonce ?? 0),
+        isUnlimited: amount >= UNLIMITED_THRESHOLD,
+      };
+    }
+
+    if (
+      primaryType === "PermitBatchTransferFrom" &&
+      types?.PermitBatchTransferFrom
+    ) {
+      const permitted = (message.permitted ?? []) as Array<{
+        token: `0x${string}`;
+        amount: string | bigint;
+      }>;
+      const tokens = permitted.map((p) => ({
+        address: p.token,
+        amount: BigInt(p.amount),
+        expiration: 0n,
+      }));
+      return {
+        standard: "Permit2",
+        verifyingContract: (domain.verifyingContract as `0x${string}`) ?? "0x",
+        spender: message.spender,
+        tokens,
+        sigDeadline: BigInt(message.deadline ?? message.sigDeadline ?? 0),
+        nonce: BigInt(message.nonce ?? 0),
+        isUnlimited: tokens.some((t) => t.amount >= UNLIMITED_THRESHOLD),
+      };
+    }
+
     return null;
   } catch {
     return null;

@@ -1,4 +1,7 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+// TWV-2026-059 — wallet-setup progress carries the in-flight mnemonic;
+// it MUST live in SecureStore (device-only) and never in AsyncStorage,
+// or `adb backup` would exfiltrate a plaintext seed phrase.
+
 import { router, useNavigation } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { BackHandler, Platform, StatusBar } from "react-native";
@@ -6,7 +9,6 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { english, generateMnemonic } from "viem/accounts";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import {
   TSelectedWords,
@@ -17,9 +19,17 @@ import {
 } from "@/constants/types/walletTypes";
 import { createWalletSteps } from "@/constants/walletSetup/walletCreationStepList";
 import { useWallet } from "@/hooks/useWallet";
+import { useScreenshotGuard } from "@/services/security/screenshotGuard";
+import {
+  walletSecureDelete,
+  walletSecureGet,
+  walletSecureSet,
+} from "@/services/security/walletSecureStore";
+import { generateWalletMnemonic } from "@/services/walletService";
 import WalletSetupSteps from "./WalletSetupSteps";
 
 export default function WalletSetup() {
+  useScreenshotGuard();
   const [currentStep, setCurrentStep] = useState(0);
   const [isTermsAccepted, setIsTermsAccepted] = useState(false);
   const [mnemonic, setMnemonic] = useState<string[]>([]);
@@ -79,7 +89,7 @@ export default function WalletSetup() {
         selectedWords,
       };
 
-      await AsyncStorage.setItem(
+      await walletSecureSet(
         WALLET_SETUP_PROGRESS_KEY,
         JSON.stringify(progressData),
       );
@@ -90,7 +100,7 @@ export default function WalletSetup() {
 
   const clearProgress = useCallback(async () => {
     try {
-      await AsyncStorage.removeItem(WALLET_SETUP_PROGRESS_KEY);
+      await walletSecureDelete(WALLET_SETUP_PROGRESS_KEY);
       console.log("Wallet setup progress cleared successfully");
     } catch (error) {
       console.error("Failed to clear wallet setup progress:", error);
@@ -109,9 +119,7 @@ export default function WalletSetup() {
   useEffect(() => {
     const loadProgress = async () => {
       try {
-        const savedProgress = await AsyncStorage.getItem(
-          WALLET_SETUP_PROGRESS_KEY,
-        );
+        const savedProgress = await walletSecureGet(WALLET_SETUP_PROGRESS_KEY);
 
         if (savedProgress) {
           const progress: TSetupProgress = JSON.parse(savedProgress);
@@ -134,7 +142,7 @@ export default function WalletSetup() {
             "Setup Resumed: Your previous wallet setup has been restored.",
           );
         } else {
-          const generatedMnemonic = generateMnemonic(english).split(" ");
+          const generatedMnemonic = generateWalletMnemonic().split(" ");
           setMnemonic(generatedMnemonic);
           generateWordOptions(generatedMnemonic);
         }
@@ -143,7 +151,7 @@ export default function WalletSetup() {
       } catch (error) {
         console.error("Failed to load progress:", error);
 
-        const generatedMnemonic = generateMnemonic(english).split(" ");
+        const generatedMnemonic = generateWalletMnemonic().split(" ");
         setMnemonic(generatedMnemonic);
         generateWordOptions(generatedMnemonic);
 

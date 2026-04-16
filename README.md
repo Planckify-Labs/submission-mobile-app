@@ -1,4 +1,33 @@
-# Welcome to your Expo app 👋
+# Takumi Wallet (mobile)
+
+## Official distribution channels (TWV-2026-065)
+
+These are the **only** places a genuine Takumi Wallet binary is ever
+published. If you found a "Takumi" installer somewhere that is not
+listed here — a paid search ad, a sideloaded `.apk`, a desktop app, a
+browser extension — it is not ours. Do not install it.
+
+- **Apple App Store:** https://apps.apple.com/app/takumi-wallet/id000000000
+- **Google Play Store:** https://play.google.com/store/apps/details?id=com.planckify.takumiwallet
+- **Website:** https://takumi.ai
+- **X:** https://x.com/takumi_ai
+- **GitHub:** https://github.com/cstralpt
+- **Discord:** https://discord.gg/takumi
+
+App identifiers:
+
+- **iOS Bundle ID:** `com.planckify.takumiwallet`
+- **Android Package:** `com.planckify.takumiwallet`
+- **Signing-cert SHA-256:** shown in the in-app **About** screen (Wallet
+  tab → About). Users can compare the published fingerprint to what the
+  OS reports. The value in `constants/about.ts` is the source of truth;
+  updates require security-team review.
+
+Distribution-discipline notes:
+`docs/distribution-discipline.md` (public runbook excerpt) and the
+private ops folder (full impersonation-monitoring runbook).
+
+## Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 

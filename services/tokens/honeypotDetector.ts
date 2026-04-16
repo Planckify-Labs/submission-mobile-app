@@ -5,8 +5,8 @@
 
 import * as SQLite from "expo-sqlite";
 import { erc20Abi, getAddress } from "viem";
-import { getPublicClient } from "@/utils/clients";
 import { supportedChains } from "@/constants/configs/chainConfig";
+import { getPublicClient } from "@/utils/clients";
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -21,7 +21,7 @@ function getDb(): SQLite.SQLiteDatabase {
         "reason TEXT, " +
         "checked_at INTEGER NOT NULL, " +
         "PRIMARY KEY (contract_address, chain_id)" +
-        ");"
+        ");",
     );
   }
   return db;
@@ -32,10 +32,15 @@ export interface HoneypotResult {
   reason?: string;
 }
 
-export function getCachedResult(contractAddress: string, chainId: number): HoneypotResult | null {
+export function getCachedResult(
+  contractAddress: string,
+  chainId: number,
+): HoneypotResult | null {
   const database = getDb();
   const row = database.getFirstSync<{
-    is_honeypot: number; reason: string | null; checked_at: number;
+    is_honeypot: number;
+    reason: string | null;
+    checked_at: number;
   }>(
     "SELECT * FROM honeypot_cache WHERE contract_address = ? AND chain_id = ?",
     [contractAddress.toLowerCase(), chainId],
@@ -64,21 +69,36 @@ export async function detectHoneypot(
 
   try {
     await client.simulateContract({
-      address: tokenAddr, abi: erc20Abi, functionName: "approve",
-      args: [spender, BigInt("1000000")], account: owner,
+      address: tokenAddr,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [spender, BigInt("1000000")],
+      account: owner,
     });
     await client.simulateContract({
-      address: tokenAddr, abi: erc20Abi, functionName: "transfer",
-      args: [spender, 1n], account: owner,
+      address: tokenAddr,
+      abi: erc20Abi,
+      functionName: "transfer",
+      args: [spender, 1n],
+      account: owner,
     });
   } catch {
-    result = { isHoneypot: true, reason: "Cannot be transferred — possible honeypot" };
+    result = {
+      isHoneypot: true,
+      reason: "Cannot be transferred — possible honeypot",
+    };
   }
 
   const database = getDb();
   database.runSync(
     "INSERT OR REPLACE INTO honeypot_cache (contract_address, chain_id, is_honeypot, reason, checked_at) VALUES (?, ?, ?, ?, ?)",
-    [contractAddress.toLowerCase(), chainId, result.isHoneypot ? 1 : 0, result.reason ?? null, Date.now()],
+    [
+      contractAddress.toLowerCase(),
+      chainId,
+      result.isHoneypot ? 1 : 0,
+      result.reason ?? null,
+      Date.now(),
+    ],
   );
 
   return result;

@@ -8,7 +8,9 @@ import type { Namespace } from "@/services/chains/types";
 // CAIP-2 format: "namespace:reference"
 // e.g., "eip155:1" → Ethereum mainnet
 
-export function caip2ToNamespace(caip2: string): { namespace: Namespace; chainId: number } | null {
+export function caip2ToNamespace(
+  caip2: string,
+): { namespace: Namespace; chainId: number } | null {
   const [ns, ref] = caip2.split(":");
   if (!ns || !ref) return null;
 
@@ -26,7 +28,10 @@ export function caip2ToNamespace(caip2: string): { namespace: Namespace; chainId
   return { namespace, chainId };
 }
 
-export function namespaceToCaip2(namespace: Namespace, chainId: number): string {
+export function namespaceToCaip2(
+  namespace: Namespace,
+  chainId: number,
+): string {
   const nsMapping: Record<Namespace, string> = {
     eip155: "eip155",
     solana: "solana",
@@ -36,6 +41,10 @@ export function namespaceToCaip2(namespace: Namespace, chainId: number): string 
   return `${nsMapping[namespace]}:${chainId}`;
 }
 
-export function accountToCaip10(namespace: Namespace, chainId: number, address: string): string {
+export function accountToCaip10(
+  namespace: Namespace,
+  chainId: number,
+  address: string,
+): string {
   return `${namespaceToCaip2(namespace, chainId)}:${address}`;
 }

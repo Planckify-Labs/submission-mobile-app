@@ -8,15 +8,38 @@ const UUID_KEY = "dapp_bridge.eip6963_uuid";
 const UUID_V4_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// TWV-2026-031 — UUID generation uses the OS CSPRNG via the polyfill
+// installed in `pollyfills.ts`, not `Math.random`. The UUID is stored
+// per-install (not baked at build time) on purpose: a build-time
+// constant fingerprints every install of the wallet, which is a
+// privacy regression; the strong defence against malicious-wallet
+// impersonation is the `rdns` value (verified by `assertOurRdns`),
+// not the UUID itself. See `docs/design-notes/eip6963-identity.md`.
 function generateUuidV4(): string {
-  const hex = () => Math.floor(Math.random() * 16).toString(16);
-  const chars: string[] = [];
-  for (let i = 0; i < 32; i++) chars.push(hex());
-  chars[12] = "4"; // version
-  chars[16] = ["8", "9", "a", "b"][Math.floor(Math.random() * 4)]; // variant
-  return `${chars.slice(0, 8).join("")}-${chars.slice(8, 12).join("")}-${chars
-    .slice(12, 16)
-    .join("")}-${chars.slice(16, 20).join("")}-${chars.slice(20, 32).join("")}`;
+  const buf = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(buf);
+  buf[6] = (buf[6] & 0x0f) | 0x40; // version 4
+  buf[8] = (buf[8] & 0x3f) | 0x80; // variant 10
+  const hex = Array.from(buf)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+/**
+ * TWV-2026-031 — runtime invariant. Our `rdns` MUST be the package's
+ * reverse-DNS. Any other value is either a build mistake or an
+ * impersonation attempt; surface it loudly.
+ */
+const OUR_RDNS = "com.takumi.wallet" as const;
+export function assertOurRdns(rdns: string): void {
+  if (rdns !== OUR_RDNS) {
+    if (__DEV__) {
+      console.error(
+        `[TWV-2026-031] eip6963 rdns drift — expected "${OUR_RDNS}", got "${rdns}"`,
+      );
+    }
+  }
 }
 
 /**

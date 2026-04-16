@@ -5,8 +5,8 @@
  */
 
 import { type Address, erc20Abi, formatUnits, getAddress } from "viem";
-import { getPublicClient } from "@/utils/clients";
 import { supportedChains } from "@/constants/configs/chainConfig";
+import { getPublicClient } from "@/utils/clients";
 import type {
   ENSResolution,
   HistoryOpts,
@@ -21,7 +21,8 @@ import type {
 } from "./types";
 import { IndexerNotSupportedError } from "./types";
 
-const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11" as const;
+const MULTICALL3_ADDRESS =
+  "0xcA11bde05977b3631167028862bE2a173976CA11" as const;
 
 function getChainForId(chainId: number) {
   const config = supportedChains.find((c) => c.chain.id === chainId);
@@ -80,7 +81,12 @@ export class DirectRPCProvider implements IndexerProvider {
   async getTokenMetadata(
     contractAddress: string,
     chainId: number,
-  ): Promise<{ symbol: string; name: string; decimals: number; logoURI?: string } | null> {
+  ): Promise<{
+    symbol: string;
+    name: string;
+    decimals: number;
+    logoURI?: string;
+  } | null> {
     const chain = getChainForId(chainId);
     if (!chain) return null;
 

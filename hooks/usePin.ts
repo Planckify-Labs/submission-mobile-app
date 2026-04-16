@@ -1,5 +1,9 @@
-import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useState } from "react";
+import {
+  walletSecureDelete,
+  walletSecureGet,
+  walletSecureSet,
+} from "@/services/security/walletSecureStore";
 
 const PIN_KEY = "takumipay_user_pin";
 
@@ -18,7 +22,7 @@ export function usePin(): UsePinReturn {
   const checkForExistingPin = useCallback(async () => {
     try {
       setIsLoading(true);
-      const storedPin = await SecureStore.getItemAsync(PIN_KEY);
+      const storedPin = await walletSecureGet(PIN_KEY);
       setHasPin(!!storedPin);
     } catch (error) {
       console.error("Error checking for PIN:", error);
@@ -33,7 +37,7 @@ export function usePin(): UsePinReturn {
 
   const verifyPin = async (pin: string): Promise<boolean> => {
     try {
-      const storedPin = await SecureStore.getItemAsync(PIN_KEY);
+      const storedPin = await walletSecureGet(PIN_KEY);
       return storedPin === pin;
     } catch (error) {
       console.error("Error verifying PIN:", error);
@@ -43,7 +47,7 @@ export function usePin(): UsePinReturn {
 
   const setPin = async (pin: string): Promise<void> => {
     try {
-      await SecureStore.setItemAsync(PIN_KEY, pin);
+      await walletSecureSet(PIN_KEY, pin);
       setHasPin(true);
     } catch (error) {
       console.error("Error setting PIN:", error);
@@ -53,7 +57,7 @@ export function usePin(): UsePinReturn {
 
   const resetPin = async (): Promise<void> => {
     try {
-      await SecureStore.deleteItemAsync(PIN_KEY);
+      await walletSecureDelete(PIN_KEY);
       setHasPin(false);
     } catch (error) {
       console.error("Error resetting PIN:", error);

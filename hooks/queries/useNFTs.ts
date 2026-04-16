@@ -4,9 +4,13 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { indexerRegistry } from "@/services/indexer/registry";
-import type { NFTAsset, NFTOpts, PaginatedResult } from "@/services/indexer/types";
-import type { NFTCollection } from "@/services/nfts/types";
+import type {
+  NFTAsset,
+  NFTOpts,
+  PaginatedResult,
+} from "@/services/indexer/types";
 import { checkNFTSpam } from "@/services/nfts/spamFilter";
+import type { NFTCollection } from "@/services/nfts/types";
 
 export const nftQueryKeys = {
   list: (address: string, chainId: number) =>

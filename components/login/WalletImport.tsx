@@ -2,7 +2,14 @@ import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import Bip39PasteWarningModal from "@/components/security/Bip39PasteWarningModal";
+import { SeedWordInput } from "@/components/security/SeedWordInput";
+import VanityPrefixWarningModal from "@/components/security/VanityPrefixWarningModal";
 import { useWallet } from "@/hooks/useWallet";
+import { useScreenshotGuard } from "@/services/security/screenshotGuard";
+import { looksLikeBip39 } from "@/services/security/sensitivePaste";
+import { checkVanityPrefixRisk } from "@/services/security/vanityPrefix";
+import { createWalletFromParams } from "@/utils/walletUtils";
 
 interface WalletImportProps {
   type: "SeedPhrase" | "PrivateKey";
@@ -19,35 +26,57 @@ export default function WalletImport({
   validationMessage,
   validateInput,
 }: WalletImportProps) {
+  useScreenshotGuard();
   const [input, setInput] = useState<string>("");
   const [walletName, setWalletName] = useState<string>("");
+  const [pendingPaste, setPendingPaste] = useState<string | null>(null);
+  const [vanityWarning, setVanityWarning] = useState<{
+    address: string;
+    description: string;
+    input: string;
+  } | null>(null);
   const { addWallet } = useWallet();
+
+  // TWV-2026-063 — commit a validated paste + clear the clipboard.
+  const commitPaste = (text: string) => {
+    if (!validateInput(text)) {
+      console.error("Invalid Input:", validationMessage);
+      return;
+    }
+    setInput(text);
+  };
 
   const handlePasteFromClipboard = async () => {
     try {
       const text = await Clipboard.getStringAsync();
-
-      if (!validateInput(text)) {
-        console.error("Invalid Input:", validationMessage);
+      if (looksLikeBip39(text)) {
+        setPendingPaste(text);
         return;
       }
-
-      setInput(text);
+      commitPaste(text);
+      await Clipboard.setStringAsync("").catch(() => {});
     } catch (error) {
       console.error(error);
       console.error("Error: Failed to paste from clipboard");
     }
   };
 
-  const handleImport = () => {
-    if (!validateInput(input)) {
-      console.error("Invalid Input:", validationMessage);
-      return;
-    }
+  const handlePasteAnyway = async () => {
+    const text = pendingPaste ?? "";
+    setPendingPaste(null);
+    commitPaste(text);
+    await Clipboard.setStringAsync("").catch(() => {});
+  };
 
+  const handleTypeInstead = async () => {
+    setPendingPaste(null);
+    await Clipboard.setStringAsync("").catch(() => {});
+  };
+
+  const finalizeImport = (rawInput: string) => {
     addWallet({
       source: type,
-      [type === "SeedPhrase" ? "seedPhrase" : "privateKey"]: input,
+      [type === "SeedPhrase" ? "seedPhrase" : "privateKey"]: rawInput,
       name: walletName || undefined,
     }).then((success) => {
       if (success) {
@@ -59,10 +88,46 @@ export default function WalletImport({
     });
   };
 
+  const handleImport = () => {
+    if (!validateInput(input)) {
+      console.error("Invalid Input:", validationMessage);
+      return;
+    }
+
+    // TWV-2026-040 — pre-derive the address to check it against the
+    // Profanity-class heuristic before we finalise the import.
+    const draft = createWalletFromParams({
+      source: type,
+      [type === "SeedPhrase" ? "seedPhrase" : "privateKey"]: input,
+      name: walletName || undefined,
+    });
+    if (draft) {
+      const risk = checkVanityPrefixRisk(draft.address);
+      if (risk.flagged && risk.description) {
+        setVanityWarning({
+          address: draft.address,
+          description: risk.description,
+          input,
+        });
+        return;
+      }
+    }
+
+    finalizeImport(input);
+  };
+
+  const handleVanityAcknowledge = () => {
+    const pending = vanityWarning;
+    setVanityWarning(null);
+    if (pending) finalizeImport(pending.input);
+  };
+
+  const handleVanityCancel = () => setVanityWarning(null);
+
   return (
     <View>
       <Text className="text-light-matte-black font-medium mb-2">{title}</Text>
-      <TextInput
+      <SeedWordInput
         className="bg-light p-3 rounded-lg text-light-matte-black border border-light-matte-black/10 mb-4"
         value={input}
         onChangeText={setInput}
@@ -97,6 +162,20 @@ export default function WalletImport({
       >
         <Text className="text-light font-bold text-lg">Import Wallet</Text>
       </Pressable>
+
+      <Bip39PasteWarningModal
+        visible={pendingPaste !== null}
+        onPasteAnyway={handlePasteAnyway}
+        onTypeInstead={handleTypeInstead}
+      />
+
+      <VanityPrefixWarningModal
+        visible={vanityWarning !== null}
+        address={vanityWarning?.address ?? ""}
+        description={vanityWarning?.description ?? ""}
+        onAcknowledge={handleVanityAcknowledge}
+        onCancel={handleVanityCancel}
+      />
     </View>
   );
 }

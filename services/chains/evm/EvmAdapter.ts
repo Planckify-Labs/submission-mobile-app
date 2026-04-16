@@ -13,6 +13,7 @@ import {
   type PublicClient,
   toHex,
 } from "viem";
+import { takumipayLogoBase64 } from "@/constants/takumipay";
 import type { TWallet } from "@/constants/types/walletTypes";
 import type {
   ApprovalDecision,
@@ -33,8 +34,12 @@ import { getAccountForWallet } from "@/services/walletService";
 import { Bundler, getBundlerConfig, type UserOperation } from "./bundler";
 import { UserChainStore } from "./chainStore";
 import { getInstallUuid } from "./eip6963";
-import { takumipayLogoBase64 } from "@/constants/takumipay";
 import { PROVIDER_ERRORS, ProviderRpcError } from "./errors";
+import {
+  sanitiseChainString,
+  sanitiseIconUrl,
+  validateBlockExplorerUrls,
+} from "./explorerAllowlist";
 import { getEvmInjectedScript } from "./injectedScript";
 import type {
   EvmAddChainPayload,
@@ -52,11 +57,16 @@ import type {
 import { getPaymasterConfig, Paymaster } from "./paymaster";
 import { verifySignature } from "./signatureVerifier";
 
-// --- Allowlisted 7702 delegators (see §8 open question 3). Compile-time pin
-// today; advanced settings UI later. --------------------------------------
-const AUTHORIZED_DELEGATORS = new Set<string>([
-  "0x0000000000000000000000000000000000000000".toLowerCase(), // placeholder
-]);
+// --- TWV-2026-010 — Allowlisted 7702 delegators. The authoritative list
+// lives in `./eip7702Guard.ts`; re-exported here for legacy callers
+// referencing this name. Bytecode-prologue sniff is also enforced
+// at the signing boundary (`execSignAuthorization`).
+import {
+  AUTHORIZED_DELEGATORS as EIP7702_ALLOWLIST,
+  decideAuthorizationByAddress,
+  decideAuthorizationByBytecode,
+} from "./eip7702Guard";
+const AUTHORIZED_DELEGATORS = EIP7702_ALLOWLIST;
 
 type ChainConfig = { chain: Chain; rpcUrl: string };
 
@@ -125,6 +135,8 @@ export class EvmAdapter implements ChainAdapter {
         icon: takumipayLogoBase64,
         rdns: "com.takumi.wallet",
       },
+      // TWV-2026-015 — closure-scoped nonce; rotated per nav.
+      sessionNonce: ctx.sessionNonce,
     });
   }
 
@@ -272,26 +284,10 @@ export class EvmAdapter implements ChainAdapter {
             }),
           );
         }
-        case "eth_sign": {
-          const [address, message] = params as [unknown, unknown];
-          if (typeof message !== "string" || typeof address !== "string")
-            return err(PROVIDER_ERRORS.invalidParams("eth_sign"));
-          if (!isAddress(address))
-            return err(PROVIDER_ERRORS.invalidParams("address"));
-          if (!ctx.activeWallet) return err(PROVIDER_ERRORS.disconnected());
-          if (ctx.activeWallet.address.toLowerCase() !== address.toLowerCase())
-            return err(PROVIDER_ERRORS.unauthorized());
-          const payload: EvmSignMessagePayload = {
-            message,
-            display: "hex",
-            address: address as `0x${string}`,
-          };
-          return needsApproval(
-            makeIntent(req, "signMessage", payload, ctx.activeWallet, {
-              method: "eth_sign",
-            }),
-          );
-        }
+        // `eth_sign` is hard-rejected at the bridge (TWV-2026-007 —
+        // see HARD_REJECT_METHODS in services/bridge/DappBridge.ts).
+        // Intentionally no case here; defence-in-depth below also returns
+        // PROVIDER_ERRORS.unsupportedMethod for any method not matched.
         case "eth_signTypedData":
         case "eth_signTypedData_v1":
         case "eth_signTypedData_v3":
@@ -393,6 +389,11 @@ export class EvmAdapter implements ChainAdapter {
             makeIntent(req, "addChain", normalized.payload, ctx.activeWallet),
           );
         }
+        // TWV-2026-017 — review gate. Every switch MUST route through
+        // `needsApproval` and emit a fresh sheet; never reuse a prior
+        // grant for "this dApp". A PR that adds caching / "remember this
+        // choice" / auto-approve flags here is a merge-block — see
+        // `docs/design-notes/chain-switch-ux.md`.
         case "wallet_switchEthereumChain": {
           const [raw] = params as [{ chainId?: string }];
           if (!raw?.chainId || typeof raw.chainId !== "string")
@@ -771,13 +772,37 @@ export class EvmAdapter implements ChainAdapter {
         `RPC health check failed for ${payload.rpcUrls[0]}`,
       );
     }
+    // TWV-2026-049 — validate dApp-supplied explorer / icon / chain
+    // strings before persisting. Unverified explorers are stored with
+    // a tag so the tx-history UI can require long-press + in-app WebView.
+    const explorerValidation = validateBlockExplorerUrls(
+      payload.chainId,
+      payload.blockExplorerUrls,
+    );
+    const verifiedExplorerUrls = explorerValidation
+      .filter((v) => v.status === "verified")
+      .map((v) => v.url);
+    const unverifiedExplorerUrls = explorerValidation
+      .filter((v) => v.status === "unverified")
+      .map((v) => v.url);
+    const sanitisedIconUrls = (payload.iconUrls ?? [])
+      .map(sanitiseIconUrl)
+      .filter((u): u is string => typeof u === "string");
     await UserChainStore.add({
       chainId: payload.chainId,
-      chainName: payload.chainName,
-      nativeCurrency: payload.nativeCurrency,
+      chainName: sanitiseChainString(payload.chainName, 64),
+      nativeCurrency: {
+        ...payload.nativeCurrency,
+        name: sanitiseChainString(payload.nativeCurrency?.name, 32),
+        symbol: sanitiseChainString(payload.nativeCurrency?.symbol, 8),
+      },
       rpcUrls: payload.rpcUrls,
-      blockExplorerUrls: payload.blockExplorerUrls,
-      iconUrls: payload.iconUrls,
+      blockExplorerUrls: [...verifiedExplorerUrls, ...unverifiedExplorerUrls],
+      explorerTrust:
+        unverifiedExplorerUrls.length === 0 && verifiedExplorerUrls.length > 0
+          ? "verified"
+          : "unverified",
+      iconUrls: sanitisedIconUrls,
       addedAt: Date.now(),
     });
     return null;
@@ -1015,8 +1040,33 @@ export class EvmAdapter implements ChainAdapter {
     ctx: AdapterContext,
   ): Promise<Hex> {
     const payload = intent.payload as EvmAuthorizationPayload;
-    if (!AUTHORIZED_DELEGATORS.has(payload.delegator.toLowerCase())) {
-      throw PROVIDER_ERRORS.invalidParams("delegator not on allowlist");
+    // TWV-2026-010 — allowlist enforced at the signing boundary itself,
+    // not just in the UI. A bypass through deeplink / bridge / agent
+    // cannot reach the key.
+    const addressDecision = decideAuthorizationByAddress(payload.delegator);
+    if (!addressDecision.ok) {
+      throw PROVIDER_ERRORS.invalidParams(addressDecision.message);
+    }
+    // Bytecode sniff — skip for zero-address (revoke) since there's no
+    // code to inspect. Best-effort: a transport failure does NOT block
+    // signing of an allowlisted delegate (we don't want a DoS via RPC
+    // outage), but a positive SELFDESTRUCT match always rejects.
+    if (payload.delegator.toLowerCase() !== "0x0000000000000000000000000000000000000000") {
+      try {
+        const pc = this.publicClient(ctx);
+        const code = (await pc.getCode({ address: payload.delegator })) as
+          | `0x${string}`
+          | undefined;
+        const bytecodeDecision = decideAuthorizationByBytecode(code);
+        if (!bytecodeDecision.ok) {
+          throw PROVIDER_ERRORS.invalidParams(bytecodeDecision.message);
+        }
+      } catch (e) {
+        if (e instanceof ProviderRpcError) throw e;
+        // Transport failure — log and proceed; allowlist already gated.
+        if (__DEV__)
+          console.warn("[7702] bytecode sniff failed", e);
+      }
     }
     const wallet = intent.wallet ?? ctx.activeWallet;
     if (!wallet) throw PROVIDER_ERRORS.disconnected();

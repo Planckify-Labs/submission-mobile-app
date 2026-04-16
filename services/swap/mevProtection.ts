@@ -2,7 +2,7 @@
  * MEV protection via Flashbots Protect RPC for Ethereum mainnet.
  */
 
-import { createPublicClient, http, type Chain } from "viem";
+import { type Chain, createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 
 const FLASHBOTS_PROTECT_RPC = "https://rpc.flashbots.net";

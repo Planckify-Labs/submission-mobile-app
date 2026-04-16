@@ -10,10 +10,12 @@ import type {
   EvmSignTypedDataPayload,
 } from "@/services/chains/evm/payloads";
 import {
+  isKnownSpender,
   tryDecodeErc2612,
   tryDecodePermit2,
   tryParseSiwe,
 } from "@/services/decoders";
+import { useScreenshotGuard } from "@/services/security/screenshotGuard";
 import { ApprovalShell } from "./ApprovalShell";
 import { PrimaryActions, SheetModal } from "./SheetModal";
 
@@ -30,6 +32,7 @@ export function EvmSignMessageSheet({
   intent,
   onDecision,
 }: Props): React.ReactElement {
+  useScreenshotGuard();
   const isTyped = intent.kind === "signTypedData";
   const holdRequired = intent.annotations.some(
     (a) =>
@@ -163,11 +166,31 @@ function DecodedPermitCard({
 }): React.ReactElement | null {
   if (!decoded) return null;
   const isPermit2 = decoded.standard === "Permit2";
+  const knownSpender = isKnownSpender(decoded.spender);
   return (
     <View className="bg-amber-50 rounded-xl p-3 mb-3">
       <Text className="text-xs text-amber-700 font-semibold mb-1">
         {isPermit2 ? "Permit2 approval" : "ERC-20 permit"}
       </Text>
+      {!knownSpender && (
+        <View className="bg-red-100 border border-red-300 rounded-lg p-2 mb-2">
+          <Text className="text-xs text-red-800 font-semibold">
+            Unknown spender
+          </Text>
+          <Text className="text-xs text-red-700 mt-0.5">
+            This contract is not on our known-safe list. Scam drainers abuse
+            permits via unfamiliar spenders. Verify the address on the dApp's
+            official docs before signing.
+          </Text>
+        </View>
+      )}
+      {knownSpender && (
+        <View className="bg-green-100 border border-green-300 rounded-lg p-2 mb-2">
+          <Text className="text-xs text-green-800">
+            Verified spender: {knownSpender.name}
+          </Text>
+        </View>
+      )}
       <Row k="Spender" v={decoded.spender} />
       {!isPermit2 && (
         <>

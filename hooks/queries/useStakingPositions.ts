@@ -3,7 +3,11 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { isLST, getLSTInfo, getExchangeRate } from "@/services/staking/lstDetector";
+import {
+  getExchangeRate,
+  getLSTInfo,
+  isLST,
+} from "@/services/staking/lstDetector";
 import { detectVault } from "@/services/staking/vaultDetector";
 import type { TokenBalanceItem } from "@/services/tokens/types";
 
@@ -58,7 +62,10 @@ export function useStakingPositions(
         }
 
         // Check ERC-4626 vault (only for tokens not in default list)
-        if (token.source === "auto-discovered" || token.source === "user-added") {
+        if (
+          token.source === "auto-discovered" ||
+          token.source === "user-added"
+        ) {
           const vault = await detectVault(token.contractAddress, token.chainId);
           if (vault) {
             const balance = Number(token.balance) / 10 ** token.decimals;

@@ -8,6 +8,13 @@ export interface UserChain {
   nativeCurrency: { name: string; symbol: string; decimals: number };
   rpcUrls: string[];
   blockExplorerUrls?: string[];
+  /**
+   * TWV-2026-049 — `"verified"` when every stored `blockExplorerUrls`
+   * entry matches the pinned allowlist for this chainId. `"unverified"`
+   * otherwise — consumer UI MUST require long-press + in-app WebView
+   * when rendering an unverified explorer link.
+   */
+  explorerTrust?: "verified" | "unverified";
   iconUrls?: string[];
   addedAt: number;
   /** Best-effort capability flags filled during add-chain health check. */
@@ -46,6 +53,11 @@ function notify(): void {
     }
   }
 }
+
+// TWV-2026-016 — signing-chainId invariant lives in
+// `./signingChainId.ts` (kept dep-free so it's unit-testable under plain
+// Node). Re-export for back-compat and grep proximity to chainStore.
+export { getSigningChainId, verifyRpcChainId } from "./signingChainId";
 
 export const UserChainStore = {
   hydrate,

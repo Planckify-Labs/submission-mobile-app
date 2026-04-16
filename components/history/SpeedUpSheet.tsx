@@ -1,7 +1,10 @@
 import React from "react";
-import { View, Text, Pressable } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import type { PendingTx } from "@/services/history/PendingTxTracker";
-import { buildSpeedUpParams, buildCancelParams } from "@/services/history/PendingTxTracker";
+import {
+  buildCancelParams,
+  buildSpeedUpParams,
+} from "@/services/history/PendingTxTracker";
 
 interface SpeedUpSheetProps {
   tx: PendingTx;
@@ -10,7 +13,12 @@ interface SpeedUpSheetProps {
   onDismiss: () => void;
 }
 
-export function SpeedUpSheet({ tx, onSpeedUp, onCancel, onDismiss }: SpeedUpSheetProps) {
+export function SpeedUpSheet({
+  tx,
+  onSpeedUp,
+  onCancel,
+  onDismiss,
+}: SpeedUpSheetProps) {
   const ageMs = Date.now() - tx.submittedAt;
   const ageMinutes = Math.floor(ageMs / 60000);
 
@@ -23,7 +31,8 @@ export function SpeedUpSheet({ tx, onSpeedUp, onCancel, onDismiss }: SpeedUpShee
           Transaction Stuck
         </Text>
         <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Pending for {ageMinutes < 1 ? "< 1" : ageMinutes} minute{ageMinutes !== 1 ? "s" : ""}
+          Pending for {ageMinutes < 1 ? "< 1" : ageMinutes} minute
+          {ageMinutes !== 1 ? "s" : ""}
         </Text>
       </View>
 
@@ -66,10 +75,7 @@ export function SpeedUpSheet({ tx, onSpeedUp, onCancel, onDismiss }: SpeedUpShee
       </Pressable>
 
       {/* Dismiss */}
-      <Pressable
-        onPress={onDismiss}
-        className="py-3 items-center"
-      >
+      <Pressable onPress={onDismiss} className="py-3 items-center">
         <Text className="text-gray-500 dark:text-gray-400 font-medium">
           Keep Waiting
         </Text>

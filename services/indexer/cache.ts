@@ -39,10 +39,10 @@ function getDb(): SQLite.SQLiteDatabase {
         "category TEXT NOT NULL, " +
         "data TEXT NOT NULL, " +
         "updated_at INTEGER NOT NULL" +
-        ");"
+        ");",
     );
     db.execSync(
-      "CREATE INDEX IF NOT EXISTS idx_cache_category ON cache(category);"
+      "CREATE INDEX IF NOT EXISTS idx_cache_category ON cache(category);",
     );
   }
   return db;

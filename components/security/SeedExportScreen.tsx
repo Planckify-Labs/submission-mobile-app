@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, Alert } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import React, { useEffect, useState } from "react";
+import { Alert, Pressable, Text, View } from "react-native";
 import { useScreenshotGuard } from "@/services/security/screenshotGuard";
 
 interface SeedExportScreenProps {
@@ -24,7 +24,10 @@ export function SeedExportScreen({ words, onClose }: SeedExportScreenProps) {
 
   const handleCopyAll = async () => {
     await Clipboard.setStringAsync(words.join(" "));
-    Alert.alert("Copied", "Seed phrase copied to clipboard. It will be cleared in 60 seconds.");
+    Alert.alert(
+      "Copied",
+      "Seed phrase copied to clipboard. It will be cleared in 60 seconds.",
+    );
     // Auto-clear clipboard after 60s
     setTimeout(async () => {
       await Clipboard.setStringAsync("");
@@ -45,7 +48,10 @@ export function SeedExportScreen({ words, onClose }: SeedExportScreenProps) {
         {groupWords.map((word, i) => {
           const wordIndex = currentGroup * groupSize + i + 1;
           return (
-            <View key={wordIndex} className="flex-row items-center py-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+            <View
+              key={wordIndex}
+              className="flex-row items-center py-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0"
+            >
               <Text className="text-sm text-gray-400 dark:text-gray-500 w-8">
                 {wordIndex}.
               </Text>
@@ -65,13 +71,17 @@ export function SeedExportScreen({ words, onClose }: SeedExportScreenProps) {
       {/* Navigation */}
       <View className="flex-row justify-between mb-6">
         <Pressable
-          onPress={() => setCurrentIndex(Math.max(0, (currentGroup - 1) * groupSize))}
+          onPress={() =>
+            setCurrentIndex(Math.max(0, (currentGroup - 1) * groupSize))
+          }
           disabled={currentGroup === 0}
           className={`px-6 py-3 rounded-xl ${
             currentGroup > 0 ? "bg-gray-200 dark:bg-gray-700" : "opacity-30"
           }`}
         >
-          <Text className="text-gray-900 dark:text-white font-medium">Previous</Text>
+          <Text className="text-gray-900 dark:text-white font-medium">
+            Previous
+          </Text>
         </Pressable>
 
         {currentGroup < totalGroups - 1 ? (
@@ -82,7 +92,10 @@ export function SeedExportScreen({ words, onClose }: SeedExportScreenProps) {
             <Text className="text-white font-medium">Next</Text>
           </Pressable>
         ) : (
-          <Pressable onPress={onClose} className="bg-green-600 px-6 py-3 rounded-xl">
+          <Pressable
+            onPress={onClose}
+            className="bg-green-600 px-6 py-3 rounded-xl"
+          >
             <Text className="text-white font-medium">Done</Text>
           </Pressable>
         )}

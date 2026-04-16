@@ -3,8 +3,15 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { resolveForward, resolveReverse, resolveAvatar } from "@/services/ens/resolver";
-import { isUnstoppableDomain, resolveUnstoppable } from "@/services/ens/unstoppable";
+import {
+  resolveAvatar,
+  resolveForward,
+  resolveReverse,
+} from "@/services/ens/resolver";
+import {
+  isUnstoppableDomain,
+  resolveUnstoppable,
+} from "@/services/ens/unstoppable";
 
 export const ensQueryKeys = {
   name: (address: string) => ["ens", "name", address] as const,

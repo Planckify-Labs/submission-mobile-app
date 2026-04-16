@@ -614,8 +614,8 @@ export default function AgentPermissionsScreen() {
               })}
             </View>
             <Text className="text-light-matte-black/50 text-xs mt-2 ml-1 leading-4">
-              Toggles add a permanent grant for that category. They override
-              the default mode for matching tools.
+              Toggles add a permanent grant for that category. They override the
+              default mode for matching tools.
             </Text>
           </View>
 
@@ -646,8 +646,8 @@ export default function AgentPermissionsScreen() {
                   Transfer thresholds
                 </Text>
                 <Text className="text-light-matte-black/60 text-xs mt-0.5">
-                  Auto-approve transfers below a USD limit. Per-token
-                  overrides supported.
+                  Auto-approve transfers below a USD limit. Per-token overrides
+                  supported.
                 </Text>
               </View>
               <ChevronRight size={18} color="#c71c4b" />

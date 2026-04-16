@@ -4,14 +4,9 @@
  * contract interaction, batching, and failure isolation automatically.
  */
 
-import {
-  type Address,
-  type PublicClient,
-  erc20Abi,
-  getAddress,
-} from "viem";
-import { getPublicClient } from "@/utils/clients";
+import { type Address, erc20Abi, getAddress, type PublicClient } from "viem";
 import { supportedChains } from "@/constants/configs/chainConfig";
+import { getPublicClient } from "@/utils/clients";
 
 const MAX_BATCH_SIZE = 200;
 

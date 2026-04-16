@@ -64,10 +64,11 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { useWallet } from "@/hooks/useWallet";
+import OptimizedImage from "@/components/common/OptimizedImage";
+import type { TCryptoAsset } from "@/constants/types/assetTypes";
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
-import OptimizedImage from "@/components/common/OptimizedImage";
+import { useWallet } from "@/hooks/useWallet";
 import {
   getTransferThresholdStore,
   NATIVE_TOKEN_KEY,
@@ -77,7 +78,6 @@ import {
   type TransferThresholds,
 } from "@/services/transferThresholdStore";
 import { readUserAssetsForChain } from "@/services/userAssetsReader";
-import type { TCryptoAsset } from "@/constants/types/assetTypes";
 
 // Extra breathing room above the keyboard — matches the pattern used
 // in `AddContactModal`. Tuned so the focused input sits well above the
@@ -412,9 +412,9 @@ export default function TransferThresholdsScreen() {
               )}
             </View>
             <Text className="text-light-matte-black/50 text-xs mt-2 ml-1 leading-4">
-              Enter $0 to make every transfer in that bucket require
-              explicit approval. Defaults apply globally across chains
-              within this wallet.
+              Enter $0 to make every transfer in that bucket require explicit
+              approval. Defaults apply globally across chains within this
+              wallet.
             </Text>
           </View>
 
@@ -505,8 +505,8 @@ export default function TransferThresholdsScreen() {
             </View>
 
             <Text className="text-light-matte-black/50 text-xs mt-2 ml-1 leading-4">
-              Overrides win over defaults. Set a token to $0 to make it
-              always ask, even when the default would auto-approve.
+              Overrides win over defaults. Set a token to $0 to make it always
+              ask, even when the default would auto-approve.
             </Text>
           </View>
 
@@ -521,12 +521,12 @@ export default function TransferThresholdsScreen() {
                 override at your limit.
               </Text>
               <Text className="text-light-matte-black/70 text-xs leading-5 mt-1">
-                · "Auto-approve everything except USDC" — keep defaults,
-                add a USDC override at $0.
+                · "Auto-approve everything except USDC" — keep defaults, add a
+                USDC override at $0.
               </Text>
               <Text className="text-light-matte-black/70 text-xs leading-5 mt-1">
-                · "Auto-approve a specific list" — set defaults to $0, add
-                an override per token.
+                · "Auto-approve a specific list" — set defaults to $0, add an
+                override per token.
               </Text>
             </View>
           </View>
@@ -836,7 +836,9 @@ function OverridePickerSheet({
         // falls back cleanly.
         logoUrl: isNative
           ? nativeLogoUrl
-          : (a.logo && a.logo.length > 0 ? a.logo : undefined),
+          : a.logo && a.logo.length > 0
+            ? a.logo
+            : undefined,
       };
     });
   }, [myAssets, chainId, nativeLogoUrl]);
@@ -994,206 +996,208 @@ function OverridePickerSheet({
             </TouchableOpacity>
           </View>
 
-        {stage === "pick" ? (
-          <ScrollView
-            className="px-3"
-            style={{ maxHeight: sheetListMaxHeight }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {tokensLoading && myAssets === null ? (
-              <Text className="text-center text-light-matte-black/50 py-8">
-                Loading tokens…
-              </Text>
-            ) : (
-              <>
-                {myAssetsAsOverrides.length > 0 && (
+          {stage === "pick" ? (
+            <ScrollView
+              className="px-3"
+              style={{ maxHeight: sheetListMaxHeight }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {tokensLoading && myAssets === null ? (
+                <Text className="text-center text-light-matte-black/50 py-8">
+                  Loading tokens…
+                </Text>
+              ) : (
+                <>
+                  {myAssetsAsOverrides.length > 0 && (
+                    <PickerSection
+                      title="My assets"
+                      subtitle={`Tokens you've added on ${activeChain?.chain.name ?? "this chain"}`}
+                      tokens={myAssetsAsOverrides}
+                      onSelect={(token) => {
+                        setSelected(token);
+                        setStage("amount");
+                      }}
+                    />
+                  )}
+
                   <PickerSection
-                    title="My assets"
-                    subtitle={`Tokens you've added on ${activeChain?.chain.name ?? "this chain"}`}
-                    tokens={myAssetsAsOverrides}
+                    title="Available tokens"
+                    subtitle={
+                      myAssetsAsOverrides.length > 0
+                        ? "Other tokens on this chain"
+                        : `Tokens on ${activeChain?.chain.name ?? "this chain"}`
+                    }
+                    tokens={availableAsOverrides}
                     onSelect={(token) => {
                       setSelected(token);
                       setStage("amount");
                     }}
+                    emptyLabel={
+                      availableAsOverrides.length === 0
+                        ? "No tokens found for this chain"
+                        : undefined
+                    }
                   />
-                )}
-
-                <PickerSection
-                  title="Available tokens"
-                  subtitle={
-                    myAssetsAsOverrides.length > 0
-                      ? "Other tokens on this chain"
-                      : `Tokens on ${activeChain?.chain.name ?? "this chain"}`
-                  }
-                  tokens={availableAsOverrides}
-                  onSelect={(token) => {
-                    setSelected(token);
-                    setStage("amount");
-                  }}
-                  emptyLabel={
-                    availableAsOverrides.length === 0
-                      ? "No tokens found for this chain"
-                      : undefined
-                  }
+                </>
+              )}
+            </ScrollView>
+          ) : (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingHorizontal: 20 }}
+            >
+              <View className="flex-row items-center bg-light rounded-2xl px-4 py-3 mb-3">
+                <Text className="text-light-matte-black/60 text-2xl mr-2">
+                  $
+                </Text>
+                <TextInput
+                  value={amountDraft}
+                  onChangeText={setAmountDraft}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                  accessibilityLabel="Threshold amount in USD"
+                  className="text-light-matte-black text-2xl font-bold flex-1"
                 />
-              </>
-            )}
-          </ScrollView>
-        ) : (
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingHorizontal: 20 }}
-          >
-            <View className="flex-row items-center bg-light rounded-2xl px-4 py-3 mb-3">
-              <Text className="text-light-matte-black/60 text-2xl mr-2">$</Text>
-              <TextInput
-                value={amountDraft}
-                onChangeText={setAmountDraft}
-                keyboardType="decimal-pad"
-                placeholder="0"
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
-                accessibilityLabel="Threshold amount in USD"
-                className="text-light-matte-black text-2xl font-bold flex-1"
-              />
-            </View>
-            {/* "Always ask" shortcut is the only preset — arbitrary
+              </View>
+              {/* "Always ask" shortcut is the only preset — arbitrary
                 USD numbers make no sense across IDR-pegged / EUR-pegged
                 / volatile-priced tokens. Users type the USD amount they
                 want; we keep the semantic shortcut since it's
                 currency-agnostic (threshold = 0 = always confirm). */}
-            <View className="flex-row mb-1">
-              <TouchableOpacity
-                onPress={() => setAmountDraft("0")}
-                className="bg-light rounded-xl py-2.5 px-4 self-start"
-                accessibilityRole="button"
-                accessibilityLabel="Always ask"
-              >
-                <Text className="text-light-matte-black text-sm font-semibold">
-                  Always ask
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <Text className="text-light-matte-black/50 text-[11px] mb-4 ml-1">
-              Amount is in USD. The agent compares it against the USD
-              value of the transfer at send time.
-            </Text>
+              <View className="flex-row mb-1">
+                <TouchableOpacity
+                  onPress={() => setAmountDraft("0")}
+                  className="bg-light rounded-xl py-2.5 px-4 self-start"
+                  accessibilityRole="button"
+                  accessibilityLabel="Always ask"
+                >
+                  <Text className="text-light-matte-black text-sm font-semibold">
+                    Always ask
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text className="text-light-matte-black/50 text-[11px] mb-4 ml-1">
+                Amount is in USD. The agent compares it against the USD value of
+                the transfer at send time.
+              </Text>
 
-            {/* Save-scope control. Hidden when there's only one wallet —
+              {/* Save-scope control. Hidden when there's only one wallet —
                 the three-way choice would all collapse to "this wallet"
                 anyway, so showing the UI would be dead weight. */}
-            {hasMultipleWallets && (
-              <View className="mb-4">
-                <Text className="text-light-matte-black/50 text-[10px] uppercase tracking-wide mb-2 ml-1">
-                  Save on
-                </Text>
-                <View
-                  className="bg-light rounded-2xl overflow-hidden"
-                  style={cardShadow}
-                >
-                  <ScopeOption
-                    icon={Wallet}
-                    label="This wallet only"
-                    hint="Default — changes stay on the active wallet."
-                    selected={scope.type === "this"}
-                    onPress={() => setScope({ type: "this" })}
-                  />
-                  <View className="h-px bg-light-matte-black/5" />
-                  <ScopeOption
-                    icon={Users}
-                    label="All my wallets"
-                    hint={`Apply to all ${wallets.length} wallets.`}
-                    selected={scope.type === "all"}
-                    onPress={() => setScope({ type: "all" })}
-                  />
-                  <View className="h-px bg-light-matte-black/5" />
-                  <ScopeOption
-                    icon={ListChecks}
-                    label={
-                      scope.type === "some"
-                        ? `Selected wallets (${scope.addresses.length})`
-                        : "Choose specific wallets…"
-                    }
-                    hint={
-                      scope.type === "some"
-                        ? "Tap to change your selection."
-                        : "Pick any subset of your wallets."
-                    }
-                    selected={scope.type === "some"}
-                    trailing={<ChevronRight size={16} color="#c71c4b" />}
-                    onPress={() => {
-                      // Pre-seed the draft from the current selection so
-                      // "edit" feels continuous rather than a cold restart.
-                      setWalletDraft(
-                        new Set(
-                          scope.type === "some"
-                            ? scope.addresses
-                            : [walletAddress],
-                        ),
-                      );
-                      setStage("wallets");
-                    }}
-                  />
+              {hasMultipleWallets && (
+                <View className="mb-4">
+                  <Text className="text-light-matte-black/50 text-[10px] uppercase tracking-wide mb-2 ml-1">
+                    Save on
+                  </Text>
+                  <View
+                    className="bg-light rounded-2xl overflow-hidden"
+                    style={cardShadow}
+                  >
+                    <ScopeOption
+                      icon={Wallet}
+                      label="This wallet only"
+                      hint="Default — changes stay on the active wallet."
+                      selected={scope.type === "this"}
+                      onPress={() => setScope({ type: "this" })}
+                    />
+                    <View className="h-px bg-light-matte-black/5" />
+                    <ScopeOption
+                      icon={Users}
+                      label="All my wallets"
+                      hint={`Apply to all ${wallets.length} wallets.`}
+                      selected={scope.type === "all"}
+                      onPress={() => setScope({ type: "all" })}
+                    />
+                    <View className="h-px bg-light-matte-black/5" />
+                    <ScopeOption
+                      icon={ListChecks}
+                      label={
+                        scope.type === "some"
+                          ? `Selected wallets (${scope.addresses.length})`
+                          : "Choose specific wallets…"
+                      }
+                      hint={
+                        scope.type === "some"
+                          ? "Tap to change your selection."
+                          : "Pick any subset of your wallets."
+                      }
+                      selected={scope.type === "some"}
+                      trailing={<ChevronRight size={16} color="#c71c4b" />}
+                      onPress={() => {
+                        // Pre-seed the draft from the current selection so
+                        // "edit" feels continuous rather than a cold restart.
+                        setWalletDraft(
+                          new Set(
+                            scope.type === "some"
+                              ? scope.addresses
+                              : [walletAddress],
+                          ),
+                        );
+                        setStage("wallets");
+                      }}
+                    />
+                  </View>
                 </View>
-              </View>
-            )}
+              )}
 
-            <TouchableOpacity
-              onPress={handleConfirm}
-              className="bg-light-primary-red rounded-2xl py-3.5 items-center"
-              accessibilityRole="button"
-              accessibilityLabel="Save threshold"
-            >
-              <Text className="text-white font-bold">
-                {existingOverride ? "Update" : "Add override"}
-                {scope.type === "all" ? " (all wallets)" : ""}
-                {scope.type === "some"
-                  ? ` (${scope.addresses.length} wallet${scope.addresses.length === 1 ? "" : "s"})`
-                  : ""}
-              </Text>
-            </TouchableOpacity>
-            {!existingOverride && (
               <TouchableOpacity
-                onPress={() => setStage("pick")}
-                className="py-3 items-center"
+                onPress={handleConfirm}
+                className="bg-light-primary-red rounded-2xl py-3.5 items-center"
+                accessibilityRole="button"
+                accessibilityLabel="Save threshold"
               >
-                <Text className="text-light-matte-black/60 text-sm">
-                  Pick a different token
+                <Text className="text-white font-bold">
+                  {existingOverride ? "Update" : "Add override"}
+                  {scope.type === "all" ? " (all wallets)" : ""}
+                  {scope.type === "some"
+                    ? ` (${scope.addresses.length} wallet${scope.addresses.length === 1 ? "" : "s"})`
+                    : ""}
                 </Text>
               </TouchableOpacity>
-            )}
+              {!existingOverride && (
+                <TouchableOpacity
+                  onPress={() => setStage("pick")}
+                  className="py-3 items-center"
+                >
+                  <Text className="text-light-matte-black/60 text-sm">
+                    Pick a different token
+                  </Text>
+                </TouchableOpacity>
+              )}
 
-            {/* Dynamic spacer — grows to keyboard height + 66px so the
+              {/* Dynamic spacer — grows to keyboard height + 66px so the
                 focused $ input + Save button can always be scrolled
                 above the keyboard edge. Same pattern as AddContactModal. */}
-            <Animated.View
-              style={{
-                height: Animated.add(
-                  keyboardHeightAnimation,
-                  EXTRA_SPACE_ABOVE_KEYBOARD,
-                ),
-              }}
-            />
-          </ScrollView>
-        )}
+              <Animated.View
+                style={{
+                  height: Animated.add(
+                    keyboardHeightAnimation,
+                    EXTRA_SPACE_ABOVE_KEYBOARD,
+                  ),
+                }}
+              />
+            </ScrollView>
+          )}
 
-        {stage === "wallets" && (
-          <WalletMultiSelect
-            wallets={wallets}
-            activeWalletAddress={walletAddress}
-            draft={walletDraft}
-            onDraftChange={setWalletDraft}
-            onDone={handleWalletsDone}
-            onCancel={() => setStage("amount")}
-            // Wallet-select has extra chrome below the list (warning
-            // banner, Apply, Back) — give it ~140px less than the
-            // bare token picker gets.
-            listMaxHeight={Math.max(220, sheetListMaxHeight - 140)}
-          />
-        )}
+          {stage === "wallets" && (
+            <WalletMultiSelect
+              wallets={wallets}
+              activeWalletAddress={walletAddress}
+              draft={walletDraft}
+              onDraftChange={setWalletDraft}
+              onDone={handleWalletsDone}
+              onCancel={() => setStage("amount")}
+              // Wallet-select has extra chrome below the list (warning
+              // banner, Apply, Back) — give it ~140px less than the
+              // bare token picker gets.
+              listMaxHeight={Math.max(220, sheetListMaxHeight - 140)}
+            />
+          )}
         </Animated.View>
       </View>
     </Modal>
@@ -1326,9 +1330,9 @@ function WalletMultiSelect({
         style={{ backgroundColor: "#c71c4b15" }}
       >
         <Text className="text-light-primary-red text-xs leading-5">
-          Be sure you know what you're doing. Thresholds control how much
-          the agent can move on these wallets without asking. You'll get a
-          final confirmation before the save lands.
+          Be sure you know what you're doing. Thresholds control how much the
+          agent can move on these wallets without asking. You'll get a final
+          confirmation before the save lands.
         </Text>
       </View>
 

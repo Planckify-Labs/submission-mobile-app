@@ -3,8 +3,8 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { indexerRegistry } from "@/services/indexer/registry";
 import { getCached, setCache } from "@/services/indexer/cache";
+import { indexerRegistry } from "@/services/indexer/registry";
 import type { TokenApproval } from "@/services/indexer/types";
 
 export const approvalsQueryKeys = {
@@ -21,7 +21,11 @@ export function useTokenApprovalsQuery(
     queryFn: async (): Promise<TokenApproval[]> => {
       if (!address) return [];
 
-      const cached = getCached<TokenApproval[]>("tokenApprovals", address, chainId);
+      const cached = getCached<TokenApproval[]>(
+        "tokenApprovals",
+        address,
+        chainId,
+      );
 
       try {
         const approvals = await indexerRegistry.call<TokenApproval[]>(

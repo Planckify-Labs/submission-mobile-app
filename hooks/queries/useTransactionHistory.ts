@@ -3,13 +3,13 @@
  */
 
 import { useInfiniteQuery } from "@tanstack/react-query";
+import type { DayGroup, HistoryFilter } from "@/services/history/types";
 import { indexerRegistry } from "@/services/indexer/registry";
 import type {
   HistoryOpts,
   PaginatedResult,
   WalletTransaction,
 } from "@/services/indexer/types";
-import type { DayGroup, HistoryFilter } from "@/services/history/types";
 
 export const historyQueryKeys = {
   list: (address: string, chainId: number, filter?: HistoryFilter) =>

@@ -26,7 +26,7 @@ function getDb(): SQLite.SQLiteDatabase {
         "topic TEXT PRIMARY KEY, peer_name TEXT NOT NULL, peer_url TEXT NOT NULL, " +
         "peer_icon TEXT, chains TEXT NOT NULL, methods TEXT NOT NULL, " +
         "accounts TEXT NOT NULL, expiry INTEGER NOT NULL, connected_at INTEGER NOT NULL" +
-        ");"
+        ");",
     );
   }
   return db;
@@ -36,9 +36,17 @@ export function saveSession(session: WCSession): void {
   const database = getDb();
   database.runSync(
     "INSERT OR REPLACE INTO sessions (topic, peer_name, peer_url, peer_icon, chains, methods, accounts, expiry, connected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [session.topic, session.peerName, session.peerUrl, session.peerIcon ?? null,
-     JSON.stringify(session.chains), JSON.stringify(session.methods),
-     JSON.stringify(session.accounts), session.expiry, session.connectedAt],
+    [
+      session.topic,
+      session.peerName,
+      session.peerUrl,
+      session.peerIcon ?? null,
+      JSON.stringify(session.chains),
+      JSON.stringify(session.methods),
+      JSON.stringify(session.accounts),
+      session.expiry,
+      session.connectedAt,
+    ],
   );
 }
 
@@ -58,15 +66,21 @@ export function deleteSession(topic: string): void {
 
 export function clearExpiredSessions(): void {
   const database = getDb();
-  database.runSync("DELETE FROM sessions WHERE expiry <= ?", [Math.floor(Date.now() / 1000)]);
+  database.runSync("DELETE FROM sessions WHERE expiry <= ?", [
+    Math.floor(Date.now() / 1000),
+  ]);
 }
 
 function rowToSession(row: Record<string, unknown>): WCSession {
   return {
-    topic: row.topic as string, peerName: row.peer_name as string,
-    peerUrl: row.peer_url as string, peerIcon: (row.peer_icon as string) ?? undefined,
-    chains: JSON.parse(row.chains as string), methods: JSON.parse(row.methods as string),
+    topic: row.topic as string,
+    peerName: row.peer_name as string,
+    peerUrl: row.peer_url as string,
+    peerIcon: (row.peer_icon as string) ?? undefined,
+    chains: JSON.parse(row.chains as string),
+    methods: JSON.parse(row.methods as string),
     accounts: JSON.parse(row.accounts as string),
-    expiry: row.expiry as number, connectedAt: row.connected_at as number,
+    expiry: row.expiry as number,
+    connectedAt: row.connected_at as number,
   };
 }

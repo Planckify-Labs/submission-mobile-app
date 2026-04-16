@@ -3,9 +3,9 @@
  */
 
 import * as SQLite from "expo-sqlite";
-import { indexerRegistry } from "@/services/indexer/registry";
-import { getCached, setCache } from "@/services/indexer/cache";
 import { formatUnits } from "viem";
+import { getCached, setCache } from "@/services/indexer/cache";
+import { indexerRegistry } from "@/services/indexer/registry";
 import type { TokenPrice } from "@/services/indexer/types";
 
 // ─── Currency preferences ────────────────────────────────────────────
@@ -19,13 +19,20 @@ function getPrefsDb(): SQLite.SQLiteDatabase {
       "CREATE TABLE IF NOT EXISTS settings (" +
         "key TEXT PRIMARY KEY, " +
         "value TEXT NOT NULL" +
-        ");"
+        ");",
     );
   }
   return prefsDb;
 }
 
-export type FiatCurrency = "USD" | "EUR" | "GBP" | "JPY" | "IDR" | "KRW" | "CNY";
+export type FiatCurrency =
+  | "USD"
+  | "EUR"
+  | "GBP"
+  | "JPY"
+  | "IDR"
+  | "KRW"
+  | "CNY";
 
 export function getCurrencyPreference(): FiatCurrency {
   const db = getPrefsDb();
@@ -38,10 +45,10 @@ export function getCurrencyPreference(): FiatCurrency {
 
 export function setCurrencyPreference(currency: FiatCurrency): void {
   const db = getPrefsDb();
-  db.runSync(
-    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-    ["fiat_currency", currency],
-  );
+  db.runSync("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", [
+    "fiat_currency",
+    currency,
+  ]);
 }
 
 // ─── Exchange rates (simple static fallback) ─────────────────────────
@@ -72,7 +79,13 @@ export interface PortfolioSummary {
 }
 
 export function computePortfolioTotal(
-  balances: Array<{ balance: bigint; decimals: number; price?: number; change24h?: number; isHidden?: boolean }>,
+  balances: Array<{
+    balance: bigint;
+    decimals: number;
+    price?: number;
+    change24h?: number;
+    isHidden?: boolean;
+  }>,
   currency: FiatCurrency = "USD",
 ): PortfolioSummary {
   let totalValueUsd = 0;

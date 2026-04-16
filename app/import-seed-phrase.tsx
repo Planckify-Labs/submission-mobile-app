@@ -19,7 +19,12 @@ import {
 } from "react-native-safe-area-context";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import SeedPhraseGrid from "@/components/common/SeedPhraseGrid";
+import Bip39PasteWarningModal from "@/components/security/Bip39PasteWarningModal";
+import VanityPrefixWarningModal from "@/components/security/VanityPrefixWarningModal";
 import { useWallet } from "@/hooks/useWallet";
+import { looksLikeBip39 } from "@/services/security/sensitivePaste";
+import { checkVanityPrefixRisk } from "@/services/security/vanityPrefix";
+import { createWalletFromParams } from "@/utils/walletUtils";
 
 export default function ImportWalletScreen() {
   const { bottom } = useSafeAreaInsets();
@@ -31,6 +36,12 @@ export default function ImportWalletScreen() {
   const [currentWord, setCurrentWord] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
+  const [pendingPaste, setPendingPaste] = useState<string | null>(null);
+  const [vanityWarning, setVanityWarning] = useState<{
+    address: string;
+    description: string;
+    seedPhrase: string;
+  } | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const { addWallet } = useWallet();
@@ -41,36 +52,52 @@ export default function ImportWalletScreen() {
     setSeedPhraseArray(newArray);
   };
 
+  // TWV-2026-063 — commit a pasted seed phrase. Clears the clipboard
+  // regardless of which branch the user takes so the phrase does not
+  // linger readable by other apps.
+  const commitSeedPhrasePaste = (text: string) => {
+    const words = text.trim().split(/\s+/);
+    if (words.length !== 12 && words.length !== 24) {
+      console.error(
+        "Invalid Seed Phrase: Please paste a valid 12 or 24-word seed phrase",
+      );
+      return;
+    }
+    setSeedPhraseArray(words);
+  };
+
   const handlePasteFromClipboard = async () => {
     try {
       const text = await Clipboard.getStringAsync();
-      const words = text.trim().split(/\s+/);
-
-      if (words.length !== 12 && words.length !== 24) {
-        console.error(
-          "Invalid Seed Phrase: Please paste a valid 12 or 24-word seed phrase",
-        );
+      if (looksLikeBip39(text)) {
+        // Defer commit until the user chooses. Do NOT auto-dismiss.
+        setPendingPaste(text);
         return;
       }
-
-      setSeedPhraseArray(words);
+      commitSeedPhrasePaste(text);
+      // Tap-driven paste of seed-shaped material clears the clipboard.
+      await Clipboard.setStringAsync("").catch(() => {});
     } catch (error) {
       console.log(error);
       console.error("Error: Failed to paste from clipboard");
     }
   };
 
-  const handleImport = () => {
-    const seedPhrase = seedPhraseArray.join(" ").trim();
-    const words = seedPhrase.split(/\s+/);
+  const handlePasteAnyway = async () => {
+    const text = pendingPaste ?? "";
+    setPendingPaste(null);
+    commitSeedPhrasePaste(text);
+    await Clipboard.setStringAsync("").catch(() => {});
+  };
 
-    if (words.length !== 12 && words.length !== 24) {
-      console.error(
-        "Invalid Seed Phrase: Please enter a valid 12 or 24-word seed phrase",
-      );
-      return;
-    }
+  const handleTypeInstead = async () => {
+    setPendingPaste(null);
+    // Still clear the clipboard — the seed phrase should not remain
+    // readable by other apps just because the user declined to paste.
+    await Clipboard.setStringAsync("").catch(() => {});
+  };
 
+  const finalizeImport = (seedPhrase: string) => {
     setIsLoading(true);
     setLoadingMessage("Importing your wallet...");
 
@@ -104,6 +131,47 @@ export default function ImportWalletScreen() {
         );
       });
   };
+
+  const handleImport = () => {
+    const seedPhrase = seedPhraseArray.join(" ").trim();
+    const words = seedPhrase.split(/\s+/);
+
+    if (words.length !== 12 && words.length !== 24) {
+      console.error(
+        "Invalid Seed Phrase: Please enter a valid 12 or 24-word seed phrase",
+      );
+      return;
+    }
+
+    // TWV-2026-040 — pre-derive to run the vanity-prefix heuristic. Any
+    // flag blocks finalization behind an explicit acknowledgement.
+    const draft = createWalletFromParams({
+      source: "SeedPhrase",
+      seedPhrase: seedPhrase,
+      name: "My Wallet",
+    });
+    if (draft) {
+      const risk = checkVanityPrefixRisk(draft.address);
+      if (risk.flagged && risk.description) {
+        setVanityWarning({
+          address: draft.address,
+          description: risk.description,
+          seedPhrase,
+        });
+        return;
+      }
+    }
+
+    finalizeImport(seedPhrase);
+  };
+
+  const handleVanityAcknowledge = () => {
+    const pending = vanityWarning;
+    setVanityWarning(null);
+    if (pending) finalizeImport(pending.seedPhrase);
+  };
+
+  const handleVanityCancel = () => setVanityWarning(null);
 
   const scrollToInput = (index: number) => {
     setTimeout(() => {
@@ -234,6 +302,20 @@ export default function ImportWalletScreen() {
             visible={isLoading}
             title="Setting Up Your Wallet"
             message={loadingMessage}
+          />
+
+          <Bip39PasteWarningModal
+            visible={pendingPaste !== null}
+            onPasteAnyway={handlePasteAnyway}
+            onTypeInstead={handleTypeInstead}
+          />
+
+          <VanityPrefixWarningModal
+            visible={vanityWarning !== null}
+            address={vanityWarning?.address ?? ""}
+            description={vanityWarning?.description ?? ""}
+            onAcknowledge={handleVanityAcknowledge}
+            onCancel={handleVanityCancel}
           />
         </View>
       </SafeAreaView>

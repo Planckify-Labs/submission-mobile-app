@@ -120,6 +120,78 @@ describe("tryDecodePermit2 — PermitBatch", () => {
   });
 });
 
+describe("tryDecodePermit2 — PermitTransferFrom (signature transfer)", () => {
+  it("decodes single-token transfer authorization", () => {
+    const payload = {
+      domain: permitSingle().domain,
+      types: {
+        PermitTransferFrom: [
+          { name: "permitted", type: "TokenPermissions" },
+          { name: "spender", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+        TokenPermissions: [
+          { name: "token", type: "address" },
+          { name: "amount", type: "uint256" },
+        ],
+      },
+      primaryType: "PermitTransferFrom" as const,
+      message: {
+        permitted: {
+          token: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          amount: "500000",
+        },
+        spender: "0xdddddddddddddddddddddddddddddddddddddddd",
+        nonce: "7",
+        deadline: "9999999999",
+      },
+    };
+    const d = tryDecodePermit2(payload as any);
+    assert.ok(d);
+    assert.equal(d.spender, "0xdddddddddddddddddddddddddddddddddddddddd");
+    assert.equal(d.tokens.length, 1);
+    assert.equal(d.tokens[0]?.amount, 500000n);
+    assert.equal(d.nonce, 7n);
+  });
+});
+
+describe("tryDecodePermit2 — PermitBatchTransferFrom", () => {
+  it("decodes multi-token transfer with one unlimited entry", () => {
+    const payload = {
+      domain: permitSingle().domain,
+      types: {
+        PermitBatchTransferFrom: [
+          { name: "permitted", type: "TokenPermissions[]" },
+          { name: "spender", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      primaryType: "PermitBatchTransferFrom" as const,
+      message: {
+        permitted: [
+          {
+            token: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            amount: "1",
+          },
+          {
+            token: "0xcccccccccccccccccccccccccccccccccccccccc",
+            amount: ((1n << 160n) - 1n).toString(),
+          },
+        ],
+        spender: "0xdddddddddddddddddddddddddddddddddddddddd",
+        nonce: "11",
+        deadline: "9999999999",
+      },
+    };
+    const d = tryDecodePermit2(payload as any);
+    assert.ok(d);
+    assert.equal(d.tokens.length, 2);
+    assert.equal(d.isUnlimited, true);
+  });
+});
+
 describe("tryDecodePermit2 — negative cases", () => {
   it("returns null when domain.name is not Permit2", () => {
     const p = permitSingle();

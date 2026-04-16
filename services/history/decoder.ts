@@ -6,18 +6,18 @@
  */
 
 import {
+  decodeAbiParameters,
+  decodeEventLog,
+  erc20Abi,
+  getAddress,
   type Hex,
   type Log,
-  decodeEventLog,
-  decodeAbiParameters,
-  getAddress,
   parseAbi,
-  erc20Abi,
 } from "viem";
 import type {
-  TxType,
-  TokenTransfer,
   NFTTransfer,
+  TokenTransfer,
+  TxType,
 } from "@/services/indexer/types";
 
 // ─── ABIs for event decoding ─────────────────────────────────────────
@@ -96,7 +96,11 @@ export function decodeTx(tx: DecoderInput): DecoderOutput {
           strict: false,
         });
         if (decoded.eventName === "Transfer") {
-          const args = decoded.args as { from: string; to: string; value: bigint };
+          const args = decoded.args as {
+            from: string;
+            to: string;
+            value: bigint;
+          };
           tokenTransfers.push({
             contractAddress: log.address,
             from: args.from.toLowerCase(),
@@ -119,7 +123,11 @@ export function decodeTx(tx: DecoderInput): DecoderOutput {
           strict: false,
         });
         if (decoded.eventName === "Transfer") {
-          const args = decoded.args as { from: string; to: string; tokenId: bigint };
+          const args = decoded.args as {
+            from: string;
+            to: string;
+            tokenId: bigint;
+          };
           nftTransfers.push({
             contractAddress: log.address,
             from: args.from.toLowerCase(),
@@ -144,8 +152,11 @@ export function decodeTx(tx: DecoderInput): DecoderOutput {
       });
       if (decoded.eventName === "TransferSingle") {
         const args = decoded.args as {
-          operator: string; from: string; to: string;
-          id: bigint; value: bigint;
+          operator: string;
+          from: string;
+          to: string;
+          id: bigint;
+          value: bigint;
         };
         nftTransfers.push({
           contractAddress: log.address,
@@ -159,8 +170,11 @@ export function decodeTx(tx: DecoderInput): DecoderOutput {
       }
       if (decoded.eventName === "TransferBatch") {
         const args = decoded.args as {
-          operator: string; from: string; to: string;
-          ids: readonly bigint[]; values: readonly bigint[];
+          operator: string;
+          from: string;
+          to: string;
+          ids: readonly bigint[];
+          values: readonly bigint[];
         };
         for (let i = 0; i < args.ids.length; i++) {
           nftTransfers.push({
@@ -196,7 +210,8 @@ function classifyTx(
 
   if (SWAP_SELECTORS.has(selector)) return "swap";
   if (selector === APPROVE_SELECTOR) return "token-approve";
-  if (nftTransfers.length > 0 && tokenTransfers.length === 0) return "nft-transfer";
+  if (nftTransfers.length > 0 && tokenTransfers.length === 0)
+    return "nft-transfer";
   if (tokenTransfers.length > 0 && nftTransfers.length === 0) {
     if (tokenTransfers.length >= 2) return "swap";
     return "token-transfer";

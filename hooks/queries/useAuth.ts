@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { publicApi, reset401Guard } from "@/constants/configs/ky";
 import { useWallet } from "@/hooks/useWallet";
@@ -7,6 +6,11 @@ import { clearChatStateForWallet } from "@/lib/storage/chatKeys";
 import { storage } from "@/lib/storage/mmkv";
 import { activeConvRegistry } from "@/services/activeConvRegistry";
 import { pendingTxStore } from "@/services/pendingTxStore";
+import {
+  walletSecureDelete,
+  walletSecureGet,
+  walletSecureSet,
+} from "@/services/security/walletSecureStore";
 
 interface TNonceResponse {
   nonce: string;
@@ -46,18 +50,15 @@ export const storeTokens = async (
   walletAddress?: string,
 ): Promise<void> => {
   try {
-    await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
-    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+    await walletSecureSet(ACCESS_TOKEN_KEY, accessToken);
+    await walletSecureSet(REFRESH_TOKEN_KEY, refreshToken);
     if (walletAddress) {
-      await SecureStore.setItemAsync(
+      await walletSecureSet(
         AUTH_WALLET_ADDRESS_KEY,
         walletAddress.toLowerCase(),
       );
-      await SecureStore.setItemAsync(accessKeyFor(walletAddress), accessToken);
-      await SecureStore.setItemAsync(
-        refreshKeyFor(walletAddress),
-        refreshToken,
-      );
+      await walletSecureSet(accessKeyFor(walletAddress), accessToken);
+      await walletSecureSet(refreshKeyFor(walletAddress), refreshToken);
     }
   } catch (error) {
     console.error("Failed to store tokens:", error);
@@ -67,7 +68,7 @@ export const storeTokens = async (
 
 export const getAccessToken = async (): Promise<string | null> => {
   try {
-    return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+    return await walletSecureGet(ACCESS_TOKEN_KEY);
   } catch (error) {
     console.error("Failed to get access token:", error);
     return null;
@@ -76,7 +77,7 @@ export const getAccessToken = async (): Promise<string | null> => {
 
 export const getRefreshToken = async (): Promise<string | null> => {
   try {
-    return await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    return await walletSecureGet(REFRESH_TOKEN_KEY);
   } catch (error) {
     console.error("Failed to get refresh token:", error);
     return null;
@@ -88,7 +89,7 @@ export const getAccessTokenForWallet = async (
 ): Promise<string | null> => {
   if (!walletAddress) return null;
   try {
-    const token = await SecureStore.getItemAsync(accessKeyFor(walletAddress));
+    const token = await walletSecureGet(accessKeyFor(walletAddress));
     return token || null;
   } catch (error) {
     console.error("Failed to get access token for wallet:", error);
@@ -101,7 +102,7 @@ export const getRefreshTokenForWallet = async (
 ): Promise<string | null> => {
   if (!walletAddress) return null;
   try {
-    const token = await SecureStore.getItemAsync(refreshKeyFor(walletAddress));
+    const token = await walletSecureGet(refreshKeyFor(walletAddress));
     return token || null;
   } catch (error) {
     console.error("Failed to get refresh token for wallet:", error);
@@ -111,9 +112,9 @@ export const getRefreshTokenForWallet = async (
 
 export const clearTokens = async (): Promise<void> => {
   try {
-    await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
-    await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
-    await SecureStore.deleteItemAsync(AUTH_WALLET_ADDRESS_KEY);
+    await walletSecureDelete(ACCESS_TOKEN_KEY);
+    await walletSecureDelete(REFRESH_TOKEN_KEY);
+    await walletSecureDelete(AUTH_WALLET_ADDRESS_KEY);
   } catch (error) {
     console.error("Failed to clear tokens:", error);
   }
@@ -123,7 +124,7 @@ export const getAuthenticatedWalletAddress = async (): Promise<
   string | null
 > => {
   try {
-    const addr = await SecureStore.getItemAsync(AUTH_WALLET_ADDRESS_KEY);
+    const addr = await walletSecureGet(AUTH_WALLET_ADDRESS_KEY);
     return addr;
   } catch (error) {
     console.error("Failed to get authenticated wallet address:", error);
@@ -222,19 +223,13 @@ export const useRefreshToken = () => {
 
         const walletToPersist = activeWallet?.address;
         if (walletToPersist) {
-          await SecureStore.setItemAsync(
+          await walletSecureSet(
             accessKeyFor(walletToPersist),
             response.access_token,
           );
-          await SecureStore.setItemAsync(
-            ACCESS_TOKEN_KEY,
-            response.access_token,
-          );
+          await walletSecureSet(ACCESS_TOKEN_KEY, response.access_token);
         } else {
-          await SecureStore.setItemAsync(
-            ACCESS_TOKEN_KEY,
-            response.access_token,
-          );
+          await walletSecureSet(ACCESS_TOKEN_KEY, response.access_token);
         }
 
         // Fresh access token obtained — allow future 401s to trigger redirect again
@@ -347,16 +342,10 @@ export const useIsAuthenticated = () => {
         ) {
           try {
             if (accessToken) {
-              await SecureStore.setItemAsync(
-                accessKeyFor(currentWallet),
-                accessToken,
-              );
+              await walletSecureSet(accessKeyFor(currentWallet), accessToken);
             }
             if (refreshToken) {
-              await SecureStore.setItemAsync(
-                refreshKeyFor(currentWallet),
-                refreshToken,
-              );
+              await walletSecureSet(refreshKeyFor(currentWallet), refreshToken);
             }
           } catch (e) {
             console.warn(

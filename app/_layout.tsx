@@ -1,3 +1,6 @@
+// TWV-2026-002 — pollyfills MUST load before any module that can transitively
+// pull in Viem or `@scure/bip39`. Keep this the first import of the app.
+import "../pollyfills";
 import { QueryClient, useIsRestoring } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { router, SplashScreen, Stack } from "expo-router";
@@ -10,7 +13,6 @@ import {
   shouldPersistQuery,
 } from "@/lib/storage/queryPersister";
 import "../global.css";
-import "../pollyfills";
 
 SplashScreen.preventAutoHideAsync();
 

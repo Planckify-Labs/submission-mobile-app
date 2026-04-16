@@ -1,6 +1,6 @@
-import React from "react";
-import { View, Text, FlatList, Pressable } from "react-native";
 import { Image } from "expo-image";
+import React from "react";
+import { FlatList, Pressable, Text, View } from "react-native";
 import type { WCSession } from "@/services/walletconnect/sessionStore";
 
 interface SessionListProps {
@@ -31,7 +31,10 @@ export function SessionList({ sessions, onDisconnect }: SessionListProps) {
           {/* dApp icon */}
           <View className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 items-center justify-center mr-3">
             {item.peerIcon ? (
-              <Image source={{ uri: item.peerIcon }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+              <Image
+                source={{ uri: item.peerIcon }}
+                style={{ width: 40, height: 40, borderRadius: 20 }}
+              />
             ) : (
               <Text className="text-gray-500 text-sm font-bold">
                 {item.peerName.slice(0, 2).toUpperCase()}
@@ -41,16 +44,25 @@ export function SessionList({ sessions, onDisconnect }: SessionListProps) {
 
           {/* Session info */}
           <View className="flex-1">
-            <Text className="text-base font-medium text-gray-900 dark:text-white">{item.peerName}</Text>
-            <Text className="text-xs text-gray-500 dark:text-gray-400">{item.peerUrl}</Text>
+            <Text className="text-base font-medium text-gray-900 dark:text-white">
+              {item.peerName}
+            </Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400">
+              {item.peerUrl}
+            </Text>
             <Text className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
               {item.chains.join(", ")}
             </Text>
           </View>
 
           {/* Disconnect */}
-          <Pressable onPress={() => onDisconnect(item.topic)} className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30">
-            <Text className="text-red-600 dark:text-red-400 text-xs font-medium">Disconnect</Text>
+          <Pressable
+            onPress={() => onDisconnect(item.topic)}
+            className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30"
+          >
+            <Text className="text-red-600 dark:text-red-400 text-xs font-medium">
+              Disconnect
+            </Text>
           </Pressable>
         </View>
       )}

@@ -1,9 +1,9 @@
 export type {
-  WalletTransaction,
+  NFTTransfer,
+  TokenTransfer,
   TxStatus,
   TxType,
-  TokenTransfer,
-  NFTTransfer,
+  WalletTransaction,
 } from "@/services/indexer/types";
 
 export interface DayGroup {

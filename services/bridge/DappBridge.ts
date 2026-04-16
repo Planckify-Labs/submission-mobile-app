@@ -14,6 +14,12 @@ import { runPipeline, runSingleInspector } from "./inspector";
 import { pendingIntentsStore } from "./pendingIntents";
 import { redactParams } from "./redact";
 
+// TWV-2026-007: `eth_sign` signs an arbitrary 32-byte hash with no
+// structured-data display — any dApp that reaches it is one prompt away
+// from a blank-check signature. Hard-reject at the bridge so no approval
+// intent is ever created. Rejection is terminal — no user override.
+export const HARD_REJECT_METHODS: ReadonlySet<string> = new Set(["eth_sign"]);
+
 interface InFlight {
   resolve: (result: unknown) => void;
   reject: (code: number, message: string, data?: unknown) => void;
@@ -34,6 +40,14 @@ export class DappBridge {
   private inFlight = new Map<string, InFlight>();
   private pendingByOrigin = new Map<string, string>();
   private opts: DappBridgeOpts;
+  // TWV-2026-013 — current top-frame origin reported by the WebView's
+  // navigation callback. Every dispatched request must declare an
+  // origin host that matches this; mismatches are sub-frame attempts.
+  private trackedTopOrigin: string | null = null;
+  // TWV-2026-015 — current session nonce; rotated on every top-frame
+  // navigation. Compared (constant-time) against `__takumi_nonce` on
+  // every inbound message; missing or stale → drop silently.
+  private sessionNonce: string | null = null;
 
   constructor(opts: DappBridgeOpts) {
     this.opts = opts;
@@ -53,10 +67,37 @@ export class DappBridge {
     this.opts = opts;
   }
 
+  /**
+   * TWV-2026-015 — install / rotate the per-session nonce. The screen
+   * generates this from the OS CSPRNG at every top-frame load and
+   * stamps it into the injected provider script's closure scope.
+   */
+  setSessionNonce(nonce: string | null): void {
+    this.sessionNonce = nonce;
+  }
+
+  /** Constant-time string equality for nonce comparison. */
+  private nonceEquals(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++)
+      diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return diff === 0;
+  }
+
   async dispatch(rawMessage: unknown): Promise<void> {
     const parsed = parseMessage(rawMessage);
     if (!parsed) return;
-    const { id, namespace, method, params, origin } = parsed;
+    const { id, namespace, method, params, origin, nonce } = parsed;
+
+    // TWV-2026-015 — silent drop on missing / stale nonce. Spec says
+    // "no error reply that leaks the control"; sub-frame forgery should
+    // see no observable response.
+    if (this.sessionNonce !== null) {
+      if (typeof nonce !== "string" || !this.nonceEquals(nonce, this.sessionNonce)) {
+        return;
+      }
+    }
 
     const adapter = ChainAdapterRegistry.get(namespace);
     if (!adapter) {
@@ -84,6 +125,31 @@ export class DappBridge {
       origin,
       params: redactParams(method, params),
     });
+
+    if (HARD_REJECT_METHODS.has(method)) {
+      this.postError(id, 4200, `${method} is deprecated and unsupported`);
+      return;
+    }
+
+    // TWV-2026-013 — origin pinning. Reject any request whose declared
+    // origin host disagrees with the tracked top-frame host. Sub-frame
+    // messages (CVE-2020-6506-class XSS) cannot impersonate the top
+    // origin under this check. `trackedTopOrigin === null` means we
+    // haven't received a navigation event yet (cold start) — accept,
+    // because the alternative is to brick the very first request the
+    // page issues at load.
+    if (this.trackedTopOrigin !== null) {
+      const declaredHost = originKey(origin.url);
+      const trackedHost = originKey(this.trackedTopOrigin);
+      if (declaredHost !== trackedHost) {
+        this.postError(
+          id,
+          4100,
+          `origin mismatch — declared ${declaredHost}, top frame is ${trackedHost}`,
+        );
+        return;
+      }
+    }
 
     try {
       const ctx = this.opts.getContext();
@@ -155,6 +221,11 @@ export class DappBridge {
 
   /** Called by the screen on WebView navigation — enforces §10.4 inv 5. */
   onNavigate(url: string, title?: string): void {
+    // TWV-2026-013 — capture top-frame origin for the origin-pin check
+    // in `dispatch()`. Updated on every navigation; sub-frame loads
+    // never hit this callback because RN-WebView only emits it for the
+    // main frame.
+    this.trackedTopOrigin = url;
     bridgeEventBus.emit({
       kind: "navigate",
       at: Date.now(),
@@ -389,6 +460,8 @@ function parseMessage(raw: unknown): {
   method: string;
   params: unknown;
   origin: Origin;
+  /** TWV-2026-015 — closure-stamped session nonce from the injected provider. */
+  nonce?: string;
 } | null {
   try {
     const data = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -402,9 +475,17 @@ function parseMessage(raw: unknown): {
       (d.namespace as Namespace) ?? ("eip155" as Namespace);
     const method = String(d.method ?? "");
     const params = d.params ?? [];
-    const origin = (d.origin as Origin) ?? ({ url: "" } as Origin);
+    // TWV-2026-013 — prefer the JS-declared top-frame origin (signed
+    // with the per-session nonce) over the screen-supplied stamp.
+    const declaredOrigin = d.__takumi_origin as string | undefined;
+    const origin =
+      typeof declaredOrigin === "string"
+        ? ({ url: declaredOrigin } as Origin)
+        : ((d.origin as Origin) ?? ({ url: "" } as Origin));
+    const nonce =
+      typeof d.__takumi_nonce === "string" ? d.__takumi_nonce : undefined;
     if (!method) return null;
-    return { id, namespace, method, params, origin };
+    return { id, namespace, method, params, origin, nonce };
   } catch {
     return null;
   }

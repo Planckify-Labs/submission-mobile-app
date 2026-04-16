@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Pressable } from "react-native";
-import { getPendingTxs, type PendingTx } from "@/services/history/PendingTxTracker";
+import { Pressable, Text, View } from "react-native";
+import {
+  getPendingTxs,
+  type PendingTx,
+} from "@/services/history/PendingTxTracker";
 
 interface PendingTxBannerProps {
   onPress?: () => void;

@@ -4,8 +4,8 @@
  */
 
 import type { TokenBalance } from "@/services/indexer/types";
-import type { SpamCheckResult } from "./types";
 import { TOP_100_NAMES } from "./tokenList";
+import type { SpamCheckResult } from "./types";
 
 // ─── Levenshtein Distance ────────────────────────────────────────────
 
@@ -73,12 +73,18 @@ export function checkSpam(token: TokenBalance): SpamCheckResult {
   return { isSpam: false, severity: "safe" };
 }
 
-function checkNameMimicry(name: string, symbol: string): SpamCheckResult | null {
+function checkNameMimicry(
+  name: string,
+  symbol: string,
+): SpamCheckResult | null {
   const lowerName = name.toLowerCase().trim();
   const lowerSymbol = symbol.toLowerCase().trim();
 
   // Skip check for legitimate variants
-  if (LEGITIMATE_VARIANTS.has(lowerName) || LEGITIMATE_VARIANTS.has(lowerSymbol)) {
+  if (
+    LEGITIMATE_VARIANTS.has(lowerName) ||
+    LEGITIMATE_VARIANTS.has(lowerSymbol)
+  ) {
     return null;
   }
 

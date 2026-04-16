@@ -18,13 +18,13 @@ function getDb(): SQLite.SQLiteDatabase {
         "notes TEXT, " +
         "created_at INTEGER NOT NULL, " +
         "last_used_at INTEGER NOT NULL" +
-        ");"
+        ");",
     );
     db.execSync(
       "CREATE TABLE IF NOT EXISTS send_counts (" +
         "address TEXT PRIMARY KEY, " +
         "count INTEGER NOT NULL DEFAULT 0" +
-        ");"
+        ");",
     );
   }
   return db;
@@ -34,7 +34,9 @@ function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-export function addContact(contact: Omit<Contact, "id" | "createdAt" | "lastUsedAt">): Contact {
+export function addContact(
+  contact: Omit<Contact, "id" | "createdAt" | "lastUsedAt">,
+): Contact {
   const database = getDb();
   const id = genId();
   const now = Date.now();
@@ -42,19 +44,34 @@ export function addContact(contact: Omit<Contact, "id" | "createdAt" | "lastUsed
 
   database.runSync(
     "INSERT INTO contacts (id, label, addresses, notes, created_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?)",
-    [id, entry.label, JSON.stringify(entry.addresses), entry.notes ?? null, now, now],
+    [
+      id,
+      entry.label,
+      JSON.stringify(entry.addresses),
+      entry.notes ?? null,
+      now,
+      now,
+    ],
   );
   return entry;
 }
 
-export function updateContact(id: string, patch: Partial<Pick<Contact, "label" | "addresses" | "notes">>): void {
+export function updateContact(
+  id: string,
+  patch: Partial<Pick<Contact, "label" | "addresses" | "notes">>,
+): void {
   const database = getDb();
   const existing = getContactById(id);
   if (!existing) return;
   const updated = { ...existing, ...patch };
   database.runSync(
     "UPDATE contacts SET label = ?, addresses = ?, notes = ? WHERE id = ?",
-    [updated.label, JSON.stringify(updated.addresses), updated.notes ?? null, id],
+    [
+      updated.label,
+      JSON.stringify(updated.addresses),
+      updated.notes ?? null,
+      id,
+    ],
   );
 }
 
@@ -66,14 +83,21 @@ export function deleteContact(id: string): void {
 export function getContactById(id: string): Contact | null {
   const database = getDb();
   const row = database.getFirstSync<{
-    id: string; label: string; addresses: string; notes: string | null;
-    created_at: number; last_used_at: number;
+    id: string;
+    label: string;
+    addresses: string;
+    notes: string | null;
+    created_at: number;
+    last_used_at: number;
   }>("SELECT * FROM contacts WHERE id = ?", [id]);
   if (!row) return null;
   return rowToContact(row);
 }
 
-export function getContacts(opts?: { search?: string; namespace?: string }): Contact[] {
+export function getContacts(opts?: {
+  search?: string;
+  namespace?: string;
+}): Contact[] {
   const database = getDb();
   let query = "SELECT * FROM contacts";
   const params: unknown[] = [];
@@ -86,20 +110,29 @@ export function getContacts(opts?: { search?: string; namespace?: string }): Con
   query += " ORDER BY last_used_at DESC";
 
   const rows = database.getAllSync<{
-    id: string; label: string; addresses: string; notes: string | null;
-    created_at: number; last_used_at: number;
+    id: string;
+    label: string;
+    addresses: string;
+    notes: string | null;
+    created_at: number;
+    last_used_at: number;
   }>(query, params as (string | number | null)[]);
 
   let contacts = rows.map(rowToContact);
   if (opts?.namespace) {
-    contacts = contacts.filter((c) => c.addresses.some((a) => a.namespace === opts.namespace));
+    contacts = contacts.filter((c) =>
+      c.addresses.some((a) => a.namespace === opts.namespace),
+    );
   }
   return contacts;
 }
 
 export function touchContact(id: string): void {
   const database = getDb();
-  database.runSync("UPDATE contacts SET last_used_at = ? WHERE id = ?", [Date.now(), id]);
+  database.runSync("UPDATE contacts SET last_used_at = ? WHERE id = ?", [
+    Date.now(),
+    id,
+  ]);
 }
 
 export function incrementSendCount(address: string): void {
@@ -124,12 +157,19 @@ export function getFrequentRecipients(minCount: number = 3): string[] {
 }
 
 function rowToContact(row: {
-  id: string; label: string; addresses: string; notes: string | null;
-  created_at: number; last_used_at: number;
+  id: string;
+  label: string;
+  addresses: string;
+  notes: string | null;
+  created_at: number;
+  last_used_at: number;
 }): Contact {
   return {
-    id: row.id, label: row.label,
+    id: row.id,
+    label: row.label,
     addresses: JSON.parse(row.addresses) as ContactAddress[],
-    notes: row.notes ?? undefined, createdAt: row.created_at, lastUsedAt: row.last_used_at,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+    lastUsedAt: row.last_used_at,
   };
 }

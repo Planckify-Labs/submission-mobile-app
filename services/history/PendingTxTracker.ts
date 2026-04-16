@@ -4,9 +4,9 @@
  */
 
 import * as SQLite from "expo-sqlite";
-import { getPublicClient } from "@/utils/clients";
 import { supportedChains } from "@/constants/configs/chainConfig";
 import type { TxStatus } from "@/services/indexer/types";
+import { getPublicClient } from "@/utils/clients";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -29,7 +29,10 @@ export interface PendingTx {
   replacementFor?: string;
 }
 
-export type PendingTxListener = (tx: PendingTx, event: "confirmed" | "failed" | "dropped") => void;
+export type PendingTxListener = (
+  tx: PendingTx,
+  event: "confirmed" | "failed" | "dropped",
+) => void;
 
 // ─── Backoff intervals (ms) ──────────────────────────────────────────
 
@@ -61,7 +64,7 @@ function getDb(): SQLite.SQLiteDatabase {
         "description TEXT, " +
         "replaced_by TEXT, " +
         "replacement_for TEXT" +
-        ");"
+        ");",
     );
   }
   return db;
@@ -88,10 +91,21 @@ export function registerPendingTx(tx: PendingTx): void {
       "(hash, chain_id, from_addr, to_addr, nonce, value, data, max_fee, max_priority_fee, gas_price, status, submitted_at, description, replaced_by, replacement_for) " +
       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
-      tx.hash, tx.chainId, tx.from, tx.to, tx.nonce, tx.value, tx.data,
-      tx.maxFeePerGas ?? null, tx.maxPriorityFeePerGas ?? null, tx.gasPrice ?? null,
-      tx.status, tx.submittedAt, tx.description ?? null,
-      tx.replacedBy ?? null, tx.replacementFor ?? null,
+      tx.hash,
+      tx.chainId,
+      tx.from,
+      tx.to,
+      tx.nonce,
+      tx.value,
+      tx.data,
+      tx.maxFeePerGas ?? null,
+      tx.maxPriorityFeePerGas ?? null,
+      tx.gasPrice ?? null,
+      tx.status,
+      tx.submittedAt,
+      tx.description ?? null,
+      tx.replacedBy ?? null,
+      tx.replacementFor ?? null,
     ],
   );
 
@@ -114,7 +128,11 @@ export function getAllTrackedTxs(): PendingTx[] {
   return rows.map(rowToTx);
 }
 
-function updateStatus(hash: string, status: TxStatus, confirmedAt?: number): void {
+function updateStatus(
+  hash: string,
+  status: TxStatus,
+  confirmedAt?: number,
+): void {
   const database = getDb();
   database.runSync(
     "UPDATE pending_txs SET status = ?, confirmed_at = ? WHERE hash = ?",
@@ -129,16 +147,20 @@ function startPolling(tx: PendingTx, attempt = 0): void {
   if (!chain) return;
 
   const client = getPublicClient(chain);
-  const delay = BACKOFF_INTERVALS[Math.min(attempt, BACKOFF_INTERVALS.length - 1)];
+  const delay =
+    BACKOFF_INTERVALS[Math.min(attempt, BACKOFF_INTERVALS.length - 1)];
 
   const timer = setTimeout(async () => {
     pollingTimers.delete(tx.hash);
 
     try {
-      const receipt = await client.getTransactionReceipt({ hash: tx.hash as `0x${string}` });
+      const receipt = await client.getTransactionReceipt({
+        hash: tx.hash as `0x${string}`,
+      });
 
       if (receipt) {
-        const status: TxStatus = receipt.status === "success" ? "confirmed" : "failed";
+        const status: TxStatus =
+          receipt.status === "success" ? "confirmed" : "failed";
         updateStatus(tx.hash, status, Date.now());
         tx.status = status;
         notify(tx, status === "confirmed" ? "confirmed" : "failed");
@@ -189,7 +211,9 @@ export function buildSpeedUpParams(tx: PendingTx) {
     data: tx.data,
     nonce: tx.nonce,
     maxFeePerGas: BigInt(Math.ceil(Number(originalMaxFee) * bumpFactor)),
-    maxPriorityFeePerGas: BigInt(Math.ceil(Number(originalPriorityFee) * bumpFactor)),
+    maxPriorityFeePerGas: BigInt(
+      Math.ceil(Number(originalPriorityFee) * bumpFactor),
+    ),
   };
 }
 
@@ -204,7 +228,9 @@ export function buildCancelParams(tx: PendingTx) {
     data: "0x",
     nonce: tx.nonce,
     maxFeePerGas: BigInt(Math.ceil(Number(originalMaxFee) * bumpFactor)),
-    maxPriorityFeePerGas: BigInt(Math.ceil(Number(originalPriorityFee) * bumpFactor)),
+    maxPriorityFeePerGas: BigInt(
+      Math.ceil(Number(originalPriorityFee) * bumpFactor),
+    ),
   };
 }
 

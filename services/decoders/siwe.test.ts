@@ -78,7 +78,8 @@ describe("tryParseSiwe — negative cases", () => {
   });
 
   it("returns null when no address follows the header", () => {
-    const bad = "example.com wants you to sign in with your Ethereum account:\n";
+    const bad =
+      "example.com wants you to sign in with your Ethereum account:\n";
     assert.equal(tryParseSiwe(bad), null);
   });
 

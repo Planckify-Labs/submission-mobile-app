@@ -19,16 +19,24 @@ const SEQUENCER_ENDPOINTS: Record<number, string> = {
   42161: "https://arb1.arbitrum.io/health",
 };
 
-export async function checkSequencerHealth(chainId: number): Promise<SequencerState> {
+export async function checkSequencerHealth(
+  chainId: number,
+): Promise<SequencerState> {
   const endpoint = SEQUENCER_ENDPOINTS[chainId];
   if (!endpoint) {
     return { chainId, status: "healthy", lastCheckedAt: Date.now() };
   }
 
   try {
-    const response = await fetch(endpoint, { signal: AbortSignal.timeout(5000) });
+    const response = await fetch(endpoint, {
+      signal: AbortSignal.timeout(5000),
+    });
     const status: SequencerStatus = response.ok ? "healthy" : "delayed";
-    const state: SequencerState = { chainId, status, lastCheckedAt: Date.now() };
+    const state: SequencerState = {
+      chainId,
+      status,
+      lastCheckedAt: Date.now(),
+    };
     sequencerStates.set(chainId, state);
     return state;
   } catch {

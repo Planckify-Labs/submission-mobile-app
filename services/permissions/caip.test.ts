@@ -21,10 +21,7 @@ describe("originKey", () => {
     assert.equal(originKey("http://localhost:3000/"), "http://localhost:3000");
   });
   it("treats http and https as distinct origins", () => {
-    assert.notEqual(
-      originKey("http://foo.xyz"),
-      originKey("https://foo.xyz"),
-    );
+    assert.notEqual(originKey("http://foo.xyz"), originKey("https://foo.xyz"));
   });
   it("falls back to lowercased input on invalid URL", () => {
     assert.equal(originKey("not a url"), "not a url");
@@ -59,9 +56,6 @@ describe("caip2 / caip10", () => {
     assert.equal(caip2("solana", "mainnet-beta"), "solana:mainnet-beta");
   });
   it("caip10 adds address", () => {
-    assert.equal(
-      caip10("eip155", 1, "0xabc"),
-      "eip155:1:0xabc",
-    );
+    assert.equal(caip10("eip155", 1, "0xabc"), "eip155:1:0xabc");
   });
 });

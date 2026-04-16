@@ -4,10 +4,14 @@
  */
 
 import * as SQLite from "expo-sqlite";
-import { createPublicClient, http, type Chain, type PublicClient } from "viem";
+import { type Chain, createPublicClient, http, type PublicClient } from "viem";
 import { supportedChains } from "@/constants/configs/chainConfig";
-import type { RPCProviderConfig, RPCProviderState, HealthStatus } from "./types";
 import { initBucket, tryConsume } from "./rateLimiter";
+import type {
+  HealthStatus,
+  RPCProviderConfig,
+  RPCProviderState,
+} from "./types";
 
 // ─── Default provider configs ────────────────────────────────────────
 
@@ -34,7 +38,7 @@ function getDb(): SQLite.SQLiteDatabase {
         "url TEXT NOT NULL, " +
         "priority INTEGER DEFAULT 0, " +
         "PRIMARY KEY (chain_id, url)" +
-        ");"
+        ");",
     );
   }
   return db;
@@ -99,14 +103,25 @@ export function addCustomRPC(chainId: number, name: string, url: string): void {
 
   const key = stateKey(chainId, name);
   providerStates.set(key, {
-    name, url, chainId, priority: 0, rateLimitRpm: 300, isCustom: true,
-    healthStatus: "healthy", lastLatencyMs: 0, consecutiveHealthy: 3, lastCheckedAt: 0,
+    name,
+    url,
+    chainId,
+    priority: 0,
+    rateLimitRpm: 300,
+    isCustom: true,
+    healthStatus: "healthy",
+    lastLatencyMs: 0,
+    consecutiveHealthy: 3,
+    lastCheckedAt: 0,
   });
 }
 
 export function removeCustomRPC(chainId: number, url: string): void {
   const database = getDb();
-  database.runSync("DELETE FROM custom_rpcs WHERE chain_id = ? AND url = ?", [chainId, url]);
+  database.runSync("DELETE FROM custom_rpcs WHERE chain_id = ? AND url = ?", [
+    chainId,
+    url,
+  ]);
 }
 
 export async function checkHealth(chainId: number): Promise<void> {
@@ -122,7 +137,9 @@ export async function checkHealth(chainId: number): Promise<void> {
       const client = createClient(chain, provider.url || undefined);
       await Promise.race([
         client.getBlockNumber(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 5000),
+        ),
       ]);
 
       const latency = Date.now() - start;
@@ -141,7 +158,8 @@ export async function checkHealth(chainId: number): Promise<void> {
     } catch {
       provider.consecutiveHealthy = 0;
       provider.lastCheckedAt = Date.now();
-      provider.healthStatus = provider.healthStatus === "degraded" ? "down" : "degraded";
+      provider.healthStatus =
+        provider.healthStatus === "degraded" ? "down" : "degraded";
     }
 
     providerStates.set(key, provider);
@@ -155,7 +173,10 @@ function createClient(chain: Chain, url?: string): PublicClient {
 export function getFailoverClient(chainId: number): PublicClient {
   const chain = supportedChains.find((c) => c.chain.id === chainId)?.chain;
   if (!chain) {
-    return createPublicClient({ chain: supportedChains[0].chain, transport: http() });
+    return createPublicClient({
+      chain: supportedChains[0].chain,
+      transport: http(),
+    });
   }
 
   const providers = getProvidersForChain(chainId);

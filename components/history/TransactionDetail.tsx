@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, ScrollView, Pressable, Linking } from "react-native";
+import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { formatEther, formatGwei, formatUnits } from "viem";
 import type { WalletTransaction } from "@/services/indexer/types";
 
@@ -47,10 +47,7 @@ export function TransactionDetail({ tx, onClose }: TransactionDetailProps) {
       <DetailRow label="Type" value={tx.type} />
       <DetailRow label="From" value={tx.from} truncate />
       {tx.to && <DetailRow label="To" value={tx.to} truncate />}
-      <DetailRow
-        label="Value"
-        value={formatEther(tx.value)}
-      />
+      <DetailRow label="Value" value={formatEther(tx.value)} />
       <DetailRow label="Nonce" value={String(tx.nonce)} />
       {tx.blockNumber && (
         <DetailRow label="Block" value={String(tx.blockNumber)} />
@@ -95,7 +92,10 @@ export function TransactionDetail({ tx, onClose }: TransactionDetailProps) {
             Token Transfers
           </Text>
           {tx.decoded.tokenTransfers.map((t, i) => (
-            <View key={i} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-2">
+            <View
+              key={i}
+              className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-2"
+            >
               <Text className="text-sm text-gray-900 dark:text-white">
                 {t.symbol ?? "Token"}: {formatUnits(t.value, t.decimals ?? 18)}
               </Text>
@@ -127,9 +127,10 @@ function DetailRow({
   value: string;
   truncate?: boolean;
 }) {
-  const display = truncate && value.length > 16
-    ? `${value.slice(0, 8)}...${value.slice(-6)}`
-    : value;
+  const display =
+    truncate && value.length > 16
+      ? `${value.slice(0, 8)}...${value.slice(-6)}`
+      : value;
 
   return (
     <View className="flex-row justify-between py-2 border-b border-gray-100 dark:border-gray-800">

@@ -21,9 +21,9 @@ import { beforeEach, describe, it } from "node:test";
 
 import type { ApprovalIntent } from "./approval.ts";
 import {
+  InspectorRegistry,
   type IntentAnnotation,
   type IntentInspector,
-  InspectorRegistry,
   runPipeline,
   runSingleInspector,
 } from "./inspector.ts";
@@ -54,14 +54,15 @@ describe("InspectorRegistry", () => {
     InspectorRegistry.register(b);
     InspectorRegistry.register(c);
     const list = InspectorRegistry.list("auto");
-    assert.deepEqual(list.map((i) => i.name), ["b", "a", "c"]);
+    assert.deepEqual(
+      list.map((i) => i.name),
+      ["b", "a", "c"],
+    );
   });
 
   it("filters by mode (auto vs on-demand)", () => {
     InspectorRegistry.register(mkInspector({ name: "auto1", mode: "auto" }));
-    InspectorRegistry.register(
-      mkInspector({ name: "od1", mode: "on-demand" }),
-    );
+    InspectorRegistry.register(mkInspector({ name: "od1", mode: "on-demand" }));
     assert.equal(InspectorRegistry.list("auto").length, 1);
     assert.equal(InspectorRegistry.list("on-demand").length, 1);
     assert.equal(InspectorRegistry.list("auto")[0]?.name, "auto1");

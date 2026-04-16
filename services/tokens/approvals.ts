@@ -2,7 +2,13 @@
  * Token approval management — revoke calldata builders.
  */
 
-import { encodeFunctionData, erc20Abi, getAddress, maxUint256, formatUnits } from "viem";
+import {
+  encodeFunctionData,
+  erc20Abi,
+  formatUnits,
+  getAddress,
+  maxUint256,
+} from "viem";
 import type { TokenApproval } from "@/services/indexer/types";
 
 const ERC721_SET_APPROVAL_ABI = [
@@ -43,10 +49,16 @@ export function isUnlimitedAllowance(allowance: bigint | "unlimited"): boolean {
   return false;
 }
 
-export function formatAllowance(allowance: bigint | "unlimited", decimals: number): string {
+export function formatAllowance(
+  allowance: bigint | "unlimited",
+  decimals: number,
+): string {
   if (isUnlimitedAllowance(allowance)) return "Unlimited";
   if (typeof allowance === "bigint") {
-    return parseFloat(formatUnits(allowance, decimals)).toLocaleString(undefined, { maximumFractionDigits: 4 });
+    return parseFloat(formatUnits(allowance, decimals)).toLocaleString(
+      undefined,
+      { maximumFractionDigits: 4 },
+    );
   }
   return "0";
 }

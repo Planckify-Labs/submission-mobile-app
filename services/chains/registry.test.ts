@@ -11,9 +11,7 @@ import { beforeEach, describe, it } from "node:test";
 import { ChainAdapterRegistry } from "./registry.ts";
 import type { ChainAdapter } from "./types.ts";
 
-function makeAdapter(
-  namespace: ChainAdapter["namespace"],
-): ChainAdapter {
+function makeAdapter(namespace: ChainAdapter["namespace"]): ChainAdapter {
   return {
     namespace,
     getInjectedScript: () => "",

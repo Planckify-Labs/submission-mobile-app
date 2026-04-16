@@ -2,9 +2,9 @@
  * ERC-4626 vault detection + underlying value calculation.
  */
 
-import { getAddress, erc20Abi, parseAbi, parseEther, formatEther } from "viem";
-import { getPublicClient } from "@/utils/clients";
+import { erc20Abi, formatEther, getAddress, parseAbi, parseEther } from "viem";
 import { supportedChains } from "@/constants/configs/chainConfig";
+import { getPublicClient } from "@/utils/clients";
 
 const erc4626Abi = parseAbi([
   "function asset() view returns (address)",
@@ -46,7 +46,9 @@ export async function detectVault(
         abi: erc20Abi,
         functionName: "symbol",
       });
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
 
     // Get exchange rate (1 share → X assets)
     const assetsPerShare = await client.readContract({

@@ -1,6 +1,43 @@
 import { decodeFunctionData, parseAbiItem } from "viem";
 
 /**
+ * Review gate — TWV-2026-053 (Uniswap v4 hook address + allowlist display).
+ *
+ * When v4 calldata support lands here, the signer UI MUST surface the hook
+ * identity the same way it surfaces `to` and `value`. Do not merge a v4
+ * decoder that hides the hook behind "Uniswap v4 PoolManager" trust.
+ *
+ * Pre-implementation checklist for v4 decoding (blocks merge):
+ *   1. Extract `PoolKey` (currency0, currency1, fee, tickSpacing, hooks)
+ *      from calldata to `PoolManager.swap` / `modifyLiquidity` / `unlock`
+ *      paths. The `hooks` address field is the value that must be routed
+ *      to the signer UI.
+ *   2. Resolve the hook via `constants/uniswap-v4-hooks.ts` (to be created).
+ *      Shape: `{ address: `0x${string}`; chainId: number; name: string;
+ *      audited: boolean; source: string; addedAt: string; }[]`. Ship
+ *      in-bundle with a dated source comment; no runtime fetches.
+ *      Unknown hooks render as "Custom hook — pool logic provided by a
+ *      third party" with the address shown in full (never abbreviated
+ *      away). Known-Uniswap-Labs hooks render with the audit status.
+ *   3. Signer copy distinguishes "Uniswap v4 pool with a hook" from
+ *      "Uniswap v4 pool without a hook" (hook address == zero address).
+ *   4. Simulation (TWV-2026-011, task 17) is required for v4 signs; the
+ *      simulator must cover `beforeSwap` / `afterSwap` hook effects and
+ *      display the full asset delta. Unexpected transfers to addresses
+ *      not in the pool route trigger the label-vs-delta mismatch warning
+ *      (TWV-2026-038, task 27). If the simulator is unavailable for the
+ *      target chain, the UI warns "cannot simulate — proceed only if you
+ *      trust this pool."
+ *   5. Hook address is always displayed — it is never elided, shortened
+ *      away, or replaced by "Uniswap v4" branding in any signer-UI
+ *      copy path.
+ *
+ * Reviewers: block PRs that add `PoolManager` selectors to `SELECTOR_DB`
+ * without a companion hook-display path in the signer UI. Cross-link the
+ * PR to this review gate and task 27.
+ */
+
+/**
  * Minimal local selector → signature map for the most common ERC-20 / NFT
  * / router functions. Intentionally small — ~20 entries covers the long tail
  * of volume. The asset can grow via a build step later.
@@ -58,6 +95,61 @@ export interface DecodedCalldata {
   args?: DecodedArg[];
   ambiguous?: boolean;
   raw: `0x${string}`;
+  /**
+   * TWV-2026-009 — high-risk variants the signer UI MUST branch on, not
+   * render as generic "Contract Interaction". Kept as a discriminated
+   * tag so the decoder output remains a single value rather than a
+   * parallel predicate query.
+   */
+  risk?:
+    | {
+        kind: "setApprovalForAll";
+        operator: `0x${string}`;
+        approved: boolean;
+      }
+    | {
+        kind: "approve";
+        spender: `0x${string}`;
+        amount: bigint;
+        isUnlimited: boolean;
+      };
+}
+
+// TWV-2026-009 — "unlimited" threshold for ERC-20 `approve`. Any value
+// at or above `type(uint256).max / 2` is treated as unbounded because
+// no legitimate workflow needs to grant more than half of supply — the
+// pattern appears only in "max approve" templates that ice-phish drainers
+// exploit.
+const UINT256_MAX = (1n << 256n) - 1n;
+const UNLIMITED_APPROVE_THRESHOLD = UINT256_MAX / 2n;
+
+function classifyRisk(
+  decoded: DecodedCalldata,
+): DecodedCalldata["risk"] {
+  if (decoded.functionName === "setApprovalForAll" && decoded.args) {
+    const operator = decoded.args[0]?.value;
+    const approved = decoded.args[1]?.value;
+    if (typeof operator === "string" && typeof approved === "boolean") {
+      return {
+        kind: "setApprovalForAll",
+        operator: operator as `0x${string}`,
+        approved,
+      };
+    }
+  }
+  if (decoded.functionName === "approve" && decoded.args) {
+    const spender = decoded.args[0]?.value;
+    const amount = decoded.args[1]?.value;
+    if (typeof spender === "string" && typeof amount === "bigint") {
+      return {
+        kind: "approve",
+        spender: spender as `0x${string}`,
+        amount,
+        isUnlimited: amount >= UNLIMITED_APPROVE_THRESHOLD,
+      };
+    }
+  }
+  return undefined;
 }
 
 export function decodeCalldata(
@@ -65,7 +157,11 @@ export function decodeCalldata(
 ): DecodedCalldata | null {
   if (!data || data === "0x") return null;
   if (data.length < 10) {
-    return { selector: data.slice(0, 10) as `0x${string}`, signature: null, raw: data };
+    return {
+      selector: data.slice(0, 10) as `0x${string}`,
+      signature: null,
+      raw: data,
+    };
   }
   const selector = data.slice(0, 10).toLowerCase() as `0x${string}`;
   const candidates = SELECTOR_DB[selector];
@@ -85,7 +181,7 @@ export function decodeCalldata(
           value,
         }),
       );
-      return {
+      const out: DecodedCalldata = {
         selector,
         signature: sig,
         functionName: decoded.functionName,
@@ -93,6 +189,8 @@ export function decodeCalldata(
         ambiguous: candidates.length > 1,
         raw: data,
       };
+      out.risk = classifyRisk(out);
+      return out;
     } catch {
       // try next candidate
     }

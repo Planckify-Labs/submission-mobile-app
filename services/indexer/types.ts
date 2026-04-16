@@ -180,10 +180,7 @@ export interface IndexerProvider {
   readonly name: string;
   readonly priority: number;
 
-  getTokenBalances(
-    address: string,
-    chainId: number,
-  ): Promise<TokenBalance[]>;
+  getTokenBalances(address: string, chainId: number): Promise<TokenBalance[]>;
 
   getTransactionHistory(
     opts: HistoryOpts,
@@ -191,15 +188,17 @@ export interface IndexerProvider {
 
   getNFTs(opts: NFTOpts): Promise<PaginatedResult<NFTAsset>>;
 
-  getTokenApprovals(
-    address: string,
-    chainId: number,
-  ): Promise<TokenApproval[]>;
+  getTokenApprovals(address: string, chainId: number): Promise<TokenApproval[]>;
 
   getTokenMetadata(
     contractAddress: string,
     chainId: number,
-  ): Promise<{ symbol: string; name: string; decimals: number; logoURI?: string } | null>;
+  ): Promise<{
+    symbol: string;
+    name: string;
+    decimals: number;
+    logoURI?: string;
+  } | null>;
 
   getTokenPrices(
     contractAddresses: string[],

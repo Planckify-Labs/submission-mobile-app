@@ -1,6 +1,6 @@
-import React from "react";
-import { View, Text, Pressable } from "react-native";
 import { Image } from "expo-image";
+import React from "react";
+import { Pressable, Text, View } from "react-native";
 import { formatUnits } from "viem";
 import type { TokenBalanceItem } from "@/services/tokens/types";
 import { SpamBadge } from "./SpamBadge";

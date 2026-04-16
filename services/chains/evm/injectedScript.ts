@@ -5,6 +5,13 @@ export interface EvmInjectedScriptParams {
   chainId: string; // 0x-prefixed hex
   networkVersion: string; // decimal chain id
   info: Eip6963Info;
+  /**
+   * TWV-2026-015 — per-session nonce stamped on every outbound bridge
+   * message. Generated native-side from the OS CSPRNG and rotated on
+   * every top-frame navigation. Stored in closure scope inside the
+   * provider, never on `window`.
+   */
+  sessionNonce?: string;
 }
 
 /**
@@ -51,6 +58,10 @@ export function getEvmInjectedScript(p: EvmInjectedScriptParams): string {
   window.__takumi_evm_installed = true;
 
   var initial = ${initial};
+  // TWV-2026-015 — closure-scoped session nonce. Rotated on every
+  // top-frame navigation by the native side; sub-frame forgery cannot
+  // read it because it lives inside this IIFE.
+  var __takumi_session_nonce = ${JSON.stringify(p.sessionNonce ?? "")};
 
   var provider = {
     isMetaMask: true,
@@ -109,7 +120,12 @@ export function getEvmInjectedScript(p: EvmInjectedScriptParams): string {
             namespace: 'eip155',
             id: id,
             method: args.method,
-            params: args.params || []
+            params: args.params || [],
+            // TWV-2026-015 — session nonce + top-frame origin.
+            // Sub-frame postMessage cannot include the closure-scoped
+            // nonce; the bridge drops messages without it.
+            __takumi_nonce: __takumi_session_nonce,
+            __takumi_origin: (function(){ try { return window.top.location.origin; } catch (e) { return location.origin; } })()
           }));
         } catch (e) {
           window._pendingRequests.delete(id);
