@@ -88,7 +88,7 @@ export default function WalletImport({
     });
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!validateInput(input)) {
       console.error("Invalid Input:", validationMessage);
       return;
@@ -96,7 +96,7 @@ export default function WalletImport({
 
     // TWV-2026-040 — pre-derive the address to check it against the
     // Profanity-class heuristic before we finalise the import.
-    const draft = createWalletFromParams({
+    const draft = await createWalletFromParams({
       source: type,
       [type === "SeedPhrase" ? "seedPhrase" : "privateKey"]: input,
       name: walletName || undefined,

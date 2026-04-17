@@ -203,7 +203,7 @@ export function useWallet() {
   const addWallet = useCallback(
     async (walletData: TWalletCreationParams) => {
       return await deferredTask(async () => {
-        const wallet = createWalletFromParams(walletData);
+        const wallet = await createWalletFromParams(walletData);
         if (!wallet) return false;
 
         const walletExists = wallets.some(

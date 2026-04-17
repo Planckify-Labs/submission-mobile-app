@@ -132,7 +132,7 @@ export default function ImportWalletScreen() {
       });
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     const seedPhrase = seedPhraseArray.join(" ").trim();
     const words = seedPhrase.split(/\s+/);
 
@@ -145,7 +145,7 @@ export default function ImportWalletScreen() {
 
     // TWV-2026-040 — pre-derive to run the vanity-prefix heuristic. Any
     // flag blocks finalization behind an explicit acknowledgement.
-    const draft = createWalletFromParams({
+    const draft = await createWalletFromParams({
       source: "SeedPhrase",
       seedPhrase: seedPhrase,
       name: "My Wallet",

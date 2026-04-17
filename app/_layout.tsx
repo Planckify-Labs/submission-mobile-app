@@ -1,6 +1,8 @@
 // TWV-2026-002 — pollyfills MUST load before any module that can transitively
 // pull in Viem or `@scure/bip39`. Keep this the first import of the app.
 import "../pollyfills";
+// Ordering (spec §6.2): polyfill import → bootWalletKits() → any screen/provider.
+import { bootWalletKits } from "@/services/walletKit/boot";
 import { QueryClient, useIsRestoring } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { router, SplashScreen, Stack } from "expo-router";
@@ -13,6 +15,9 @@ import {
   shouldPersistQuery,
 } from "@/lib/storage/queryPersister";
 import "../global.css";
+
+// Register WalletKit adapters before any screen/provider reads the registry.
+bootWalletKits();
 
 SplashScreen.preventAutoHideAsync();
 

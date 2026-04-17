@@ -1,5 +1,21 @@
+import {
+  createKeyPairFromPrivateKeyBytes,
+  getAddressFromPublicKey,
+} from "@solana/kit";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
-import { TWallet, TWalletCreationParams } from "@/constants/types/walletTypes";
+import type {
+  TWallet,
+  TWalletCreationParams,
+} from "@/constants/types/walletTypes";
+import {
+  base58ToBytes,
+  bytesToBase58,
+  parseSolanaPrivateKey as parseSolanaPrivateKeyCodec,
+} from "@/services/chains/solana/codec";
+import {
+  DEFAULT_SOLANA_PATH,
+  mnemonicToSolanaPrivateKey,
+} from "@/services/chains/solana/derivation";
 
 export function isValidPrivateKey(privateKey: string): boolean {
   const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
@@ -13,6 +29,58 @@ export function isValidMnemonic(mnemonic: string): boolean {
 
 export function formatPrivateKey(privateKey: string): string {
   return privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
+}
+
+/**
+ * Validate a Solana base58 address (32 bytes decoded). Never throws — any
+ * malformed input returns `false` so callers can render a clean error
+ * state without a try/catch.
+ */
+export function isValidSolanaAddress(s: string): boolean {
+  if (!s) return false;
+  try {
+    const bytes = base58ToBytes(s);
+    return bytes.length === 32;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate a Solana private key. Accepts both the 32-byte ed25519 seed
+ * form and Phantom's 64-byte export. Never throws.
+ *
+ * Cross-curve guard (§14.6): a 64-hex EVM key like
+ * `0xabcd…` decodes — if at all — to bytes whose length is neither 32
+ * nor 64, so it is correctly rejected here before it reaches
+ * `createSolanaWalletFromPrivateKey`.
+ */
+export function isValidSolanaPrivateKey(s: string): boolean {
+  if (!s) return false;
+  try {
+    const bytes = base58ToBytes(s);
+    return bytes.length === 32 || bytes.length === 64;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Non-throwing variant of `parseSolanaPrivateKey` from
+ * `services/chains/solana/codec.ts`. Returns the 32-byte seed on
+ * success or `null` when the input is not a valid 32- or 64-byte
+ * base58 Solana secret.
+ *
+ * Keeps the throwing codec helper as the canonical implementation —
+ * this wrapper only converts the failure mode to suit the UI surface.
+ */
+export function parseSolanaPrivateKey(s: string): Uint8Array | null {
+  if (!s) return null;
+  try {
+    return parseSolanaPrivateKeyCodec(s);
+  } catch {
+    return null;
+  }
 }
 
 export function createWalletFromPrivateKey(
@@ -52,15 +120,110 @@ export function createWalletFromMnemonic(
   };
 }
 
-export function createWalletFromParams(
+/**
+ * Create a Solana `TWallet` from a base58-encoded private key.
+ *
+ * Spec reference: `docs/solana-chain-support-spec.md` §7.3.
+ *
+ * Accepts either a 32-byte seed or a 64-byte Phantom export (seed +
+ * pubkey). Returns `null` on malformed input so callers can render a
+ * clean error — the validator surface (`isValidSolanaPrivateKey`) is
+ * the *loud* path; this creator is the *safe* path.
+ *
+ * Security invariant (TWV-2026-070): the WebCrypto `CryptoKeyPair` is
+ * minted with `extractable: false`. The raw 32-byte seed is held only
+ * on the stack of this function; we store the original base58 string
+ * on `TWallet.privateKey` so the signer dwell site (Task 10) can
+ * reconstruct it later.
+ */
+export async function createSolanaWalletFromPrivateKey(
+  pkBase58: string,
+  name?: string,
+): Promise<TWallet | null> {
+  const seed = parseSolanaPrivateKey(pkBase58);
+  if (!seed) return null;
+  try {
+    const keyPair = await createKeyPairFromPrivateKeyBytes(seed, false);
+    const addr = await getAddressFromPublicKey(keyPair.publicKey);
+    const address = addr.toString();
+    return {
+      account: { address },
+      address,
+      privateKey: pkBase58,
+      name: name || "Solana Wallet",
+      balance: "0",
+      source: "Imported",
+      type: "PrivateKey",
+      namespace: "solana",
+      solana: { pubkeyBase58: address, derivationPath: undefined },
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Create a Solana `TWallet` from a BIP-39 mnemonic via SLIP-0010
+ * ed25519 derivation at the Phantom-compatible default path.
+ *
+ * Spec reference: `docs/solana-chain-support-spec.md` §7.3, §7.2.
+ *
+ * Returns `null` if the mnemonic fails `isValidMnemonic` (12- or
+ * 24-word BIP-39 check) or if kit rejects the derived bytes. We store
+ * the seed in Phantom's 32-byte base58 form on `TWallet.privateKey`
+ * so the signer can reconstruct it without re-deriving from the
+ * mnemonic.
+ *
+ * Security invariant (TWV-2026-070): `extractable: false` on the
+ * CryptoKeyPair — the private half must not leave the kit surface.
+ */
+export async function createSolanaWalletFromMnemonic(
+  mnemonic: string,
+  name?: string,
+): Promise<TWallet | null> {
+  if (!isValidMnemonic(mnemonic)) return null;
+  try {
+    const seed = mnemonicToSolanaPrivateKey(mnemonic);
+    const keyPair = await createKeyPairFromPrivateKeyBytes(seed, false);
+    const addr = await getAddressFromPublicKey(keyPair.publicKey);
+    const address = addr.toString();
+    return {
+      account: { address },
+      address,
+      privateKey: bytesToBase58(seed),
+      seedPhrase: mnemonic,
+      name: name || "Solana Wallet",
+      balance: "0",
+      source: "Created",
+      type: "SeedPhrase",
+      namespace: "solana",
+      solana: {
+        pubkeyBase58: address,
+        derivationPath: DEFAULT_SOLANA_PATH,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function createWalletFromParams(
   params: TWalletCreationParams,
-): TWallet | null {
+): Promise<TWallet | null> {
   if (params.source === "PrivateKey" && params.privateKey) {
     return createWalletFromPrivateKey(params.privateKey, params.name);
   }
 
   if (params.source === "SeedPhrase" && params.seedPhrase) {
     return createWalletFromMnemonic(params.seedPhrase, params.name);
+  }
+
+  if (params.source === "SolanaPrivateKey" && params.privateKey) {
+    return createSolanaWalletFromPrivateKey(params.privateKey, params.name);
+  }
+
+  if (params.source === "SolanaSeedPhrase" && params.seedPhrase) {
+    return createSolanaWalletFromMnemonic(params.seedPhrase, params.name);
   }
 
   if (params.source === "social" && params.account) {

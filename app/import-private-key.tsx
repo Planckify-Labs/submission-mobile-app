@@ -115,7 +115,7 @@ export default function ImportPrivateKeyScreen() {
       });
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
     if (!privateKeyRegex.test(privateKey)) {
       console.error("Invalid Private Key: Please enter a valid private key");
@@ -125,7 +125,7 @@ export default function ImportPrivateKeyScreen() {
     // TWV-2026-040 — check the derived address against the Profanity-
     // class heuristic. This is the highest-leverage screen for the
     // check because Profanity was itself a private-key generator.
-    const draft = createWalletFromParams({
+    const draft = await createWalletFromParams({
       source: "PrivateKey",
       privateKey: privateKey,
       name: "My Wallet",
