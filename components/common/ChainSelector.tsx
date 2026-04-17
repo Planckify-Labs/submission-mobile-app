@@ -437,14 +437,16 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
                         </Text>
                       </View>
                     ) : (
-                      Array.from(filteredGrouped.entries()).map(([ns, rows]) => (
-                        <View key={ns} className="mb-2">
-                          <Text className="text-light-matte-black/60 text-xs font-semibold uppercase mb-2 mt-2">
-                            {sectionTitleForNamespace(ns)}
-                          </Text>
-                          {rows.map(renderChainItem)}
-                        </View>
-                      ))
+                      Array.from(filteredGrouped.entries()).map(
+                        ([ns, rows]) => (
+                          <View key={ns} className="mb-2">
+                            <Text className="text-light-matte-black/60 text-xs font-semibold uppercase mb-2 mt-2">
+                              {sectionTitleForNamespace(ns)}
+                            </Text>
+                            {rows.map(renderChainItem)}
+                          </View>
+                        ),
+                      )
                     )}
                   </ScrollView>
                 </View>

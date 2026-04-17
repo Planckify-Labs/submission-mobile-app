@@ -225,7 +225,11 @@ export function decodeInstruction(
   if (d) {
     const out = d.decode(ins);
     if (out) return out;
-    return { program: d.programName, kind: "unknown", programName: d.programName };
+    return {
+      program: d.programName,
+      kind: "unknown",
+      programName: d.programName,
+    };
   }
   return {
     program: ins.programId,

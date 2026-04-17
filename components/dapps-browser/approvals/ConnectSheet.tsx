@@ -151,10 +151,7 @@ export function ConnectSheet({
   // Biometric gating is kit-controlled; EVM kits ship without it, Solana
   // with it. The hook's return values are inert when the kit opts out, so
   // the ungated path just maps `gatedApprove` → `approve` below.
-  const biometric = useBiometricApproval(
-    `Approve connect to ${host}`,
-    approve,
-  );
+  const biometric = useBiometricApproval(`Approve connect to ${host}`, approve);
   const requireBiometric = kit?.requireBiometricForConnect === true;
   const onApprove = requireBiometric
     ? () => {
@@ -209,10 +206,7 @@ export function ConnectSheet({
           className="px-2 py-0.5 self-start rounded-full"
           style={{ backgroundColor: `${brandColor}1A` }}
         >
-          <Text
-            className="text-xs font-semibold"
-            style={{ color: brandColor }}
-          >
+          <Text className="text-xs font-semibold" style={{ color: brandColor }}>
             {chipLabel}
           </Text>
         </View>

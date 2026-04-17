@@ -39,6 +39,12 @@ if (!globalThis.crypto) {
   (globalThis as { crypto: typeof webcrypto }).crypto = webcrypto;
 }
 
+import {
+  generateKeyPairSigner,
+  getCompiledTransactionMessageDecoder,
+  getSignatureFromTransaction,
+} from "@solana/kit";
+import { getTransferSolInstructionDataDecoder } from "@solana-program/system";
 // We import the module under test with a `.ts` extension so the
 // `--experimental-strip-types` runner can pick it up.
 import {
@@ -46,13 +52,6 @@ import {
   getSolanaBalance,
   getSolanaRentExemption,
 } from "./transferService.ts";
-
-import {
-  generateKeyPairSigner,
-  getSignatureFromTransaction,
-  getCompiledTransactionMessageDecoder,
-} from "@solana/kit";
-import { getTransferSolInstructionDataDecoder } from "@solana-program/system";
 
 /**
  * 32 zero bytes encoded as base58 — the System Program address. We can
@@ -162,110 +161,107 @@ describe("getSolanaRentExemption", () => {
 });
 
 describe("buildAndSendSolTransfer (fallback / no-subscriptions path)", () => {
-  it(
-    "signs with the provided signer, emits a correct transfer instruction, and returns the local signature",
-    async () => {
-      // Real signer so `signTransactionMessageWithSigners` can actually
-      // produce a valid ed25519 signature — the service doesn't know
-      // about keypairs directly, but it does resolve every signer
-      // referenced by the message, so we need something capable of
-      // signing. `generateKeyPairSigner` uses webcrypto under the hood
-      // (already polyfilled above). No `Math.random`.
-      const signer = await generateKeyPairSigner();
-      // Use a fresh keypair for the destination too — any 32-byte ed25519
-      // public key works as a Solana address, and unlike the System
-      // Program address, it can legally be a writable transfer target.
-      const recipient = await generateKeyPairSigner();
+  it("signs with the provided signer, emits a correct transfer instruction, and returns the local signature", async () => {
+    // Real signer so `signTransactionMessageWithSigners` can actually
+    // produce a valid ed25519 signature — the service doesn't know
+    // about keypairs directly, but it does resolve every signer
+    // referenced by the message, so we need something capable of
+    // signing. `generateKeyPairSigner` uses webcrypto under the hood
+    // (already polyfilled above). No `Math.random`.
+    const signer = await generateKeyPairSigner();
+    // Use a fresh keypair for the destination too — any 32-byte ed25519
+    // public key works as a Solana address, and unlike the System
+    // Program address, it can legally be a writable transfer target.
+    const recipient = await generateKeyPairSigner();
 
-      const lamports = 2_500_000n;
+    const lamports = 2_500_000n;
 
-      let capturedWire: string | undefined;
-      const { rpc, calls } = createMockRpc({
-        onSendTransaction: (wire) => {
-          capturedWire = wire;
-        },
-      });
+    let capturedWire: string | undefined;
+    const { rpc, calls } = createMockRpc({
+      onSendTransaction: (wire) => {
+        capturedWire = wire;
+      },
+    });
 
-      const sig = await buildAndSendSolTransfer({
-        rpc: rpc as never,
-        // Intentionally NO rpcSubs → exercises the public-RPC-friendly
-        // fallback that submits via `rpc.sendTransaction(...).send()`.
-        signer,
-        to: recipient.address,
-        lamports,
-      });
+    const sig = await buildAndSendSolTransfer({
+      rpc: rpc as never,
+      // Intentionally NO rpcSubs → exercises the public-RPC-friendly
+      // fallback that submits via `rpc.sendTransaction(...).send()`.
+      signer,
+      to: recipient.address,
+      lamports,
+    });
 
-      // 1. The fallback path must have hit `sendTransaction` exactly once.
-      assert.equal(calls.sendTransaction, 1);
-      assert.ok(
-        typeof capturedWire === "string" && capturedWire.length > 0,
-        "sendTransaction should receive a non-empty base64 wire payload",
-      );
+    // 1. The fallback path must have hit `sendTransaction` exactly once.
+    assert.equal(calls.sendTransaction, 1);
+    assert.ok(
+      typeof capturedWire === "string" && capturedWire.length > 0,
+      "sendTransaction should receive a non-empty base64 wire payload",
+    );
 
-      // 2. The returned value is a base58 string.
-      assert.equal(typeof sig, "string");
-      assert.ok(sig.length > 0);
+    // 2. The returned value is a base58 string.
+    assert.equal(typeof sig, "string");
+    assert.ok(sig.length > 0);
 
-      // 3. Re-derive the signed transaction from the wire payload so we
-      //    can inspect the compiled message structurally. We use a Node
-      //    `Buffer` purely to decode base64 → bytes for fixture parsing;
-      //    the production path never touches `Buffer`.
-      const wireBytes = new Uint8Array(
-        Buffer.from(capturedWire as string, "base64"),
-      );
+    // 3. Re-derive the signed transaction from the wire payload so we
+    //    can inspect the compiled message structurally. We use a Node
+    //    `Buffer` purely to decode base64 → bytes for fixture parsing;
+    //    the production path never touches `Buffer`.
+    const wireBytes = new Uint8Array(
+      Buffer.from(capturedWire as string, "base64"),
+    );
 
-      // The wire format is: compact-u16 signature count || signatures ||
-      // compiled-message. We just need the compiled-message half.
-      // Signature count is a compact-u16 — for a single-signer tx it's
-      // a single byte `1`, and each signature is 64 bytes.
-      assert.equal(wireBytes[0], 1, "expected exactly 1 signature");
-      const SIG_LEN = 64;
-      const messageStart = 1 + SIG_LEN;
-      const signatureBytes = wireBytes.slice(1, messageStart);
-      assert.equal(
-        signatureBytes.length,
-        64,
-        "ed25519 signature must be 64 bytes",
-      );
-      // The signature must not be all zeros — proves the signer actually
-      // signed something.
-      assert.ok(
-        signatureBytes.some((b) => b !== 0),
-        "signature must not be all zero bytes",
-      );
+    // The wire format is: compact-u16 signature count || signatures ||
+    // compiled-message. We just need the compiled-message half.
+    // Signature count is a compact-u16 — for a single-signer tx it's
+    // a single byte `1`, and each signature is 64 bytes.
+    assert.equal(wireBytes[0], 1, "expected exactly 1 signature");
+    const SIG_LEN = 64;
+    const messageStart = 1 + SIG_LEN;
+    const signatureBytes = wireBytes.slice(1, messageStart);
+    assert.equal(
+      signatureBytes.length,
+      64,
+      "ed25519 signature must be 64 bytes",
+    );
+    // The signature must not be all zeros — proves the signer actually
+    // signed something.
+    assert.ok(
+      signatureBytes.some((b) => b !== 0),
+      "signature must not be all zero bytes",
+    );
 
-      const messageBytes = wireBytes.slice(messageStart);
-      const compiled =
-        getCompiledTransactionMessageDecoder().decode(messageBytes);
+    const messageBytes = wireBytes.slice(messageStart);
+    const compiled =
+      getCompiledTransactionMessageDecoder().decode(messageBytes);
 
-      // 4. Fee payer is the first static account and must equal the
-      //    signer's address.
-      const feePayerAddress = compiled.staticAccounts[0];
-      assert.equal(feePayerAddress, signer.address);
+    // 4. Fee payer is the first static account and must equal the
+    //    signer's address.
+    const feePayerAddress = compiled.staticAccounts[0];
+    assert.equal(feePayerAddress, signer.address);
 
-      // 5. The message has exactly one instruction (our transfer).
-      assert.equal(compiled.instructions.length, 1);
-      const instr = compiled.instructions[0];
-      assert.ok(instr.data, "transfer instruction must have data bytes");
+    // 5. The message has exactly one instruction (our transfer).
+    assert.equal(compiled.instructions.length, 1);
+    const instr = compiled.instructions[0];
+    assert.ok(instr.data, "transfer instruction must have data bytes");
 
-      // 6. Decode the instruction data and verify lamports round-trip.
-      const decoded = getTransferSolInstructionDataDecoder().decode(
-        instr.data as Uint8Array,
-      );
-      assert.equal(decoded.amount, lamports);
+    // 6. Decode the instruction data and verify lamports round-trip.
+    const decoded = getTransferSolInstructionDataDecoder().decode(
+      instr.data as Uint8Array,
+    );
+    assert.equal(decoded.amount, lamports);
 
-      // 7. The returned signature must equal the locally-computed one —
-      //    the service explicitly does NOT trust the RPC's response
-      //    ("mock-rpc-returned-sig" above) as the source of truth.
-      //    Reconstruct the Transaction object from the wire and run
-      //    `getSignatureFromTransaction` against it.
-      const localSig = getSignatureFromTransaction({
-        messageBytes: messageBytes as never,
-        signatures: {
-          [feePayerAddress]: signatureBytes as never,
-        } as never,
-      } as never);
-      assert.equal(sig, localSig);
-    },
-  );
+    // 7. The returned signature must equal the locally-computed one —
+    //    the service explicitly does NOT trust the RPC's response
+    //    ("mock-rpc-returned-sig" above) as the source of truth.
+    //    Reconstruct the Transaction object from the wire and run
+    //    `getSignatureFromTransaction` against it.
+    const localSig = getSignatureFromTransaction({
+      messageBytes: messageBytes as never,
+      signatures: {
+        [feePayerAddress]: signatureBytes as never,
+      } as never,
+    } as never);
+    assert.equal(sig, localSig);
+  });
 });

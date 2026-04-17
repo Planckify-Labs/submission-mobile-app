@@ -73,7 +73,9 @@ export default function RecievePaymentModal({
       (w) => w.namespace === activeChain.namespace,
     );
     setTabNamespace(
-      match ? activeChain.namespace : pairedWallets[0]?.namespace ?? activeChain.namespace,
+      match
+        ? activeChain.namespace
+        : (pairedWallets[0]?.namespace ?? activeChain.namespace),
     );
   }, [activeChain.namespace, pairedWallets]);
 
@@ -86,8 +88,8 @@ export default function RecievePaymentModal({
     ns === "eip155"
       ? "Ethereum"
       : ns === "solana"
-      ? "Solana"
-      : ns.charAt(0).toUpperCase() + ns.slice(1);
+        ? "Solana"
+        : ns.charAt(0).toUpperCase() + ns.slice(1);
 
   const chainPillLabel =
     displayWallet.namespace === "eip155"
@@ -95,10 +97,10 @@ export default function RecievePaymentModal({
         ? activeChain.chain.name
         : "Ethereum"
       : displayWallet.namespace === "solana"
-      ? activeChain.namespace === "solana"
-        ? `Solana ${activeChain.cluster === "devnet" ? "Devnet" : "Mainnet"}`
-        : "Solana"
-      : tabLabelFor(displayWallet.namespace);
+        ? activeChain.namespace === "solana"
+          ? `Solana ${activeChain.cluster === "devnet" ? "Devnet" : "Mainnet"}`
+          : "Solana"
+        : tabLabelFor(displayWallet.namespace);
   return (
     <Modal
       transparent

@@ -52,9 +52,8 @@ describe("mnemonicToSolanaPrivateKey", () => {
 
   it("derives the Phantom-verified address for the golden vector", async () => {
     const privateKeyBytes = mnemonicToSolanaPrivateKey(TEST_MNEMONIC);
-    const { publicKey } = await createKeyPairFromPrivateKeyBytes(
-      privateKeyBytes,
-    );
+    const { publicKey } =
+      await createKeyPairFromPrivateKeyBytes(privateKeyBytes);
     const address = await getAddressFromPublicKey(publicKey);
     const actual = address.toString();
 

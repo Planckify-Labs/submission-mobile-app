@@ -6,20 +6,20 @@
  * priority 15, simulation at 20).
  */
 
-import type { ApprovalIntent } from "../approval";
-import type { IntentInspector } from "../inspector";
+import { buildNonceMismatchAnnotation } from "@/services/chains/solana/durableNonce";
+import {
+  analysePartialSigner,
+  buildPartialSigningAnnotation,
+} from "@/services/chains/solana/partialSigner";
 import type {
   SolanaSignTxPayload,
   SolanaSimulationSummary,
   SolanaSimulationWarning,
 } from "@/services/chains/solana/payloads";
-import { getSolanaRpc } from "@/services/rpc/solanaRpcPool";
 import { simulateTransaction } from "@/services/chains/solana/simulate";
-import {
-  analysePartialSigner,
-  buildPartialSigningAnnotation,
-} from "@/services/chains/solana/partialSigner";
-import { buildNonceMismatchAnnotation } from "@/services/chains/solana/durableNonce";
+import { getSolanaRpc } from "@/services/rpc/solanaRpcPool";
+import type { ApprovalIntent } from "../approval";
+import type { IntentInspector } from "../inspector";
 
 const SYSTEM_PROGRAM = "11111111111111111111111111111111";
 

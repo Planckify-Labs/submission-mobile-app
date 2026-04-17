@@ -1,9 +1,6 @@
 // TWV-2026-002 — pollyfills MUST load before any module that can transitively
 // pull in Viem or `@scure/bip39`. Keep this the first import of the app.
 import "../pollyfills";
-// Ordering (spec §6.2): polyfill import → bootWalletKits() → any screen/provider.
-import { bootWalletKits } from "@/services/walletKit/boot";
-import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
 import {
   QueryClient,
   useIsRestoring,
@@ -14,12 +11,15 @@ import { router, SplashScreen, Stack } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { LogBox } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import LockScreen from "@/components/security/LockScreen";
 import { PerformanceProvider } from "@/components/providers/PerformanceProvider";
+import LockScreen from "@/components/security/LockScreen";
+import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
 import {
   mmkvPersister,
   shouldPersistQuery,
 } from "@/lib/storage/queryPersister";
+// Ordering (spec §6.2): polyfill import → bootWalletKits() → any screen/provider.
+import { bootWalletKits } from "@/services/walletKit/boot";
 import { hasStoredWallets } from "@/services/walletService";
 import "../global.css";
 

@@ -35,7 +35,14 @@ export interface Token2022Extension {
 // Extension-type discriminants per SPL Token-2022 spec. The first few
 // are the ones worth calling out for user-visible risk; anything else
 // surfaces as `info` so the user sees it but isn't alarmed.
-const EXTENSION_META: Record<number, { kind: Token2022ExtensionKind; severity: Token2022Extension["severity"]; detail: string }> = {
+const EXTENSION_META: Record<
+  number,
+  {
+    kind: Token2022ExtensionKind;
+    severity: Token2022Extension["severity"];
+    detail: string;
+  }
+> = {
   1: {
     kind: "TransferFeeConfig",
     severity: "warn",
@@ -44,12 +51,14 @@ const EXTENSION_META: Record<number, { kind: Token2022ExtensionKind; severity: T
   3: {
     kind: "ConfidentialTransferMint",
     severity: "warn",
-    detail: "Mint supports confidential transfers (pending balances may be hidden).",
+    detail:
+      "Mint supports confidential transfers (pending balances may be hidden).",
   },
   7: {
     kind: "PermanentDelegate",
     severity: "danger",
-    detail: "Mint designates a permanent delegate that can move tokens from any account.",
+    detail:
+      "Mint designates a permanent delegate that can move tokens from any account.",
   },
   9: {
     kind: "NonTransferable",
@@ -74,12 +83,14 @@ const EXTENSION_META: Record<number, { kind: Token2022ExtensionKind; severity: T
   16: {
     kind: "CpiGuard",
     severity: "info",
-    detail: "CPI guard enabled — constrains what other programs can do with the account.",
+    detail:
+      "CPI guard enabled — constrains what other programs can do with the account.",
   },
   17: {
     kind: "TransferHook",
     severity: "warn",
-    detail: "Mint registers a transfer-hook program — custom logic runs on every transfer.",
+    detail:
+      "Mint registers a transfer-hook program — custom logic runs on every transfer.",
   },
   19: {
     kind: "MetadataPointer",
@@ -99,7 +110,9 @@ const EXTENSION_META: Record<number, { kind: Token2022ExtensionKind; severity: T
  * standard mint fields (mintAuthority, supply, decimals, isInitialized,
  * freezeAuthority) that every SPL token shares.
  */
-export function parseToken2022Extensions(data: Uint8Array): Token2022Extension[] {
+export function parseToken2022Extensions(
+  data: Uint8Array,
+): Token2022Extension[] {
   const extensions: Token2022Extension[] = [];
   let i = 165;
   while (i + 4 <= data.length) {

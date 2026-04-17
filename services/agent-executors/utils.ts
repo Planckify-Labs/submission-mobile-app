@@ -206,6 +206,14 @@ export function classifyPointsError(err: unknown): PointsApiErrorCode {
   if (status === 429) return "rate_limited";
   if (status === 503) return "service_unavailable";
 
+  // 1a. Local beforeRequest guard (see `constants/configs/ky.ts`) throws
+  //     before any HTTP round-trip when the active wallet has no stored
+  //     access token. Catch its message here so the agent sees a clean
+  //     `authentication_required` signal instead of `unknown_error`.
+  if (/not authenticated/i.test(message)) {
+    return "authentication_required";
+  }
+
   // 2. Backend domain error codes.
   if (code === "INSUFFICIENT_POINTS" || /insufficient/i.test(message)) {
     return "insufficient_points";

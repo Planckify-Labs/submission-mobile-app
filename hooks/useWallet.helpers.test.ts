@@ -23,9 +23,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type { TBlockchain } from "../api/types/blockchain.ts";
-import { buildChainConfigFromBlockchain } from "./useWallet.helpers.ts";
 import { walletKitRegistry } from "../services/walletKit/registry.ts";
 import type { WalletKitAdapter } from "../services/walletKit/types.ts";
+import { buildChainConfigFromBlockchain } from "./useWallet.helpers.ts";
 
 function makeEvmBlockchain(overrides: Partial<TBlockchain> = {}): TBlockchain {
   return {
@@ -148,7 +148,9 @@ describe("walletKitRegistry — kit accessor round-trip", () => {
   // react-dom harness.
   const originalKits = walletKitRegistry.getAll();
 
-  function installKit(adapter: Partial<WalletKitAdapter> & { namespace: "eip155" | "solana" }): WalletKitAdapter {
+  function installKit(
+    adapter: Partial<WalletKitAdapter> & { namespace: "eip155" | "solana" },
+  ): WalletKitAdapter {
     const kit: WalletKitAdapter = {
       namespace: adapter.namespace,
       validateAddress: () => true,

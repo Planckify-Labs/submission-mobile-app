@@ -134,9 +134,7 @@ export function SolanaSignMessageSheet({
           >
             <Text className="text-xs text-gray-700">Copy base64</Text>
           </TouchableOpacity>
-          {error && (
-            <Text className="text-xs text-red-600 mt-2">{error}</Text>
-          )}
+          {error && <Text className="text-xs text-red-600 mt-2">{error}</Text>}
         </ScrollView>
       </ApprovalShell>
       <PrimaryActions

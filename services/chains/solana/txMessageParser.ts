@@ -19,8 +19,7 @@
  * can walk without re-parsing the tx itself.
  */
 
-const BASE58 =
-  "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 function bytesToBase58(bytes: Uint8Array): string {
   if (bytes.length === 0) return "";
@@ -183,8 +182,7 @@ export function parseWireTransaction(b64: string): ParsedTransaction | null {
       const dataLen = c.compactU16();
       if (dataLen > c.remaining()) return null;
       const data = c.slice(dataLen);
-      const programId =
-        accountKeys[programIdIndex] ?? `?idx:${programIdIndex}`;
+      const programId = accountKeys[programIdIndex] ?? `?idx:${programIdIndex}`;
       instructions.push({
         programId,
         accounts: accountIndices.map(
@@ -245,11 +243,7 @@ export function writableAccounts(t: ParsedTransaction): string[] {
   for (let i = 0; i < signerWritableEnd; i++) {
     out.push(t.accountKeys[i]);
   }
-  for (
-    let i = t.numRequiredSignatures;
-    i < nonSignerWritableEnd;
-    i++
-  ) {
+  for (let i = t.numRequiredSignatures; i < nonSignerWritableEnd; i++) {
     out.push(t.accountKeys[i]);
   }
   return out;

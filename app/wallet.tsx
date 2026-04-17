@@ -7,12 +7,7 @@ import {
   Shield,
   Wallet as WalletIcon,
 } from "lucide-react-native";
-import React, {
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -39,8 +34,8 @@ import { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import {
   chainCacheKey,
-  walletForNamespace,
   type WalletAccount,
+  walletForNamespace,
 } from "@/hooks/useWallet.helpers";
 
 const CARD_WIDTH = 160;
@@ -200,10 +195,7 @@ export default function Wallet() {
     ],
   );
 
-  const keyExtractor = useCallback(
-    (item: WalletAccount) => item.id,
-    [],
-  );
+  const keyExtractor = useCallback((item: WalletAccount) => item.id, []);
 
   // Show at most 3 accounts in the horizontal strip, preferring the
   // active one up front when there are more.

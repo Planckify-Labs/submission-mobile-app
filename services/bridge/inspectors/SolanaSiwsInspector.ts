@@ -9,14 +9,11 @@
  * Runs only on Solana + `signIn` kind.
  */
 
-import type { ApprovalIntent } from "../approval";
-import { originKey } from "@/services/permissions/caip";
-import { buildSiwsMessage } from "@/services/chains/solana/siws";
 import type { SolanaSignInPayload } from "@/services/chains/solana/payloads";
-import type {
-  IntentAnnotation,
-  IntentInspector,
-} from "../inspector";
+import { buildSiwsMessage } from "@/services/chains/solana/siws";
+import { originKey } from "@/services/permissions/caip";
+import type { ApprovalIntent } from "../approval";
+import type { IntentAnnotation, IntentInspector } from "../inspector";
 
 function buildMismatchAnnotation(
   declared: string,

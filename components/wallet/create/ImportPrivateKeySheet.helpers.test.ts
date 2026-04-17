@@ -16,13 +16,12 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
-
+import { walletKitRegistry } from "../../../services/walletKit/registry.ts";
+import type { WalletKitAdapter } from "../../../services/walletKit/types.ts";
 import {
   computeValidationState,
   normalizePrivateKeyInput,
 } from "./ImportPrivateKeySheet.helpers.ts";
-import { walletKitRegistry } from "../../../services/walletKit/registry.ts";
-import type { WalletKitAdapter } from "../../../services/walletKit/types.ts";
 
 // ── Minimal kit mocks ──────────────────────────────────────────────────
 // We only need `namespace` + `validatePrivateKey`; every other method is
@@ -225,10 +224,7 @@ describe("computeValidationState", () => {
     });
 
     it("a 0x-prefixed EVM key marked as 'solana' is also invalid", () => {
-      assert.equal(
-        computeValidationState(`0x${EVM_KEY}`, "solana"),
-        "invalid",
-      );
+      assert.equal(computeValidationState(`0x${EVM_KEY}`, "solana"), "invalid");
     });
 
     it("correct key on correct chain returns 'valid' for both sides", () => {

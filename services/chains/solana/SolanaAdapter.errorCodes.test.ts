@@ -25,9 +25,10 @@ describe("SOLANA_ERROR_CODES — §10.3 contract", () => {
     const vals = Object.values(SOLANA_ERROR_CODES);
     assert.equal(vals.length, 8);
     // Hard-coded check — if anything here changes, the spec changes too.
-    assert.deepEqual(new Set(vals), new Set([
-      4001, 4100, 4200, 4900, 4901, -32002, -32602, -32603,
-    ]));
+    assert.deepEqual(
+      new Set(vals),
+      new Set([4001, 4100, 4200, 4900, 4901, -32002, -32602, -32603]),
+    );
   });
 
   it("isSolanaContractCode accepts every spec code", () => {

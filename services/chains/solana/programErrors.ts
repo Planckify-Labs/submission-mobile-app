@@ -84,10 +84,19 @@ const SPL_TOKEN_ERRORS: Record<number, { name: string; detail: string }> = {
     name: "AlreadyInUse",
     detail: "Account is already initialised.",
   },
-  7: { name: "InvalidNumberOfProvidedSigners", detail: "Invalid signer count." },
-  8: { name: "InvalidNumberOfRequiredSigners", detail: "Invalid required signer count." },
+  7: {
+    name: "InvalidNumberOfProvidedSigners",
+    detail: "Invalid signer count.",
+  },
+  8: {
+    name: "InvalidNumberOfRequiredSigners",
+    detail: "Invalid required signer count.",
+  },
   9: { name: "UninitializedState", detail: "State account not initialised." },
-  10: { name: "NativeNotSupported", detail: "Operation unsupported on native mint." },
+  10: {
+    name: "NativeNotSupported",
+    detail: "Operation unsupported on native mint.",
+  },
   11: {
     name: "NonNativeHasBalance",
     detail: "Non-native token account has a non-zero balance.",
@@ -95,7 +104,10 @@ const SPL_TOKEN_ERRORS: Record<number, { name: string; detail: string }> = {
   12: { name: "InvalidInstruction", detail: "Invalid SPL Token instruction." },
   13: { name: "InvalidState", detail: "Token state invalid for instruction." },
   14: { name: "Overflow", detail: "Arithmetic overflow." },
-  15: { name: "AuthorityTypeNotSupported", detail: "Authority type not supported." },
+  15: {
+    name: "AuthorityTypeNotSupported",
+    detail: "Authority type not supported.",
+  },
   16: {
     name: "MintCannotFreeze",
     detail: "Mint lacks freeze authority for this op.",
@@ -105,14 +117,21 @@ const SPL_TOKEN_ERRORS: Record<number, { name: string; detail: string }> = {
   19: { name: "NonNativeNotSupported", detail: "Native token required." },
 };
 
-const COMPUTE_BUDGET_ERRORS: Record<number, { name: string; detail: string }> = {
-  0: {
-    name: "InstructionLimitExceeded",
-    detail: "Computed instruction limit exceeded.",
-  },
-  1: { name: "InvalidInstructionData", detail: "Invalid compute-budget instruction data." },
-  2: { name: "DuplicateInstruction", detail: "Duplicate compute-budget instruction." },
-};
+const COMPUTE_BUDGET_ERRORS: Record<number, { name: string; detail: string }> =
+  {
+    0: {
+      name: "InstructionLimitExceeded",
+      detail: "Computed instruction limit exceeded.",
+    },
+    1: {
+      name: "InvalidInstructionData",
+      detail: "Invalid compute-budget instruction data.",
+    },
+    2: {
+      name: "DuplicateInstruction",
+      detail: "Duplicate compute-budget instruction.",
+    },
+  };
 
 const STAKE_ERRORS: Record<number, { name: string; detail: string }> = {
   0: { name: "NoCreditsToRedeem", detail: "No credits to redeem." },
@@ -120,12 +139,18 @@ const STAKE_ERRORS: Record<number, { name: string; detail: string }> = {
   2: { name: "AlreadyDeactivated", detail: "Stake already deactivated." },
   3: { name: "TooSoonToRedelegate", detail: "Cannot redelegate yet." },
   4: { name: "InsufficientStake", detail: "Insufficient stake to split." },
-  5: { name: "MergeMismatch", detail: "Stake accounts incompatible for merge." },
+  5: {
+    name: "MergeMismatch",
+    detail: "Stake accounts incompatible for merge.",
+  },
   6: { name: "CustodianMissing", detail: "Custodian signer required." },
   7: { name: "CustodianSignatureMissing", detail: "Custodian did not sign." },
 };
 
-const PROGRAM_TABLES: Record<string, Record<number, { name: string; detail: string }>> = {
+const PROGRAM_TABLES: Record<
+  string,
+  Record<number, { name: string; detail: string }>
+> = {
   [SYSTEM_PROGRAM]: SYSTEM_ERRORS,
   [SPL_TOKEN]: SPL_TOKEN_ERRORS,
   [TOKEN_2022]: SPL_TOKEN_ERRORS, // Token-2022 shares the base SPL numbering; extensions start at 50+.

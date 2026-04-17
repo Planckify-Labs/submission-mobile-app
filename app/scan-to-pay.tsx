@@ -11,9 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  isValidSolanaAddress,
-} from "@/utils/walletUtils";
+import { isValidSolanaAddress } from "@/utils/walletUtils";
 
 export default function ScanToPay() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);

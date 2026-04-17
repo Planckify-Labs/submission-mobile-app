@@ -9,9 +9,8 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-
-import { buildAgentContext } from "./agentContext.ts";
 import type { ApprovalIntent } from "../../bridge/approval.ts";
+import { buildAgentContext } from "./agentContext.ts";
 import type {
   SolanaSignInPayload,
   SolanaSignMessagePayload,

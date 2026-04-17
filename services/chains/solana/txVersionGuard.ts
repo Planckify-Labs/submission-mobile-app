@@ -84,8 +84,7 @@ export function checkVersionDowngrade(args: {
     return {
       ok: false,
       code: -32602,
-      reason:
-        "transaction version mismatch (v0 wire with legacy declaration)",
+      reason: "transaction version mismatch (v0 wire with legacy declaration)",
     };
   }
   // Legacy wire bytes with ALT references cannot be safely represented —

@@ -21,6 +21,7 @@ import "fastestsmallesttextencoderdecoder";
 // drop this block.
 import * as ed25519 from "@noble/ed25519";
 import { sha512 } from "@noble/hashes/sha2";
+
 ed25519.etc.sha512Async = async (...messages: Uint8Array[]) => {
   let total = 0;
   for (const m of messages) total += m.length;
@@ -48,6 +49,7 @@ ed25519.etc.sha512Sync = (...messages: Uint8Array[]) => {
 // only exports `install()`. Call it explicitly here so the polyfill
 // actually runs. Enforced by the self-check below.
 import { install as installEd25519Polyfill } from "@solana/webcrypto-ed25519-polyfill";
+
 installEd25519Polyfill();
 
 // The v2.0.0 polyfill compares `algorithm !== "Ed25519"` with strict

@@ -22,9 +22,24 @@
  *
  * The agent only ever sees the public address — the private key and seed
  * phrase must never leave the device.
+ *
+ * Address format: EVM wallets send a `0x`-prefixed hex address; Solana
+ * wallets send a base58 public key. The server accepts either — see
+ * `chat.schemas.ts` on the agent API. The `namespace` field is the
+ * authoritative discriminator.
  */
 export interface WalletContext {
-  address: `0x${string}`;
+  address: string;
+  /**
+   * Chain namespace the wallet is active on. Omitted for legacy EVM
+   * clients; the server defaults to `"eip155"` when absent.
+   */
+  namespace?: "eip155" | "solana";
+  /**
+   * Numeric chain id for EVM chains. For non-EVM chains this is `0` —
+   * the server only reads it to surface in the system prompt and to
+   * stamp conversation rows, so a sentinel is fine.
+   */
   chain_id: number;
   chain_name: string;
   chain_symbol: string;

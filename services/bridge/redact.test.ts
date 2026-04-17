@@ -224,7 +224,9 @@ describe("redactParams — Solana methods (§10.4 inv 11)", () => {
     assert.equal(out[0].messageLength, 32);
     assert.ok(out[0].messagePreview.length <= 17);
     // Full message must not leak.
-    assert.ok(!JSON.stringify(out).includes("ZGVhZGJlZWZkZWFkYmVlZmRlYWRiZWVm"));
+    assert.ok(
+      !JSON.stringify(out).includes("ZGVhZGJlZWZkZWFkYmVlZmRlYWRiZWVm"),
+    );
   });
 
   it("solana:signTransaction drops the base64 tx body", () => {

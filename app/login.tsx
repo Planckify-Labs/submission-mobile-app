@@ -16,16 +16,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import ImportPrivateKeySheet from "@/components/wallet/create/ImportPrivateKeySheet";
 import ImportSeedPhraseSheet from "@/components/wallet/create/ImportSeedPhraseSheet";
-import { useWallet } from "@/hooks/useWallet";
 import {
   configureGoogleSignIn,
   useGoogleSignIn,
 } from "@/hooks/queries/useGoogleAuth";
+import { useWallet } from "@/hooks/useWallet";
+import { bootstrapFirstLoginWallets } from "@/services/walletKit/bootstrap";
 import {
   loadWalletsFromStorage,
   saveWalletsToStorage,
 } from "@/services/walletService";
-import { bootstrapFirstLoginWallets } from "@/services/walletKit/bootstrap";
 
 export default function Login() {
   const { height } = useWindowDimensions();
@@ -47,14 +47,20 @@ export default function Login() {
     try {
       const minted = await bootstrapFirstLoginWallets();
       if (minted.length === 0) {
-        Alert.alert("Create Failed", "Could not create a wallet. Please try again.");
+        Alert.alert(
+          "Create Failed",
+          "Could not create a wallet. Please try again.",
+        );
         return;
       }
       await addWallets(minted);
       router.replace("/");
     } catch (error) {
       console.error("create wallet failed:", error);
-      Alert.alert("Create Failed", "Could not create a wallet. Please try again.");
+      Alert.alert(
+        "Create Failed",
+        "Could not create a wallet. Please try again.",
+      );
     } finally {
       setCreating(false);
     }
@@ -65,13 +71,10 @@ export default function Login() {
     router.replace("/");
   }, []);
 
-  const handlePrivateKeyWalletAdded = useCallback(
-    (_: unknown) => {
-      setPkSheetVisible(false);
-      router.replace("/");
-    },
-    [],
-  );
+  const handlePrivateKeyWalletAdded = useCallback((_: unknown) => {
+    setPkSheetVisible(false);
+    router.replace("/");
+  }, []);
 
   const handleImportSeedPhraseInstead = useCallback(() => {
     setPkSheetVisible(false);

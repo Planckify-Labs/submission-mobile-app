@@ -27,9 +27,7 @@ export interface SolanaInjectedScriptParams {
 const FALLBACK_ICON =
   "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiMwMDAiLz48dGV4dCB4PSI1MCUiIHk9IjUyJSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iI2ZmZiIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiPlQ8L3RleHQ+PC9zdmc+";
 
-export function getSolanaInjectedScript(
-  p: SolanaInjectedScriptParams,
-): string {
+export function getSolanaInjectedScript(p: SolanaInjectedScriptParams): string {
   const A = JSON.stringify(p.activeAddress);
   const N = JSON.stringify(p.sessionNonce ?? "");
   const I = JSON.stringify(p.iconDataUrl ?? FALLBACK_ICON);
@@ -42,7 +40,7 @@ try{
     tag:"solana_inject",
     at:Date.now(),
     alreadyInstalled:!!window.__takumi_solana_installed,
-    hasActive:${A?"true":"false"},
+    hasActive:${A ? "true" : "false"},
     location:location.href
   }));
 }catch(e){}

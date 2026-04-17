@@ -16,20 +16,20 @@ import type {
 import { useAgentBusy } from "@/hooks/useAgentBusy";
 import { storage } from "@/lib/storage/mmkv";
 import type { Namespace } from "@/services/chains/types";
-import * as walletService from "@/services/walletService";
 import { deriveWalletsFromMnemonic } from "@/services/walletKit/deriveAll";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import type { WalletKitAdapter } from "@/services/walletKit/types";
+import * as walletService from "@/services/walletService";
 import { getPublicClient, getWalletClient } from "@/utils/clients";
 import { createWalletFromParams } from "@/utils/walletUtils";
+import { useBlockchainsWithStorage } from "./useBlockchainsWithStorage";
 import {
   buildChainConfigFromBlockchain,
   groupWalletsIntoAccounts,
+  type WalletAccount,
   walletForNamespace,
   walletIndexForAccountAndNamespace,
-  type WalletAccount,
 } from "./useWallet.helpers";
-import { useBlockchainsWithStorage } from "./useBlockchainsWithStorage";
 
 export function useWallet() {
   const { deferredTask } = usePerformance();

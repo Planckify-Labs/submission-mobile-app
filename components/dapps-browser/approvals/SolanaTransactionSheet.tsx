@@ -4,13 +4,13 @@ import type {
   ApprovalDecision,
   ApprovalIntent,
 } from "@/services/bridge/approval";
+import { isJitoTipAccount } from "@/services/chains/solana/jitoTipAccounts";
 import type {
   SolanaCluster,
   SolanaDecodedInstruction,
   SolanaSignTxPayload,
   SolanaSimulationSummary,
 } from "@/services/chains/solana/payloads";
-import { isJitoTipAccount } from "@/services/chains/solana/jitoTipAccounts";
 import { truncateAddress } from "@/utils/walletUtils";
 import { ApprovalShell } from "./ApprovalShell";
 import { RiskBanner } from "./RiskBanner";
@@ -35,12 +35,10 @@ function ComputeBudgetRow({
 }): React.ReactElement | null {
   if (!decoded) return null;
   const limit = decoded.find(
-    (d) =>
-      d.program === "compute-budget" && d.kind === "setComputeUnitLimit",
+    (d) => d.program === "compute-budget" && d.kind === "setComputeUnitLimit",
   );
   const price = decoded.find(
-    (d) =>
-      d.program === "compute-budget" && d.kind === "setComputeUnitPrice",
+    (d) => d.program === "compute-budget" && d.kind === "setComputeUnitPrice",
   );
   if (!limit && !price) return null;
   const limitValue =
@@ -86,15 +84,16 @@ function JitoTipRow({
     return typeof data.to === "string" && isJitoTipAccount(data.to);
   });
   if (!tipTransfer) return null;
-  const data = (tipTransfer as { data: { to: string; lamports?: bigint } }).data;
+  const data = (tipTransfer as { data: { to: string; lamports?: bigint } })
+    .data;
   return (
     <View className="border border-amber-200 bg-amber-50 rounded-xl p-3 mt-2">
       <Text className="text-xs text-amber-900 font-medium">Jito MEV tip</Text>
       <Text className="text-xs text-amber-800 mt-1">
         {typeof data.lamports === "bigint"
           ? `${data.lamports.toString()} lamports`
-          : "tip"} →{" "}
-        {truncateAddress({ address: data.to, preset: "medium" })}
+          : "tip"}{" "}
+        → {truncateAddress({ address: data.to, preset: "medium" })}
       </Text>
     </View>
   );
@@ -214,9 +213,7 @@ export function SolanaTransactionSheet({
           <ComputeBudgetRow decoded={p.decoded} />
           <JitoTipRow decoded={p.decoded} />
           <SimulationRow s={p.simulation} />
-          {error && (
-            <Text className="text-xs text-red-600 mt-2">{error}</Text>
-          )}
+          {error && <Text className="text-xs text-red-600 mt-2">{error}</Text>}
         </ScrollView>
       </ApprovalShell>
       <PrimaryActions

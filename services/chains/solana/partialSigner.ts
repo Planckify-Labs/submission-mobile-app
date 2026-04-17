@@ -27,9 +27,7 @@ export function analysePartialSigner(args: {
   signerAccounts: string[];
 }): PartialSignerAnalysis {
   const activeIsFeePayer = args.feePayer === args.activeWallet;
-  const remaining = args.signerAccounts.filter(
-    (s) => s !== args.activeWallet,
-  );
+  const remaining = args.signerAccounts.filter((s) => s !== args.activeWallet);
   return {
     isPartial: remaining.length > 0,
     feePayer: args.feePayer,
@@ -44,9 +42,7 @@ export function analysePartialSigner(args: {
  * they're signing a tx that requires additional signatures before it
  * can broadcast.
  */
-export function buildPartialSigningAnnotation(
-  a: PartialSignerAnalysis,
-): {
+export function buildPartialSigningAnnotation(a: PartialSignerAnalysis): {
   code: "signer.partial";
   severity: "info";
   title: string;

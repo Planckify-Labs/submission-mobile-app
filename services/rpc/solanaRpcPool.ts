@@ -12,13 +12,13 @@
  * set logs a boot warn (inv 20).
  */
 
-import { createSolanaRpc } from "@solana/kit";
 import type {
   Rpc,
   RpcSubscriptions,
   SolanaRpcApi,
   SolanaRpcSubscriptionsApi,
 } from "@solana/kit";
+import { createSolanaRpc } from "@solana/kit";
 import type { SolanaCluster } from "@/services/chains/solana/payloads";
 
 type CacheKey = string;
@@ -99,7 +99,10 @@ function resolveSubsUrl(cluster: SolanaCluster): string | undefined {
  * We intercept at the outer proxy level — creating per-method wrappers that
  * return an object whose `.send()` returns the cached or retried value.
  */
-function wrapRpc(cluster: SolanaCluster, raw: Rpc<SolanaRpcApi>): Rpc<SolanaRpcApi> {
+function wrapRpc(
+  cluster: SolanaCluster,
+  raw: Rpc<SolanaRpcApi>,
+): Rpc<SolanaRpcApi> {
   return new Proxy(raw as unknown as Record<string, unknown>, {
     get(target, prop: string) {
       const method = target[prop];
@@ -109,13 +112,13 @@ function wrapRpc(cluster: SolanaCluster, raw: Rpc<SolanaRpcApi>): Rpc<SolanaRpcA
           target,
           args,
         );
-        if (!call || typeof call !== "object" || !("send" in call))
-          return call;
+        if (!call || typeof call !== "object" || !("send" in call)) return call;
         return {
           ...(call as object),
-          send: () => invokeWithCache(cluster, prop, args, () =>
-            (call as { send: () => Promise<unknown> }).send(),
-          ),
+          send: () =>
+            invokeWithCache(cluster, prop, args, () =>
+              (call as { send: () => Promise<unknown> }).send(),
+            ),
         };
       };
     },
@@ -192,9 +195,7 @@ function sleep(ms: number): Promise<void> {
 
 function safeStringify(v: unknown): string {
   try {
-    return JSON.stringify(v, (_k, x) =>
-      typeof x === "bigint" ? `${x}n` : x,
-    );
+    return JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? `${x}n` : x));
   } catch {
     return String(v);
   }

@@ -16,7 +16,4 @@
 import { register } from "node:module";
 import { pathToFileURL } from "node:url";
 
-register(
-  "./_test-resolver-hook.mjs",
-  pathToFileURL(`${import.meta.dirname}/`),
-);
+register("./_test-resolver-hook.mjs", pathToFileURL(`${import.meta.dirname}/`));

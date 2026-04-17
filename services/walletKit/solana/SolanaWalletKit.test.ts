@@ -192,7 +192,10 @@ describe("SolanaWalletKit.truncateAddress", () => {
   it("returns a start...end slice with the expected shape for the golden address", () => {
     const out = kit.truncateAddress(EXPECTED_ADDRESS);
     // Default start=4, end=4 per the spec ("short" preset in walletUtils).
-    assert.equal(out, `${EXPECTED_ADDRESS.slice(0, 4)}...${EXPECTED_ADDRESS.slice(-4)}`);
+    assert.equal(
+      out,
+      `${EXPECTED_ADDRESS.slice(0, 4)}...${EXPECTED_ADDRESS.slice(-4)}`,
+    );
     assert.equal(out, "HAgk...Kpqk");
   });
 

@@ -42,10 +42,7 @@ const WEBVIEW_NOISE_PATTERNS: readonly string[] = [
   "Datadog Browser SDK",
 ];
 
-const CONTEXT_NOISE_PREFIXES: readonly string[] = [
-  "core/history",
-  "core/rum",
-];
+const CONTEXT_NOISE_PREFIXES: readonly string[] = ["core/history", "core/rum"];
 
 function serialiseArg(a: unknown): string {
   if (typeof a === "string") return a;

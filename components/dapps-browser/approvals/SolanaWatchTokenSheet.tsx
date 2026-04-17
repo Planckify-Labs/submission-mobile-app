@@ -68,7 +68,10 @@ export function SolanaWatchTokenSheet({
   ];
 
   const hasMismatch = rows.some(
-    (r) => r.verified !== undefined && r.claimed !== undefined && r.verified !== r.claimed,
+    (r) =>
+      r.verified !== undefined &&
+      r.claimed !== undefined &&
+      r.verified !== r.claimed,
   );
 
   return (

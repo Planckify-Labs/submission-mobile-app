@@ -13,9 +13,9 @@
  * Node's `stream` via `cipher-base` and cannot run under Hermes.
  */
 
-import { mnemonicToSeedSync } from "@scure/bip39";
 import { hmac } from "@noble/hashes/hmac";
 import { sha512 } from "@noble/hashes/sha2";
+import { mnemonicToSeedSync } from "@scure/bip39";
 
 export const DEFAULT_SOLANA_PATH = "m/44'/501'/0'/0'";
 

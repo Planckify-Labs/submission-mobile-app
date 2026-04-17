@@ -51,9 +51,9 @@ function runInjectedScript(activeAddress: string | null) {
   win.dispatchEvent = (ev: Record<string, unknown>) => {
     captured.calls.push(String(ev.type));
     if (ev.type === "wallet-standard:register-wallet") {
-      const detail = ev.detail as ((api: {
-        register: (w: Record<string, unknown>) => void;
-      }) => void) | undefined;
+      const detail = ev.detail as
+        | ((api: { register: (w: Record<string, unknown>) => void }) => void)
+        | undefined;
       if (detail) {
         detail({
           register: (w) => {
@@ -111,9 +111,7 @@ describe("wallet-standard lint — object shape (§10.6)", () => {
 
   it("wallet.chains also includes 3 CAIP-2 genesis-hash forms", () => {
     const chains = wallet?.chains as string[];
-    assert.ok(
-      chains.includes("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"),
-    );
+    assert.ok(chains.includes("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"));
   });
 
   it("wallet.accounts is [] pre-connect even when an active wallet exists (§4.2b)", () => {
@@ -181,10 +179,7 @@ describe("wallet-standard lint — account shape (post-connect)", () => {
   // Accounts are [] at inject time; `_updateSolanaWallet` populates them
   // after the user approves on our unified ConnectSheet. Simulate that
   // push here and verify the resulting WalletAccount shape.
-  const {
-    wallet,
-    window: win,
-  } = runInjectedScript("9xyz123AAABBBB");
+  const { wallet, window: win } = runInjectedScript("9xyz123AAABBBB");
   (
     win._updateSolanaWallet as (s: {
       accounts: Array<{ address: string }>;

@@ -60,10 +60,7 @@ describe("buildSiwsMessage", () => {
     const msg = buildSiwsMessage({
       domain: "drift.trade",
       address: "9xyz123",
-      resources: [
-        "ipfs://bafybei",
-        "https://example.com/terms",
-      ],
+      resources: ["ipfs://bafybei", "https://example.com/terms"],
     });
     const expected = [
       "drift.trade wants you to sign in with your Solana account:",

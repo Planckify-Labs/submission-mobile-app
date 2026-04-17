@@ -302,108 +302,105 @@ const WalletSelectorModal = memo(function WalletSelectorModal({
             }}
             className="bg-light-main-container rounded-t-3xl"
           >
-          <View
-            {...panResponder.panHandlers}
-            className="items-center py-3"
-          >
-            <View className="w-10 h-1 bg-light-matte-black/20 rounded-full" />
-          </View>
-
-          <View className="flex-row items-center justify-between px-4 pb-3">
-            {isDappConnection && dappUrl ? (
-              <View className="flex-row items-center gap-2 flex-1 pr-3">
-                <View className="w-8 h-8 bg-light-primary-red/10 rounded-full items-center justify-center">
-                  <Wallet size={16} color="#c71c4b" />
-                </View>
-                <View className="flex-1">
-                  <Text
-                    className="text-light-matte-black text-lg font-bold"
-                    numberOfLines={1}
-                  >
-                    Connect Wallet
-                  </Text>
-                  <Text
-                    className="text-light-matte-black/60 text-xs"
-                    numberOfLines={1}
-                  >
-                    {getDomainFromUrl(dappUrl)} wants to connect
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              <Text className="text-light-matte-black text-xl font-bold">
-                {title}
-              </Text>
-            )}
-            <Pressable
-              onPress={closeModal}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              className="w-8 h-8 rounded-full bg-light-matte-black/10 items-center justify-center"
-            >
-              <X size={18} color="#20222c" />
-            </Pressable>
-          </View>
-
-          <View className="px-4 mb-3">
-            <View className="bg-light rounded-2xl flex-row items-center px-4">
-              <Search size={18} color="#20222c" />
-              <TextInput
-                className="flex-1 py-3 px-2 text-light-matte-black"
-                placeholder="Search by name, address, or chain…"
-                placeholderTextColor="#20222c80"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {searchQuery ? (
-                <Pressable onPress={() => setSearchQuery("")}>
-                  <X size={16} color="#20222c" />
-                </Pressable>
-              ) : null}
+            <View {...panResponder.panHandlers} className="items-center py-3">
+              <View className="w-10 h-1 bg-light-matte-black/20 rounded-full" />
             </View>
-          </View>
 
-          <View className="flex-1 px-4">
-            <FlatList
-              data={filteredWallets}
-              renderItem={({ item }) => renderWalletItem(item)}
-              keyExtractor={keyExtractor}
-              extraData={`${searchQuery}:${activeWalletIndex}`}
-              contentContainerStyle={{ paddingBottom: 16 }}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={
-                <View className="items-center py-10">
-                  <Text className="text-light-matte-black/60 text-center">
-                    {wallets.length === 0
-                      ? "No wallets available. Please create or import a wallet first."
-                      : `No wallets match "${searchQuery}"`}
-                  </Text>
+            <View className="flex-row items-center justify-between px-4 pb-3">
+              {isDappConnection && dappUrl ? (
+                <View className="flex-row items-center gap-2 flex-1 pr-3">
+                  <View className="w-8 h-8 bg-light-primary-red/10 rounded-full items-center justify-center">
+                    <Wallet size={16} color="#c71c4b" />
+                  </View>
+                  <View className="flex-1">
+                    <Text
+                      className="text-light-matte-black text-lg font-bold"
+                      numberOfLines={1}
+                    >
+                      Connect Wallet
+                    </Text>
+                    <Text
+                      className="text-light-matte-black/60 text-xs"
+                      numberOfLines={1}
+                    >
+                      {getDomainFromUrl(dappUrl)} wants to connect
+                    </Text>
+                  </View>
                 </View>
-              }
-            />
-          </View>
-
-          {isDappConnection ? (
-            <View className="px-4 pb-2">
-              <View className="bg-light rounded-2xl p-3 mb-3">
-                <Text className="text-light-matte-black/60 text-xs text-center">
-                  Only connect to websites you trust. TakumiPay will never ask
-                  for your private keys or seed phrase.
+              ) : (
+                <Text className="text-light-matte-black text-xl font-bold">
+                  {title}
                 </Text>
-              </View>
+              )}
               <Pressable
-                className="bg-light rounded-2xl p-4"
                 onPress={closeModal}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                className="w-8 h-8 rounded-full bg-light-matte-black/10 items-center justify-center"
               >
-                <Text className="text-light-matte-black font-bold text-center">
-                  Cancel
-                </Text>
+                <X size={18} color="#20222c" />
               </Pressable>
             </View>
-          ) : null}
+
+            <View className="px-4 mb-3">
+              <View className="bg-light rounded-2xl flex-row items-center px-4">
+                <Search size={18} color="#20222c" />
+                <TextInput
+                  className="flex-1 py-3 px-2 text-light-matte-black"
+                  placeholder="Search by name, address, or chain…"
+                  placeholderTextColor="#20222c80"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searchQuery ? (
+                  <Pressable onPress={() => setSearchQuery("")}>
+                    <X size={16} color="#20222c" />
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+
+            <View className="flex-1 px-4">
+              <FlatList
+                data={filteredWallets}
+                renderItem={({ item }) => renderWalletItem(item)}
+                keyExtractor={keyExtractor}
+                extraData={`${searchQuery}:${activeWalletIndex}`}
+                contentContainerStyle={{ paddingBottom: 16 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={
+                  <View className="items-center py-10">
+                    <Text className="text-light-matte-black/60 text-center">
+                      {wallets.length === 0
+                        ? "No wallets available. Please create or import a wallet first."
+                        : `No wallets match "${searchQuery}"`}
+                    </Text>
+                  </View>
+                }
+              />
+            </View>
+
+            {isDappConnection ? (
+              <View className="px-4 pb-2">
+                <View className="bg-light rounded-2xl p-3 mb-3">
+                  <Text className="text-light-matte-black/60 text-xs text-center">
+                    Only connect to websites you trust. TakumiPay will never ask
+                    for your private keys or seed phrase.
+                  </Text>
+                </View>
+                <Pressable
+                  className="bg-light rounded-2xl p-4"
+                  onPress={closeModal}
+                >
+                  <Text className="text-light-matte-black font-bold text-center">
+                    Cancel
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
           </Animated.View>
         </KeyboardAvoidingView>
       </View>

@@ -69,8 +69,7 @@ export const useTokens = (options?: TTokenSearchParams) => {
       if (!cached) return undefined;
       return filterTokens(cached, options);
     },
-    initialDataUpdatedAt: () =>
-      isTextSearch ? 0 : readCacheTimestamp(),
+    initialDataUpdatedAt: () => (isTextSearch ? 0 : readCacheTimestamp()),
     queryFn: async () => {
       if (isTextSearch) {
         return await tokenApi.searchTokens(options ?? {});

@@ -9,8 +9,8 @@
  * `WalletKitAdapter`.
  */
 
-import type { ChainConfig } from "@/constants/configs/chainConfig";
 import type { TBlockchain } from "@/api/types/blockchain";
+import type { ChainConfig } from "@/constants/configs/chainConfig";
 import type { TWallet } from "@/constants/types/walletTypes";
 import type { Namespace } from "@/services/chains/types";
 
@@ -24,7 +24,9 @@ type BlockchainWithMaybeNamespace = TBlockchain & {
   namespace?: "eip155" | "solana";
 };
 
-function resolveNamespace(b: BlockchainWithMaybeNamespace): "eip155" | "solana" {
+function resolveNamespace(
+  b: BlockchainWithMaybeNamespace,
+): "eip155" | "solana" {
   if (b.namespace === "solana") return "solana";
   if (b.namespace === "eip155") return "eip155";
   // `isEVM === false` is treated as Solana in v2.3.0 since Solana is
@@ -66,8 +68,10 @@ export type WalletAccount = {
 // (e.g. "Main Wallet · ETH" → "Main Wallet"). Falls back to the
 // original name when no known suffix is present.
 function canonicalAccountName(name: string): string {
-  return name.replace(/\s*[·•|-]\s*(ETH|SOL|SOLANA|ETHEREUM)\s*$/i, "").trim() ||
-    name;
+  return (
+    name.replace(/\s*[·•|-]\s*(ETH|SOL|SOLANA|ETHEREUM)\s*$/i, "").trim() ||
+    name
+  );
 }
 
 /**
@@ -82,9 +86,10 @@ export function groupWalletsIntoAccounts(wallets: TWallet[]): WalletAccount[] {
   const accountsById = new Map<string, WalletAccount>();
 
   for (const w of wallets) {
-    const seed = typeof w.seedPhrase === "string" && w.seedPhrase.length > 0
-      ? w.seedPhrase
-      : null;
+    const seed =
+      typeof w.seedPhrase === "string" && w.seedPhrase.length > 0
+        ? w.seedPhrase
+        : null;
     if (seed) {
       const existing = accountsBySeed.get(seed);
       if (existing) {

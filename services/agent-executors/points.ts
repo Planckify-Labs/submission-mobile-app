@@ -53,6 +53,7 @@ import { smartContractApi } from "@/api/endpoints/smart-contracts";
 import type { TProductInputField } from "@/api/types/product";
 import AbiTakumiPointDeposit from "@/contracts/abis/AbiTakumiPointDeposit";
 import { requireWalletClient, resolveChainClients } from "./chainRouter";
+import { checkPointsAuth } from "./pointsAuth";
 import { loadCachedTokens } from "./reads";
 import {
   ExecutorError,
@@ -65,6 +66,34 @@ import {
   type ToolInput,
 } from "./types";
 import { classifyPointsError, sanitizeApiResponse } from "./utils";
+
+/**
+ * Pre-flight auth guard for points executors that require a JWT.
+ *
+ * Without this, the ky `beforeRequest` hook in `constants/configs/ky.ts`
+ * throws before the HTTP call goes out when no token is stored for the
+ * active wallet — and the 401 handler for stale tokens also force-
+ * navigates to `/auth`. Both flows would rip the user away from the
+ * agent mid-turn with no chance for the agent to explain.
+ *
+ * By short-circuiting locally with a clean `authentication_required`
+ * result, the agent gets a stable signal it can narrate ("sign in to
+ * check your points") and the user stays on the chat screen — they
+ * decide when to sign in, not us.
+ */
+async function requireAuthed(
+  context: Parameters<MobileToolExecutor>[1],
+): Promise<{ status: "failed"; error: "authentication_required" } | null> {
+  const addr = context.wallet?.address;
+  if (!addr) {
+    return { status: "failed", error: "authentication_required" };
+  }
+  const authed = await checkPointsAuth(addr);
+  if (!authed) {
+    return { status: "failed", error: "authentication_required" };
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -312,8 +341,10 @@ export const getPointsPrice: MobileToolExecutor = (input, _context) =>
  * endpoint requires auth on the backend (see §12 auth boundary table)
  * even though categories themselves aren't private — it's an API quirk.
  */
-export const getRedemptionCategories: MobileToolExecutor = (_input, _context) =>
+export const getRedemptionCategories: MobileToolExecutor = (_input, context) =>
   safeExecute(async () => {
+    const unauth = await requireAuthed(context);
+    if (unauth) return unauth;
     return runApi(
       () => productApi.getAllCategories(),
       (raw) => ({
@@ -330,8 +361,10 @@ export const getRedemptionCategories: MobileToolExecutor = (_input, _context) =>
 /**
  * `get_points_balance` — current balance, decimal string. Auth required.
  */
-export const getPointsBalance: MobileToolExecutor = (_input, _context) =>
+export const getPointsBalance: MobileToolExecutor = (_input, context) =>
   safeExecute(async () => {
+    const unauth = await requireAuthed(context);
+    if (unauth) return unauth;
     return runApi(
       () => pointsApi.getBalance(),
       (raw) => ({ balance: raw.balance }),
@@ -343,8 +376,10 @@ export const getPointsBalance: MobileToolExecutor = (_input, _context) =>
  * Backend returns the array under `data`; spec calls it `transactions`
  * — we re-key here so the agent sees the canonical shape from §12.
  */
-export const getPointsHistory: MobileToolExecutor = (input, _context) =>
+export const getPointsHistory: MobileToolExecutor = (input, context) =>
   safeExecute(async () => {
+    const unauth = await requireAuthed(context);
+    if (unauth) return unauth;
     const params = {
       type: optionalString(input, "type") as
         | "DEPOSIT"
@@ -394,8 +429,10 @@ export const getPointsHistory: MobileToolExecutor = (input, _context) =>
  * §14 Guard C). MAX_ITERATIONS applies on the server side, but we
  * don't enforce it here — that's the agent's job.
  */
-export const getRedemptionStatus: MobileToolExecutor = (input, _context) =>
+export const getRedemptionStatus: MobileToolExecutor = (input, context) =>
   safeExecute(async () => {
+    const unauth = await requireAuthed(context);
+    if (unauth) return unauth;
     const redemptionId = requireString(input, "redemption_id");
     return runApi(
       () => redeemApi.getStatus(redemptionId),
@@ -417,8 +454,10 @@ export const getRedemptionStatus: MobileToolExecutor = (input, _context) =>
  * the inline product / variant / price for the agent so it doesn't have
  * to make a follow-up `get_product_details` per row.
  */
-export const getRedemptionHistory: MobileToolExecutor = (input, _context) =>
+export const getRedemptionHistory: MobileToolExecutor = (input, context) =>
   safeExecute(async () => {
+    const unauth = await requireAuthed(context);
+    if (unauth) return unauth;
     const params = {
       status: optionalString(input, "status") as
         | "PENDING"
@@ -543,6 +582,8 @@ async function pollRedemptionForVoucher(redemptionId: string) {
  */
 export const depositPoints: MobileToolExecutor = (input, context) =>
   safeExecute(async () => {
+    const unauth = await requireAuthed(context);
+    if (unauth) return unauth;
     const chainId = resolveChainId(input, context);
     const tokenSymbol = requireString(input, "token_symbol");
     const tokenAmountHuman = requireString(input, "token_amount");
@@ -951,8 +992,10 @@ function reconcileCustomerInfo(
  * Approval: same as deposit — the dispatcher gates on the approval sheet
  * before we run.
  */
-export const executeRedemption: MobileToolExecutor = (input, _context) =>
+export const executeRedemption: MobileToolExecutor = (input, context) =>
   safeExecute(async () => {
+    const unauth = await requireAuthed(context);
+    if (unauth) return unauth;
     const productVariantId = requireString(input, "product_variant_id");
     const productPriceId = requireString(input, "product_price_id");
     const productId = optionalString(input, "product_id");

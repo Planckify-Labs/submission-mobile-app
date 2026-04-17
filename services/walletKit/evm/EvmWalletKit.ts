@@ -16,10 +16,6 @@
 import { formatUnits, isAddress, parseUnits } from "viem";
 import type { ChainConfig } from "../../../constants/configs/chainConfig.ts";
 import type { TWallet } from "../../../constants/types/walletTypes.ts";
-import {
-  generateWalletMnemonic,
-  getAccountForWallet,
-} from "../../walletService.ts";
 import { getPublicClient, getWalletClient } from "../../../utils/clients.ts";
 import {
   createWalletFromMnemonic as createEvmWalletFromMnemonic,
@@ -28,6 +24,10 @@ import {
   isValidPrivateKey,
   truncateAddress as truncateAddressUtil,
 } from "../../../utils/walletUtils.ts";
+import {
+  generateWalletMnemonic,
+  getAccountForWallet,
+} from "../../walletService.ts";
 import type {
   CreateWalletFromMnemonicParams,
   CreateWalletFromPrivateKeyParams,
@@ -39,10 +39,9 @@ import type {
 
 const EVM_NAMESPACE = "eip155" as const;
 
-function assertEvm(chain: ChainConfig): asserts chain is Extract<
-  ChainConfig,
-  { namespace: "eip155" }
-> {
+function assertEvm(
+  chain: ChainConfig,
+): asserts chain is Extract<ChainConfig, { namespace: "eip155" }> {
   if (chain.namespace !== EVM_NAMESPACE) {
     throw new Error("EvmWalletKit: expected eip155 chain");
   }
@@ -60,6 +59,11 @@ export function createEvmWalletKit(): WalletKitAdapter {
     },
     formatChainLabel(chain) {
       return chain.namespace === EVM_NAMESPACE ? chain.chain.name : null;
+    },
+    nativeSymbol(chain) {
+      return chain.namespace === EVM_NAMESPACE
+        ? chain.chain.nativeCurrency.symbol
+        : null;
     },
 
     // ── Wallet creation & validation ────────────────────────────────

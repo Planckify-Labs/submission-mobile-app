@@ -15,8 +15,8 @@
  */
 
 import { createEvmWalletKit } from "./evm/EvmWalletKit";
-import { createSolanaWalletKit } from "./solana/SolanaWalletKit";
 import { walletKitRegistry } from "./registry";
+import { createSolanaWalletKit } from "./solana/SolanaWalletKit";
 
 let booted = false;
 

@@ -37,12 +37,6 @@
  *     the Wallet Standard wire format.
  */
 
-import {
-  getBase64EncodedWireTransaction,
-  getSignatureFromTransaction,
-  sendAndConfirmTransactionFactory,
-  signTransaction as kitSignTransaction,
-} from "@solana/kit";
 import type {
   Base64EncodedWireTransaction,
   FullySignedTransaction,
@@ -52,12 +46,14 @@ import type {
   SolanaRpcApi,
   SolanaRpcSubscriptionsApi,
 } from "@solana/kit";
+import {
+  getBase64EncodedWireTransaction,
+  getSignatureFromTransaction,
+  signTransaction as kitSignTransaction,
+  sendAndConfirmTransactionFactory,
+} from "@solana/kit";
 
 import type { TWallet } from "@/constants/types/walletTypes";
-import {
-  registerSolanaSigner,
-  type SolanaSignerFns,
-} from "@/services/chains/solana/SolanaAdapter";
 import {
   base64ToBytes,
   base64ToTransaction,
@@ -65,6 +61,10 @@ import {
   bytesToBase64,
   transactionToBase64,
 } from "@/services/chains/solana/codec";
+import {
+  registerSolanaSigner,
+  type SolanaSignerFns,
+} from "@/services/chains/solana/SolanaAdapter";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 
 /**
@@ -215,9 +215,7 @@ export function installSolanaSigner(deps: InstallSolanaSignerDeps): void {
         return getSignatureFromTransaction(signed);
       } catch (err) {
         if (__DEV__)
-          console.error(
-            "[Solana bridge signer] signAndSendTransaction failed",
-          );
+          console.error("[Solana bridge signer] signAndSendTransaction failed");
         throw err;
       }
     },

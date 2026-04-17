@@ -31,14 +31,14 @@
  * sibling sheets don't use it either.
  */
 
-import { ChevronRight, KeyRound, Plus, ShieldCheck, X } from "lucide-react-native";
-import React, {
-  memo,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import {
+  ChevronRight,
+  KeyRound,
+  Plus,
+  ShieldCheck,
+  X,
+} from "lucide-react-native";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -56,13 +56,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import { bootstrapFirstLoginWallets } from "@/services/walletKit/bootstrap";
-import ImportPrivateKeySheet from "./ImportPrivateKeySheet";
-import ImportSeedPhraseSheet from "./ImportSeedPhraseSheet";
 import {
   type AddWalletStep,
   reducerOnImportSeedPhraseInstead,
   shouldResetOnVisibleChange,
 } from "./AddWalletSheet.helpers";
+import ImportPrivateKeySheet from "./ImportPrivateKeySheet";
+import ImportSeedPhraseSheet from "./ImportSeedPhraseSheet";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 // Picker is short — three cards + header. Don't reserve 92% like the
@@ -340,10 +340,7 @@ const AddWalletSheet: React.FC<Props> = memo(function AddWalletSheet({
               className="bg-light-main-container rounded-t-3xl"
             >
               {/* Drag handle — swipe-down closes. */}
-              <View
-                {...panResponder.panHandlers}
-                className="items-center py-3"
-              >
+              <View {...panResponder.panHandlers} className="items-center py-3">
                 <View className="w-10 h-1 bg-light-matte-black/20 rounded-full" />
               </View>
 

@@ -37,9 +37,7 @@ const STUB_SOURCES = {
 };
 
 function stubUrl(src) {
-  return (
-    "data:text/javascript;base64," + Buffer.from(src).toString("base64")
-  );
+  return "data:text/javascript;base64," + Buffer.from(src).toString("base64");
 }
 
 function tryExtensions(absNoExt) {

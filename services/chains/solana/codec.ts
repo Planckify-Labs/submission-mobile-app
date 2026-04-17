@@ -21,15 +21,15 @@
  *     bytes (the ed25519 seed half by convention — see §7.3 / §7.4).
  */
 
-import bs58 from "bs58";
+import type { Transaction } from "@solana/kit";
 import {
   getBase64Decoder,
+  getBase64EncodedWireTransaction,
   getBase64Encoder,
   getTransactionDecoder,
   getTransactionEncoder,
-  getBase64EncodedWireTransaction,
 } from "@solana/kit";
-import type { Transaction } from "@solana/kit";
+import bs58 from "bs58";
 
 /** Expected ed25519 seed length (private-key material). */
 const ED25519_SEED_LEN = 32;

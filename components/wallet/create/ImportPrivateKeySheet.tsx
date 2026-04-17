@@ -89,7 +89,8 @@ const PLACEHOLDER: Record<Namespace, string> = {
 
 const INVALID_COPY: Record<Namespace, string> = {
   eip155: "This doesn't look like a 64-hex EVM private key.",
-  solana: "This doesn't look like a Solana private key — expected 64-byte base58.",
+  solana:
+    "This doesn't look like a Solana private key — expected 64-byte base58.",
   sui: "This doesn't look like a Sui private key.",
 };
 
@@ -103,7 +104,11 @@ function buildAddWalletParams(
   namespace: Namespace,
   privateKey: string,
   name: string | undefined,
-): { source: "PrivateKey" | "SolanaPrivateKey"; privateKey: string; name?: string } {
+): {
+  source: "PrivateKey" | "SolanaPrivateKey";
+  privateKey: string;
+  name?: string;
+} {
   const source = namespace === "solana" ? "SolanaPrivateKey" : "PrivateKey";
   return { source, privateKey, name };
 }
@@ -252,8 +257,8 @@ function ImportPrivateKeySheet({
     step === 1
       ? "Pick a chain"
       : step === 2
-      ? "Paste private key"
-      : "Name this wallet";
+        ? "Paste private key"
+        : "Name this wallet";
 
   return (
     <Modal
@@ -422,7 +427,9 @@ function Step2Body({
   return (
     <View>
       <Text className="text-light-matte-black/70 text-sm mb-4">
-        Paste the private key for your {namespace === "solana" ? "Solana" : "Ethereum"} wallet. Nothing leaves your device until you confirm in the next step.
+        Paste the private key for your{" "}
+        {namespace === "solana" ? "Solana" : "Ethereum"} wallet. Nothing leaves
+        your device until you confirm in the next step.
       </Text>
       <TextInput
         ref={inputRef}
@@ -463,16 +470,12 @@ type Step3Props = {
   submitError: string | null;
 };
 
-function Step3Body({
-  namespace,
-  name,
-  onChangeName,
-  submitError,
-}: Step3Props) {
+function Step3Body({ namespace, name, onChangeName, submitError }: Step3Props) {
   return (
     <View>
       <Text className="text-light-matte-black/70 text-sm mb-4">
-        Give your {namespace === "solana" ? "Solana" : "Ethereum"} wallet a name. You can change this later.
+        Give your {namespace === "solana" ? "Solana" : "Ethereum"} wallet a
+        name. You can change this later.
       </Text>
       <TextInput
         value={name}

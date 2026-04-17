@@ -57,3 +57,15 @@ export function formatChainLabel(chain: ChainConfig): string {
   const kit = walletKitRegistry.get(chain.namespace);
   return kit.formatChainLabel?.(chain) ?? kit.displayName ?? chain.namespace;
 }
+
+/**
+ * Native currency ticker for `chain` — `"ETH"`, `"SOL"`, `"MATIC"`, etc.
+ * Returns `null` when the registered kit doesn't expose one. Used by
+ * shared surfaces (agent wallet-context builder) that need the symbol
+ * without switching on namespace themselves.
+ */
+export function getNativeSymbol(chain: ChainConfig): string | null {
+  if (!walletKitRegistry.has(chain.namespace)) return null;
+  const kit = walletKitRegistry.get(chain.namespace);
+  return kit.nativeSymbol?.(chain) ?? null;
+}

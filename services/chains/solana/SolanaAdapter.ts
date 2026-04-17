@@ -1,3 +1,4 @@
+import { takumipayLogoBase64 } from "@/constants/takumipay";
 import type {
   ApprovalDecision,
   ApprovalIntent,
@@ -10,15 +11,10 @@ import type {
 } from "@/services/chains/types";
 import { originKey } from "@/services/permissions/caip";
 import { PermissionStore } from "@/services/permissions/store";
-import { takumipayLogoBase64 } from "@/constants/takumipay";
 import { getSolanaRpc } from "@/services/rpc/solanaRpcPool";
 import { bytesToBase64 } from "./codec";
 import { assertSolanaErrorCode } from "./errorCodes";
 import { getSolanaInjectedScript } from "./injectedScript";
-import {
-  parseToken2022Extensions,
-  type Token2022Extension,
-} from "./token2022";
 import {
   canonicalizeChain,
   chainToCluster,
@@ -33,6 +29,7 @@ import {
   type SolanaSwitchClusterPayload,
   type SolanaWatchTokenPayload,
 } from "./payloads";
+import { parseToken2022Extensions, type Token2022Extension } from "./token2022";
 
 export interface SolanaSignerFns {
   signMessage: (address: string, message: string) => Promise<string>;
@@ -222,7 +219,9 @@ class SolanaAdapter implements ChainAdapter {
   ): Promise<ChainResult> {
     try {
       const method =
-        req.method === "solana:standard:connect" ? "standard:connect" : req.method;
+        req.method === "solana:standard:connect"
+          ? "standard:connect"
+          : req.method;
       if (req.method === "solana:standard:connect" && __DEV__) {
         // One-release legacy alias.
         console.warn(
@@ -271,7 +270,10 @@ class SolanaAdapter implements ChainAdapter {
 
   private handleConnect(req: ChainRequest, ctx: AdapterContext): ChainResult {
     const params = (req.params as unknown[]) ?? [];
-    const opts = (params[0] ?? {}) as { silent?: boolean; onlyIfTrusted?: boolean };
+    const opts = (params[0] ?? {}) as {
+      silent?: boolean;
+      onlyIfTrusted?: boolean;
+    };
     const silent = !!(opts.silent ?? opts.onlyIfTrusted);
 
     const cluster: SolanaCluster = "mainnet-beta";
@@ -342,7 +344,12 @@ class SolanaAdapter implements ChainAdapter {
     };
     return {
       status: "needs-approval",
-      intent: makeIntent<SolanaSignInPayload>(req, "signIn", payload, solWallet),
+      intent: makeIntent<SolanaSignInPayload>(
+        req,
+        "signIn",
+        payload,
+        solWallet,
+      ),
     };
   }
 
@@ -688,7 +695,9 @@ async function verifyMintOnChain(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const info = (await (rpc as any)
       .getAccountInfo(mint, { encoding: "base64" })
-      .send()) as { value: { data: unknown; owner: string } | null } | undefined;
+      .send()) as
+      | { value: { data: unknown; owner: string } | null }
+      | undefined;
     const value = info?.value;
     if (!value) return null;
     const owner = value.owner;

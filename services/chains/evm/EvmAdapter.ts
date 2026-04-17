@@ -317,9 +317,7 @@ export class EvmAdapter implements ChainAdapter {
             requestedAccounts: 1,
             chainId: cfg.chain.id,
           };
-          return needsApproval(
-            makeIntent(req, "connect", payload, evmWallet),
-          );
+          return needsApproval(makeIntent(req, "connect", payload, evmWallet));
         }
         case "wallet_getPermissions": {
           return resolved(PermissionStore.asEip2255(req.origin.url));

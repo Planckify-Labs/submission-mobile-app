@@ -66,7 +66,9 @@ export default function WalletDetails({
     } catch {
       // kit missing — fall through
     }
-    return ns === "eip155" ? "Ethereum" : ns.charAt(0).toUpperCase() + ns.slice(1);
+    return ns === "eip155"
+      ? "Ethereum"
+      : ns.charAt(0).toUpperCase() + ns.slice(1);
   }, []);
 
   // Balance is only meaningful when the active chain's namespace

@@ -23,14 +23,18 @@
 
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
-import {
-  createSolanaRpc,
-  createSolanaRpcSubscriptions,
-} from "@solana/kit";
 import type { KeyPairSigner } from "@solana/kit";
+import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 
 import type { ChainConfig } from "../../../constants/configs/chainConfig.ts";
 import type { TWallet } from "../../../constants/types/walletTypes.ts";
+import {
+  createSolanaWalletFromMnemonic,
+  createSolanaWalletFromPrivateKey,
+  isValidSolanaAddress,
+  isValidSolanaPrivateKey,
+  truncateAddress as truncateAddressUtil,
+} from "../../../utils/walletUtils.ts";
 import {
   buildAndSendSolTransfer,
   getSolanaBalance,
@@ -39,13 +43,6 @@ import {
   generateWalletMnemonic,
   getSolanaSignerForWallet,
 } from "../../walletService.ts";
-import {
-  createSolanaWalletFromMnemonic,
-  createSolanaWalletFromPrivateKey,
-  isValidSolanaAddress,
-  isValidSolanaPrivateKey,
-  truncateAddress as truncateAddressUtil,
-} from "../../../utils/walletUtils.ts";
 import type {
   CreateWalletFromMnemonicParams,
   CreateWalletFromPrivateKeyParams,
@@ -64,10 +61,9 @@ const LAMPORTS_PER_SOL = 1_000_000_000;
 
 const SOLANA_NAMESPACE = "solana" as const;
 
-function assertSolana(chain: ChainConfig): asserts chain is Extract<
-  ChainConfig,
-  { namespace: "solana" }
-> {
+function assertSolana(
+  chain: ChainConfig,
+): asserts chain is Extract<ChainConfig, { namespace: "solana" }> {
   if (chain.namespace !== SOLANA_NAMESPACE) {
     throw new Error("SolanaWalletKit: expected solana chain");
   }
@@ -99,9 +95,13 @@ export function createSolanaWalletKit(): WalletKitAdapter {
       const label = chain.cluster === "devnet" ? "Devnet" : "Mainnet";
       return `Solana ${label}`;
     },
+    nativeSymbol(chain) {
+      return chain.namespace === SOLANA_NAMESPACE ? "SOL" : null;
+    },
 
     // ── Wallet creation & validation ────────────────────────────────
-    validateAddress: (address: string): boolean => isValidSolanaAddress(address),
+    validateAddress: (address: string): boolean =>
+      isValidSolanaAddress(address),
     validatePrivateKey: (privateKey: string): boolean =>
       isValidSolanaPrivateKey(privateKey),
     validateMnemonic: (mnemonic: string): boolean =>

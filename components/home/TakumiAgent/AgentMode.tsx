@@ -67,7 +67,11 @@ import {
   HOT_WALLET_POLICY,
 } from "@/services/resolveUxTreatment";
 import { getTransferThresholdStore } from "@/services/transferThresholdStore";
-import { getEvmChainId } from "@/services/walletKit/chainInfo";
+import {
+  formatChainLabel,
+  getEvmChainId,
+  getNativeSymbol,
+} from "@/services/walletKit/chainInfo";
 import * as walletService from "@/services/walletService";
 import AgentOnboarding from "./AgentModeOnboarding/AgentOnboarding";
 import ChatInput from "./ChatInput";
@@ -388,17 +392,26 @@ export default function AgentMode() {
   }, [activeWallet?.address]);
 
   // Wallet context sent on POST /chat — short-circuits if we don't yet
-  // have an active wallet / chain resolved.
+  // have an active wallet / chain resolved. Stays chain-agnostic per
+  // §4.5 (space-docking): chain_id / chain_name / chain_symbol come
+  // from `WalletKitAdapter` hooks so every namespace is exposed the
+  // same way and adding a new chain doesn't require edits here.
+  //
+  // `chain_id` is 0 for non-EVM namespaces — the server treats the
+  // field as opaque for non-EVM and reads `namespace` as the real
+  // discriminator. EVM kits return the viem `chain.id` via
+  // `getEvmChainId`.
   const walletContext: WalletContext | null = useMemo(() => {
-    const address = activeWallet?.address as `0x${string}` | undefined;
-    // TODO(task-13): Solana wallet-context shape not yet modelled on the
-    // agent API; only emit wallet context for EVM chains.
-    if (!address || activeChain.namespace !== "eip155") return null;
+    const address = activeWallet?.address;
+    if (!address) return null;
+    const symbol = getNativeSymbol(activeChain);
+    if (!symbol) return null;
     return {
       address,
-      chain_id: activeChain.chain.id,
-      chain_name: activeChain.chain.name,
-      chain_symbol: activeChain.chain.nativeCurrency.symbol,
+      namespace: activeChain.namespace,
+      chain_id: getEvmChainId(activeChain) ?? 0,
+      chain_name: formatChainLabel(activeChain),
+      chain_symbol: symbol,
       label: activeWallet?.name,
       points_authenticated: pointsAuthenticated,
     };

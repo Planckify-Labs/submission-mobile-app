@@ -39,8 +39,7 @@ export function canonicalizeChain(input: string): SolanaChain {
 
 /** Convert short-form SolanaChain to SolanaCluster for internal RPC routing. */
 export function chainToCluster(chain: SolanaChain): SolanaCluster {
-  const short =
-    SHORT_CHAINS.has(chain) ? chain : CHAIN_GENESIS_TO_SHORT[chain];
+  const short = SHORT_CHAINS.has(chain) ? chain : CHAIN_GENESIS_TO_SHORT[chain];
   switch (short) {
     case "solana:mainnet":
       return "mainnet-beta";
@@ -222,11 +221,7 @@ export type SolanaWatchTokenPayload = {
   name?: string;
   decimals?: number;
   image?: string;
-  tokenStandard?:
-    | "spl-token"
-    | "token-2022"
-    | "metaplex-nft"
-    | "metaplex-cnft";
+  tokenStandard?: "spl-token" | "token-2022" | "metaplex-nft" | "metaplex-cnft";
   verified?: {
     mintOwner: "spl-token" | "token-2022";
     extensions?: string[];

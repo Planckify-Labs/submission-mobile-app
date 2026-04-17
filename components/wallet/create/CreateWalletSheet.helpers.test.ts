@@ -14,8 +14,8 @@ import { describe, it } from "node:test";
 import {
   computeStep,
   namespaceSetsEqual,
-  shuffleWords,
   type StepState,
+  shuffleWords,
   verifyWords,
 } from "./CreateWalletSheet.helpers.ts";
 
@@ -149,10 +149,7 @@ describe("computeStep", () => {
   });
 
   it("advances to step 2 once the mnemonic has been acknowledged", () => {
-    assert.equal(
-      computeStep({ ...base, mnemonicAcknowledged: true }),
-      2,
-    );
+    assert.equal(computeStep({ ...base, mnemonicAcknowledged: true }), 2);
   });
 
   it("stays on step 2 while verify is incorrect", () => {
@@ -233,11 +230,17 @@ describe("computeStep", () => {
 
 describe("namespaceSetsEqual", () => {
   it("returns true for identical arrays", () => {
-    assert.equal(namespaceSetsEqual(["eip155", "solana"], ["eip155", "solana"]), true);
+    assert.equal(
+      namespaceSetsEqual(["eip155", "solana"], ["eip155", "solana"]),
+      true,
+    );
   });
 
   it("returns true regardless of ordering", () => {
-    assert.equal(namespaceSetsEqual(["solana", "eip155"], ["eip155", "solana"]), true);
+    assert.equal(
+      namespaceSetsEqual(["solana", "eip155"], ["eip155", "solana"]),
+      true,
+    );
   });
 
   it("returns false for different lengths", () => {

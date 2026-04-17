@@ -123,15 +123,11 @@ export function SolanaSignAllTransactionsSheet({
               defaultOpen={i === 0}
             />
           ))}
-          {error && (
-            <Text className="text-xs text-red-600 mt-2">{error}</Text>
-          )}
+          {error && <Text className="text-xs text-red-600 mt-2">{error}</Text>}
         </ScrollView>
       </ApprovalShell>
       <PrimaryActions
-        approveLabel={
-          pending ? "Authenticating…" : `Approve all (${n})`
-        }
+        approveLabel={pending ? "Authenticating…" : `Approve all (${n})`}
         onApprove={() => {
           void gatedApprove();
         }}

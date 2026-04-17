@@ -1,9 +1,11 @@
 import { FlashList } from "@shopify/flash-list";
 import { format } from "date-fns";
+import { router } from "expo-router";
 import {
   Check,
   ChevronRight,
   CopyIcon,
+  LogIn,
   Search,
   Wallet,
   X,
@@ -25,6 +27,8 @@ import {
 } from "react-native";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
+import type { ChainConfig } from "@/constants/configs/chainConfig";
+import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import {
   useConversationList,
   useDeleteConversation,
@@ -32,7 +36,14 @@ import {
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { useWallet } from "@/hooks/useWallet";
-import { formatChainLabel } from "@/services/walletKit/chainInfo";
+import {
+  buildChainConfigFromBlockchain,
+  chainCacheKey,
+} from "@/hooks/useWallet.helpers";
+import {
+  formatChainLabel,
+  getNativeSymbol,
+} from "@/services/walletKit/chainInfo";
 import { copyToClipboard } from "@/utils/helperUtils";
 
 const { height } = Dimensions.get("window");
@@ -58,7 +69,7 @@ export default function ConversationHistory({
     activeWalletIndex,
     activeChain,
     setActiveWallet,
-    changeActiveChain,
+    changeActiveChainToConfig,
   } = useWallet();
 
   const activeWallet = useMemo(
@@ -66,8 +77,10 @@ export default function ConversationHistory({
     [wallets, activeWalletIndex],
   );
 
+  const { isAuthenticated, isLoading: isLoadingAuth } = useIsAuthenticated();
+
   const { data: convListData, isLoading: isLoadingConvs } = useConversationList(
-    activeWallet?.address,
+    isAuthenticated === true ? activeWallet?.address : undefined,
   );
   const { mutate: deleteConv } = useDeleteConversation();
 
@@ -79,35 +92,29 @@ export default function ConversationHistory({
     isActive: true,
   });
 
+  // Chain list for the selector. Every backend `TBlockchain` row is
+  // mapped to a proper `ChainConfig` via `buildChainConfigFromBlockchain`
+  // (same helper `useWallet` uses), so EVM + Solana share a single shape
+  // and the render path stays chain-agnostic — display labels and the
+  // native symbol come from the kit via `formatChainLabel` /
+  // `getNativeSymbol`, not from an `if (ns === "X")` branch here.
   const allChains = useMemo(() => {
     if (!blockchains || !nativeTokens) return [];
-
-    // Agent chain picker is EVM-only this spec (N1). Backend Solana
-    // rows ship with `chainId: null`, so filter them out before
-    // dereferencing.
-    return blockchains
-      .filter(
-        (b) => b.isEVM !== false && typeof b.chainId === "number",
-      )
-      .map((blockchain) => {
-        const nativeToken =
-          blockchain.tokens?.find((t) => t.isNativeCurrency) ??
-          blockchain.tokens?.[0];
-        return {
-          chain: {
-            id: blockchain.chainId as number,
-            name: blockchain.name,
-            nativeCurrency: {
-              name: nativeToken?.name ?? blockchain.name,
-              symbol: nativeToken?.symbol ?? "N/A",
-              decimals: nativeToken?.decimals ?? 18,
-            },
-          },
-          iconUrl: nativeToken?.logoUrl,
-          isTestnet: false,
-          blockchainId: blockchain.id,
-        };
-      });
+    return blockchains.map((blockchain) => {
+      const config = buildChainConfigFromBlockchain(blockchain);
+      const nativeToken =
+        blockchain.tokens?.find((t) => t.isNativeCurrency) ??
+        blockchain.tokens?.[0];
+      return {
+        key: chainCacheKey(config),
+        config,
+        label: formatChainLabel(config),
+        symbol: getNativeSymbol(config) ?? nativeToken?.symbol ?? "",
+        iconUrl: config.iconUrl ?? nativeToken?.logoUrl,
+        isTestnet: config.isTestnet === true,
+        blockchainId: blockchain.id,
+      };
+    });
   }, [blockchains, nativeTokens]);
 
   const formattedAddress = useMemo(() => {
@@ -144,11 +151,11 @@ export default function ConversationHistory({
   }, [fadeAnim, translateY]);
 
   const handleChainSelect = useCallback(
-    async (chainId: number) => {
-      await changeActiveChain(chainId);
+    async (config: ChainConfig) => {
+      await changeActiveChainToConfig(config);
       closeChainModal();
     },
-    [changeActiveChain, closeChainModal],
+    [changeActiveChainToConfig, closeChainModal],
   );
 
   const openChainModal = useCallback(() => {
@@ -234,63 +241,88 @@ export default function ConversationHistory({
           Conversations
         </Text>
 
-        <FlashList
-          data={filteredConversations}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
+        {isLoadingAuth ? (
+          <View className="items-center py-8">
+            <ActivityIndicator size="small" color="#c71c4b" />
+          </View>
+        ) : isAuthenticated === false ? (
+          <View className="items-center py-10 px-6 flex-1 justify-center">
+            <View className="w-14 h-14 rounded-full bg-light-primary-red/10 items-center justify-center mb-3">
+              <LogIn size={24} color="#c71c4b" />
+            </View>
+            <Text className="text-light-matte-black font-semibold text-base mb-1">
+              Sign in to see your history
+            </Text>
+            <Text className="text-sm text-gray-500 text-center mb-4">
+              Your conversations with Takumi are saved to your wallet. Sign in
+              to view them here.
+            </Text>
             <TouchableOpacity
-              onPress={() => onResumeConversation(item.id)}
-              className="rounded-lg px-4 py-3 mb-2 flex-row items-start justify-between"
+              onPress={() => router.push("/auth")}
+              className="bg-light-primary-red rounded-full px-6 py-3"
             >
-              <View className="flex-1 mr-3">
-                <Text
-                  className="text-light-matte-black font-normal text-base"
-                  numberOfLines={1}
-                >
-                  {item.title}
-                </Text>
-                {item.last_message_preview ? (
+              <Text className="text-white font-semibold text-sm">Sign in</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlashList
+            data={filteredConversations}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onPress={() => onResumeConversation(item.id)}
+                className="rounded-lg px-4 py-3 mb-2 flex-row items-start justify-between"
+              >
+                <View className="flex-1 mr-3">
                   <Text
-                    className="text-xs text-gray-500 mt-0.5"
+                    className="text-light-matte-black font-normal text-base"
                     numberOfLines={1}
                   >
-                    {item.last_message_preview}
+                    {item.title}
                   </Text>
-                ) : null}
-                <Text className="text-[10px] text-gray-400 mt-1">
-                  {format(new Date(item.updated_at), "MMM d, yyyy")}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() =>
-                  deleteConv({
-                    id: item.id,
-                    walletAddress: activeWallet?.address ?? "",
-                  })
-                }
-                hitSlop={8}
-                className="pt-1"
-              >
-                <X size={14} color="#9ca3af" />
+                  {item.last_message_preview ? (
+                    <Text
+                      className="text-xs text-gray-500 mt-0.5"
+                      numberOfLines={1}
+                    >
+                      {item.last_message_preview}
+                    </Text>
+                  ) : null}
+                  <Text className="text-[10px] text-gray-400 mt-1">
+                    {format(new Date(item.updated_at), "MMM d, yyyy")}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() =>
+                    deleteConv({
+                      id: item.id,
+                      walletAddress: activeWallet?.address ?? "",
+                    })
+                  }
+                  hitSlop={8}
+                  className="pt-1"
+                >
+                  <X size={14} color="#9ca3af" />
+                </TouchableOpacity>
               </TouchableOpacity>
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={
-            isLoadingConvs ? (
-              <View className="items-center py-8">
-                <ActivityIndicator size="small" color="#c71c4b" />
-              </View>
-            ) : (
-              <View className="items-center py-8">
-                <Text className="text-sm text-gray-400">
-                  No conversations yet
-                </Text>
-              </View>
-            )
-          }
-          scrollEnabled={true}
-          showsVerticalScrollIndicator={false}
-        />
+            )}
+            ListEmptyComponent={
+              isLoadingConvs ? (
+                <View className="items-center py-8">
+                  <ActivityIndicator size="small" color="#c71c4b" />
+                </View>
+              ) : (
+                <View className="items-center py-8">
+                  <Text className="text-sm text-gray-400">
+                    No conversations yet
+                  </Text>
+                </View>
+              )
+            }
+            scrollEnabled={true}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
         <View className="flex-row justify-between p-4 px-[4px]">
           <View className="flex-row gap-2 items-center">
             <TouchableOpacity onPress={openChainModal}>
@@ -399,17 +431,20 @@ export default function ConversationHistory({
                       </View>
                     ) : (
                       allChains.map((chain) => {
+                        // Chain-agnostic active check — `chainCacheKey`
+                        // folds each `ChainConfig` into a stable string
+                        // that encodes the namespace and the chain's
+                        // own id / cluster, so no `if (ns === "X")`
+                        // branch is needed here.
                         const isActive =
-                          activeChain.namespace === "eip155" &&
-                          activeChain.chain.id === chain.chain.id;
+                          chainCacheKey(activeChain) === chain.key;
 
                         return (
                           <Pressable
-                            key={chain.chain.id}
-                            className={`flex-row items-center p-4 mb-2 rounded-xl ${
-                              isActive ? "bg-light-primary-red/10" : "bg-light"
-                            }`}
-                            onPress={() => handleChainSelect(chain.chain.id)}
+                            key={chain.key}
+                            className={`flex-row items-center p-4 mb-2 rounded-xl ${isActive ? "bg-light-primary-red/10" : "bg-light"
+                              }`}
+                            onPress={() => handleChainSelect(chain.config)}
                           >
                             <View className="mr-3 rounded-full overflow-hidden">
                               <OptimizedImage
@@ -420,10 +455,10 @@ export default function ConversationHistory({
 
                             <View className="flex-1">
                               <Text className="text-light-matte-black font-bold">
-                                {chain.chain.name}
+                                {chain.label}
                               </Text>
                               <Text className="text-light-matte-black/70 text-sm">
-                                {chain.chain.nativeCurrency.symbol || "N/A"}
+                                {chain.symbol || "N/A"}
                               </Text>
                             </View>
 

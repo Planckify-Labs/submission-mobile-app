@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   BackHandler,
   Dimensions,
+  InteractionManager,
   Platform,
   ScrollView,
   StatusBar,
@@ -30,15 +31,25 @@ export default function Home() {
       animated: true,
     });
     setCurrentIndex(index);
-    // Mark agent mode as visited when navigating to it
-    if (index === 1) {
-      setHasVisitedAgentMode(true);
-    }
   }, []);
 
   const handleChatModePress = () => {
     scrollToIndex(1);
   };
+
+  // Pre-warm AgentMode shortly after the home screen idles. Mounting it
+  // on-press makes the swipe feel laggy — the heavy useWallet /
+  // useBlockchainsWithStorage / FlashList boot cost lands in the same
+  // frame as the animation start. Defer to after first interactions so
+  // the initial home paint stays cheap, then let AgentMode hydrate in
+  // the background so tapping chat mode is instant.
+  useEffect(() => {
+    if (hasVisitedAgentMode) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      setHasVisitedAgentMode(true);
+    });
+    return () => task.cancel();
+  }, [hasVisitedAgentMode]);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener(

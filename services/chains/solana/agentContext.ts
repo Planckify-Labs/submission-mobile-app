@@ -21,13 +21,13 @@ import type { ApprovalIntent } from "@/services/bridge/approval";
 import type {
   SolanaApprovalPayload,
   SolanaDecodedInstruction,
+  SolanaSignAllTransactionsPayload,
   SolanaSignInPayload,
   SolanaSignMessagePayload,
   SolanaSignTxPayload,
-  SolanaSignAllTransactionsPayload,
+  SolanaSimulationSummary,
   SolanaSwitchClusterPayload,
   SolanaWatchTokenPayload,
-  SolanaSimulationSummary,
 } from "./payloads";
 
 export interface AgentIntentContext {
@@ -177,14 +177,18 @@ function originHost(url: string | undefined): string | undefined {
 
 function instructionSummary(ix: SolanaDecodedInstruction): string {
   if (ix.program === "system" && "kind" in ix) {
-    const d = (ix as { data?: { from?: string; to?: string; lamports?: bigint } })
-      .data;
+    const d = (
+      ix as { data?: { from?: string; to?: string; lamports?: bigint } }
+    ).data;
     if (ix.kind === "transfer" && d) {
       return `System.transfer ${d.lamports ?? "?"} lamports → ${d.to ?? "?"}`;
     }
     return `System.${ix.kind}`;
   }
-  if ((ix.program === "spl-token" || ix.program === "token-2022") && "kind" in ix) {
+  if (
+    (ix.program === "spl-token" || ix.program === "token-2022") &&
+    "kind" in ix
+  ) {
     return `${ix.program}.${ix.kind}`;
   }
   if (ix.program === "compute-budget" && "value" in ix) {
@@ -222,9 +226,7 @@ function computeBudgetFrom(
   };
 }
 
-function buildSignTxShape(
-  p: SolanaSignTxPayload,
-): SignTransactionShape {
+function buildSignTxShape(p: SolanaSignTxPayload): SignTransactionShape {
   const decoded = p.decoded ?? [];
   return {
     kind: "signTransaction",

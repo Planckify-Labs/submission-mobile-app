@@ -59,14 +59,14 @@ import { defaultWalletNameFor } from "@/services/walletKit/bootstrap";
 import { deriveWalletsFromMnemonic } from "@/services/walletKit/deriveAll";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import { generateWalletMnemonic } from "@/services/walletService";
-import NamespacePicker from "./NamespacePicker";
 import {
   computeStep,
-  shuffleWords,
   type StepState,
-  verifyWords,
+  shuffleWords,
   type VerifyResult,
+  verifyWords,
 } from "./CreateWalletSheet.helpers";
+import NamespacePicker from "./NamespacePicker";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.92;
@@ -95,9 +95,7 @@ function buildRowOptions(mnemonic: string[], wordIndex: number): string[] {
   const correctWord = mnemonic[wordIndex];
   if (!correctWord) return [];
   const distractors = Array.from(
-    new Set(
-      mnemonic.filter((w, i) => i !== wordIndex && w !== correctWord),
-    ),
+    new Set(mnemonic.filter((w, i) => i !== wordIndex && w !== correctWord)),
   );
   // Shuffle distractors pool (Fisher–Yates via helper), then take 2.
   const picked = shuffleWords(distractors).slice(0, 2);
@@ -112,10 +110,7 @@ function buildAllRowOptions(mnemonic: string[]): QuizOptions {
   return opts;
 }
 
-function quizVerifyState(
-  picks: QuizPicks,
-  mnemonic: string[],
-): VerifyResult {
+function quizVerifyState(picks: QuizPicks, mnemonic: string[]): VerifyResult {
   // Map the quiz-row state into the shuffled/picked model
   // `verifyWords` expects. Each verification row is its own tiny
   // "shuffled" list, so we flatten: answer[i] is the correct word and
@@ -436,8 +431,8 @@ const CreateWalletSheet: React.FC<Props> = memo(function CreateWalletSheet({
         Your secret recovery phrase
       </Text>
       <Text className="text-light-matte-black/70 mb-4">
-        Write down these 12 words in order and keep them somewhere safe.
-        This phrase is the only way to restore your wallet.
+        Write down these 12 words in order and keep them somewhere safe. This
+        phrase is the only way to restore your wallet.
       </Text>
 
       {/* Reveal view — copy disabled per spec §14.6. Screenshot blur is
@@ -542,8 +537,8 @@ const CreateWalletSheet: React.FC<Props> = memo(function CreateWalletSheet({
         Choose chains
       </Text>
       <Text className="text-light-matte-black/70 mb-4">
-        Your phrase can create a wallet on each chain below. Uncheck any
-        you don't want on this device — you can always add them later.
+        Your phrase can create a wallet on each chain below. Uncheck any you
+        don't want on this device — you can always add them later.
       </Text>
       <NamespacePicker
         mode="multi"
@@ -661,7 +656,12 @@ const CreateWalletSheet: React.FC<Props> = memo(function CreateWalletSheet({
   };
 
   return (
-    <Modal transparent visible animationType="none" onRequestClose={handleCancel}>
+    <Modal
+      transparent
+      visible
+      animationType="none"
+      onRequestClose={handleCancel}
+    >
       <TouchableWithoutFeedback onPress={handleCancel}>
         <Animated.View
           style={{
@@ -737,10 +737,7 @@ const CreateWalletSheet: React.FC<Props> = memo(function CreateWalletSheet({
                 {step === 4 ? renderStep4() : null}
               </ScrollView>
 
-              <View
-                className="px-4"
-                style={{ paddingBottom: bottomOffset }}
-              >
+              <View className="px-4" style={{ paddingBottom: bottomOffset }}>
                 {renderFooter()}
               </View>
             </Animated.View>

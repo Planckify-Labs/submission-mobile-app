@@ -32,10 +32,7 @@ const WalletCard = memo(function WalletCard({
   // must truncate base58 with the Solana kit even when the active chain
   // is EVM, otherwise we hard-code `(0,6)…(-4)` slices on the wrong
   // alphabet.
-  const kit = useMemo(
-    () => getKitForWallet(wallet),
-    [getKitForWallet, wallet],
-  );
+  const kit = useMemo(() => getKitForWallet(wallet), [getKitForWallet, wallet]);
 
   // Balance pill is namespace-gated: we only have a chain context for
   // this card when the active chain's namespace matches the card's
@@ -117,10 +114,7 @@ const WalletCard = memo(function WalletCard({
         </View>
 
         <View className="items-end">
-          <Text
-            className="text-light-matte-black/70 text-xs"
-            numberOfLines={1}
-          >
+          <Text className="text-light-matte-black/70 text-xs" numberOfLines={1}>
             {formattedBalance}
           </Text>
           {isActive && (

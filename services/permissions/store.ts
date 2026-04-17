@@ -162,12 +162,7 @@ export const PermissionStore = {
     return [...cache.grants];
   },
 
-
-  isGranted(
-    origin: string,
-    walletAddress: string,
-    chainId: ChainKey,
-  ): boolean {
+  isGranted(origin: string, walletAddress: string, chainId: ChainKey): boolean {
     const key = originKey(origin);
     return cache.grants.some(
       (g) =>

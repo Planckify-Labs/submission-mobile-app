@@ -156,4 +156,12 @@ export interface WalletKitAdapter {
    * `services/walletKit/chainInfo.ts#formatChainLabel` when omitted.
    */
   formatChainLabel?(chain: ChainConfig): string | null;
+  /**
+   * Returns the native currency ticker for `chain` — `"ETH"`, `"SOL"`,
+   * `"MATIC"`, etc. Called by the agent-mode wallet-context builder
+   * (`components/home/TakumiAgent/AgentMode.tsx`) so shared code can stay
+   * chain-agnostic per §4.5 space-docking. Returns `null` when `chain`
+   * doesn't belong to this kit.
+   */
+  nativeSymbol?(chain: ChainConfig): string | null;
 }

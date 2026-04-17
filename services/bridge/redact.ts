@@ -186,9 +186,7 @@ export function redactParams(method: string, params: unknown): unknown {
           chain: o.chain,
           messageLength: typeof m === "string" ? m.length : 0,
           messagePreview:
-            typeof m === "string" && m.length > 16
-              ? `${m.slice(0, 16)}…`
-              : m,
+            typeof m === "string" && m.length > 16 ? `${m.slice(0, 16)}…` : m,
         },
       ];
     }
@@ -210,8 +208,7 @@ export function redactParams(method: string, params: unknown): unknown {
         out.push({
           address: o.address,
           chain: o.chain,
-          txBytes:
-            typeof o.transaction === "string" ? o.transaction.length : 0,
+          txBytes: typeof o.transaction === "string" ? o.transaction.length : 0,
           hasOptions: !!o.options,
         });
       } else out.push(redactMessage(p));

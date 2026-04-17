@@ -17,8 +17,7 @@
  * The Takumi-AI on-demand inspector walks these without re-parsing.
  */
 
-import type { ApprovalIntent } from "../approval";
-import type { IntentInspector } from "../inspector";
+import { detectDurableNonce } from "@/services/chains/solana/durableNonce";
 import type { SolanaSignTxPayload } from "@/services/chains/solana/payloads";
 import { decodeInstructions } from "@/services/chains/solana/programDecoder";
 import {
@@ -26,7 +25,8 @@ import {
   signerAccounts,
   writableAccounts,
 } from "@/services/chains/solana/txMessageParser";
-import { detectDurableNonce } from "@/services/chains/solana/durableNonce";
+import type { ApprovalIntent } from "../approval";
+import type { IntentInspector } from "../inspector";
 
 export const SolanaProgramDecoderInspector: IntentInspector = {
   name: "solana-program-decoder",

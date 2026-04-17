@@ -25,6 +25,7 @@ import { ADDRESS_BOOK_EXECUTORS } from "./addressBook";
 import { POINTS_EXECUTORS } from "./points";
 import { READ_EXECUTORS } from "./reads";
 import { SIMULATE_EXECUTORS } from "./simulate";
+import { SOLANA_EXECUTORS } from "./solana";
 import type { MobileToolExecutor } from "./types";
 import { WRITE_EXECUTORS } from "./writes";
 
@@ -45,6 +46,7 @@ export const EXECUTORS: Record<string, MobileToolExecutor> = {
   ...WRITE_EXECUTORS,
   ...POINTS_EXECUTORS,
   ...ADDRESS_BOOK_EXECUTORS,
+  ...SOLANA_EXECUTORS,
 };
 
 /**
@@ -93,6 +95,10 @@ export const EXPECTED_MOBILE_TOOLS: ReadonlyArray<string> = [
   "get_address_book",
   "get_address_book_entry",
   "search_address_book",
+  // solana native
+  "get_wallet_sol_balance",
+  "get_sol_balance",
+  "send_sol",
 ];
 
 /**

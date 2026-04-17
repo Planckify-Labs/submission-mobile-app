@@ -22,9 +22,9 @@
  *     future).
  */
 
-import { generateWalletMnemonic } from "@/services/walletService";
-import type { Namespace } from "@/services/chains/types";
 import type { TWallet } from "@/constants/types/walletTypes";
+import type { Namespace } from "@/services/chains/types";
+import { generateWalletMnemonic } from "@/services/walletService";
 import { deriveWalletsFromMnemonic } from "./deriveAll";
 import { walletKitRegistry } from "./registry";
 
