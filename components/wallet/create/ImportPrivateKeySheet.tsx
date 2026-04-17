@@ -1,0 +1,529 @@
+/**
+ * `ImportPrivateKeySheet` — three-step, single-chain private-key import.
+ *
+ * Spec reference: `docs/solana-chain-support-spec.md` §14.6.
+ * Task: `docs/solana-chain-support-task/25_import_private_key_sheet_*.md`.
+ *
+ * Flow:
+ *   1. Pick chain — `NamespacePicker` (single-select), filtered to kits
+ *      that advertise `supportsPrivateKeyImport !== false`. If the user
+ *      has already pasted once and stepped back, `inferNamespaceFromKey`
+ *      PRE-HIGHLIGHTS the inferred card — the user still taps (soft
+ *      hint, not auto-select — a 64-hex string is ambiguous).
+ *   2. Paste key — single-line `TextInput` with a chain-specific
+ *      placeholder and error copy. Live validation via
+ *      `walletKitRegistry.get(namespace).validatePrivateKey(...)`.
+ *   3. Name & confirm — optional `name` field. Confirm calls
+ *      `kit.createWalletFromPrivateKey({ privateKey, name })`, then
+ *      `addWallet(params)` on success — where the params shape matches
+ *      the existing `TWalletCreationParams` contract (EVM passes
+ *      `"PrivateKey"`; Solana passes `"SolanaPrivateKey"`). We route
+ *      through params rather than feeding a pre-built `TWallet` because
+ *      `useWallet.addWallet` is the canonical dedup / persistence entry
+ *      point (Task 23 will add a batch variant; we stay on the singular
+ *      path).
+ *
+ * Rules (non-negotiable, spec §14.6):
+ *   - No cross-chain derivation. EVM hex → only `eip155`; Solana base58
+ *     → only `solana`. The kit validators enforce; the UI never exposes
+ *     an "import on both chains" toggle.
+ *   - User-confirmed pick. Inference pre-highlights, never auto-selects.
+ *   - TWV-2026-057 dwell discipline. The raw key is held only during
+ *     the synchronous `kit.createWalletFromPrivateKey` + `addWallet`
+ *     call chain; the local paste state is cleared on success / dismiss.
+ *   - Trim + optional `0x` strip on EVM; no silent re-encoding elsewhere.
+ */
+
+import { ArrowLeft, X } from "lucide-react-native";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import type { TWallet } from "@/constants/types/walletTypes";
+import { useWallet } from "@/hooks/useWallet";
+import type { Namespace } from "@/services/chains/types";
+import { walletKitRegistry } from "@/services/walletKit/registry";
+import {
+  computeValidationState,
+  normalizePrivateKeyInput,
+} from "./ImportPrivateKeySheet.helpers";
+import { inferNamespaceFromKey } from "./inferNamespaceFromKey";
+import { NamespacePicker } from "./NamespacePicker";
+
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  onWalletAdded: (wallet: TWallet) => void;
+  /**
+   * Wired by the parent `AddWalletSheet` (Task 22) so the footer link
+   * can pivot to the seed-phrase sub-sheet. When omitted the footer
+   * link hides entirely — we never render a dead link.
+   */
+  onImportSeedPhraseInstead?: () => void;
+};
+
+type Step = 1 | 2 | 3;
+
+// Chain-specific copy. Kept inline rather than on `WalletKitAdapter`
+// because this is UI wording (subject to product polish), not adapter
+// behavior — and a future kit author shouldn't have to thread English
+// strings through the port.
+const PLACEHOLDER: Record<Namespace, string> = {
+  eip155: "0x... (64 hex chars)",
+  solana: "Base58 (88 chars, Phantom export format)",
+  sui: "Sui private key",
+};
+
+const INVALID_COPY: Record<Namespace, string> = {
+  eip155: "This doesn't look like a 64-hex EVM private key.",
+  solana: "This doesn't look like a Solana private key — expected 64-byte base58.",
+  sui: "This doesn't look like a Sui private key.",
+};
+
+/**
+ * Map `{ namespace, privateKey }` to the `TWalletCreationParams` shape
+ * accepted by `useWallet.addWallet`. EVM uses the historic
+ * `"PrivateKey"` discriminant; Solana uses `"SolanaPrivateKey"` added
+ * by Task 09.
+ */
+function buildAddWalletParams(
+  namespace: Namespace,
+  privateKey: string,
+  name: string | undefined,
+): { source: "PrivateKey" | "SolanaPrivateKey"; privateKey: string; name?: string } {
+  const source = namespace === "solana" ? "SolanaPrivateKey" : "PrivateKey";
+  return { source, privateKey, name };
+}
+
+function ImportPrivateKeySheet({
+  visible,
+  onClose,
+  onWalletAdded,
+  onImportSeedPhraseInstead,
+}: Props): React.ReactElement | null {
+  // ── Step machine ──────────────────────────────────────────────────
+  const [step, setStep] = useState<Step>(1);
+  const [namespace, setNamespace] = useState<Namespace | null>(null);
+  const [privateKey, setPrivateKey] = useState<string>("");
+  const [name, setName] = useState<string>("");
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const { addWallet } = useWallet();
+
+  // Focus target for step 2.
+  const keyInputRef = useRef<TextInput>(null);
+
+  // Reset on open / close. Matches the discipline of holding the raw
+  // key only for the lifetime of the sheet.
+  useEffect(() => {
+    if (!visible) {
+      setStep(1);
+      setNamespace(null);
+      setPrivateKey("");
+      setName("");
+      setSubmitting(false);
+      setSubmitError(null);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (visible && step === 2) {
+      // Tiny deferred focus so the TextInput is mounted.
+      const t = setTimeout(() => keyInputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [visible, step]);
+
+  // Soft inference: if the user has already pasted and returns to step
+  // 1, pre-highlight the card that matches the paste format. Inference
+  // is advisory — the user still taps to confirm. Computed on every
+  // render; cheap (regex only).
+  const inferred = useMemo(
+    () => (privateKey.trim() ? inferNamespaceFromKey(privateKey) : null),
+    [privateKey],
+  );
+
+  const selectedForPicker: Namespace[] = useMemo(() => {
+    if (namespace) return [namespace];
+    if (inferred) return [inferred];
+    return [];
+  }, [namespace, inferred]);
+
+  const handleNamespaceChange = useCallback((v: Namespace[]) => {
+    setNamespace(v[0] ?? null);
+  }, []);
+
+  const proceedFromStep1 = useCallback(() => {
+    if (!namespace) return;
+    setStep(2);
+  }, [namespace]);
+
+  const validationState = useMemo(
+    () => computeValidationState(privateKey, namespace),
+    [privateKey, namespace],
+  );
+
+  const proceedFromStep2 = useCallback(() => {
+    if (validationState !== "valid") return;
+    setStep(3);
+  }, [validationState]);
+
+  const goBack = useCallback(() => {
+    setSubmitError(null);
+    if (step === 1) {
+      onClose();
+      return;
+    }
+    setStep((s) => (s === 3 ? 2 : 1) as Step);
+  }, [step, onClose]);
+
+  const handleConfirm = useCallback(async () => {
+    if (!namespace) return;
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const kit = walletKitRegistry.get(namespace);
+      const normalized = normalizePrivateKeyInput(privateKey, namespace);
+      // TWV-2026-057 — raw key held only across this synchronous pair
+      // of calls. After `addWallet` we drop local state on success /
+      // on unmount.
+      const built = await kit.createWalletFromPrivateKey({
+        privateKey: normalized,
+        name: name.trim() || undefined,
+      });
+      if (!built) {
+        setSubmitError(
+          "We couldn't import this key. Double-check that it matches the chain you picked.",
+        );
+        return;
+      }
+      // Route through `addWallet` so the singular dedup / persistence
+      // path owns it. We pass params — the hook calls
+      // `createWalletFromParams` internally; re-deriving from the same
+      // normalized key yields the same address as `built.address`, so
+      // there's no mismatch risk.
+      const ok = await addWallet(
+        buildAddWalletParams(namespace, normalized, name.trim() || undefined),
+      );
+      if (!ok) {
+        setSubmitError(
+          "We couldn't import this wallet. It may already exist in your wallet list.",
+        );
+        return;
+      }
+      // Hand the just-built wallet to the parent. We don't read back
+      // from `useWallet().wallets` because that array is stale inside
+      // this closure — the query cache update from `addWallet` lands
+      // on the next render. `built` has the same address as what the
+      // hook persisted (both go through the same derivation), so it's
+      // a faithful reference.
+      onWalletAdded(built);
+      // Drop local key state immediately before closing.
+      setPrivateKey("");
+      setName("");
+      onClose();
+    } catch (e) {
+      console.error("ImportPrivateKeySheet: confirm failed", e);
+      setSubmitError(
+        "Something went wrong importing this wallet. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }, [namespace, privateKey, name, addWallet, onWalletAdded, onClose]);
+
+  if (!visible) return null;
+
+  const title =
+    step === 1
+      ? "Pick a chain"
+      : step === 2
+      ? "Paste private key"
+      : "Name this wallet";
+
+  return (
+    <Modal
+      transparent={false}
+      visible
+      animationType="slide"
+      onRequestClose={goBack}
+    >
+      <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
+        {/* Header */}
+        <View className="flex-row items-center justify-between px-4 py-3">
+          <Pressable
+            onPress={goBack}
+            accessibilityRole="button"
+            accessibilityLabel={step === 1 ? "Close" : "Back"}
+            hitSlop={12}
+            className="p-1"
+          >
+            {step === 1 ? (
+              <X size={24} color="#c71c4b" />
+            ) : (
+              <ArrowLeft size={24} color="#c71c4b" />
+            )}
+          </Pressable>
+          <Text className="text-light-matte-black font-semibold text-base">
+            Step {step} of 3
+          </Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <ScrollView
+          className="flex-1 px-6"
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 24 }}
+        >
+          <Text className="text-light-matte-black text-2xl font-bold mb-2">
+            {title}
+          </Text>
+
+          {step === 1 ? (
+            <Step1Body
+              selected={selectedForPicker}
+              onChange={handleNamespaceChange}
+              inferredHint={!namespace && inferred !== null}
+            />
+          ) : null}
+
+          {step === 2 && namespace ? (
+            <Step2Body
+              namespace={namespace}
+              value={privateKey}
+              onChangeText={setPrivateKey}
+              validationState={validationState}
+              inputRef={keyInputRef}
+            />
+          ) : null}
+
+          {step === 3 && namespace ? (
+            <Step3Body
+              namespace={namespace}
+              name={name}
+              onChangeName={setName}
+              submitError={submitError}
+            />
+          ) : null}
+        </ScrollView>
+
+        {/* Primary action */}
+        <View className="px-6 pb-2">
+          {step === 1 ? (
+            <PrimaryButton
+              label="Continue"
+              disabled={!namespace}
+              onPress={proceedFromStep1}
+            />
+          ) : null}
+          {step === 2 ? (
+            <PrimaryButton
+              label="Continue"
+              disabled={validationState !== "valid"}
+              onPress={proceedFromStep2}
+            />
+          ) : null}
+          {step === 3 ? (
+            <PrimaryButton
+              label={submitting ? "Importing..." : "Import wallet"}
+              disabled={submitting}
+              loading={submitting}
+              onPress={handleConfirm}
+            />
+          ) : null}
+        </View>
+
+        {/* Footer — present on every step */}
+        {onImportSeedPhraseInstead ? (
+          <View className="px-6 pb-6 pt-2">
+            <Text className="text-light-matte-black/60 text-xs text-center mb-1">
+              Wrong chain? A seed phrase imports all chains at once.
+            </Text>
+            <Pressable
+              onPress={onImportSeedPhraseInstead}
+              accessibilityRole="button"
+              accessibilityLabel="Import seed phrase instead"
+              hitSlop={8}
+            >
+              <Text className="text-light-primary-red text-sm font-semibold text-center">
+                Import seed phrase instead
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View className="pb-6" />
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+// ── Step bodies ──────────────────────────────────────────────────────
+
+type Step1Props = {
+  selected: Namespace[];
+  onChange: (v: Namespace[]) => void;
+  inferredHint: boolean;
+};
+
+function Step1Body({ selected, onChange, inferredHint }: Step1Props) {
+  return (
+    <View>
+      <Text className="text-light-matte-black/70 text-sm mb-4">
+        Which chain does this private key belong to? One key, one chain — pick
+        deliberately.
+      </Text>
+      {inferredHint ? (
+        <View className="bg-light-primary-red/10 rounded-xl p-3 mb-3">
+          <Text className="text-light-matte-black text-xs">
+            We highlighted a likely match based on your paste — tap to confirm.
+          </Text>
+        </View>
+      ) : null}
+      <NamespacePicker
+        mode="single"
+        selected={selected}
+        onChange={onChange}
+        filter={(k) => k.supportsPrivateKeyImport !== false}
+      />
+    </View>
+  );
+}
+
+type Step2Props = {
+  namespace: Namespace;
+  value: string;
+  onChangeText: (s: string) => void;
+  validationState: "empty" | "invalid" | "valid";
+  inputRef: React.RefObject<TextInput | null>;
+};
+
+function Step2Body({
+  namespace,
+  value,
+  onChangeText,
+  validationState,
+  inputRef,
+}: Step2Props) {
+  return (
+    <View>
+      <Text className="text-light-matte-black/70 text-sm mb-4">
+        Paste the private key for your {namespace === "solana" ? "Solana" : "Ethereum"} wallet. Nothing leaves your device until you confirm in the next step.
+      </Text>
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={PLACEHOLDER[namespace]}
+        placeholderTextColor="#00000066"
+        autoCapitalize="none"
+        autoCorrect={false}
+        // Keep single-line per task spec. Hide characters so a shoulder
+        // surfer doesn't get a peek — this field is sensitive.
+        secureTextEntry
+        spellCheck={false}
+        className={`bg-light-main-container border rounded-xl px-4 py-3 text-light-matte-black ${
+          validationState === "invalid"
+            ? "border-light-primary-red"
+            : "border-light-matte-black/10"
+        }`}
+      />
+      {validationState === "invalid" ? (
+        <Text className="text-light-primary-red text-xs mt-2">
+          {INVALID_COPY[namespace]}
+        </Text>
+      ) : null}
+      {validationState === "valid" ? (
+        <Text className="text-light-matte-black/60 text-xs mt-2">
+          Key looks good. Tap Continue to name and confirm.
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+type Step3Props = {
+  namespace: Namespace;
+  name: string;
+  onChangeName: (s: string) => void;
+  submitError: string | null;
+};
+
+function Step3Body({
+  namespace,
+  name,
+  onChangeName,
+  submitError,
+}: Step3Props) {
+  return (
+    <View>
+      <Text className="text-light-matte-black/70 text-sm mb-4">
+        Give your {namespace === "solana" ? "Solana" : "Ethereum"} wallet a name. You can change this later.
+      </Text>
+      <TextInput
+        value={name}
+        onChangeText={onChangeName}
+        placeholder="e.g. Trading wallet"
+        placeholderTextColor="#00000066"
+        maxLength={32}
+        className="bg-light-main-container border border-light-matte-black/10 rounded-xl px-4 py-3 text-light-matte-black"
+      />
+      {submitError ? (
+        <Text className="text-light-primary-red text-xs mt-3">
+          {submitError}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+// ── Primary button ───────────────────────────────────────────────────
+
+type PrimaryButtonProps = {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+};
+
+function PrimaryButton({
+  label,
+  onPress,
+  disabled,
+  loading,
+}: PrimaryButtonProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      className={`py-4 rounded-full items-center flex-row justify-center ${
+        disabled ? "bg-light-primary-red/50" : "bg-light-primary-red"
+      }`}
+    >
+      {loading ? (
+        <ActivityIndicator color="#ffffff" style={{ marginRight: 8 }} />
+      ) : null}
+      <Text className="text-light font-bold text-base">{label}</Text>
+    </Pressable>
+  );
+}
+
+export default ImportPrivateKeySheet;
+export { ImportPrivateKeySheet };
+export type { Props as ImportPrivateKeySheetProps };

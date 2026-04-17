@@ -1,15 +1,16 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import {
+  AlertTriangle,
   ChevronRight,
   Info,
   Plus,
   Shield,
   Wallet as WalletIcon,
+  X,
 } from "lucide-react-native";
 import React, {
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -32,6 +33,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { usePerformance } from "@/components/providers/PerformanceProvider";
+import AddWalletSheet from "@/components/wallet/create/AddWalletSheet";
 import WalletCompactCard from "@/components/wallet/WalletCompactCard";
 import WalletDetails from "@/components/wallet/WalletDetails";
 import WalletSwitcherModal from "@/components/wallet/WalletSwitcherModal";
@@ -47,6 +49,15 @@ export default function Wallet() {
   const [refreshing, setRefreshing] = useState(false);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const [showSwitcherModal, setShowSwitcherModal] = useState(false);
+  // Task 26 / §14.4: one sheet instance, three entry points ("+",
+  // empty-state CTA, WalletSwitcherModal's onAddWallet). Lifting
+  // visibility here so all three triggers flip the same flag.
+  const [addWalletSheetVisible, setAddWalletSheetVisible] = useState(false);
+  // §14.3 soft backup banner: local React state only until the verify-
+  // words settings flow lands (spec Q6 / Task 26 rules). Resets each
+  // app launch — deliberate, per spec; a persisted dismissed flag would
+  // get in the way of the real UX when the verification surface ships.
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const detailsOpacity = useRef(new Animated.Value(1)).current;
   const queryClient = useQueryClient();
@@ -106,7 +117,7 @@ export default function Wallet() {
     return kit.formatNativeAmount(activeNativeBalance, chainForActiveWallet);
   }, [activeNativeBalance, chainForActiveWallet, kit]);
 
-  const { isReady, deferredTask } = usePerformance();
+  const { deferredTask } = usePerformance();
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 0 : bottom > 0 ? bottom : 0;
 
@@ -128,11 +139,11 @@ export default function Wallet() {
     setRefreshing(false);
   }, [loadWallets, queryClient]);
 
-  useEffect(() => {
-    if (isReady && !isLoading && wallets.length === 0) {
-      router.replace("/login");
-    }
-  }, [isLoading, wallets, isReady]);
+  // Task 26 / §14.4: zero-wallet no longer redirects to `/login` —
+  // rendering handles it inline via the empty-state CTA above. The
+  // previous `router.replace("/login")` effect lived here and silently
+  // rerouted users who deleted every wallet; removed per spec so the
+  // inline "Add wallet" card can greet them instead.
 
   const handleWalletSwitch = useCallback(
     async (index: number) => {
@@ -213,8 +224,81 @@ export default function Wallet() {
     );
   }
 
+  // §14.3 soft banner: shown whenever any wallet carries an auto-mint
+  // `seedPhrase` that the user hasn't backed up yet. The verify-words
+  // settings flow that would flip this off is a follow-up — until then
+  // the dismiss is local state (see `bannerDismissed` above).
+  const hasUnbackedUpMnemonic = useMemo(
+    () => wallets.some((w) => typeof w.seedPhrase === "string" && w.seedPhrase.length > 0),
+    [wallets],
+  );
+  const showBackupBanner = hasUnbackedUpMnemonic && !bannerDismissed;
+
+  // Empty-state render (§14.4) — no auto-redirect. Users who have
+  // deleted every wallet land here and see an inline CTA that opens the
+  // same `AddWalletSheet` as the "+" button / WalletSwitcherModal.
   if (wallets.length === 0) {
-    return null;
+    return (
+      <>
+        <StatusBar barStyle="dark-content" />
+        <SafeAreaView
+          className="flex-1 bg-light-main-container"
+          edges={["top"]}
+          style={{ paddingBottom: bottomOffset }}
+        >
+          <View className="mb-6 mx-4 mt-4">
+            <View className="flex-row items-center justify-between mb-2">
+              <Text
+                className={`text-light-matte-black ${isSmallScreen ? "text-2xl" : "text-3xl"} font-bold tracking-tight`}
+              >
+                Wallets
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                className="bg-light w-10 h-10 rounded-full items-center justify-center shadow-sm"
+                onPress={() => setAddWalletSheetVisible(true)}
+                style={{
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 2,
+                  elevation: 1,
+                }}
+              >
+                <Plus size={20} color="#c71c4b" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View className="flex-1 items-center justify-center px-8">
+            <View className="w-16 h-16 rounded-full bg-light-primary-red/10 items-center justify-center mb-4">
+              <WalletIcon size={32} color="#c71c4b" />
+            </View>
+            <Text className="text-light-matte-black text-lg font-bold mt-2">
+              No wallets yet
+            </Text>
+            <Text className="text-light-matte-black/60 text-sm text-center mt-2">
+              Add your first wallet to get started
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Add wallet"
+              className="bg-light-primary-red py-3 px-8 rounded-full mt-6"
+              onPress={() => setAddWalletSheetVisible(true)}
+            >
+              <Text className="text-light font-bold">Add wallet</Text>
+            </TouchableOpacity>
+          </View>
+
+          <AddWalletSheet
+            visible={addWalletSheetVisible}
+            onClose={() => setAddWalletSheetVisible(false)}
+            onWalletAdded={() => setAddWalletSheetVisible(false)}
+          />
+        </SafeAreaView>
+      </>
+    );
   }
 
   return (
@@ -236,6 +320,29 @@ export default function Wallet() {
             />
           }
         >
+          {showBackupBanner && (
+            <View className="mx-4 mt-2 mb-3 bg-light-primary-red/10 border border-light-primary-red/20 rounded-2xl px-4 py-3 flex-row items-center">
+              <View className="w-8 h-8 rounded-full bg-light-primary-red/15 items-center justify-center mr-3">
+                <AlertTriangle size={16} color="#c71c4b" />
+              </View>
+              <Text
+                className="flex-1 text-light-matte-black text-sm font-medium"
+                numberOfLines={2}
+              >
+                Back up your recovery phrase
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss backup banner"
+                onPress={() => setBannerDismissed(true)}
+                className="w-7 h-7 items-center justify-center ml-2"
+              >
+                <X size={16} color="#20222c" />
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View className="mb-6 mx-4">
             <View className="flex-row items-center justify-between mb-2">
               <Text
@@ -246,7 +353,7 @@ export default function Wallet() {
               <TouchableOpacity
                 activeOpacity={0.7}
                 className="bg-light w-10 h-10 rounded-full items-center justify-center shadow-sm"
-                onPress={() => router.push("/login")}
+                onPress={() => setAddWalletSheetVisible(true)}
                 style={{
                   shadowColor: "#000",
                   shadowOffset: { width: 0, height: 1 },
@@ -417,7 +524,20 @@ export default function Wallet() {
           wallets={wallets}
           activeWalletIndex={activeWalletIndex}
           onSelectWallet={handleWalletSwitch}
-          onAddWallet={() => router.push("/login")}
+          onAddWallet={() => {
+            // Close the switcher first so the sheet doesn't stack on
+            // top of another modal — WalletSwitcherModal already calls
+            // its own `closeModal` before firing `onAddWallet`, so this
+            // branch runs AFTER the switcher starts its dismiss anim.
+            setShowSwitcherModal(false);
+            setAddWalletSheetVisible(true);
+          }}
+        />
+
+        <AddWalletSheet
+          visible={addWalletSheetVisible}
+          onClose={() => setAddWalletSheetVisible(false)}
+          onWalletAdded={() => setAddWalletSheetVisible(false)}
         />
       </SafeAreaView>
     </>

@@ -232,6 +232,58 @@ export function useWallet() {
     [wallets, saveWallets, deferredTask, setActiveWalletInternal],
   );
 
+  // Batch-insert helper for multi-chain flows (spec §14.6). Used by
+  // `CreateWalletSheet` and `ImportSeedPhraseSheet` where one mnemonic
+  // derives N `TWallet` rows and we want a single biometric prompt
+  // (TWV-2026-060) — not N. Takes wallets that have already been
+  // derived by `deriveWalletsFromMnemonic`, skips duplicate-address
+  // checks across the batch itself (every input is a fresh derive so
+  // internal collisions are impossible by construction), but still
+  // guards against collisions with the existing bundle. Returns `true`
+  // iff at least one non-duplicate wallet was persisted.
+  //
+  // Active-wallet selection: after a successful save, the first non-
+  // duplicate wallet is selected as active, preferring an `eip155`
+  // row when present so agent / send flows default to the EVM chain
+  // the rest of the app optimises for. Matches the intent of
+  // `addWallet`'s "auto-select the added wallet" behavior.
+  const addWallets = useCallback(
+    async (walletsToAdd: TWallet[]): Promise<boolean> => {
+      if (walletsToAdd.length === 0) return false;
+      return await deferredTask(async () => {
+        const existingAddrs = new Set(
+          wallets.map((w) => w.address.toLowerCase()),
+        );
+        const fresh = walletsToAdd.filter(
+          (w) => !existingAddrs.has(w.address.toLowerCase()),
+        );
+        if (fresh.length === 0) {
+          console.error(
+            "Duplicate Wallets: Every wallet in the batch is already imported.",
+          );
+          return false;
+        }
+        const updatedWallets = [...wallets, ...fresh];
+        const success = await saveWallets(updatedWallets);
+        if (success) {
+          // Prefer an eip155 wallet from the fresh batch so downstream
+          // EVM-first surfaces (agent, send) default sensibly.
+          const preferredIdxInFresh = fresh.findIndex(
+            (w) => w.namespace === "eip155",
+          );
+          const firstFreshIdx = wallets.length;
+          const targetIdx =
+            preferredIdxInFresh >= 0
+              ? firstFreshIdx + preferredIdxInFresh
+              : firstFreshIdx;
+          setActiveWalletInternal(targetIdx);
+        }
+        return success;
+      }, "Adding wallets");
+    },
+    [wallets, saveWallets, deferredTask, setActiveWalletInternal],
+  );
+
   const updateWallet = useCallback(
     async (index: number, updatedWallet: TWallet) => {
       if (index < 0 || index >= wallets.length) return false;
@@ -417,6 +469,7 @@ export function useWallet() {
     loadWallets,
     saveWallets,
     addWallet,
+    addWallets,
     updateWallet,
     removeWallet,
     changeActiveChain,
