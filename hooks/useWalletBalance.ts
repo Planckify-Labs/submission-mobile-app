@@ -11,18 +11,21 @@ export function useWalletBalance(
   address?: `0x${string}` | string,
   chain?: ChainConfig,
 ) {
-  const enabled = Boolean(address && chain?.chain);
+  // TODO(task-13): replace direct `chain.chain.*` reach-through with a
+  // namespace-aware balance accessor on the kit adapter.
+  const evmChain = chain?.namespace === "eip155" ? chain : undefined;
+  const enabled = Boolean(address && evmChain);
   const queryClient = useQueryClient();
   const queryKey = useMemo(
-    () => [QKEY_Wallets.balance, address, chain?.chain?.id] as const,
-    [address, chain?.chain?.id],
+    () => [QKEY_Wallets.balance, address, evmChain?.chain.id] as const,
+    [address, evmChain?.chain.id],
   );
 
   const balanceQuery = useQuery({
     queryKey,
     queryFn: async () => {
-      if (!address || !chain?.chain) return BigInt(0);
-      const publicClient = getPublicClient(chain.chain);
+      if (!address || !evmChain) return BigInt(0);
+      const publicClient = getPublicClient(evmChain.chain);
       const balance = await publicClient.getBalance({
         address: address as `0x${string}`,
       });
@@ -61,13 +64,13 @@ export function useWalletBalance(
   }, [enabled]);
 
   const balanceFormatted = useMemo(() => {
-    const decimals = chain?.chain.nativeCurrency?.decimals ?? 18;
+    const decimals = evmChain?.chain.nativeCurrency?.decimals ?? 18;
     const asString = formatUnits(balanceQuery.data ?? BigInt(0), decimals);
     const [intPart, fracPart = ""] = asString.split(".");
     const truncated = fracPart.slice(0, 6);
     const trimmed = truncated.replace(/0+$/g, "");
     return trimmed ? `${intPart}.${trimmed}` : intPart;
-  }, [balanceQuery.data, chain?.chain.nativeCurrency?.decimals]);
+  }, [balanceQuery.data, evmChain?.chain.nativeCurrency?.decimals]);
 
   return {
     balance: balanceFormatted,

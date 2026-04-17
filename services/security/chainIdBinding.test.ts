@@ -41,18 +41,12 @@ describe("decideTxChainBinding", () => {
 
 describe("decideTypedDataChainBinding", () => {
   it("accepts typed data with matching domain.chainId (number)", () => {
-    const d = decideTypedDataChainBinding(
-      { domain: { chainId: 1 } },
-      1,
-    );
+    const d = decideTypedDataChainBinding({ domain: { chainId: 1 } }, 1);
     assert.equal(d.ok, true);
   });
 
   it("accepts typed data with matching domain.chainId (string)", () => {
-    const d = decideTypedDataChainBinding(
-      { domain: { chainId: "1" } },
-      1,
-    );
+    const d = decideTypedDataChainBinding({ domain: { chainId: "1" } }, 1);
     assert.equal(d.ok, true);
   });
 
@@ -63,10 +57,7 @@ describe("decideTypedDataChainBinding", () => {
   });
 
   it("rejects typed data whose domain.chainId disagrees with active chain", () => {
-    const d = decideTypedDataChainBinding(
-      { domain: { chainId: 5 } },
-      1,
-    );
+    const d = decideTypedDataChainBinding({ domain: { chainId: 5 } }, 1);
     assert.equal(d.ok, false);
     if (!d.ok) assert.equal(d.code, "domain_mismatch");
   });

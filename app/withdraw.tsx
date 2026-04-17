@@ -20,6 +20,7 @@ import ChainSelector from "@/components/common/ChainSelector";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
+import { assertEvmChain } from "@/constants/configs/chainConfig";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useWallet } from "@/hooks/useWallet";
@@ -40,8 +41,13 @@ export default function Withdraw() {
     activeWalletIndex,
     setActiveWallet,
     getPublicClientForActiveChain,
-    activeChain,
+    activeChain: rawActiveChain,
   } = useWallet();
+
+  // TODO(task-13): replace `activeChain.chain.*` reach-through with
+  // namespace-aware kit accessor.
+  const activeChain = assertEvmChain(rawActiveChain);
+
   const { data: blockchains } = useBlockchains();
 
   const activeBackendChain = React.useMemo(

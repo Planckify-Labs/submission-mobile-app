@@ -46,9 +46,10 @@ export function isFlaggedHost(rawUrl: string): boolean {
   }
   // Spec rule: when feed is stale, fall back to fallback list — DO NOT
   // soft-fail open for known-flagged cached entries.
-  const live = cachedFlagged && Date.now() - cachedAt < STALE_TTL_MS
-    ? cachedFlagged
-    : null;
+  const live =
+    cachedFlagged && Date.now() - cachedAt < STALE_TTL_MS
+      ? cachedFlagged
+      : null;
   if (live?.has(host)) return true;
   if (live && Array.from(live).some((flagged) => host.endsWith(`.${flagged}`)))
     return true;

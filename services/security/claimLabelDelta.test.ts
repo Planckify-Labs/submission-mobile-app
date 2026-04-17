@@ -9,10 +9,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  detectClaimMismatch,
-  looksLikeClaim,
-} from "./claimLabelDelta.ts";
+import { detectClaimMismatch, looksLikeClaim } from "./claimLabelDelta.ts";
 import type { AssetDelta } from "./txSimulator.ts";
 
 const TOKEN = "0x000000000000000000000000000000000000bbbb" as const;

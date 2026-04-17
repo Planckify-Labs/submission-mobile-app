@@ -5,7 +5,7 @@
 // hash inside the wallet from the raw fields and surface it to the
 // signer UI for out-of-band comparison against Safe Transaction Service.
 
-import { hashTypedData, type Hex } from "viem";
+import { type Hex, hashTypedData } from "viem";
 
 export interface SafeTxFields {
   to: `0x${string}`;

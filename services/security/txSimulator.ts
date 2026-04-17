@@ -68,9 +68,10 @@ export type TxSimulationResult =
  * payloads return `coverage: "partial"`, which the UI must surface as
  * "asset movement could not be enumerated — sign with caution".
  */
-export function predictAssetDeltasFromCalldata(
-  input: TxSimulationInput,
-): { deltas: AssetDelta[]; coverage: "full" | "partial" } {
+export function predictAssetDeltasFromCalldata(input: TxSimulationInput): {
+  deltas: AssetDelta[];
+  coverage: "full" | "partial";
+} {
   const deltas: AssetDelta[] = [];
   const decoded = decodeCalldata(input.data);
 

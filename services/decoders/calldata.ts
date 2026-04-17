@@ -123,9 +123,7 @@ export interface DecodedCalldata {
 const UINT256_MAX = (1n << 256n) - 1n;
 const UNLIMITED_APPROVE_THRESHOLD = UINT256_MAX / 2n;
 
-function classifyRisk(
-  decoded: DecodedCalldata,
-): DecodedCalldata["risk"] {
+function classifyRisk(decoded: DecodedCalldata): DecodedCalldata["risk"] {
   if (decoded.functionName === "setApprovalForAll" && decoded.args) {
     const operator = decoded.args[0]?.value;
     const approved = decoded.args[1]?.value;

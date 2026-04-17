@@ -29,7 +29,10 @@ export function SwitchChainSheet({
         <View className="bg-gray-50 rounded-xl p-3">
           <Text className="text-xs text-gray-500">From</Text>
           <Text className="text-base text-gray-900 mb-2">
-            {activeChain?.chain?.name ?? "current"}
+            {/* TODO(task-17): namespace-aware chain label. */}
+            {activeChain.namespace === "eip155"
+              ? (activeChain.chain.name ?? "current")
+              : activeChain.cluster}
           </Text>
           <Text className="text-xs text-gray-500">To</Text>
           <Text className="text-base text-gray-900">

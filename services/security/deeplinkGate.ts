@@ -18,7 +18,11 @@ const FRAGMENT_DENY = /(seed|mnemonic|privatekey|pk|signature)/i;
 
 export type DeeplinkVerdict =
   | { ok: true; preview: true; route: string; reason?: string }
-  | { ok: false; code: "non_https" | "wrong_host" | "fragment_blocked" | "malformed"; reason: string };
+  | {
+      ok: false;
+      code: "non_https" | "wrong_host" | "fragment_blocked" | "malformed";
+      reason: string;
+    };
 
 /**
  * Inspect an incoming deeplink. Returns a verdict the deeplink

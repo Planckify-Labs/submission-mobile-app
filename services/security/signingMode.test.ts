@@ -14,14 +14,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
-const src = readFileSync(
-  new URL("./signingMode.ts", import.meta.url),
-  "utf-8",
-);
+const src = readFileSync(new URL("./signingMode.ts", import.meta.url), "utf-8");
 
 describe("signingMode — TWV-2026-035 source invariants", () => {
   it("persists via signingSecureSet (auth-gated SecureStore)", () => {
-    assert.match(src, /signingSecureSet\(STORAGE_KEY,\s*enabled \? "1" : "0"\)/);
+    assert.match(
+      src,
+      /signingSecureSet\(STORAGE_KEY,\s*enabled \? "1" : "0"\)/,
+    );
   });
 
   it("hydrate is async and reads the same key", () => {
@@ -40,6 +40,9 @@ describe("signingMode — TWV-2026-035 source invariants", () => {
 
   it("subscribers are notified on change", () => {
     assert.match(src, /export function subscribeSigningMode/);
-    assert.match(src, /function notify\(\)[\s\S]*?for \(const l of listeners\)/);
+    assert.match(
+      src,
+      /function notify\(\)[\s\S]*?for \(const l of listeners\)/,
+    );
   });
 });

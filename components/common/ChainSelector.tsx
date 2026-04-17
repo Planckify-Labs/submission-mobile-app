@@ -163,7 +163,11 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
       isTestnet: boolean;
       blockchainId: string;
     }) => {
-      const isActive = activeChain.chain.id === chain.chain.id;
+      // TODO(task-16): `ChainSelector` gains namespace grouping; compare
+      // via kit-aware identity once Solana entries are rendered.
+      const isActive =
+        activeChain.namespace === "eip155" &&
+        activeChain.chain.id === chain.chain.id;
 
       return (
         <Pressable
@@ -197,11 +201,12 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
             </View>
           )}
 
-          {activeChain.chain.id === chain.chain.id && (
-            <View className="w-6 h-6 rounded-full bg-light-primary-red/10 items-center justify-center">
-              <Check size={14} color="#c71c4b" strokeWidth={3} />
-            </View>
-          )}
+          {activeChain.namespace === "eip155" &&
+            activeChain.chain.id === chain.chain.id && (
+              <View className="w-6 h-6 rounded-full bg-light-primary-red/10 items-center justify-center">
+                <Check size={14} color="#c71c4b" strokeWidth={3} />
+              </View>
+            )}
         </Pressable>
       );
     },
@@ -223,7 +228,9 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
           defaultSource={require("@/assets/images/takumipay-logo.png")}
         />
         <Text className="text-light-matte-black text-xs font-medium mr-2">
-          {activeChain.chain.name}
+          {activeChain.namespace === "eip155"
+            ? activeChain.chain.name
+            : activeChain.cluster}
         </Text>
         <ChevronDown size={16} color="#c71c4b" />
       </Pressable>

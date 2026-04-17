@@ -19,7 +19,7 @@
  * the safer behaviour is "no tap action".
  */
 
-import { supportedChains } from "../../../../constants/configs/chainConfig.ts";
+import { findEvmChainById } from "../../../../constants/configs/chainConfig.ts";
 
 /**
  * Build a block explorer URL for a pending transaction.
@@ -33,7 +33,8 @@ export function buildExplorerUrl(
 ): string | undefined {
   if (!chain_id || !tx_hash) return undefined;
 
-  const entry = supportedChains.find((c) => c.chain.id === chain_id);
+  // TODO(task-05): EVM-only; Solana will need a slot-based explorer helper.
+  const entry = findEvmChainById(chain_id);
   if (!entry) return undefined;
 
   const explorer = entry.chain.blockExplorers?.default?.url;

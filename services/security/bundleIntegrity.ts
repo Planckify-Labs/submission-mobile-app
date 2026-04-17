@@ -11,7 +11,11 @@
 
 export type IntegrityDecision =
   | { ok: true; sha256: string }
-  | { ok: false; code: "mismatch" | "missing_manifest" | "missing_runtime"; message: string };
+  | {
+      ok: false;
+      code: "mismatch" | "missing_manifest" | "missing_runtime";
+      message: string;
+    };
 
 export interface IntegrityInputs {
   /** SHA-256 hex of the JS bundle currently loaded on disk. */

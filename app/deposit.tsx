@@ -29,6 +29,7 @@ import {
 } from "@/components/deposit";
 import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
+import { assertEvmChain } from "@/constants/configs/chainConfig";
 import { useDepositState } from "@/hooks/deposit/useDepositState";
 import { useNavigationReady } from "@/hooks/useNavigationReady";
 import { useWallet } from "@/hooks/useWallet";
@@ -43,8 +44,13 @@ function DepositContent({ bottomOffset }: DepositContentProps) {
     activeWallet,
     activeWalletIndex,
     setActiveWallet,
-    activeChain,
+    activeChain: rawActiveChain,
   } = useWallet();
+
+  // TODO(task-14): replace `activeChain.chain.*` reach-through with
+  // kit-dispatched accessors once deposit flow moves to
+  // `WalletKitAdapter`.
+  const activeChain = assertEvmChain(rawActiveChain);
   const {
     selectedToken,
     amount,

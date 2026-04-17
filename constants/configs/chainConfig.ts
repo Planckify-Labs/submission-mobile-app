@@ -7,35 +7,100 @@ import {
   type Chain as TChain,
 } from "viem/chains";
 
-export interface ChainConfig {
-  chain: TChain;
-  iconUrl?: string;
-  isTestnet?: boolean;
+export type ChainConfig =
+  | {
+      namespace: "eip155";
+      chain: TChain;
+      iconUrl?: string;
+      isTestnet?: boolean;
+    }
+  | {
+      namespace: "solana";
+      cluster: "mainnet-beta" | "devnet";
+      rpcUrl: string;
+      rpcSubscriptionsUrl?: string;
+      iconUrl?: string;
+      isTestnet?: boolean;
+    };
+
+export type EvmChainConfig = Extract<ChainConfig, { namespace: "eip155" }>;
+export type SolanaChainConfig = Extract<ChainConfig, { namespace: "solana" }>;
+
+/**
+ * Narrowing helper used as a stopgap while tasks 04–16 relocate
+ * `activeChain.chain.*` reach-through into the `WalletKitAdapter` and
+ * per-screen kit dispatch. Throws when called on a non-EVM chain so
+ * callers that haven't migrated yet still fail loud rather than silently
+ * passing `undefined` into viem.
+ *
+ * Prefer `if (chain.namespace === "eip155")` at the boundary of new code.
+ */
+export function assertEvmChain(chain: ChainConfig): EvmChainConfig {
+  if (chain.namespace !== "eip155") {
+    throw new Error(
+      `assertEvmChain: expected EVM chain, got namespace=${chain.namespace}`,
+    );
+  }
+  return chain;
+}
+
+/** Filters `supportedChains` down to the EVM-only variants. */
+export function getEvmSupportedChains(): EvmChainConfig[] {
+  return supportedChains.filter(
+    (c): c is EvmChainConfig => c.namespace === "eip155",
+  );
+}
+
+/** Lookup an EVM chain by viem `chainId`. Ignores Solana entries. */
+export function findEvmChainById(chainId: number): EvmChainConfig | undefined {
+  return getEvmSupportedChains().find((c) => c.chain.id === chainId);
 }
 
 export const supportedChains: ChainConfig[] = [
   {
+    namespace: "eip155",
     chain: mainnet,
     iconUrl:
       "https://ethereum.org/static/6b935ac0e6194247347855dc3d328e83/13c43/eth-diamond-black.png",
   },
   {
+    namespace: "eip155",
     chain: polygon,
     iconUrl: "https://polygon.technology/favicon.ico",
   },
   {
+    namespace: "eip155",
     chain: bsc,
     iconUrl: "https://bscscan.com/images/svg/brands/bnb.svg",
   },
   {
+    namespace: "eip155",
     chain: goerli,
     iconUrl:
       "https://ethereum.org/static/6b935ac0e6194247347855dc3d328e83/13c43/eth-diamond-black.png",
     isTestnet: true,
   },
   {
+    namespace: "eip155",
     chain: polygonMumbai,
     iconUrl: "https://polygon.technology/favicon.ico",
+    isTestnet: true,
+  },
+  {
+    namespace: "solana",
+    cluster: "mainnet-beta",
+    rpcUrl:
+      process.env.EXPO_PUBLIC_SOLANA_MAINNET_RPC ??
+      "https://api.mainnet-beta.solana.com",
+    iconUrl: "https://solana.com/src/img/branding/solanaLogoMark.svg",
+  },
+  {
+    namespace: "solana",
+    cluster: "devnet",
+    rpcUrl:
+      process.env.EXPO_PUBLIC_SOLANA_DEVNET_RPC ??
+      "https://api.devnet.solana.com",
+    iconUrl: "https://solana.com/src/img/branding/solanaLogoMark.svg",
     isTestnet: true,
   },
 ];

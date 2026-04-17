@@ -10,10 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
-const src = readFileSync(
-  new URL("./eip6963.ts", import.meta.url),
-  "utf-8",
-);
+const src = readFileSync(new URL("./eip6963.ts", import.meta.url), "utf-8");
 
 describe("eip6963 — UUID v4 generation (TWV-2026-031)", () => {
   it("uses crypto.getRandomValues, not Math.random()", () => {

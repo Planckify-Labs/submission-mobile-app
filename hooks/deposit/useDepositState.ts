@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useCallback, useEffect, useMemo } from "react";
 import { erc20Abi, formatUnits, maxUint256, parseUnits } from "viem";
 import type { TToken } from "@/api/types/token";
+import { assertEvmChain } from "@/constants/configs/chainConfig";
 import { useTakumiWalletContract } from "@/contracts/hooks/useTakumiWalletContract";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
@@ -56,10 +57,15 @@ export function useDepositState() {
 
   const {
     activeWallet,
-    activeChain,
+    activeChain: rawActiveChain,
     getClientForActiveWallet,
     getPublicClientForActiveChain,
   } = useWallet();
+
+  // TODO(task-14): deposit flow is EVM-only. Move chain reach-through
+  // into the `WalletKitAdapter` so Solana can share this hook later.
+  const activeChain = assertEvmChain(rawActiveChain);
+
   const { isAuthenticated } = useIsAuthenticated();
   const { data: blockchains } = useBlockchains();
 

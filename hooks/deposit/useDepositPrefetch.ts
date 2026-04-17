@@ -15,9 +15,14 @@ import { useWallet } from "@/hooks/useWallet";
 export function useDepositPrefetch() {
   const queryClient = useQueryClient();
   const { activeChain } = useWallet();
-  const chainId = activeChain.chain.id;
+  // TODO(task-14): deposit prefetch is EVM-only. Skip when the active
+  // chain is non-EVM and let the kit-specific prefetch (when it lands)
+  // handle Solana.
+  const chainId =
+    activeChain.namespace === "eip155" ? activeChain.chain.id : null;
 
   useEffect(() => {
+    if (chainId == null) return;
     const id = requestIdleCallback(() => {
       // 1. Pre-warm JS modules: forces Hermes to parse viem + contract hooks
       //    before the user taps deposit, so the navigation animation isn't blocked.

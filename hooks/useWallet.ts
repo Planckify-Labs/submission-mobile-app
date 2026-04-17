@@ -4,6 +4,7 @@ import { Alert, InteractionManager } from "react-native";
 import type { Account, PublicClient, WalletClient } from "viem";
 import { usePerformance } from "@/components/providers/PerformanceProvider";
 import {
+  assertEvmChain,
   type ChainConfig,
   supportedChains,
 } from "@/constants/configs/chainConfig";
@@ -45,9 +46,18 @@ export function useWallet() {
     queryKey: [QKEY_Wallets.activeChain],
     queryFn: () => {
       const storedChain = storage.getString("active_chain");
-      return storedChain
-        ? (JSON.parse(storedChain) as ChainConfig)
-        : supportedChains[0];
+      if (!storedChain) return supportedChains[0];
+      // Rehydration safety (§10): any persisted shape that predates the
+      // `ChainConfig` discriminated union is missing `namespace`. Stamp
+      // "eip155" before returning so the new narrowing doesn't trip on
+      // upgrade from v2.2.x.
+      const parsed = JSON.parse(storedChain) as Partial<ChainConfig> & {
+        chain?: unknown;
+      };
+      if (!("namespace" in parsed) || !parsed.namespace) {
+        return { ...parsed, namespace: "eip155" } as ChainConfig;
+      }
+      return parsed as ChainConfig;
     },
   });
 
@@ -263,7 +273,13 @@ export function useWallet() {
           return false;
         }
 
+        // TODO(task-13): build the correct `ChainConfig` variant per
+        // backend `Blockchain.namespace` — Solana rows should produce
+        // the `namespace: "solana"` shape with `cluster` + `rpcUrl`.
+        // For now every backend row collapses to EVM, matching pre-v2.3
+        // behavior.
         const apiChain: ChainConfig = {
+          namespace: "eip155",
           chain: {
             id: blockchain.chainId,
             name: blockchain.name,
@@ -368,11 +384,15 @@ export function useWallet() {
     const account = walletService.getAccountForWallet(activeWallet);
     if (!account) return null;
 
-    return getWalletClient(account as Account, activeChain.chain);
+    // TODO(task-05): move viem client construction into `EvmWalletKit`.
+    const evmChain = assertEvmChain(activeChain);
+    return getWalletClient(account as Account, evmChain.chain);
   }, [activeWallet, activeChain]);
 
   const getPublicClientForActiveChain = useCallback((): PublicClient => {
-    return getPublicClient(activeChain.chain);
+    // TODO(task-05): move viem client construction into `EvmWalletKit`.
+    const evmChain = assertEvmChain(activeChain);
+    return getPublicClient(evmChain.chain);
   }, [activeChain]);
 
   const renameWallet = useCallback(

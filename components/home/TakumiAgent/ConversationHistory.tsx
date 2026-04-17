@@ -292,7 +292,10 @@ export default function ConversationHistory({
                 {activeWallet?.name}
               </Text>
               <Text className="text-[10px] font-bold text-light-matte-black/70">
-                {activeChain?.chain?.name}
+                {/* TODO(task-16): namespace-aware chain label. */}
+                {activeChain.namespace === "eip155"
+                  ? activeChain.chain.name
+                  : activeChain.cluster}
               </Text>
               <TouchableOpacity
                 className="flex-row gap-2"
@@ -388,7 +391,9 @@ export default function ConversationHistory({
                       </View>
                     ) : (
                       allChains.map((chain) => {
+                        // TODO(task-16): namespace-aware equality check.
                         const isActive =
+                          activeChain.namespace === "eip155" &&
                           activeChain.chain.id === chain.chain.id;
 
                         return (

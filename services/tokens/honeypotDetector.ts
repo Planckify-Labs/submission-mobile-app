@@ -5,7 +5,7 @@
 
 import * as SQLite from "expo-sqlite";
 import { erc20Abi, getAddress } from "viem";
-import { supportedChains } from "@/constants/configs/chainConfig";
+import { findEvmChainById } from "@/constants/configs/chainConfig";
 import { getPublicClient } from "@/utils/clients";
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -57,7 +57,8 @@ export async function detectHoneypot(
   const cached = getCachedResult(contractAddress, chainId);
   if (cached) return cached;
 
-  const chain = supportedChains.find((c) => c.chain.id === chainId)?.chain;
+  // TODO(task-05): EVM-only lookup — move under `EvmWalletKit`.
+  const chain = findEvmChainById(chainId)?.chain;
   if (!chain) return { isHoneypot: false };
 
   const client = getPublicClient(chain);

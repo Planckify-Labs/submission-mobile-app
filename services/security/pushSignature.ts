@@ -10,7 +10,11 @@ import { hexToBytes } from "viem";
 
 export type PushVerdict =
   | { ok: true }
-  | { ok: false; code: "missing_fields" | "expired" | "bad_signature"; message: string };
+  | {
+      ok: false;
+      code: "missing_fields" | "expired" | "bad_signature";
+      message: string;
+    };
 
 export interface SignedPushPayload {
   /** Server-allocated notification id, included in the HMAC. */
@@ -36,11 +40,7 @@ async function hmacSha256(
     false,
     ["sign"],
   );
-  const sig = await subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(message),
-  );
+  const sig = await subtle.sign("HMAC", key, new TextEncoder().encode(message));
   return new Uint8Array(sig);
 }
 

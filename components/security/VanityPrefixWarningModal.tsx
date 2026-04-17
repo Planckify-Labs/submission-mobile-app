@@ -106,9 +106,7 @@ export default function VanityPrefixWarningModal({
 
           <Pressable
             className={`py-4 rounded-full items-center mb-3 ${
-              acknowledged
-                ? "bg-light-primary-red"
-                : "bg-light-primary-red/40"
+              acknowledged ? "bg-light-primary-red" : "bg-light-primary-red/40"
             }`}
             disabled={!acknowledged}
             onPress={() => {

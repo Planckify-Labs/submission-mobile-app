@@ -10,24 +10,18 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
-  SIGNATURE_PRODUCING_METHODS,
   isFlaggedHost,
+  SIGNATURE_PRODUCING_METHODS,
   setFlaggedHosts,
 } from "./scamDomainFeed.ts";
 
 describe("isFlaggedHost — fallback list", () => {
   it("flags a host on the embedded fallback list", () => {
-    assert.equal(
-      isFlaggedHost("https://uniswap-claim.io/promo"),
-      true,
-    );
+    assert.equal(isFlaggedHost("https://uniswap-claim.io/promo"), true);
   });
 
   it("flags subdomains of a fallback host", () => {
-    assert.equal(
-      isFlaggedHost("https://drop.uniswap-claim.io/"),
-      true,
-    );
+    assert.equal(isFlaggedHost("https://drop.uniswap-claim.io/"), true);
   });
 
   it("does NOT flag a legitimate host", () => {
@@ -50,14 +44,8 @@ describe("isFlaggedHost — live feed", () => {
 describe("SIGNATURE_PRODUCING_METHODS", () => {
   it("includes the well-known signing methods", () => {
     assert.equal(SIGNATURE_PRODUCING_METHODS.has("personal_sign"), true);
-    assert.equal(
-      SIGNATURE_PRODUCING_METHODS.has("eth_signTypedData_v4"),
-      true,
-    );
-    assert.equal(
-      SIGNATURE_PRODUCING_METHODS.has("eth_sendTransaction"),
-      true,
-    );
+    assert.equal(SIGNATURE_PRODUCING_METHODS.has("eth_signTypedData_v4"), true);
+    assert.equal(SIGNATURE_PRODUCING_METHODS.has("eth_sendTransaction"), true);
   });
 
   it("does NOT include read methods", () => {

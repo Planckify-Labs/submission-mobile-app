@@ -5,7 +5,10 @@
 
 import * as SQLite from "expo-sqlite";
 import { type Chain, createPublicClient, http, type PublicClient } from "viem";
-import { supportedChains } from "@/constants/configs/chainConfig";
+import {
+  findEvmChainById,
+  getEvmSupportedChains,
+} from "@/constants/configs/chainConfig";
 import { initBucket, tryConsume } from "./rateLimiter";
 import type {
   HealthStatus,
@@ -126,7 +129,8 @@ export function removeCustomRPC(chainId: number, url: string): void {
 
 export async function checkHealth(chainId: number): Promise<void> {
   const providers = getProvidersForChain(chainId);
-  const chain = supportedChains.find((c) => c.chain.id === chainId)?.chain;
+  // TODO(task-05): EVM-only lookup — move under `EvmWalletKit`.
+  const chain = findEvmChainById(chainId)?.chain;
   if (!chain) return;
 
   for (const provider of providers) {
@@ -171,10 +175,12 @@ function createClient(chain: Chain, url?: string): PublicClient {
 }
 
 export function getFailoverClient(chainId: number): PublicClient {
-  const chain = supportedChains.find((c) => c.chain.id === chainId)?.chain;
+  // TODO(task-05): EVM-only lookup — move under `EvmWalletKit`.
+  const chain = findEvmChainById(chainId)?.chain;
+  const evmChains = getEvmSupportedChains();
   if (!chain) {
     return createPublicClient({
-      chain: supportedChains[0].chain,
+      chain: evmChains[0].chain,
       transport: http(),
     });
   }
@@ -196,7 +202,8 @@ let healthInterval: ReturnType<typeof setInterval> | null = null;
 export function startHealthMonitoring(): void {
   if (healthInterval) return;
   healthInterval = setInterval(() => {
-    for (const chain of supportedChains) {
+    // TODO(task-05): move EVM-only RPC health-check under `EvmWalletKit`.
+    for (const chain of getEvmSupportedChains()) {
       checkHealth(chain.chain.id).catch(() => {});
     }
   }, 60_000);
@@ -215,7 +222,8 @@ export function getHealthSummary(): Array<{
   status: HealthStatus;
   latencyMs: number;
 }> {
-  return supportedChains.map((c) => {
+  // TODO(task-05): summarise non-EVM chains once their kits land.
+  return getEvmSupportedChains().map((c) => {
     const providers = getProvidersForChain(c.chain.id);
     const primary = providers[0];
     return {

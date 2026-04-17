@@ -19,7 +19,11 @@ export interface TypedDataLike {
 
 export type ChainIdBindingDecision =
   | { ok: true }
-  | { ok: false; code: "missing_chainid" | "legacy_type" | "domain_mismatch"; message: string };
+  | {
+      ok: false;
+      code: "missing_chainid" | "legacy_type" | "domain_mismatch";
+      message: string;
+    };
 
 /**
  * Refuse signing if the payload doesn't declare chainId, or if the

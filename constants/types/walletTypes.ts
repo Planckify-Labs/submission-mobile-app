@@ -24,6 +24,11 @@ export interface TSmart7702Fields {
   >;
 }
 
+export interface TSolanaFields {
+  pubkeyBase58: string;
+  derivationPath?: string;
+}
+
 export interface TWallet {
   name: string;
   address: string;
@@ -42,10 +47,16 @@ export interface TWallet {
   };
   smart4337?: TSmart4337Fields;
   smart7702?: TSmart7702Fields;
+  solana?: TSolanaFields;
 }
 
 export interface TWalletCreationParams {
-  source: "social" | "SeedPhrase" | "PrivateKey";
+  source:
+    | "social"
+    | "SeedPhrase"
+    | "PrivateKey"
+    | "SolanaSeedPhrase"
+    | "SolanaPrivateKey";
   privateKey?: string;
   seedPhrase?: string;
   name?: string;

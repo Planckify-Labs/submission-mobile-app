@@ -30,7 +30,10 @@ describe("screenshotGuard — refcount semantics (TWV-2026-023)", () => {
 
   it("increments activeCount on mount and decrements on cleanup", () => {
     assert.match(src, /activeCount\s*\+=\s*1/);
-    assert.match(src, /activeCount\s*=\s*Math\.max\(0,\s*activeCount\s*-\s*1\)/);
+    assert.match(
+      src,
+      /activeCount\s*=\s*Math\.max\(0,\s*activeCount\s*-\s*1\)/,
+    );
   });
 
   it("engages capture prevention only when count transitions 0 → 1", () => {

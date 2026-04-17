@@ -349,6 +349,10 @@ export default function AgentMode() {
   // drops `chain_id` from a tool input (the server's mobile-tool
   // schema is a permissive `{}` stub, so the LLM is not schema-bound
   // to always include it).
+  // TODO(task-13): source active chain id + metadata via a kit accessor.
+  const activeChainId =
+    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
+
   const executorContext: ExecutorContext | null = useMemo(() => {
     if (!activeWallet?.address) return null;
     const account = walletService.getAccountForWallet(activeWallet);
@@ -356,9 +360,9 @@ export default function AgentMode() {
       wallet: activeWallet,
       account: account ?? null,
       blockchains,
-      activeChainId: activeChain?.chain.id,
+      activeChainId,
     };
-  }, [activeWallet, blockchains, activeChain?.chain.id]);
+  }, [activeWallet, blockchains, activeChainId]);
 
   // Points / redemption auth hint for `wallet_context.points_authenticated`
   // (protocol v1.1 §13). Read locally from secure storage on every
@@ -388,7 +392,9 @@ export default function AgentMode() {
   // have an active wallet / chain resolved.
   const walletContext: WalletContext | null = useMemo(() => {
     const address = activeWallet?.address as `0x${string}` | undefined;
-    if (!address || !activeChain?.chain) return null;
+    // TODO(task-13): Solana wallet-context shape not yet modelled on the
+    // agent API; only emit wallet context for EVM chains.
+    if (!address || activeChain.namespace !== "eip155") return null;
     return {
       address,
       chain_id: activeChain.chain.id,
@@ -827,7 +833,7 @@ export default function AgentMode() {
           id: convId,
           title: meta.conversation_title,
           wallet_address: walletAddress,
-          chain_id: activeChain?.chain.id ?? 0,
+          chain_id: activeChainId ?? 0,
           created_at:
             existingIdx >= 0
               ? list.items[existingIdx].created_at

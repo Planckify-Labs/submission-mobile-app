@@ -14,10 +14,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
-const src = readFileSync(
-  new URL("./DappBridge.ts", import.meta.url),
-  "utf-8",
-);
+const src = readFileSync(new URL("./DappBridge.ts", import.meta.url), "utf-8");
 
 describe("DappBridge — TWV-2026-015 per-session nonce gate", () => {
   it("declares sessionNonce + setSessionNonce path", () => {
@@ -65,10 +62,7 @@ describe("DappBridge — TWV-2026-013 origin-pin check", () => {
 
 describe("DappBridge — TWV-2026-007 hard-reject eth_sign", () => {
   it("declares HARD_REJECT_METHODS and includes eth_sign", () => {
-    assert.match(
-      src,
-      /export const HARD_REJECT_METHODS[\s\S]*?"eth_sign"/,
-    );
+    assert.match(src, /export const HARD_REJECT_METHODS[\s\S]*?"eth_sign"/);
   });
 
   it("does NOT include personal_sign or any typed-data variant", () => {

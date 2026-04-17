@@ -131,7 +131,9 @@ export default function TransferThresholdsScreen() {
   const { bottom } = useSafeAreaInsets();
 
   const address = activeWallet?.address as `0x${string}` | undefined;
-  const chainId = activeChain?.chain.id;
+  // TODO(task-13): source chainId via a namespace-aware kit accessor.
+  const chainId =
+    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
 
   const store = useMemo(() => {
     if (!address) return null;
@@ -641,6 +643,13 @@ function OverridePickerSheet({
   onSave: (override: TokenOverride, scope: SaveScope) => void;
 }) {
   const { activeChain } = useWallet();
+  // TODO(task-13): source these via namespace-aware kit accessors.
+  const nativeCurrencySymbol =
+    activeChain.namespace === "eip155"
+      ? activeChain.chain.nativeCurrency.symbol
+      : undefined;
+  const activeChainName =
+    activeChain.namespace === "eip155" ? activeChain.chain.name : undefined;
   const { data: allTokens = [], isLoading: tokensLoading } = useTokens();
   const { data: blockchains } = useBlockchainsWithStorage();
 
@@ -848,7 +857,7 @@ function OverridePickerSheet({
     const native: TokenOverride = {
       chainId,
       contractAddress: NATIVE_TOKEN_KEY,
-      symbol: activeChain?.chain.nativeCurrency.symbol ?? "ETH",
+      symbol: nativeCurrencySymbol ?? "ETH",
       isNative: true,
       threshold_usd: 0,
       logoUrl: nativeLogoUrl,
@@ -882,7 +891,7 @@ function OverridePickerSheet({
     allTokens,
     activeBlockchainRow?.id,
     chainId,
-    activeChain?.chain.nativeCurrency.symbol,
+    nativeCurrencySymbol,
     myAssetsAsOverrides,
     nativeLogoUrl,
   ]);
@@ -1012,7 +1021,7 @@ function OverridePickerSheet({
                   {myAssetsAsOverrides.length > 0 && (
                     <PickerSection
                       title="My assets"
-                      subtitle={`Tokens you've added on ${activeChain?.chain.name ?? "this chain"}`}
+                      subtitle={`Tokens you've added on ${activeChainName ?? "this chain"}`}
                       tokens={myAssetsAsOverrides}
                       onSelect={(token) => {
                         setSelected(token);
@@ -1026,7 +1035,7 @@ function OverridePickerSheet({
                     subtitle={
                       myAssetsAsOverrides.length > 0
                         ? "Other tokens on this chain"
-                        : `Tokens on ${activeChain?.chain.name ?? "this chain"}`
+                        : `Tokens on ${activeChainName ?? "this chain"}`
                     }
                     tokens={availableAsOverrides}
                     onSelect={(token) => {

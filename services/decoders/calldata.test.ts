@@ -130,10 +130,10 @@ describe("decodeCalldata — TWV-2026-009 risk classification", () => {
   });
 
   it("flags approve(spender, uint256.max) as unlimited", () => {
-    const data = encode(
-      "function approve(address spender, uint256 amount)",
-      [SPENDER, UINT256_MAX],
-    );
+    const data = encode("function approve(address spender, uint256 amount)", [
+      SPENDER,
+      UINT256_MAX,
+    ]);
     const d = decodeCalldata(data);
     assert.ok(d);
     assert.equal(d.risk?.kind, "approve");
@@ -145,10 +145,10 @@ describe("decodeCalldata — TWV-2026-009 risk classification", () => {
 
   it("flags approve(spender, half-of-max) as unlimited (>= threshold)", () => {
     const half = UINT256_MAX / 2n;
-    const data = encode(
-      "function approve(address spender, uint256 amount)",
-      [SPENDER, half],
-    );
+    const data = encode("function approve(address spender, uint256 amount)", [
+      SPENDER,
+      half,
+    ]);
     const d = decodeCalldata(data);
     assert.ok(d);
     if (d.risk?.kind === "approve") {
@@ -159,10 +159,10 @@ describe("decodeCalldata — TWV-2026-009 risk classification", () => {
   });
 
   it("does NOT flag approve(spender, small) as unlimited", () => {
-    const data = encode(
-      "function approve(address spender, uint256 amount)",
-      [SPENDER, 1_000_000n],
-    );
+    const data = encode("function approve(address spender, uint256 amount)", [
+      SPENDER,
+      1_000_000n,
+    ]);
     const d = decodeCalldata(data);
     assert.ok(d);
     assert.equal(d.risk?.kind, "approve");

@@ -66,7 +66,9 @@ describe("decideAuthorizationByBytecode — SELFDESTRUCT sniff", () => {
   it("only sniffs the first 512 bytes — SELFDESTRUCT past that is allowed", () => {
     const prologue = "60".repeat(512);
     const tail = "ff" + "00".repeat(20);
-    const d = decideAuthorizationByBytecode(("0x" + prologue + tail) as `0x${string}`);
+    const d = decideAuthorizationByBytecode(
+      ("0x" + prologue + tail) as `0x${string}`,
+    );
     assert.equal(d.ok, true);
   });
 });

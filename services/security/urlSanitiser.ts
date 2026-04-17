@@ -76,8 +76,7 @@ export function sanitiseUrl(raw: string): SanitisedUrl | null {
  * the remaining text as plain `<Text>` and the URLs as sanitised
  * tokens that route through the confirmation gate on tap.
  */
-const URL_RE =
-  /\bhttps?:\/\/[^\s<>"'`]+/gi;
+const URL_RE = /\bhttps?:\/\/[^\s<>"'`]+/gi;
 
 export interface ExtractedUrls {
   text: string;

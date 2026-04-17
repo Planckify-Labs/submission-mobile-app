@@ -67,7 +67,11 @@ describe("walletService — TWV-2026-060 bundle storage layout", () => {
     );
     assert.ok(saveBlock);
     const sigSetCalls = (saveBlock[0].match(/signingSecureSet/g) ?? []).length;
-    assert.equal(sigSetCalls, 1, `expected 1 signingSecureSet in save; got ${sigSetCalls}`);
+    assert.equal(
+      sigSetCalls,
+      1,
+      `expected 1 signingSecureSet in save; got ${sigSetCalls}`,
+    );
     // The old per-wallet loop must not exist.
     assert.doesNotMatch(
       saveBlock[0],
@@ -115,7 +119,9 @@ describe("walletService — single-flight guards (no prompt cascade)", () => {
   it("save-error path does NOT null cachedWallets", () => {
     // Nulling on every transient save failure forces a full re-read
     // on the next mount — another round of biometric prompts.
-    const errorBlock = src.match(/catch \(error\)[\s\S]*?Failed to save wallets[\s\S]*?return false/);
+    const errorBlock = src.match(
+      /catch \(error\)[\s\S]*?Failed to save wallets[\s\S]*?return false/,
+    );
     assert.ok(errorBlock);
     assert.doesNotMatch(errorBlock[0], /cachedWallets\s*=\s*null/);
   });

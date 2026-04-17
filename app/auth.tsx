@@ -47,20 +47,20 @@ export default function AuthScreen() {
     isLoading: isWalletLoading,
   } = useWallet();
 
+  // TODO(task-13): source chainId via a namespace-aware kit accessor.
+  const activeChainId =
+    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
+  const activeChainName =
+    activeChain.namespace === "eip155"
+      ? activeChain.chain.name
+      : activeChain.cluster;
+
   // Fetch nonce from the API — enabled once wallet address is available
-  const { data: fetchedNonce } = useNonce(
-    activeWallet?.address,
-    activeChain?.chain?.id,
-  );
+  const { data: fetchedNonce } = useNonce(activeWallet?.address, activeChainId);
 
   const { data: nonceData, setNewData: setNonceData } =
     useRQGlobalState<NonceData>({
-      queryKey: [
-        "auth",
-        "nonce",
-        activeWallet?.address,
-        activeChain?.chain?.id,
-      ],
+      queryKey: ["auth", "nonce", activeWallet?.address, activeChainId],
       initialData: { message: "" },
     });
 
@@ -298,7 +298,7 @@ export default function AuthScreen() {
             <View className="flex-row items-center">
               <View className="w-2 h-2 bg-green-500 rounded-full mr-2" />
               <Text className="text-light-matte-black/60 text-xs">
-                {activeChain?.chain?.name || "Unknown Network"}
+                {activeChainName || "Unknown Network"}
               </Text>
             </View>
           </View>

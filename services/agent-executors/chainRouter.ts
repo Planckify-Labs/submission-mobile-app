@@ -25,7 +25,7 @@
 
 import { type Account, type Chain, defineChain } from "viem";
 import type { TBlockchain } from "@/api/types/blockchain";
-import { supportedChains } from "@/constants/configs/chainConfig";
+import { findEvmChainById } from "@/constants/configs/chainConfig";
 import { getPublicClient, getWalletClient } from "@/utils/clients";
 import {
   type ChainClients,
@@ -85,7 +85,8 @@ export function resolveChainDef(
     return def;
   }
 
-  const fromStatic = supportedChains.find((c) => c.chain.id === chainId);
+  // TODO(task-05): EVM-only lookup — move under `EvmWalletKit`.
+  const fromStatic = findEvmChainById(chainId);
   if (fromStatic) {
     chainDefCache.set(chainId, fromStatic.chain);
     return fromStatic.chain;

@@ -200,35 +200,37 @@ let lastSave: Promise<unknown> = Promise.resolve();
 export async function saveWalletsToStorage(
   wallets: TWallet[],
 ): Promise<boolean> {
-  const next = lastSave.catch(() => {}).then(async () => {
-    try {
-      cachedWallets = [...wallets];
-      const walletAddresses = wallets.map((w) => w.address);
-      // Public index (non-auth) — kept so code paths that only need
-      // the address list don't touch the signing store.
-      await walletSecureSet(
-        WALLET_INDEX_KEY,
-        JSON.stringify(walletAddresses),
-      );
-      // TWV-2026-060 bundle mode — ALL wallets written as one
-      // auth-gated blob. ONE biometric prompt, regardless of how many
-      // wallets the user holds. Adding a 100th wallet is the same
-      // cost as adding the first.
-      await signingSecureSet(
-        WALLET_BUNDLE_KEY,
-        JSON.stringify(wallets.map(stripAccount)),
-      );
-      return true;
-    } catch (error) {
-      console.error("Failed to save wallets:", error);
-      // Do NOT null `cachedWallets` here. Doing so would force the
-      // next `loadWalletsFromStorage` to hit the signing store again
-      // — N more biometric prompts — just because a save failed.
-      // The in-memory state already reflects the caller's intent;
-      // persistence can retry on the next natural save.
-      return false;
-    }
-  });
+  const next = lastSave
+    .catch(() => {})
+    .then(async () => {
+      try {
+        cachedWallets = [...wallets];
+        const walletAddresses = wallets.map((w) => w.address);
+        // Public index (non-auth) — kept so code paths that only need
+        // the address list don't touch the signing store.
+        await walletSecureSet(
+          WALLET_INDEX_KEY,
+          JSON.stringify(walletAddresses),
+        );
+        // TWV-2026-060 bundle mode — ALL wallets written as one
+        // auth-gated blob. ONE biometric prompt, regardless of how many
+        // wallets the user holds. Adding a 100th wallet is the same
+        // cost as adding the first.
+        await signingSecureSet(
+          WALLET_BUNDLE_KEY,
+          JSON.stringify(wallets.map(stripAccount)),
+        );
+        return true;
+      } catch (error) {
+        console.error("Failed to save wallets:", error);
+        // Do NOT null `cachedWallets` here. Doing so would force the
+        // next `loadWalletsFromStorage` to hit the signing store again
+        // — N more biometric prompts — just because a save failed.
+        // The in-memory state already reflects the caller's intent;
+        // persistence can retry on the next natural save.
+        return false;
+      }
+    });
   lastSave = next;
   return next;
 }

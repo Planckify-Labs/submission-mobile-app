@@ -94,7 +94,10 @@ export class DappBridge {
     // "no error reply that leaks the control"; sub-frame forgery should
     // see no observable response.
     if (this.sessionNonce !== null) {
-      if (typeof nonce !== "string" || !this.nonceEquals(nonce, this.sessionNonce)) {
+      if (
+        typeof nonce !== "string" ||
+        !this.nonceEquals(nonce, this.sessionNonce)
+      ) {
         return;
       }
     }

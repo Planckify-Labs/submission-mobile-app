@@ -5,7 +5,7 @@
  */
 
 import { type Address, erc20Abi, formatUnits, getAddress } from "viem";
-import { supportedChains } from "@/constants/configs/chainConfig";
+import { findEvmChainById } from "@/constants/configs/chainConfig";
 import { getPublicClient } from "@/utils/clients";
 import type {
   ENSResolution,
@@ -25,7 +25,8 @@ const MULTICALL3_ADDRESS =
   "0xcA11bde05977b3631167028862bE2a173976CA11" as const;
 
 function getChainForId(chainId: number) {
-  const config = supportedChains.find((c) => c.chain.id === chainId);
+  // TODO(task-05): EVM-only lookup — move under `EvmWalletKit`.
+  const config = findEvmChainById(chainId);
   return config?.chain;
 }
 

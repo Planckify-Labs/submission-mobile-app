@@ -8,7 +8,7 @@
 
 import * as SQLite from "expo-sqlite";
 import { getAddress } from "viem";
-import { supportedChains } from "@/constants/configs/chainConfig";
+import { findEvmChainById } from "@/constants/configs/chainConfig";
 // expo-file-system used for image caching
 import { getPublicClient } from "@/utils/clients";
 
@@ -102,7 +102,8 @@ async function fetchTokenURI(
   chainId: number,
   tokenType: "ERC-721" | "ERC-1155",
 ): Promise<string | null> {
-  const chain = supportedChains.find((c) => c.chain.id === chainId)?.chain;
+  // TODO(task-05): EVM-only lookup — move under `EvmWalletKit`.
+  const chain = findEvmChainById(chainId)?.chain;
   if (!chain) return null;
 
   const client = getPublicClient(chain);

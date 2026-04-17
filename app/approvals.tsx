@@ -49,7 +49,10 @@ function buildRevokeData(approval: TokenApproval): `0x${string}` {
 
 export default function ApprovalsScreen(): React.ReactElement {
   const { activeWallet, activeChain } = useWallet();
-  const chainId = activeChain?.chain?.id;
+  // TODO(task-13): source chainId via kit accessor once `useWallet` exposes
+  // a namespace-aware active-chain id.
+  const chainId =
+    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
   const { data, isLoading, refetch, isRefetching } = useTokenApprovalsQuery(
     activeWallet?.address,
     chainId ?? 1,
@@ -91,7 +94,8 @@ export default function ApprovalsScreen(): React.ReactElement {
           {item.isApprovalForAll ? " · ApprovalForAll" : ""}
         </Text>
         <Text className="text-sm text-gray-900 mt-0.5" selectable>
-          Token: {truncateAddress({ address: item.contractAddress, preset: "medium" })}
+          Token:{" "}
+          {truncateAddress({ address: item.contractAddress, preset: "medium" })}
         </Text>
         <Text className="text-sm text-gray-900 mt-0.5" selectable>
           Spender:{" "}

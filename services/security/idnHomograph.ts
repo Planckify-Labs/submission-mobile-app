@@ -19,7 +19,9 @@ export interface UrlRenderVerdict {
 // Tiny script classification: Latin / Greek / Cyrillic / Han. We don't
 // pull in a 1MB ICU table — these four buckets cover every public
 // homograph attack documented to date.
-function classifyChar(c: string): "latin" | "greek" | "cyrillic" | "han" | "ascii" | "other" {
+function classifyChar(
+  c: string,
+): "latin" | "greek" | "cyrillic" | "han" | "ascii" | "other" {
   const cp = c.codePointAt(0) ?? 0;
   if (cp <= 0x7f) return "ascii";
   if (cp >= 0x0370 && cp <= 0x03ff) return "greek";

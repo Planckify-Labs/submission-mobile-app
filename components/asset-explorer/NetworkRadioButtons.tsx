@@ -70,12 +70,14 @@ const NetworkRadioButtons = () => {
     [blockchains],
   );
 
+  // TODO(task-13): source chainId via a namespace-aware kit accessor.
+  const activeChainId =
+    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
+
   useEffect(() => {
-    if (activeChain?.chain?.id) {
-      const networkId = getNetworkIdFromChainId(activeChain.chain.id);
-      const blockchain = blockchains?.find(
-        (b) => b.chainId === activeChain.chain.id,
-      );
+    if (activeChainId) {
+      const networkId = getNetworkIdFromChainId(activeChainId);
+      const blockchain = blockchains?.find((b) => b.chainId === activeChainId);
 
       if (blockchain) {
         selectNetwork(networkId, blockchain.id);
@@ -84,7 +86,7 @@ const NetworkRadioButtons = () => {
       }
     }
   }, [
-    activeChain?.chain?.id,
+    activeChainId,
     blockchains,
     displayNetworks,
     selectNetwork,

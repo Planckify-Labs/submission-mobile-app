@@ -3,7 +3,7 @@
  */
 
 import { erc20Abi, formatEther, getAddress, parseAbi, parseEther } from "viem";
-import { supportedChains } from "@/constants/configs/chainConfig";
+import { findEvmChainById } from "@/constants/configs/chainConfig";
 import { getPublicClient } from "@/utils/clients";
 
 const erc4626Abi = parseAbi([
@@ -24,7 +24,8 @@ export async function detectVault(
   contractAddress: string,
   chainId: number,
 ): Promise<VaultInfo | null> {
-  const chain = supportedChains.find((c) => c.chain.id === chainId)?.chain;
+  // TODO(task-05): EVM-only lookup — move into `EvmWalletKit`.
+  const chain = findEvmChainById(chainId)?.chain;
   if (!chain) return null;
 
   const client = getPublicClient(chain);

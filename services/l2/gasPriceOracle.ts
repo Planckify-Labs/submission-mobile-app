@@ -3,7 +3,7 @@
  */
 
 import { formatEther, getAddress, parseAbi } from "viem";
-import { supportedChains } from "@/constants/configs/chainConfig";
+import { findEvmChainById } from "@/constants/configs/chainConfig";
 import { getPublicClient } from "@/utils/clients";
 
 // OP Stack GasPriceOracle precompile address
@@ -25,7 +25,8 @@ export async function getL1DataFee(
 ): Promise<bigint | null> {
   if (!isOPStackChain(chainId)) return null;
 
-  const chain = supportedChains.find((c) => c.chain.id === chainId)?.chain;
+  // TODO(task-05): EVM-only lookup — move under `EvmWalletKit`.
+  const chain = findEvmChainById(chainId)?.chain;
   if (!chain) return null;
 
   const client = getPublicClient(chain);

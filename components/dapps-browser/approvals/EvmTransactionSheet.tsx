@@ -122,9 +122,9 @@ export function EvmTransactionSheet({
             )}
             {simulation.coverage === "partial" && (
               <Text className="text-xs text-amber-700 mt-2">
-                ⚠ Asset movement could not be enumerated for this calldata.
-                Sign with caution — a full pre-sign simulator is on the
-                roadmap (TWV-2026-011 follow-up).
+                ⚠ Asset movement could not be enumerated for this calldata. Sign
+                with caution — a full pre-sign simulator is on the roadmap
+                (TWV-2026-011 follow-up).
               </Text>
             )}
           </View>
@@ -139,53 +139,40 @@ export function EvmTransactionSheet({
                 </Text>
                 <View className="flex-row mt-2">
                   <Text className="text-xs text-red-700 w-20">Operator</Text>
-                  <Text
-                    className="text-xs text-red-900 flex-1"
-                    selectable
-                  >
+                  <Text className="text-xs text-red-900 flex-1" selectable>
                     {decoded.risk.operator}
                   </Text>
                 </View>
                 <View className="flex-row mt-1">
                   <Text className="text-xs text-red-700 w-20">Collection</Text>
-                  <Text
-                    className="text-xs text-red-900 flex-1"
-                    selectable
-                  >
+                  <Text className="text-xs text-red-900 flex-1" selectable>
                     {tx.to}
                   </Text>
                 </View>
               </View>
             )}
-          {decoded?.risk?.kind === "approve" &&
-            decoded.risk.isUnlimited && (
-              <View className="bg-red-50 border border-red-300 rounded-xl p-3 mb-3">
-                <Text className="text-xs font-bold text-red-800 uppercase">
-                  Unlimited approval
+          {decoded?.risk?.kind === "approve" && decoded.risk.isUnlimited && (
+            <View className="bg-red-50 border border-red-300 rounded-xl p-3 mb-3">
+              <Text className="text-xs font-bold text-red-800 uppercase">
+                Unlimited approval
+              </Text>
+              <Text className="text-sm text-red-900 mt-1">
+                {UNLIMITED_APPROVE_COPY}
+              </Text>
+              <View className="flex-row mt-2">
+                <Text className="text-xs text-red-700 w-20">Spender</Text>
+                <Text className="text-xs text-red-900 flex-1" selectable>
+                  {decoded.risk.spender}
                 </Text>
-                <Text className="text-sm text-red-900 mt-1">
-                  {UNLIMITED_APPROVE_COPY}
-                </Text>
-                <View className="flex-row mt-2">
-                  <Text className="text-xs text-red-700 w-20">Spender</Text>
-                  <Text
-                    className="text-xs text-red-900 flex-1"
-                    selectable
-                  >
-                    {decoded.risk.spender}
-                  </Text>
-                </View>
-                <View className="flex-row mt-1">
-                  <Text className="text-xs text-red-700 w-20">Token</Text>
-                  <Text
-                    className="text-xs text-red-900 flex-1"
-                    selectable
-                  >
-                    {tx.to}
-                  </Text>
-                </View>
               </View>
-            )}
+              <View className="flex-row mt-1">
+                <Text className="text-xs text-red-700 w-20">Token</Text>
+                <Text className="text-xs text-red-900 flex-1" selectable>
+                  {tx.to}
+                </Text>
+              </View>
+            </View>
+          )}
           <View className="bg-gray-50 rounded-xl p-3 mb-3">
             <Text className="text-xs text-gray-500">To</Text>
             <Text className="text-sm text-gray-900" selectable>

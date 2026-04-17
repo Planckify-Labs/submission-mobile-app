@@ -67,6 +67,11 @@ export interface BalanceSectionRef {
 
 const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   const { activeWallet, activeChain } = useWallet();
+  // TODO(task-13): source native metadata via a namespace-aware kit accessor.
+  const nativeSymbol =
+    activeChain.namespace === "eip155"
+      ? (activeChain.chain.nativeCurrency?.symbol ?? "ETH")
+      : "SOL";
   const {
     isAuthenticated,
     isLoading: isAuthLoading,
@@ -128,12 +133,10 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
     }
   };
   const [isShowBalance, setShowBalance] = useState(false);
-  const [selectedToken, setSelectedToken] = useState(
-    activeChain?.chain.nativeCurrency?.symbol || "ETH",
-  );
+  const [selectedToken, setSelectedToken] = useState(nativeSymbol);
   useEffect(() => {
-    setSelectedToken(activeChain?.chain.nativeCurrency?.symbol || "ETH");
-  }, [activeChain?.chain?.nativeCurrency?.symbol]);
+    setSelectedToken(nativeSymbol);
+  }, [nativeSymbol]);
   const [modalVisible, setModalVisible] = useState(false);
   const [isModalAnimationComplete, setIsModalAnimationComplete] =
     useState(false);
@@ -243,7 +246,7 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => {
-                  setSelectedToken(activeChain.chain.nativeCurrency.symbol);
+                  setSelectedToken(nativeSymbol);
                   router.push("/asset-explorer");
                 }}
                 className="flex-row items-center"

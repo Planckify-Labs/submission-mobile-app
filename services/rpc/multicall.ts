@@ -5,7 +5,7 @@
  */
 
 import { type Address, erc20Abi, getAddress, type PublicClient } from "viem";
-import { supportedChains } from "@/constants/configs/chainConfig";
+import { findEvmChainById } from "@/constants/configs/chainConfig";
 import { getPublicClient } from "@/utils/clients";
 
 const MAX_BATCH_SIZE = 200;
@@ -17,7 +17,8 @@ export async function batchBalanceOf(
   tokens: Array<{ contractAddress: string; decimals: number }>,
   chainId: number,
 ): Promise<Map<string, bigint>> {
-  const chain = supportedChains.find((c) => c.chain.id === chainId)?.chain;
+  // TODO(task-05): move EVM-only lookups behind `EvmWalletKit`.
+  const chain = findEvmChainById(chainId)?.chain;
   if (!chain) return new Map();
 
   const client = getPublicClient(chain);
@@ -80,7 +81,8 @@ export async function batchAllowance(
   spender: string,
   chainId: number,
 ): Promise<Map<string, bigint>> {
-  const chain = supportedChains.find((c) => c.chain.id === chainId)?.chain;
+  // TODO(task-05): move EVM-only lookups behind `EvmWalletKit`.
+  const chain = findEvmChainById(chainId)?.chain;
   if (!chain) return new Map();
 
   const client = getPublicClient(chain);

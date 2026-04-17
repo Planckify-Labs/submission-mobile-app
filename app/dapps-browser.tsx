@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Keyboard, StatusBar, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
@@ -13,6 +19,7 @@ function generateSessionNonce(): string {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
+
 import BrowserAddressBar from "@/components/dapps-browser/BrowserAddressBar";
 import BrowserNavigationControls from "@/components/dapps-browser/BrowserNavigationControls";
 import DAppsHub from "@/components/dapps-browser/DAppsHub";
@@ -84,13 +91,20 @@ export default function DappsBrowser() {
       bootBridge({
         getContext: () => ctxRef.current,
         getWebView: () => webViewRef.current,
-        resolveEvmChain: (ctx) => ({
-          chain: activeChain.chain,
-          rpcUrl:
-            activeChain.chain.rpcUrls?.default?.http?.[0] ??
-            activeChain.chain.rpcUrls?.public?.http?.[0] ??
-            "",
-        }),
+        // TODO(task-17): route chain resolution through the kit adapter
+        // registry so the Solana bridge signer can mount alongside EVM.
+        resolveEvmChain: (ctx) => {
+          if (activeChain.namespace !== "eip155") {
+            return null;
+          }
+          return {
+            chain: activeChain.chain,
+            rpcUrl:
+              activeChain.chain.rpcUrls?.default?.http?.[0] ??
+              activeChain.chain.rpcUrls?.public?.http?.[0] ??
+              "",
+          };
+        },
         onSwitchChain: async (chainId) => {
           await changeActiveChain(chainId);
         },
@@ -196,7 +210,14 @@ export default function DappsBrowser() {
     // TWV-2026-015 — `sessionNonce` in the dep list so a fresh nonce
     // (rotated by `handleNavigate`) actually re-renders the script and
     // gets re-injected on the next nav.
-  }, [activeWallet?.address, activeChain?.chain?.id, sessionNonce]);
+  }, [
+    activeWallet?.address,
+    // TODO(task-17): include non-EVM chain discriminants here too.
+    activeChain.namespace === "eip155"
+      ? activeChain.chain.id
+      : activeChain.cluster,
+    sessionNonce,
+  ]);
 
   const handleNavigate = useCallback(
     (navState: {

@@ -32,6 +32,7 @@ import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import RecipientPickerModal from "@/components/send/RecipientPickerModal";
 import TokenSelectorModal from "@/components/wallet/TokenSelectorModal";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
+import { assertEvmChain } from "@/constants/configs/chainConfig";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useTokens } from "@/hooks/queries/useTokens";
@@ -48,10 +49,16 @@ export default function SendScreen() {
     activeWallet,
     activeWalletIndex,
     setActiveWallet,
-    activeChain,
+    activeChain: rawActiveChain,
     getClientForActiveWallet,
     getPublicClientForActiveChain,
   } = useWallet();
+
+  // TODO(task-14): Replace direct `activeChain.chain.*` reads with
+  // kit-dispatched accessors once `SendScreen` moves to the
+  // `WalletKitAdapter`. For now assert EVM so viem reach-through
+  // compiles under the `ChainConfig` discriminated union.
+  const activeChain = assertEvmChain(rawActiveChain);
 
   const { isAuthenticated } = useIsAuthenticated();
   const { mutateAsync: createTransaction } = useCreateTransaction();

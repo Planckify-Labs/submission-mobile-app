@@ -35,9 +35,22 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
     fetchBalance();
   }, [activeWallet?.address, getPublicClientForActiveChain]);
 
+  // TODO(task-13): source native metadata via a namespace-aware kit accessor.
+  const nativeDecimals =
+    activeChain.namespace === "eip155"
+      ? (activeChain.chain.nativeCurrency?.decimals ?? 18)
+      : 9; // Solana SOL has 9 decimals
+  const nativeSymbol =
+    activeChain.namespace === "eip155"
+      ? (activeChain.chain.nativeCurrency?.symbol ?? "ETH")
+      : "SOL";
+  const chainDisplayName =
+    activeChain.namespace === "eip155"
+      ? (activeChain.chain.name ?? "Ethereum")
+      : activeChain.cluster;
+
   const formatBalance = (value: bigint): string => {
-    const decimals = activeChain?.chain?.nativeCurrency?.decimals ?? 18;
-    const formatted = formatUnits(value, decimals);
+    const formatted = formatUnits(value, nativeDecimals);
     return formatTokenAmount(formatted, { simplify: false });
   };
 
@@ -81,7 +94,7 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
 
         <View className="bg-light-primary-red/20 px-3 py-1.5 rounded-full border border-light-primary-red/30">
           <Text className="text-light-primary-red text-xs font-semibold">
-            {activeChain?.chain?.name || "Ethereum"}
+            {chainDisplayName}
           </Text>
         </View>
       </View>
@@ -98,7 +111,7 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
                 {formatBalance(balance)}
               </Text>
               <Text className="text-white/60 text-lg ml-2 mb-0.5">
-                {activeChain?.chain?.nativeCurrency?.symbol || "ETH"}
+                {nativeSymbol}
               </Text>
             </>
           )}

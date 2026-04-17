@@ -6,6 +6,13 @@
 // below + `services/walletService.test.ts`.
 import "react-native-get-random-values";
 import "fastestsmallesttextencoderdecoder";
+// TWV-2026-070 — Ed25519 polyfill MUST load after the CSPRNG polyfill and
+// the TextEncoder/TextDecoder shim, and BEFORE any `@solana/kit` import.
+// Hermes' WebCrypto ships without Ed25519; without this shim,
+// `subtle.generateKey({name:'Ed25519'}, …)` throws at runtime and the
+// Solana signing path silently breaks TWV-2026-046 parity. Enforced by
+// the self-check below.
+import "@solana/webcrypto-ed25519-polyfill";
 
 if (typeof globalThis.crypto?.getRandomValues !== "function") {
   // Fail loud. A missing CSPRNG at boot is a seed-entropy incident —
@@ -25,10 +32,7 @@ if (typeof globalThis.crypto?.getRandomValues !== "function") {
 try {
   Object.freeze(Object.prototype);
   Object.freeze(Array.prototype);
-  if (
-    !Object.isFrozen(Object.prototype) ||
-    !Object.isFrozen(Array.prototype)
-  ) {
+  if (!Object.isFrozen(Object.prototype) || !Object.isFrozen(Array.prototype)) {
     console.error(
       "[TWV-2026-021] prototype freeze unstuck — a dep un-froze it. " +
         "Investigate before merging any prototype-pollution-relevant change.",
@@ -37,3 +41,22 @@ try {
 } catch (e) {
   console.error("[TWV-2026-021] prototype freeze failed:", e);
 }
+
+// TWV-2026-070 self-check — Ed25519 must be usable at boot. A missing
+// polyfill means Solana key generation silently falls through to a
+// non-Ed25519 path or throws at sign time — either way an incident.
+// Mirrors the TWV-2026-002 pattern: fail loud, not warn.
+(async () => {
+  try {
+    await crypto.subtle.generateKey(
+      { name: "Ed25519" } as unknown as EcKeyGenParams,
+      false,
+      ["sign", "verify"],
+    );
+  } catch {
+    throw new Error(
+      "TWV-2026-070: Ed25519 unavailable at boot — polyfill did not install. " +
+        "Verify `@solana/webcrypto-ed25519-polyfill` import order in pollyfills.ts.",
+    );
+  }
+})();

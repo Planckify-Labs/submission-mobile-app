@@ -51,7 +51,10 @@ describe("computeSafeTxHash", () => {
 
   it("differs when chainId changes (replay protection)", () => {
     const a = computeSafeTxHash(FIELDS, { safeAddress: SAFE_ADDR, chainId: 1 });
-    const b = computeSafeTxHash(FIELDS, { safeAddress: SAFE_ADDR, chainId: 137 });
+    const b = computeSafeTxHash(FIELDS, {
+      safeAddress: SAFE_ADDR,
+      chainId: 137,
+    });
     assert.notEqual(a, b);
   });
 

@@ -4,7 +4,7 @@
  */
 
 import * as SQLite from "expo-sqlite";
-import { supportedChains } from "@/constants/configs/chainConfig";
+import { findEvmChainById } from "@/constants/configs/chainConfig";
 import type { TxStatus } from "@/services/indexer/types";
 import { getPublicClient } from "@/utils/clients";
 
@@ -143,7 +143,8 @@ function updateStatus(
 function startPolling(tx: PendingTx, attempt = 0): void {
   if (pollingTimers.has(tx.hash)) return;
 
-  const chain = supportedChains.find((c) => c.chain.id === tx.chainId)?.chain;
+  // TODO(task-05): EVM-only lookup — move under `EvmWalletKit`.
+  const chain = findEvmChainById(tx.chainId)?.chain;
   if (!chain) return;
 
   const client = getPublicClient(chain);

@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import QRCodeStyled from "react-native-qrcode-styled";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { ChainConfig } from "@/constants/configs/chainConfig";
 import { takumipayLogoBase64 } from "@/constants/takumipay";
 import { TWallet } from "@/constants/types/walletTypes";
 import { copyToClipboard } from "@/utils/helperUtils";
@@ -21,11 +22,7 @@ type ReceivePaymentModalProps = {
   modalVisible: boolean;
   closeModal: () => void;
   activeWallet: TWallet;
-  activeChain: {
-    chain: {
-      name: string;
-    };
-  };
+  activeChain: ChainConfig;
   fadeAnim: Animated.Value;
   translateY: Animated.Value;
   panResponder: any;
@@ -158,7 +155,10 @@ export default function RecievePaymentModal({
               <View className="items-center mb-4">
                 <View className="bg-light-primary-red/10 px-3 py-1 rounded-full mb-2">
                   <Text className="text-light-primary-red text-xs font-medium">
-                    {activeChain.chain.name}
+                    {/* TODO(task-16): namespace-aware chain label. */}
+                    {activeChain.namespace === "eip155"
+                      ? activeChain.chain.name
+                      : activeChain.cluster}
                   </Text>
                 </View>
                 <Text className="text-light-matte-black font-medium text-base">

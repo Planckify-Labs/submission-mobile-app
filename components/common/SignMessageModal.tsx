@@ -49,20 +49,18 @@ const SignMessageModal: React.FC<TSignMessageModalProps> = ({
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
 
   const { activeWallet, activeChain } = useWallet();
+  // TODO(task-13): source chainId via a namespace-aware kit accessor.
+  const activeChainId =
+    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
 
   const { data: fetchedNonceData, refetch: refetchNonce } = useNonce(
     activeWallet?.address,
-    activeChain?.chain?.id,
+    activeChainId,
   );
 
   const { data: nonceData, setNewData: setNonceData } =
     useRQGlobalState<TNonceData>({
-      queryKey: [
-        "auth",
-        "nonce",
-        activeWallet?.address,
-        activeChain?.chain?.id,
-      ],
+      queryKey: ["auth", "nonce", activeWallet?.address, activeChainId],
       initialData: { message: propMessage || "" },
     });
 

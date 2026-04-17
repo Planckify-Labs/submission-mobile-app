@@ -34,6 +34,15 @@ import { getAccountForWallet } from "@/services/walletService";
 import { Bundler, getBundlerConfig, type UserOperation } from "./bundler";
 import { UserChainStore } from "./chainStore";
 import { getInstallUuid } from "./eip6963";
+// --- TWV-2026-010 — Allowlisted 7702 delegators. The authoritative list
+// lives in `./eip7702Guard.ts`; re-exported here for legacy callers
+// referencing this name. Bytecode-prologue sniff is also enforced
+// at the signing boundary (`execSignAuthorization`).
+import {
+  decideAuthorizationByAddress,
+  decideAuthorizationByBytecode,
+  AUTHORIZED_DELEGATORS as EIP7702_ALLOWLIST,
+} from "./eip7702Guard";
 import { PROVIDER_ERRORS, ProviderRpcError } from "./errors";
 import {
   sanitiseChainString,
@@ -57,15 +66,6 @@ import type {
 import { getPaymasterConfig, Paymaster } from "./paymaster";
 import { verifySignature } from "./signatureVerifier";
 
-// --- TWV-2026-010 — Allowlisted 7702 delegators. The authoritative list
-// lives in `./eip7702Guard.ts`; re-exported here for legacy callers
-// referencing this name. Bytecode-prologue sniff is also enforced
-// at the signing boundary (`execSignAuthorization`).
-import {
-  AUTHORIZED_DELEGATORS as EIP7702_ALLOWLIST,
-  decideAuthorizationByAddress,
-  decideAuthorizationByBytecode,
-} from "./eip7702Guard";
 const AUTHORIZED_DELEGATORS = EIP7702_ALLOWLIST;
 
 type ChainConfig = { chain: Chain; rpcUrl: string };
@@ -1051,7 +1051,10 @@ export class EvmAdapter implements ChainAdapter {
     // code to inspect. Best-effort: a transport failure does NOT block
     // signing of an allowlisted delegate (we don't want a DoS via RPC
     // outage), but a positive SELFDESTRUCT match always rejects.
-    if (payload.delegator.toLowerCase() !== "0x0000000000000000000000000000000000000000") {
+    if (
+      payload.delegator.toLowerCase() !==
+      "0x0000000000000000000000000000000000000000"
+    ) {
       try {
         const pc = this.publicClient(ctx);
         const code = (await pc.getCode({ address: payload.delegator })) as
@@ -1064,8 +1067,7 @@ export class EvmAdapter implements ChainAdapter {
       } catch (e) {
         if (e instanceof ProviderRpcError) throw e;
         // Transport failure — log and proceed; allowlist already gated.
-        if (__DEV__)
-          console.warn("[7702] bytecode sniff failed", e);
+        if (__DEV__) console.warn("[7702] bytecode sniff failed", e);
       }
     }
     const wallet = intent.wallet ?? ctx.activeWallet;

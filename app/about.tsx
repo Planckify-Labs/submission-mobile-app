@@ -63,7 +63,7 @@ function Row({ label, value }: { label: string; value: string }) {
 function LinkRow({ label, url }: { label: string; url: string }) {
   return (
     <Pressable
-      onPress={() => Linking.openURL(url).catch(() => { })}
+      onPress={() => Linking.openURL(url).catch(() => {})}
       className="flex-row justify-between items-center py-3 border-b border-light-matte-black/5"
       accessibilityRole="link"
       accessibilityLabel={`${label} — opens ${url}`}

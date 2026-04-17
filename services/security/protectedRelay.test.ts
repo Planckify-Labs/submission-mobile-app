@@ -9,10 +9,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  isProtectableChain,
-  pickProtectedRelay,
-} from "./protectedRelay.ts";
+import { isProtectableChain, pickProtectedRelay } from "./protectedRelay.ts";
 
 describe("pickProtectedRelay", () => {
   it("routes a Uniswap V2 swap on mainnet to a relay", () => {
@@ -25,10 +22,7 @@ describe("pickProtectedRelay", () => {
   });
 
   it("routes a Uniswap Universal Router execute on mainnet", () => {
-    const r = pickProtectedRelay(
-      1,
-      "0x3593564cdeadbeef" as `0x${string}`,
-    );
+    const r = pickProtectedRelay(1, "0x3593564cdeadbeef" as `0x${string}`);
     assert.ok(r);
   });
 
@@ -41,28 +35,20 @@ describe("pickProtectedRelay", () => {
   });
 
   it("does NOT route on a chain without a configured relay", () => {
-    const r = pickProtectedRelay(
-      137,
-      "0x38ed1739deadbeef" as `0x${string}`,
-    );
+    const r = pickProtectedRelay(137, "0x38ed1739deadbeef" as `0x${string}`);
     assert.equal(r, null);
   });
 
   it("respects the user's opt-out", () => {
-    const r = pickProtectedRelay(
-      1,
-      "0x38ed1739deadbeef" as `0x${string}`,
-      { userOptedOut: true },
-    );
+    const r = pickProtectedRelay(1, "0x38ed1739deadbeef" as `0x${string}`, {
+      userOptedOut: true,
+    });
     assert.equal(r, null);
   });
 
   it("returns null for empty / short calldata", () => {
     assert.equal(pickProtectedRelay(1, undefined), null);
-    assert.equal(
-      pickProtectedRelay(1, "0xabc" as `0x${string}`),
-      null,
-    );
+    assert.equal(pickProtectedRelay(1, "0xabc" as `0x${string}`), null);
   });
 });
 

@@ -12,8 +12,7 @@ import { describe, it } from "node:test";
 
 import { verifySignedPush } from "./pushSignature.ts";
 
-const KEY_HEX =
-  "0x" + "a".repeat(64); // 32-byte key
+const KEY_HEX = "0x" + "a".repeat(64); // 32-byte key
 
 function signFor(notificationId: string, deeplink: string, expiresAt: number) {
   const msg = `${notificationId}|${deeplink}|${expiresAt}`;

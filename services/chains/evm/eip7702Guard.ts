@@ -27,7 +27,11 @@ export const AUTHORIZED_DELEGATORS: ReadonlySet<string> = new Set([
 
 export type Eip7702Decision =
   | { ok: true }
-  | { ok: false; code: "not_on_allowlist" | "selfdestruct" | "malformed"; message: string };
+  | {
+      ok: false;
+      code: "not_on_allowlist" | "selfdestruct" | "malformed";
+      message: string;
+    };
 
 /**
  * Synchronous predicate — first gate. Bytecode-fetch happens
@@ -36,11 +40,12 @@ export type Eip7702Decision =
 export function decideAuthorizationByAddress(
   delegator: string,
 ): Eip7702Decision {
-  if (
-    typeof delegator !== "string" ||
-    !/^0x[0-9a-f]{40}$/i.test(delegator)
-  ) {
-    return { ok: false, code: "malformed", message: "delegator address malformed" };
+  if (typeof delegator !== "string" || !/^0x[0-9a-f]{40}$/i.test(delegator)) {
+    return {
+      ok: false,
+      code: "malformed",
+      message: "delegator address malformed",
+    };
   }
   const a = delegator.toLowerCase();
   if (a === ZERO_ADDRESS) return { ok: true }; // revoke

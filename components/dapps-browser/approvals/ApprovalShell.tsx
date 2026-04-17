@@ -53,7 +53,12 @@ export function ApprovalShell({
             <Text className="text-xs text-gray-500">
               {activeWallet.name ?? "Wallet"} ·{" "}
               {truncateAddress({ address: activeWallet.address })}
-              {activeChain?.chain?.name ? ` · ${activeChain.chain.name}` : ""}
+              {/* TODO(task-17): namespace-aware chain label. */}
+              {activeChain.namespace === "eip155" && activeChain.chain.name
+                ? ` · ${activeChain.chain.name}`
+                : activeChain.namespace === "solana"
+                  ? ` · ${activeChain.cluster}`
+                  : ""}
             </Text>
           </View>
         )}
