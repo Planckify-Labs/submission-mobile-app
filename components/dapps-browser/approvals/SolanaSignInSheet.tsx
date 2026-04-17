@@ -52,7 +52,11 @@ export function SolanaSignInSheet({
     >
       <ApprovalShell intent={intent} title="Sign in with Solana">
         <RiskBanner annotations={intent.annotations} />
-        <ScrollView className="flex-1">
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="pb-4"
+          showsVerticalScrollIndicator
+        >
           {p.statement && (
             <View className="bg-gray-50 rounded-xl p-3 mb-3">
               <Text className="text-sm text-gray-900" selectable>
@@ -79,9 +83,7 @@ export function SolanaSignInSheet({
               ))}
             </View>
           )}
-          {error && (
-            <Text className="text-xs text-red-600 mt-2">{error}</Text>
-          )}
+          {error && <Text className="text-xs text-red-600 mt-2">{error}</Text>}
         </ScrollView>
       </ApprovalShell>
       <PrimaryActions

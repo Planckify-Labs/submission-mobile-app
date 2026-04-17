@@ -70,7 +70,11 @@ export function EvmSignMessageSheet({
         intent={intent}
         title={isTyped ? "Sign typed data" : "Sign message"}
       >
-        <ScrollView className="flex-1">
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="pb-4"
+          showsVerticalScrollIndicator
+        >
           {siwe && <SiweCard siwe={siwe} />}
           {decoded && <DecodedPermitCard decoded={decoded} />}
           {!siwe && !decoded && (
@@ -148,9 +152,21 @@ function SiweCard({
       <Row k="Nonce" v={siwe.nonce} />
       <Row k="Issued At" v={siwe.issuedAt} />
       {siwe.expirationTime && <Row k="Expires" v={siwe.expirationTime} />}
+      {siwe.notBefore && <Row k="Not Before" v={siwe.notBefore} />}
+      {siwe.requestId && <Row k="Request ID" v={siwe.requestId} />}
       {siwe.statement && (
         <View className="mt-2">
           <Text className="text-xs text-blue-700">{siwe.statement}</Text>
+        </View>
+      )}
+      {siwe.resources.length > 0 && (
+        <View className="mt-2">
+          <Text className="text-xs text-blue-700">Resources:</Text>
+          {siwe.resources.map((r) => (
+            <Text key={r} className="text-xs text-blue-700">
+              · {r}
+            </Text>
+          ))}
         </View>
       )}
     </View>
