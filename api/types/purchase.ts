@@ -47,7 +47,8 @@ export type TProductVariant = {
 export type TBlockchain = {
   id: string;
   name: string;
-  chainId: number;
+  chainId: number | null;
+  chainSlug: string | null;
   rpcUrl: string;
   blockExplorer: string;
   isEVM: boolean;
