@@ -6,8 +6,12 @@ import { ConnectSheet } from "./ConnectSheet";
 import { EvmBatchCallsSheet } from "./EvmBatchCallsSheet";
 import { EvmSignMessageSheet } from "./EvmSignMessageSheet";
 import { EvmTransactionSheet } from "./EvmTransactionSheet";
+import { SolanaSignAllTransactionsSheet } from "./SolanaSignAllTransactionsSheet";
+import { SolanaSignInSheet } from "./SolanaSignInSheet";
 import { SolanaSignMessageSheet } from "./SolanaSignMessageSheet";
+import { SolanaSwitchClusterSheet } from "./SolanaSwitchClusterSheet";
 import { SolanaTransactionSheet } from "./SolanaTransactionSheet";
+import { SolanaWatchTokenSheet } from "./SolanaWatchTokenSheet";
 import { SwitchChainSheet } from "./SwitchChainSheet";
 import { WatchAssetSheet } from "./WatchAssetSheet";
 
@@ -18,8 +22,13 @@ export const evmRenderers: ApprovalRenderer[] = [
     canHandle: (i) => i.origin?.via === "agent",
     Component: AgentCardRenderer as ApprovalRenderer["Component"],
   },
+  // `connect` intents route through the unified `ConnectSheet` regardless of
+  // namespace — per-chain presentation (chip colour, biometric gate, chip
+  // sub-label) is owned by the namespace's `WalletKitAdapter`. Adding a new
+  // chain (e.g. Sui) requires zero edits here; it just needs to register
+  // its kit with the relevant optional hooks.
   {
-    canHandle: (i) => i.namespace === "eip155" && i.kind === "connect",
+    canHandle: (i) => i.kind === "connect",
     Component: ConnectSheet as ApprovalRenderer["Component"],
   },
   {
@@ -54,8 +63,8 @@ export const evmRenderers: ApprovalRenderer[] = [
     Component: AuthorizationSheet as ApprovalRenderer["Component"],
   },
   {
-    canHandle: (i) => i.namespace === "solana" && i.kind === "connect",
-    Component: ConnectSheet as ApprovalRenderer["Component"],
+    canHandle: (i) => i.namespace === "solana" && i.kind === "signIn",
+    Component: SolanaSignInSheet as ApprovalRenderer["Component"],
   },
   {
     canHandle: (i) => i.namespace === "solana" && i.kind === "signMessage",
@@ -64,5 +73,18 @@ export const evmRenderers: ApprovalRenderer[] = [
   {
     canHandle: (i) => i.namespace === "solana" && i.kind === "signTransaction",
     Component: SolanaTransactionSheet as ApprovalRenderer["Component"],
+  },
+  {
+    canHandle: (i) =>
+      i.namespace === "solana" && i.kind === "signAllTransactions",
+    Component: SolanaSignAllTransactionsSheet as ApprovalRenderer["Component"],
+  },
+  {
+    canHandle: (i) => i.namespace === "solana" && i.kind === "switchCluster",
+    Component: SolanaSwitchClusterSheet as ApprovalRenderer["Component"],
+  },
+  {
+    canHandle: (i) => i.namespace === "solana" && i.kind === "watchAsset",
+    Component: SolanaWatchTokenSheet as ApprovalRenderer["Component"],
   },
 ];

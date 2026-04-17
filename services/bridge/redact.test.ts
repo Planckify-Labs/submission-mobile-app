@@ -173,11 +173,117 @@ describe("scrubLoggerPayload — private-key hex detection", () => {
 });
 
 describe("scrubLoggerPayload — Solana base58 detection", () => {
-  it("redacts a 44-char base58 blob", () => {
-    // 44 char base58 — 32 bytes encoded.
-    const b58 = "5".repeat(44);
+  it("redacts a 64-byte base58 blob (Phantom/Solflare export shape)", () => {
+    // ~88 chars — the 64-byte secret-key encoding.
+    const b58 = "5".repeat(88);
     const out = scrubLoggerPayload(`kp=${b58}`);
     assert.match(String(out), /\[REDACTED_SEED\]/);
+  });
+
+  it("does NOT redact Solana public addresses (~43–44 chars base58)", () => {
+    // Real Solana mint addresses (and every public account key) are
+    // 32 bytes base58 → 43–44 chars. Same shape as a 32-byte private
+    // key, but indistinguishable without context. We rely on KEY_DENY
+    // for seed detection instead; addresses in URLs / logs must pass
+    // through unchanged.
+    const mint = "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R";
+    const url = `https://raydium.io/swap/?outputMint=${mint}`;
+    const out = scrubLoggerPayload(url);
+    assert.equal(out, url);
+  });
+
+  it("still redacts a raw base58 key placed under a denied object key", () => {
+    // Even though the string-level scrubber no longer fires on 32-byte
+    // base58, `KEY_DENY` catches it via the object-key path.
+    const raw = "5".repeat(44);
+    const out = scrubLoggerPayload({ privateKey: raw }) as {
+      privateKey: string;
+    };
+    assert.equal(out.privateKey, REDACTED_SEED_PLACEHOLDER);
+  });
+});
+
+describe("redactParams — Solana methods (§10.4 inv 11)", () => {
+  it("solana:signMessage redacts message body", () => {
+    const out = redactParams("solana:signMessage", [
+      {
+        address: "9xyz",
+        chain: "solana:mainnet",
+        message: "ZGVhZGJlZWZkZWFkYmVlZmRlYWRiZWVm",
+      },
+    ]) as [
+      {
+        address: string;
+        chain: string;
+        messageLength: number;
+        messagePreview: string;
+      },
+    ];
+    assert.equal(out[0].address, "9xyz");
+    assert.equal(out[0].chain, "solana:mainnet");
+    assert.equal(out[0].messageLength, 32);
+    assert.ok(out[0].messagePreview.length <= 17);
+    // Full message must not leak.
+    assert.ok(!JSON.stringify(out).includes("ZGVhZGJlZWZkZWFkYmVlZmRlYWRiZWVm"));
+  });
+
+  it("solana:signTransaction drops the base64 tx body", () => {
+    const fakeTxBody = "A".repeat(600);
+    const out = redactParams("solana:signTransaction", [
+      { address: "9xyz", chain: "solana:mainnet", transaction: fakeTxBody },
+    ]) as [{ txBytes: number }];
+    assert.equal(out[0].txBytes, 600);
+    assert.ok(!JSON.stringify(out).includes(fakeTxBody));
+  });
+
+  it("solana:signAndSendTransaction drops tx body across batch", () => {
+    const fake = "X".repeat(400);
+    const out = redactParams("solana:signAndSendTransaction", [
+      { address: "9xyz", chain: "solana:devnet", transaction: fake },
+    ]) as [{ txBytes: number }];
+    assert.equal(out[0].txBytes, 400);
+    assert.ok(!JSON.stringify(out).includes(fake));
+  });
+
+  it("solana:signIn keeps structural fields, drops signatures", () => {
+    const out = redactParams("solana:signIn", [
+      {
+        domain: "example.com",
+        nonce: "abc",
+        issuedAt: "2026-01-01T00:00:00Z",
+        expirationTime: "2026-01-02T00:00:00Z",
+      },
+    ]) as [
+      {
+        domain: string;
+        hasNonce: boolean;
+        issuedAt: string;
+        expirationTime: string;
+      },
+    ];
+    assert.equal(out[0].domain, "example.com");
+    assert.equal(out[0].hasNonce, true);
+    assert.equal(out[0].issuedAt, "2026-01-01T00:00:00Z");
+    // Ensure actual nonce is not emitted.
+    assert.ok(!JSON.stringify(out).includes("abc"));
+  });
+
+  it("standard:connect redacts to silent flag only", () => {
+    const out = redactParams("standard:connect", [{ silent: true }]) as [
+      { silent: boolean },
+    ];
+    assert.equal(out[0].silent, true);
+  });
+
+  it("takumi:switchCluster / watchToken pass through (no secrets)", () => {
+    const sc = redactParams("takumi:switchCluster", [{ to: "devnet" }]);
+    assert.deepEqual(sc, [{ to: "devnet" }]);
+    const wt = redactParams("takumi:watchToken", [
+      { mint: "So1111111111111111111111111111111111111112" },
+    ]);
+    assert.deepEqual(wt, [
+      { mint: "So1111111111111111111111111111111111111112" },
+    ]);
   });
 });
 

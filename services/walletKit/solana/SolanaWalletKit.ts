@@ -79,6 +79,18 @@ export function createSolanaWalletKit(): WalletKitAdapter {
     supportsTokenTransfer: false,
     supportsPrivateKeyImport: true,
     displayName: "Solana",
+    brandColor: "#9945FF",
+    requireBiometricForConnect: true,
+    formatConnectChipLabel(payload: unknown): string {
+      const cluster = (payload as { cluster?: string } | null)?.cluster;
+      const label =
+        cluster === "devnet"
+          ? "Devnet"
+          : cluster === "testnet"
+            ? "Testnet"
+            : "Mainnet";
+      return `Solana · ${label}`;
+    },
 
     // ── Wallet creation & validation ────────────────────────────────
     validateAddress: (address: string): boolean => isValidSolanaAddress(address),

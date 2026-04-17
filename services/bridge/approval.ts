@@ -5,11 +5,14 @@ import type { IntentAnnotation } from "./inspector";
 
 export type ApprovalKind =
   | "connect"
+  | "signIn"
   | "signMessage"
   | "signTypedData"
   | "signTransaction"
   | "sendTransaction"
+  | "signAllTransactions"
   | "switchChain"
+  | "switchCluster"
   | "addChain"
   | "watchAsset"
   | "sendCalls"

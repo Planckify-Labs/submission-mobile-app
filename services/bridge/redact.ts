@@ -18,10 +18,15 @@ const BIP39_RUN = /\b(?:[a-z]{3,8}\s+){11,23}[a-z]{3,8}\b/g;
 // 0x-prefixed private-key shape (exactly 64 hex chars after `0x`).
 const HEX_PRIVATE_KEY = /\b0x[a-fA-F0-9]{64}\b/g;
 
-// Solana-shape 32-byte base58 private key. Base58 alphabet (no 0,O,I,l).
-// Length of a 32-byte base58 is 43–44 chars; we accept 43–45 to be
-// conservative without over-matching normal words.
-const BASE58_32_BYTE = /\b[1-9A-HJ-NP-Za-km-z]{43,45}\b/g;
+// 64-byte base58 private key (Solana's "full secret key" encoding;
+// Phantom / Solflare export format). Length ~86–88 chars. Safe to match
+// in free-form strings because nothing else on the app's surface is
+// this long. 32-byte base58 strings (43–44 chars, indistinguishable
+// from Solana **public addresses**) are NOT matched here — they'd
+// false-positive on every mint / account in a URL or log line. Raw
+// 32-byte private keys are instead caught via `KEY_DENY` object-key
+// detection (privateKey / seed / mnemonic / pk / recoveryPhrase).
+const BASE58_64_BYTE = /\b[1-9A-HJ-NP-Za-km-z]{86,90}\b/g;
 
 function looksLikeBip39Run(candidate: string): boolean {
   const parts = candidate.trim().split(/\s+/);
@@ -37,7 +42,7 @@ function redactString(s: string): string {
     looksLikeBip39Run(match) ? REDACTED_SEED_PLACEHOLDER : match,
   );
   out = out.replace(HEX_PRIVATE_KEY, REDACTED_SEED_PLACEHOLDER);
-  out = out.replace(BASE58_32_BYTE, REDACTED_SEED_PLACEHOLDER);
+  out = out.replace(BASE58_64_BYTE, REDACTED_SEED_PLACEHOLDER);
   return out;
 }
 
@@ -163,9 +168,91 @@ export function redactParams(method: string, params: unknown): unknown {
       },
     ];
   }
+  // Solana — breadcrumbs carry structural fields only. Never the base64
+  // transaction, never the signature, never the signed-message bytes.
+  // Invariant 11.
   if (method === "solana:signMessage") {
-    const [msg] = paramsArr;
-    return [redactMessage(msg)];
+    const [input] = paramsArr;
+    if (input && typeof input === "object") {
+      const o = input as {
+        address?: string;
+        message?: string;
+        chain?: string;
+      };
+      const m = o.message ?? "";
+      return [
+        {
+          address: o.address,
+          chain: o.chain,
+          messageLength: typeof m === "string" ? m.length : 0,
+          messagePreview:
+            typeof m === "string" && m.length > 16
+              ? `${m.slice(0, 16)}…`
+              : m,
+        },
+      ];
+    }
+    return [redactMessage(input)];
+  }
+  if (
+    method === "solana:signTransaction" ||
+    method === "solana:signAndSendTransaction"
+  ) {
+    const out: unknown[] = [];
+    for (const p of paramsArr) {
+      if (p && typeof p === "object") {
+        const o = p as {
+          address?: string;
+          chain?: string;
+          transaction?: string;
+          options?: unknown;
+        };
+        out.push({
+          address: o.address,
+          chain: o.chain,
+          txBytes:
+            typeof o.transaction === "string" ? o.transaction.length : 0,
+          hasOptions: !!o.options,
+        });
+      } else out.push(redactMessage(p));
+    }
+    return out;
+  }
+  if (method === "solana:signIn") {
+    const [input] = paramsArr;
+    if (input && typeof input === "object") {
+      const o = input as {
+        domain?: string;
+        chainId?: string;
+        issuedAt?: string;
+        expirationTime?: string;
+        nonce?: string;
+        requestId?: string;
+      };
+      return [
+        {
+          domain: o.domain,
+          chainId: o.chainId,
+          issuedAt: o.issuedAt,
+          expirationTime: o.expirationTime,
+          hasNonce: typeof o.nonce === "string" && o.nonce.length > 0,
+          requestId: o.requestId,
+        },
+      ];
+    }
+    return params;
+  }
+  if (method === "standard:connect") {
+    const [opts] = paramsArr;
+    if (opts && typeof opts === "object") {
+      const o = opts as { silent?: boolean };
+      return [{ silent: !!o.silent }];
+    }
+    return params;
+  }
+  if (method === "takumi:switchCluster" || method === "takumi:watchToken") {
+    // No secrets in these payloads; pass through intact.
+    return params;
   }
   return params;
 }

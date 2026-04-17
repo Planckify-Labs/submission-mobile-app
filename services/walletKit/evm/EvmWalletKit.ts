@@ -53,6 +53,8 @@ export function createEvmWalletKit(): WalletKitAdapter {
     namespace: EVM_NAMESPACE,
     supportsTokenTransfer: true,
     supportsPrivateKeyImport: true,
+    displayName: "Ethereum",
+    brandColor: "#627EEA",
 
     // ── Wallet creation & validation ────────────────────────────────
     validateAddress: (address: string): boolean => isAddress(address),

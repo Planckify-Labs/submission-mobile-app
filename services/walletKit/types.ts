@@ -119,4 +119,25 @@ export interface WalletKitAdapter {
   displayName?: string;
   /** Icon URL for UI pickers. */
   iconUrl?: string;
+
+  // ── Approval-sheet presentation hooks ───────────────────────────────
+  /**
+   * Hex colour (e.g. `"#627EEA"`) used as the accent for this chain's
+   * namespace chip in approval sheets. Omitting falls back to a neutral
+   * grey so adding a new chain without a brand colour still renders.
+   */
+  brandColor?: string;
+  /**
+   * Returns the chip label shown on the connect sheet (e.g.
+   * `"Solana · Mainnet"`). The payload is whatever the adapter emits for
+   * its `connect` intent — kits narrow it themselves. If omitted the sheet
+   * falls back to `displayName`.
+   */
+  formatConnectChipLabel?(payload: unknown): string;
+  /**
+   * When `true`, the connect sheet gates approval behind the platform
+   * biometric prompt. Kits opt in per chain (Solana ships with this on;
+   * EVM connect is a free grant for parity with MetaMask). Default `false`.
+   */
+  requireBiometricForConnect?: boolean;
 }

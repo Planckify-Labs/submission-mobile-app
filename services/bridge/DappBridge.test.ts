@@ -22,12 +22,24 @@ describe("DappBridge — TWV-2026-015 per-session nonce gate", () => {
     assert.match(src, /setSessionNonce\(nonce:\s*string \| null\)/);
   });
 
-  it("silently drops messages with missing or wrong nonce (no error reply)", () => {
+  it("silently drops messages with missing or unknown nonce (no error reply)", () => {
     // The check returns from `dispatch` without calling `postError` —
-    // spec rule "no error reply that leaks the control".
+    // spec rule "no error reply that leaks the control". The comparison
+    // runs against the session's accepted-nonces history (bounded ring),
+    // using the constant-time `nonceEquals` helper.
     assert.match(
       src,
-      /sessionNonce !== null[\s\S]*?nonceEquals\(nonce,\s*this\.sessionNonce\)[\s\S]*?return;/,
+      /sessionNonce !== null[\s\S]*?acceptedNonces\.some[\s\S]*?nonceEquals\(nonce,[\s\S]*?return;/,
+    );
+  });
+
+  it("maintains a bounded accepted-nonce history (every rotation recorded)", () => {
+    assert.match(src, /acceptedNonces:\s*string\[\]/);
+    assert.match(src, /NONCE_HISTORY_MAX/);
+    // setSessionNonce must push the new nonce into the history ring.
+    assert.match(
+      src,
+      /setSessionNonce\(nonce:\s*string \| null\)[\s\S]*?acceptedNonces\.push\(nonce\)/,
     );
   });
 

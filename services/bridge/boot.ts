@@ -12,6 +12,9 @@ import { bridgeEventBus } from "./events";
 import { InspectorRegistry } from "./inspector";
 import { HeuristicInspector } from "./inspectors/HeuristicInspector";
 import { HttpsInspector } from "./inspectors/HttpsInspector";
+import { SolanaProgramDecoderInspector } from "./inspectors/SolanaProgramDecoderInspector";
+import { SolanaSimulationInspector } from "./inspectors/SolanaSimulationInspector";
+import { SolanaSiwsInspector } from "./inspectors/SolanaSiwsInspector";
 import { pendingIntentsStore } from "./pendingIntents";
 import { registerRenderer } from "./renderers";
 import { ConsoleSink } from "./sinks/ConsoleSink";
@@ -45,6 +48,9 @@ export function bootBridge(opts: BootOpts) {
 
   InspectorRegistry.register(HttpsInspector);
   InspectorRegistry.register(HeuristicInspector);
+  InspectorRegistry.register(SolanaProgramDecoderInspector);
+  InspectorRegistry.register(SolanaSimulationInspector);
+  InspectorRegistry.register(SolanaSiwsInspector);
 
   bridgeEventBus.subscribe(ConsoleSink);
 

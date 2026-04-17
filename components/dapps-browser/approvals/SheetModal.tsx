@@ -1,4 +1,3 @@
-import { X } from "lucide-react-native";
 import React, { useEffect } from "react";
 import { BackHandler, Modal, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,31 +25,19 @@ export function SheetModal({ onDismiss, children }: Props): React.ReactElement {
       <View className="flex-1 bg-black/40 justify-end">
         <SafeAreaView
           edges={["bottom"]}
-          className="bg-white rounded-t-2xl max-h-[92%]"
+          className="bg-light-main-container rounded-t-3xl h-[92%]"
         >
           {/*
-            TWV-2026-064 — trusted-UI indicator. Renders above the WebView
-            in the RN view hierarchy; a dApp page cannot forge this strip
-            because it's drawn native and the WebView fullscreen API is
-            disabled (see `injectedJavaScript` in `app/dapps-browser.tsx`).
+            TWV-2026-064 — trusted-UI indicator via the drag handle. Native
+            drawn above the WebView; the dApp page cannot replicate the
+            sheet's native chrome (fullscreen WebView API is disabled in
+            `injectedJavaScript` in `app/dapps-browser.tsx`).
           */}
           <View
             accessibilityLabel="Takumi Wallet trusted prompt"
-            className="flex-row items-center px-3 py-1.5 bg-black rounded-t-2xl"
+            className="items-center py-3"
           >
-            <View className="w-2 h-2 rounded-full bg-green-400 mr-2" />
-            <Text className="text-[11px] text-white font-semibold">
-              Takumi Wallet · signed prompt
-            </Text>
-          </View>
-          <View className="flex-row justify-end px-2 pt-2">
-            <TouchableOpacity
-              onPress={onDismiss}
-              className="w-8 h-8 items-center justify-center"
-              accessibilityLabel="Close"
-            >
-              <X size={20} color="#6b7280" />
-            </TouchableOpacity>
+            <View className="w-10 h-1 bg-light-matte-black/20 rounded-full" />
           </View>
           {children}
         </SafeAreaView>
@@ -78,19 +65,21 @@ export function PrimaryActions({
     <View className="flex-row px-4 pt-3 pb-4 gap-3">
       <TouchableOpacity
         onPress={onReject}
-        className="flex-1 py-3 rounded-full border border-gray-300 items-center"
+        className="flex-1 py-4 rounded-2xl bg-light items-center"
         disabled={loading}
       >
-        <Text className="text-gray-700 font-medium">{rejectLabel}</Text>
+        <Text className="text-light-matte-black font-bold">{rejectLabel}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         onPress={onApprove}
-        className={`flex-1 py-3 rounded-full items-center ${
-          disabled ? "bg-gray-300" : "bg-black"
+        className={`flex-1 py-4 rounded-2xl items-center ${
+          disabled || loading
+            ? "bg-light-primary-red/40"
+            : "bg-light-primary-red"
         }`}
         disabled={disabled || loading}
       >
-        <Text className="text-white font-semibold">
+        <Text className="text-white font-bold">
           {loading ? "…" : approveLabel}
         </Text>
       </TouchableOpacity>

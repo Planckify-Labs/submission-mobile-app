@@ -47,7 +47,23 @@ export class DappBridge {
   // TWV-2026-015 — current session nonce; rotated on every top-frame
   // navigation. Compared (constant-time) against `__takumi_nonce` on
   // every inbound message; missing or stale → drop silently.
+  //
+  // `acceptedNonces` is a bounded ring of recent nonces we've issued in
+  // THIS WebView session. The security property we need is "reject
+  // messages from frames that never saw a main-frame-stamped nonce"
+  // (sub-frame forgery under CVE-2020-6506-class XSS). Every nonce in
+  // this set is main-frame-stamped, so all of them are legit — we just
+  // don't know which one the script's closure happens to have at the
+  // moment of the call, because the RN WebView doesn't re-inject on
+  // SPA navigation, so `window.__takumi_solana_nonce` / EVM's closure
+  // can be N rotations behind when the dApp fires a request.
+  //
+  // Ring capped at 32 entries — enough for a deep browsing session,
+  // small enough to not matter at the bytes level. Origin-pin remains
+  // the authoritative cross-frame defense.
   private sessionNonce: string | null = null;
+  private acceptedNonces: string[] = [];
+  private static readonly NONCE_HISTORY_MAX = 32;
 
   constructor(opts: DappBridgeOpts) {
     this.opts = opts;
@@ -71,9 +87,19 @@ export class DappBridge {
    * TWV-2026-015 — install / rotate the per-session nonce. The screen
    * generates this from the OS CSPRNG at every top-frame load and
    * stamps it into the injected provider script's closure scope.
+   *
+   * Every rotation is recorded in `acceptedNonces` (bounded ring); the
+   * dispatch path accepts any nonce that was once current. See the
+   * field comment on `acceptedNonces` for why.
    */
   setSessionNonce(nonce: string | null): void {
     this.sessionNonce = nonce;
+    if (nonce !== null && !this.acceptedNonces.includes(nonce)) {
+      this.acceptedNonces.push(nonce);
+      if (this.acceptedNonces.length > DappBridge.NONCE_HISTORY_MAX) {
+        this.acceptedNonces.shift();
+      }
+    }
   }
 
   /** Constant-time string equality for nonce comparison. */
@@ -87,17 +113,51 @@ export class DappBridge {
 
   async dispatch(rawMessage: unknown): Promise<void> {
     const parsed = parseMessage(rawMessage);
-    if (!parsed) return;
+    if (!parsed) {
+      if (__DEV__) {
+        console.warn("[bridge] dispatch drop: parseMessage returned null", {
+          rawPreview:
+            typeof rawMessage === "string"
+              ? rawMessage.slice(0, 120)
+              : typeof rawMessage,
+        });
+      }
+      return;
+    }
     const { id, namespace, method, params, origin, nonce } = parsed;
 
-    // TWV-2026-015 — silent drop on missing / stale nonce. Spec says
-    // "no error reply that leaks the control"; sub-frame forgery should
-    // see no observable response.
+    if (__DEV__) {
+      console.debug("[bridge] dispatch recv", {
+        id,
+        namespace,
+        method,
+        nonceLen: typeof nonce === "string" ? nonce.length : null,
+        sessionNonceLen:
+          typeof this.sessionNonce === "string"
+            ? this.sessionNonce.length
+            : null,
+      });
+    }
+
+    // TWV-2026-015 — silent drop on nonces this session never issued.
+    // Accept any nonce from the session-history ring; see `acceptedNonces`
+    // field comment for the rationale.
     if (this.sessionNonce !== null) {
-      if (
-        typeof nonce !== "string" ||
-        !this.nonceEquals(nonce, this.sessionNonce)
-      ) {
+      const isKnown =
+        typeof nonce === "string" &&
+        this.acceptedNonces.some((n) => this.nonceEquals(nonce, n));
+      if (!isKnown) {
+        if (__DEV__) {
+          console.warn("[bridge] dispatch drop: unknown nonce", {
+            id,
+            method,
+            namespace,
+            reqNoncePreview:
+              typeof nonce === "string" ? `${nonce.slice(0, 6)}…` : null,
+            sessionNoncePreview: `${this.sessionNonce.slice(0, 6)}…`,
+            historyLen: this.acceptedNonces.length,
+          });
+        }
         return;
       }
     }

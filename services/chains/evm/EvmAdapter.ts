@@ -184,6 +184,20 @@ export class EvmAdapter implements ChainAdapter {
           if (!config) return err(PROVIDER_ERRORS.chainNotConnected());
           return resolved(String(config.chain.id));
         }
+        case "web3_clientVersion": {
+          // Legacy identifier probed by Uniswap's WebAccountsStoreUpdater
+          // and other analytics/UX paths. Returning a stable string
+          // avoids noisy "Method not supported" warnings in dApp
+          // telemetry. Shape matches MetaMask's
+          // `MetaMask/v11.x.y/mobile/Chrome/…` pattern, trimmed.
+          return resolved("TakumiAI/v1.0.0");
+        }
+        case "eth_protocolVersion": {
+          // Another legacy probe some dApps run; `0x41` = 65 is what
+          // MetaMask/Geth return for modern Ethereum. Prevents a
+          // second "not supported" warning in the same code path.
+          return resolved("0x41");
+        }
         case "eth_accounts": {
           // Privacy fix — only disclose when origin has an EIP-2255 grant.
           if (!ctx.activeWallet) return resolved([]);
@@ -227,32 +241,48 @@ export class EvmAdapter implements ChainAdapter {
           const cfg = this.opts.resolveChainConfig(ctx);
           if (!cfg) return err(PROVIDER_ERRORS.chainNotConnected());
 
-          // Silent re-connect: if this origin already has a grant for the
-          // active wallet on this chain, return silently. dApps (wagmi
-          // eager-connect, yearn, et al) call eth_requestAccounts /
-          // wallet_requestPermissions repeatedly on mount + reconnect;
-          // prompting every time would hammer the user with sheets.
+          // Pick the EVM wallet this origin should see. NEVER route
+          // `ctx.activeWallet` when it is non-EVM — we'd return a
+          // base58 Solana address to a viem-based dApp, which then
+          // rejects the connect entirely.
+          const evmWallet = pickEvmWalletForOrigin(
+            ctx,
+            req.origin.url,
+            cfg.chain.id,
+          );
+          if (!evmWallet) return err(PROVIDER_ERRORS.disconnected());
+
+          // Silent re-connect: if this origin already has a grant for
+          // the resolved EVM wallet on this chain, return silently.
+          // dApps (wagmi eager-connect, yearn, etc.) call
+          // eth_requestAccounts / wallet_requestPermissions repeatedly
+          // on mount + reconnect; prompting every time would hammer
+          // the user with sheets.
           if (
-            ctx.activeWallet &&
             PermissionStore.isGranted(
               req.origin.url,
-              ctx.activeWallet.address,
+              evmWallet.address,
               cfg.chain.id,
             )
           ) {
             if (req.method === "eth_requestAccounts") {
-              return resolved([ctx.activeWallet.address]);
+              return resolved([evmWallet.address]);
             }
             // wallet_requestPermissions expects the EIP-2255 grant list.
             return resolved(PermissionStore.asEip2255(req.origin.url));
           }
+
+          // NOTE: no cross-namespace trust extension. A recent Solana
+          // grant for this origin does NOT imply consent to expose the
+          // user's EVM wallet — they're different identities, each
+          // requires explicit user approval via its own sheet.
 
           const payload: EvmConnectPayload = {
             requestedAccounts: 1,
             chainId: cfg.chain.id,
           };
           return needsApproval(
-            makeIntent(req, "connect", payload, ctx.activeWallet),
+            makeIntent(req, "connect", payload, evmWallet),
           );
         }
         case "wallet_getPermissions": {
@@ -579,11 +609,27 @@ export class EvmAdapter implements ChainAdapter {
       "walletIndex" in decision.data
         ? (decision.data as { walletIndex: number }).walletIndex
         : null;
-    const wallet =
-      chosenIndex !== null ? ctx.wallets[chosenIndex] : ctx.activeWallet;
-    if (!wallet) throw PROVIDER_ERRORS.disconnected();
-    if (chosenIndex !== null && chosenIndex !== undefined)
+    let wallet =
+      chosenIndex !== null ? ctx.wallets[chosenIndex] : intent.wallet;
+    // Guardrail — if the picked wallet is non-EVM (user somehow got a
+    // Solana wallet onto the EVM ConnectSheet picker), refuse rather
+    // than return a base58 Solana address to a viem-based dApp.
+    if (!wallet || wallet.namespace !== "eip155") {
+      const fallback = pickEvmWalletForOrigin(
+        ctx,
+        intent.origin.url,
+        payload.chainId,
+      );
+      if (!fallback) throw PROVIDER_ERRORS.disconnected();
+      wallet = fallback;
+    }
+    if (
+      chosenIndex !== null &&
+      chosenIndex !== undefined &&
+      ctx.wallets[chosenIndex] === wallet
+    ) {
       ctx.setActiveWallet(chosenIndex);
+    }
     await PermissionStore.grant({
       origin: intent.origin.url,
       walletAddress: wallet.address,
@@ -1242,6 +1288,39 @@ function needsApproval(intent: ApprovalIntent): ChainResult {
 }
 function err(e: ProviderRpcError): ChainResult {
   return { status: "error", code: e.code, message: e.message, data: e.data };
+}
+
+/**
+ * Find an EVM wallet for this origin. Prefers the wallet previously
+ * granted to this origin on this chain; falls back to active wallet if
+ * it is EVM; then to the first EVM wallet in the list.
+ *
+ * This decouples the EVM adapter from `ctx.activeWallet` when the user
+ * currently has a non-EVM (e.g. Solana) wallet selected in the UI.
+ * Returning the user's Solana address to an EVM dApp produces
+ * `viem: Address "Gspcn..." is invalid` at the dApp's address validator
+ * — the dApp receives a "connect success" but immediately errors.
+ */
+function pickEvmWalletForOrigin(
+  ctx: AdapterContext,
+  origin: string,
+  chainId: number,
+): TWallet | null {
+  const evmWallets = ctx.wallets.filter((w) => w.namespace === "eip155");
+  if (evmWallets.length === 0) return null;
+  const grants = PermissionStore.listByOrigin(origin).filter(
+    (g) => g.chainId === chainId,
+  );
+  for (const g of grants) {
+    const match = evmWallets.find(
+      (w) => w.address.toLowerCase() === g.walletAddress.toLowerCase(),
+    );
+    if (match) return match;
+  }
+  if (ctx.activeWallet && ctx.activeWallet.namespace === "eip155") {
+    return ctx.activeWallet;
+  }
+  return evmWallets[0];
 }
 
 function makeIntent<P>(

@@ -20,6 +20,64 @@ function generateSessionNonce(): string {
     .join("");
 }
 
+// Known third-party log spam that some dApps ship (Datadog RUM double-
+// init, pino history restore, Amplitude telemetry retries, etc.) —
+// not signals from our bridge, forwarded through the WebView console
+// bridge.
+//
+// We substring-match across ALL joined args (not just args[0]) because
+// these libraries often call `console.error("LibName:", "actual message", {extra})`
+// — the matchable text is in args[1] or later, not always at index 0.
+//
+// `CONTEXT_NOISE_PATTERNS` handles pino-style structured log objects
+// like `{context: "core/history", level: 50, ...}` where the message
+// may be absent (a "follow-up" entry with only context+level+time).
+const WEBVIEW_NOISE_PATTERNS: readonly string[] = [
+  "DD_RUM is already initialized",
+  "Restore will override",
+  "WalletConnect Core is already initialized",
+  "Amplitude Logger",
+  "Failed to fetch remote configuration",
+  "Failed to fetch (cca-lite.coinbase.com)",
+  "Datadog Browser SDK",
+];
+
+const CONTEXT_NOISE_PREFIXES: readonly string[] = [
+  "core/history",
+  "core/rum",
+];
+
+function serialiseArg(a: unknown): string {
+  if (typeof a === "string") return a;
+  if (a === null || a === undefined) return "";
+  try {
+    return JSON.stringify(a);
+  } catch {
+    return String(a);
+  }
+}
+
+function isWebviewThirdPartyNoise(args: readonly unknown[]): boolean {
+  if (args.length === 0) return false;
+  const joined = args.map(serialiseArg).join(" ");
+  for (const p of WEBVIEW_NOISE_PATTERNS) {
+    if (joined.includes(p)) return true;
+  }
+  // Structured log objects without a msg field — match by context.
+  for (const a of args) {
+    if (a && typeof a === "object" && !Array.isArray(a)) {
+      const ctx = (a as { context?: unknown }).context;
+      if (typeof ctx === "string") {
+        for (const prefix of CONTEXT_NOISE_PREFIXES) {
+          if (ctx.startsWith(prefix)) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+import { mainnet } from "viem/chains";
 import BrowserAddressBar from "@/components/dapps-browser/BrowserAddressBar";
 import BrowserNavigationControls from "@/components/dapps-browser/BrowserNavigationControls";
 import DAppsHub from "@/components/dapps-browser/DAppsHub";
@@ -94,15 +152,29 @@ export default function DappsBrowser() {
         // TODO(task-17): route chain resolution through the kit adapter
         // registry so the Solana bridge signer can mount alongside EVM.
         resolveEvmChain: (ctx) => {
-          if (activeChain.namespace !== "eip155") {
-            return null;
+          // Route by REQUEST namespace, not by global UI active chain.
+          // The bridge has already routed an EIP-155 request to us; our
+          // job is to serve it with a sensible EVM chain. When the UI
+          // happens to have a Solana chain active (user flipped into
+          // a Solana wallet earlier), we fall back to mainnet — the
+          // dApp can `wallet_switchEthereumChain` after connect if it
+          // wants a different chain. Returning `null` here forced every
+          // EVM `eth_requestAccounts` to fail with 4901 "Chain not
+          // connected", even though the user has perfectly good EVM
+          // wallets in `ctx.wallets`.
+          void ctx;
+          if (activeChain.namespace === "eip155") {
+            return {
+              chain: activeChain.chain,
+              rpcUrl:
+                activeChain.chain.rpcUrls?.default?.http?.[0] ??
+                activeChain.chain.rpcUrls?.public?.http?.[0] ??
+                "",
+            };
           }
           return {
-            chain: activeChain.chain,
-            rpcUrl:
-              activeChain.chain.rpcUrls?.default?.http?.[0] ??
-              activeChain.chain.rpcUrls?.public?.http?.[0] ??
-              "",
+            chain: mainnet,
+            rpcUrl: mainnet.rpcUrls?.default?.http?.[0] ?? "",
           };
         },
         onSwitchChain: async (chainId) => {
@@ -163,6 +235,17 @@ export default function DappsBrowser() {
           args?: unknown[];
         };
         const args = c.args ?? [];
+        // Downgrade known-noisy third-party spam (NOT bridge signal) to
+        // log-level. Each pattern below is a library shipped by dApps we
+        // don't control, re-initialised by their own code when their
+        // app boots or re-boots. They're not actionable from our side.
+        //
+        // If a pattern here ever hides a real issue, delete the entry —
+        // the full message still reaches Metro, just at the right level.
+        if (c.level === "error" && isWebviewThirdPartyNoise(args)) {
+          console.log("[webview:noise]", ...args);
+          return;
+        }
         if (c.level === "error") console.error("[webview]", ...args);
         else if (c.level === "warn") console.warn("[webview]", ...args);
         else console.log("[webview]", ...args);

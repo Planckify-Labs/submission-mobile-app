@@ -57,6 +57,17 @@ export function bytesToBase58(b: Uint8Array): string {
   return bs58.encode(b);
 }
 
+/** Decode a base64 string (wire format from injected script) to raw bytes. */
+export function base64ToBytes(b64: string): Uint8Array {
+  // kit's `getBase64Encoder().encode(str)` reads string → bytes.
+  return getBase64Encoder().encode(b64) as Uint8Array;
+}
+
+/** Encode raw bytes to a base64 string (wire format the injected script b64-decodes). */
+export function bytesToBase64(b: Uint8Array): string {
+  return getBase64Decoder().decode(b);
+}
+
 /**
  * Decode a base64-encoded Solana wire transaction into a kit `Transaction`.
  *

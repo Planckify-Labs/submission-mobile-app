@@ -1,18 +1,33 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { originKey } from "./caip";
 
-// SecureStore only accepts [A-Za-z0-9._-]; `/` is rejected.
+// Stored in AsyncStorage, not SecureStore. Grants are (origin, wallet
+// address, chainId, timestamp) — NOT secret material. SecureStore's
+// ~2 KB per-value cap silently drops state once a user connects to
+// ~10+ dApps, which makes every reconnect look like a fresh session.
+// AsyncStorage has no practical size cap for this workload.
 const STORAGE_KEY = "dapp_bridge.permissions";
+// One-shot migration tag: if we find grants in the legacy SecureStore
+// slot on boot, we move them to AsyncStorage and clear the legacy key.
+const LEGACY_SECURE_STORAGE_KEY = "dapp_bridge.permissions";
 
 export type PermissionCaveat = {
   type: "restrictReturnedAccounts";
   value: string[];
 };
 
+/**
+ * Per solana-adapter-spec.md §4.5: Solana grants key by CAIP-2 cluster
+ * identifier (`"solana:mainnet"` / `"solana:devnet"` / `"solana:testnet"`)
+ * rather than numeric chainId. EVM still passes numbers.
+ */
+export type ChainKey = number | string;
+
 export type PermissionGrant = {
   origin: string;
   walletAddress: string;
-  chainId: number;
+  chainId: ChainKey;
   caveats: PermissionCaveat[];
   grantedAt: number;
 };
@@ -38,7 +53,7 @@ function notify(): void {
 
 async function persist(): Promise<void> {
   try {
-    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(cache));
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
   } catch (e) {
     if (__DEV__) console.warn("[permissions] persist failed", e);
   }
@@ -50,7 +65,25 @@ export const PermissionStore = {
     if (hydratePromise) return hydratePromise;
     hydratePromise = (async () => {
       try {
-        const raw = await SecureStore.getItemAsync(STORAGE_KEY);
+        let raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          // Migration: pull any grants that were previously persisted
+          // in SecureStore (pre-2 KB-limit fix). Move them once and
+          // clear the legacy slot so the next boot reads only
+          // AsyncStorage.
+          try {
+            const legacy = await SecureStore.getItemAsync(
+              LEGACY_SECURE_STORAGE_KEY,
+            );
+            if (legacy) {
+              raw = legacy;
+              await AsyncStorage.setItem(STORAGE_KEY, legacy);
+              await SecureStore.deleteItemAsync(LEGACY_SECURE_STORAGE_KEY);
+            }
+          } catch {
+            // Legacy read/delete is best-effort; ignore.
+          }
+        }
         if (raw) {
           const parsed = JSON.parse(raw) as Store;
           if (parsed?.grants && Array.isArray(parsed.grants)) {
@@ -74,7 +107,7 @@ export const PermissionStore = {
   async grant(args: {
     origin: string;
     walletAddress: string;
-    chainId: number;
+    chainId: ChainKey;
   }): Promise<void> {
     const key = originKey(args.origin);
     const filtered = cache.grants.filter(
@@ -129,7 +162,12 @@ export const PermissionStore = {
     return [...cache.grants];
   },
 
-  isGranted(origin: string, walletAddress: string, chainId: number): boolean {
+
+  isGranted(
+    origin: string,
+    walletAddress: string,
+    chainId: ChainKey,
+  ): boolean {
     const key = originKey(origin);
     return cache.grants.some(
       (g) =>

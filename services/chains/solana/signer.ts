@@ -59,8 +59,10 @@ import {
   type SolanaSignerFns,
 } from "@/services/chains/solana/SolanaAdapter";
 import {
+  base64ToBytes,
   base64ToTransaction,
   bytesToBase58,
+  bytesToBase64,
   transactionToBase64,
 } from "@/services/chains/solana/codec";
 import { walletKitRegistry } from "@/services/walletKit/registry";
@@ -111,16 +113,22 @@ export function installSolanaSigner(deps: InstallSolanaSignerDeps): void {
         )) as KeyPairSigner | null;
         if (!signer) throw new Error("No Solana signer");
 
-        // The adapter hands us a UTF-8 string (dApps over
-        // `window.solana.signMessage` typically send `Uint8Array` but the
-        // Wallet Standard wire serialisation stringifies it; we re-encode
-        // as UTF-8 here, matching Phantom's reference behaviour).
-        const bytes = new TextEncoder().encode(message);
+        // `message` arrives as base64 — the injected script does
+        // `b64e(U(dappMessage))` on the wire, where `dappMessage` is
+        // the raw `Uint8Array` the dApp passed to Wallet-Standard
+        // `solana:signMessage`. We MUST base64-decode to recover the
+        // original bytes; UTF-8-encoding the base64 string instead
+        // signs the wrong content and the dApp's verifier rejects
+        // (Magic Eden / Dynamic SDK: "Invalid signature — did not
+        // pass verification"). The return is base64 too, because the
+        // shim does `b64d(r.signature)` and hands a `Uint8Array` to
+        // the dApp — base58 here would decode to garbage bytes.
+        const bytes = base64ToBytes(message);
         const [sigDict] = await signer.signMessages([
           { content: bytes, signatures: {} },
         ]);
         const sigBytes = sigDict[signer.address] ?? new Uint8Array();
-        return bytesToBase58(sigBytes);
+        return bytesToBase64(sigBytes);
       } catch (err) {
         if (__DEV__) console.error("[Solana bridge signer] signMessage failed");
         throw err;
