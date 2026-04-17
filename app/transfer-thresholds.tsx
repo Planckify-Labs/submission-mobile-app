@@ -78,6 +78,10 @@ import {
   type TransferThresholds,
 } from "@/services/transferThresholdStore";
 import { readUserAssetsForChain } from "@/services/userAssetsReader";
+import {
+  formatChainLabel,
+  getEvmChainId,
+} from "@/services/walletKit/chainInfo";
 
 // Extra breathing room above the keyboard — matches the pattern used
 // in `AddContactModal`. Tuned so the focused input sits well above the
@@ -131,9 +135,7 @@ export default function TransferThresholdsScreen() {
   const { bottom } = useSafeAreaInsets();
 
   const address = activeWallet?.address as `0x${string}` | undefined;
-  // TODO(task-13): source chainId via a namespace-aware kit accessor.
-  const chainId =
-    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
+  const chainId = getEvmChainId(activeChain);
 
   const store = useMemo(() => {
     if (!address) return null;
@@ -643,13 +645,15 @@ function OverridePickerSheet({
   onSave: (override: TokenOverride, scope: SaveScope) => void;
 }) {
   const { activeChain } = useWallet();
-  // TODO(task-13): source these via namespace-aware kit accessors.
+  // `nativeCurrencySymbol` is EVM-only today because the UI reaches into
+  // viem's `chain.nativeCurrency` shape. When Solana token support lands,
+  // add a `getNativeCurrencySymbol` kit hook rather than extending this
+  // branch.
   const nativeCurrencySymbol =
     activeChain.namespace === "eip155"
       ? activeChain.chain.nativeCurrency.symbol
       : undefined;
-  const activeChainName =
-    activeChain.namespace === "eip155" ? activeChain.chain.name : undefined;
+  const activeChainName = formatChainLabel(activeChain);
   const { data: allTokens = [], isLoading: tokensLoading } = useTokens();
   const { data: blockchains } = useBlockchainsWithStorage();
 

@@ -585,14 +585,12 @@ class SolanaAdapter implements ChainAdapter {
           const picked = ctx.wallets[pickedIndex];
           if (picked.namespace === "solana") {
             wallet = picked;
-            // NOTE: intentionally NOT calling `ctx.setActiveWallet` here.
-            // The global active-wallet slot is a UI concern (home screen,
-            // portfolio); flipping it to a Solana wallet on a Solana-dApp
-            // connect breaks subsequent EVM-dApp connects
-            // (`resolveChainConfig(ctx)` returns null for non-EVM active
-            // chains → `eth_requestAccounts` returns 4901). Per-origin
-            // wallet tracking happens via `pickSolanaWalletForOrigin`
-            // which reads the PermissionStore grant on every request.
+            // Adapter cannot mutate the global active wallet — that
+            // capability was removed from `AdapterContext` precisely
+            // because this connect path used to flip the global and
+            // break subsequent EVM-dApp connects. Per-origin tracking
+            // happens via `pickSolanaWalletForOrigin` which reads the
+            // `PermissionStore` grant on every request.
           }
         }
         if (wallet) {

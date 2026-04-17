@@ -26,7 +26,6 @@ export type ChainResult =
 export interface AdapterContext {
   activeWallet: TWallet | null;
   wallets: TWallet[];
-  setActiveWallet: (index: number) => void;
   getAccount: (wallet: TWallet) => unknown;
   /**
    * TWV-2026-015 — current per-session nonce. Threaded through to the
@@ -34,6 +33,15 @@ export interface AdapterContext {
    * carries it. Rotated on every top-frame navigation.
    */
   sessionNonce?: string;
+  // Intentionally NO `setActiveWallet`. The global active-wallet slot is
+  // a UI concern (home screen, portfolio). When an adapter's approval
+  // flow wrote to it, one chain's approval would poison another chain's
+  // next request (e.g. a Solana connect flipped the global, and the next
+  // EVM `eth_requestAccounts` saw a non-EVM active chain and returned
+  // 4901). dApp-scoped state now lives in `PermissionStore` grants,
+  // per-origin; the UI can observe grants if it wants to track dApp
+  // sessions. Keeping this field off the context by contract makes that
+  // class of bug unrepresentable.
 }
 
 export interface ChainAdapter {

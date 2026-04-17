@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNonce } from "@/hooks/queries/useAuth";
 import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { useWallet } from "@/hooks/useWallet";
+import { getEvmChainId } from "@/services/walletKit/chainInfo";
 
 interface TSignMessageModalProps {
   visible: boolean;
@@ -49,9 +50,7 @@ const SignMessageModal: React.FC<TSignMessageModalProps> = ({
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
 
   const { activeWallet, activeChain } = useWallet();
-  // TODO(task-13): source chainId via a namespace-aware kit accessor.
-  const activeChainId =
-    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
+  const activeChainId = getEvmChainId(activeChain);
 
   const { data: fetchedNonceData, refetch: refetchNonce } = useNonce(
     activeWallet?.address,

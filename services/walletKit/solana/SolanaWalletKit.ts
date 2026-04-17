@@ -91,6 +91,14 @@ export function createSolanaWalletKit(): WalletKitAdapter {
             : "Mainnet";
       return `Solana · ${label}`;
     },
+    getChainId(chain) {
+      return chain.namespace === SOLANA_NAMESPACE ? chain.cluster : null;
+    },
+    formatChainLabel(chain) {
+      if (chain.namespace !== SOLANA_NAMESPACE) return null;
+      const label = chain.cluster === "devnet" ? "Devnet" : "Mainnet";
+      return `Solana ${label}`;
+    },
 
     // ── Wallet creation & validation ────────────────────────────────
     validateAddress: (address: string): boolean => isValidSolanaAddress(address),

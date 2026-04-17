@@ -10,6 +10,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "check:syntax": "tsc --noEmit --skipLibCheck",
+    "check:chains": "bash scripts/check-chain-agnostic.sh",
     "biome:check:unsafeFix": "biome check --write --unsafe",
     "biome:check": "biome check --write"
   },

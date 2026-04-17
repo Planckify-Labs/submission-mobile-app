@@ -32,6 +32,7 @@ import {
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { useWallet } from "@/hooks/useWallet";
+import { formatChainLabel } from "@/services/walletKit/chainInfo";
 import { copyToClipboard } from "@/utils/helperUtils";
 
 const { height } = Dimensions.get("window");
@@ -302,9 +303,7 @@ export default function ConversationHistory({
                 {activeWallet?.name}
               </Text>
               <Text className="text-[10px] font-bold text-light-matte-black/70">
-                {activeChain.namespace === "eip155"
-                  ? activeChain.chain.name
-                  : activeChain.cluster}
+                {formatChainLabel(activeChain)}
               </Text>
               <TouchableOpacity
                 className="flex-row gap-2"

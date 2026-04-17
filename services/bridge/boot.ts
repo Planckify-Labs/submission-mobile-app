@@ -7,6 +7,7 @@ import { createSolanaAdapter } from "@/services/chains/solana/SolanaAdapter";
 import { installSolanaSigner } from "@/services/chains/solana/signer";
 import type { AdapterContext } from "@/services/chains/types";
 import { PermissionStore } from "@/services/permissions/store";
+import { walletKitRegistry } from "@/services/walletKit/registry";
 import { initDappBridge } from "./DappBridge";
 import { bridgeEventBus } from "./events";
 import { InspectorRegistry } from "./inspector";
@@ -84,15 +85,19 @@ export function bootBridge(opts: BootOpts) {
   // cluster hint — public defaults are the correct fallback there.
   // `rpcSubs` is omitted: public RPCs rate-limit WS subscriptions;
   // private subscription URLs are future work.
-  // Defensive: `installSolanaSigner` resolves
-  // `walletKitRegistry.get("solana")` at install time and throws if the
-  // Solana kit isn't registered yet (possible during Fast Refresh when
-  // the registry module is re-evaluated but `bootWalletKits` hasn't
-  // re-run, or during a cold boot where kit registration races with the
-  // first dapps-browser mount). Swallow that failure so the screen
-  // doesn't force-close — the EVM bridge path still works, and the
-  // Solana signer re-installs on the next bootBridge call.
-  try {
+  // Boot-order precondition. Any kit whose adapter is registered above
+  // MUST have its `WalletKitAdapter` in `walletKitRegistry` before we
+  // reach this point, otherwise signer installation (here and for any
+  // future chain) silently degrades to "no signer registered" runtime
+  // errors when a dApp tries to sign. Check explicitly so the failure
+  // mode is a loud dev-time warning tied to the offending chain, not
+  // a `-32603` at first signMessage.
+  //
+  // Fast Refresh corner case: the registry module can be re-evaluated
+  // (and cleared) while this module's `booted` flag is still `true`.
+  // When the kit is missing, we reset `booted` so the next mount retries
+  // — no throw, because retry is the correct behaviour.
+  if (walletKitRegistry.has("solana")) {
     installSolanaSigner({
       getWalletByAddress: (addr) =>
         opts.getContext().wallets.find((w) => w.address === addr),
@@ -104,15 +109,14 @@ export function bootBridge(opts: BootOpts) {
         return { rpc: createSolanaRpc(url) };
       },
     });
-  } catch (err) {
+  } else {
     if (typeof __DEV__ !== "undefined" && __DEV__) {
       console.warn(
-        "[bridge] installSolanaSigner failed; Solana dApp signing disabled for this session:",
-        err instanceof Error ? err.message : String(err),
+        "[bridge] Solana kit not registered in walletKitRegistry; " +
+          "Solana dApp signing disabled until next bootBridge. " +
+          "Did `bootWalletKits()` run before `bootBridge()`?",
       );
     }
-    // Reset the module-level `booted` flag so a later mount (once the
-    // Solana kit is registered) can retry install.
     booted = false;
   }
 

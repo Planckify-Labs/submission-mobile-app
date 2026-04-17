@@ -100,13 +100,7 @@ interface TBrowserState {
 
 export default function DappsBrowser() {
   const ready = useNavigationReady();
-  const {
-    activeWallet,
-    wallets,
-    setActiveWallet,
-    activeChain,
-    changeActiveChain,
-  } = useWallet();
+  const { activeWallet, wallets, activeChain, changeActiveChain } = useWallet();
   const webViewRef = useRef<WebView>(null);
   const addressBarRef = useRef<TextInput>(null);
   const [addressBarText, setAddressBarText] = useState("");
@@ -132,14 +126,12 @@ export default function DappsBrowser() {
   const ctxRef = useRef<AdapterContext>({
     activeWallet: null,
     wallets: [],
-    setActiveWallet: () => {},
     getAccount: getAccountForWallet,
     sessionNonce,
   });
   ctxRef.current = {
     activeWallet: activeWallet && activeWallet.address ? activeWallet : null,
     wallets,
-    setActiveWallet,
     getAccount: getAccountForWallet,
     sessionNonce,
   };

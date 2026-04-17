@@ -14,6 +14,7 @@ import { useActiveNetwork, useActiveTab } from "@/hooks/useAssetExplorerState";
 import { useNetworkModal } from "@/hooks/useNetworkModal";
 import { usePinnedNetworks } from "@/hooks/usePinnedNetworks";
 import { useWallet } from "@/hooks/useWallet";
+import { getEvmChainId } from "@/services/walletKit/chainInfo";
 import OptimizedImage from "../common/OptimizedImage";
 import NetworkRadioButtonLoadingSkeletons from "./NetworkRadioButtonLoadingSkeletons";
 
@@ -85,9 +86,7 @@ const NetworkRadioButtons = () => {
     [blockchains],
   );
 
-  // TODO(task-13): source chainId via a namespace-aware kit accessor.
-  const activeChainId =
-    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
+  const activeChainId = getEvmChainId(activeChain);
 
   useEffect(() => {
     if (activeChainId) {

@@ -24,6 +24,7 @@ import { useTokenApprovalsQuery } from "@/hooks/queries/useTokenApprovals";
 import { useWallet } from "@/hooks/useWallet";
 import { getDappBridge } from "@/services/bridge/DappBridge";
 import type { TokenApproval } from "@/services/indexer/types";
+import { getEvmChainId } from "@/services/walletKit/chainInfo";
 import { truncateAddress } from "@/utils/walletUtils";
 
 const APPROVE_ABI = parseAbiItem(
@@ -49,10 +50,7 @@ function buildRevokeData(approval: TokenApproval): `0x${string}` {
 
 export default function ApprovalsScreen(): React.ReactElement {
   const { activeWallet, activeChain } = useWallet();
-  // TODO(task-13): source chainId via kit accessor once `useWallet` exposes
-  // a namespace-aware active-chain id.
-  const chainId =
-    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
+  const chainId = getEvmChainId(activeChain);
   const { data, isLoading, refetch, isRefetching } = useTokenApprovalsQuery(
     activeWallet?.address,
     chainId ?? 1,

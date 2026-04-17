@@ -94,8 +94,11 @@ export type ChainResult =
 export interface AdapterContext {
   activeWallet: TWallet | null;
   wallets: TWallet[];
-  setActiveWallet: (index: number) => void;
   getAccount: (wallet: TWallet) => unknown;   // adapter casts
+  // NOTE: no `setActiveWallet`. The global active-wallet slot is a UI
+  // concern; adapters mutating it poisons other namespaces' paths (see
+  // retro: Solana connect flipped the global → EVM `eth_requestAccounts`
+  // returned 4901). Per-origin state lives in `PermissionStore` grants.
 }
 
 export interface ChainAdapter {

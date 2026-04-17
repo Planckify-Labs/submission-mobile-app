@@ -121,6 +121,32 @@ export class EvmAdapter implements ChainAdapter {
     });
   }
 
+  /**
+   * Returns a ctx whose `activeWallet` is the wallet this origin has a
+   * grant for on the current EVM chain. Falls back to the original ctx
+   * when no grant exists (`pickEvmWalletForOrigin`'s fallback covers the
+   * "first EVM wallet" / "active-if-EVM" edge cases). Idempotent.
+   *
+   * See `handleRequest` for the rationale — this replaces the previous
+   * implicit coupling where `execConnect` mutated the global active
+   * wallet after approval.
+   */
+  private scopeCtxToOrigin(
+    req: ChainRequest,
+    ctx: AdapterContext,
+  ): AdapterContext {
+    const config = this.opts.resolveChainConfig(ctx);
+    if (!config) return ctx;
+    const effective = pickEvmWalletForOrigin(
+      ctx,
+      req.origin.url,
+      config.chain.id,
+    );
+    if (!effective) return ctx;
+    if (ctx.activeWallet?.address === effective.address) return ctx;
+    return { ...ctx, activeWallet: effective };
+  }
+
   getInjectedScript(ctx: AdapterContext): string {
     const config = this.opts.resolveChainConfig(ctx);
     const chainIdHex = config ? toHex(config.chain.id) : "0x1";
@@ -170,6 +196,16 @@ export class EvmAdapter implements ChainAdapter {
       : req.params
         ? [req.params]
         : [];
+
+    // Origin-scope `ctx.activeWallet` to the wallet this dApp has a grant
+    // for. Before `setActiveWallet` was removed from `AdapterContext`,
+    // connect-approval flipped the global so subsequent requests saw the
+    // right wallet. Now the grant itself is authoritative, but the legacy
+    // RPC handlers below still read `ctx.activeWallet` — so we rewrite
+    // it here to the per-origin effective wallet. Unconnected origins
+    // get `pickEvmWalletForOrigin`'s fallback (global or first EVM
+    // wallet), matching pre-refactor behaviour for that edge case too.
+    ctx = this.scopeCtxToOrigin(req, ctx);
 
     try {
       switch (req.method) {
@@ -623,13 +659,10 @@ export class EvmAdapter implements ChainAdapter {
       if (!fallback) throw PROVIDER_ERRORS.disconnected();
       wallet = fallback;
     }
-    if (
-      chosenIndex !== null &&
-      chosenIndex !== undefined &&
-      ctx.wallets[chosenIndex] === wallet
-    ) {
-      ctx.setActiveWallet(chosenIndex);
-    }
+    // Per-origin grant is the source of truth for "which wallet is this
+    // dApp using" — we do NOT flip the global active wallet here (doing
+    // so from Solana's symmetric path caused the EVM-breakage incident
+    // that motivated removing `setActiveWallet` from `AdapterContext`).
     await PermissionStore.grant({
       origin: intent.origin.url,
       walletAddress: wallet.address,
@@ -1163,7 +1196,6 @@ export class EvmAdapter implements ChainAdapter {
     const ctxLike: AdapterContext = {
       activeWallet: null,
       wallets: [],
-      setActiveWallet: () => {},
       getAccount: () => null,
     };
     let pc: PublicClient;

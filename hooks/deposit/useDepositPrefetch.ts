@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { smartContractApi } from "@/api/endpoints/smart-contracts";
 import { useWallet } from "@/hooks/useWallet";
+import { getEvmChainId } from "@/services/walletKit/chainInfo";
 
 /**
  * Pre-warms the deposit screen's JS modules and prefetches its critical queries
@@ -15,11 +16,10 @@ import { useWallet } from "@/hooks/useWallet";
 export function useDepositPrefetch() {
   const queryClient = useQueryClient();
   const { activeChain } = useWallet();
-  // TODO(task-14): deposit prefetch is EVM-only. Skip when the active
-  // chain is non-EVM and let the kit-specific prefetch (when it lands)
-  // handle Solana.
-  const chainId =
-    activeChain.namespace === "eip155" ? activeChain.chain.id : null;
+  // Deposit prefetch is EVM-only; the kit-specific prefetch (when it
+  // lands for Solana/other chains) will hook in here. `getEvmChainId`
+  // returns undefined for non-EVM chains, so we short-circuit below.
+  const chainId = getEvmChainId(activeChain) ?? null;
 
   useEffect(() => {
     if (chainId == null) return;

@@ -5,6 +5,7 @@ import { useWallet } from "@/hooks/useWallet";
 import type { ApprovalIntent } from "@/services/bridge/approval";
 import { getDappBridge } from "@/services/bridge/DappBridge";
 import { InspectorRegistry } from "@/services/bridge/inspector";
+import { formatChainLabel } from "@/services/walletKit/chainInfo";
 import { truncateAddress } from "@/utils/walletUtils";
 import { RiskBanner } from "./RiskBanner";
 
@@ -53,12 +54,7 @@ export function ApprovalShell({
             <Text className="text-xs text-gray-500">
               {activeWallet.name ?? "Wallet"} ·{" "}
               {truncateAddress({ address: activeWallet.address })}
-              {/* TODO(task-17): namespace-aware chain label. */}
-              {activeChain.namespace === "eip155" && activeChain.chain.name
-                ? ` · ${activeChain.chain.name}`
-                : activeChain.namespace === "solana"
-                  ? ` · ${activeChain.cluster}`
-                  : ""}
+              {` · ${formatChainLabel(activeChain)}`}
             </Text>
           </View>
         )}

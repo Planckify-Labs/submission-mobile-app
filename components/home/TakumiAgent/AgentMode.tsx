@@ -67,6 +67,7 @@ import {
   HOT_WALLET_POLICY,
 } from "@/services/resolveUxTreatment";
 import { getTransferThresholdStore } from "@/services/transferThresholdStore";
+import { getEvmChainId } from "@/services/walletKit/chainInfo";
 import * as walletService from "@/services/walletService";
 import AgentOnboarding from "./AgentModeOnboarding/AgentOnboarding";
 import ChatInput from "./ChatInput";
@@ -349,9 +350,7 @@ export default function AgentMode() {
   // drops `chain_id` from a tool input (the server's mobile-tool
   // schema is a permissive `{}` stub, so the LLM is not schema-bound
   // to always include it).
-  // TODO(task-13): source active chain id + metadata via a kit accessor.
-  const activeChainId =
-    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
+  const activeChainId = getEvmChainId(activeChain);
 
   const executorContext: ExecutorContext | null = useMemo(() => {
     if (!activeWallet?.address) return null;

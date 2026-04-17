@@ -13,6 +13,10 @@ import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKe
 import { useNonce, useVerifySignature } from "@/hooks/queries/useAuth";
 import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { useWallet } from "@/hooks/useWallet";
+import {
+  formatChainLabel,
+  getEvmChainId,
+} from "@/services/walletKit/chainInfo";
 
 interface NonceData {
   message: string;
@@ -47,13 +51,8 @@ export default function AuthScreen() {
     isLoading: isWalletLoading,
   } = useWallet();
 
-  // TODO(task-13): source chainId via a namespace-aware kit accessor.
-  const activeChainId =
-    activeChain.namespace === "eip155" ? activeChain.chain.id : undefined;
-  const activeChainName =
-    activeChain.namespace === "eip155"
-      ? activeChain.chain.name
-      : activeChain.cluster;
+  const activeChainId = getEvmChainId(activeChain);
+  const activeChainName = formatChainLabel(activeChain);
 
   // Fetch nonce from the API — enabled once wallet address is available
   const { data: fetchedNonce } = useNonce(activeWallet?.address, activeChainId);

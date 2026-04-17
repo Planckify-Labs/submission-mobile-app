@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { formatUnits } from "viem";
 import { TWalletInfoProps } from "@/constants/types/networkTypes";
 import { useWallet } from "@/hooks/useWallet";
+import { formatChainLabel } from "@/services/walletKit/chainInfo";
 import { formatTokenAmount } from "@/utils/helperUtils";
 
 const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
@@ -42,19 +43,21 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
     fetchBalance();
   }, [activeWallet?.address, getPublicClientForActiveChain]);
 
-  // TODO(task-13): source native metadata via a namespace-aware kit accessor.
+  // Native decimals / symbol are still derived inline — a future
+  // `getNativeCurrency` kit hook would make this chain-agnostic, but the
+  // current read uses viem's `nativeCurrency` field, which only exists
+  // on EVM chains. Keep the inline branch until the kit hook lands.
+  // chain-agnostic-exempt: native-currency read is still chain-shaped
   const nativeDecimals =
     activeChain.namespace === "eip155"
       ? (activeChain.chain.nativeCurrency?.decimals ?? 18)
-      : 9; // Solana SOL has 9 decimals
+      : 9;
+  // chain-agnostic-exempt: native-currency read is still chain-shaped
   const nativeSymbol =
     activeChain.namespace === "eip155"
       ? (activeChain.chain.nativeCurrency?.symbol ?? "ETH")
       : "SOL";
-  const chainDisplayName =
-    activeChain.namespace === "eip155"
-      ? (activeChain.chain.name ?? "Ethereum")
-      : activeChain.cluster;
+  const chainDisplayName = formatChainLabel(activeChain);
 
   const formatBalance = (value: bigint): string => {
     const formatted = formatUnits(value, nativeDecimals);

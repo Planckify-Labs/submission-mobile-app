@@ -140,4 +140,20 @@ export interface WalletKitAdapter {
    * EVM connect is a free grant for parity with MetaMask). Default `false`.
    */
   requireBiometricForConnect?: boolean;
+
+  // ── Chain identification hooks (used by `services/walletKit/chainInfo.ts`) ──
+  /**
+   * Returns the native chain identifier for `chain`. EVM kits return the
+   * viem `chain.id` (number); Solana returns the cluster string. Returns
+   * `null` when the chain does not belong to this kit's namespace, so
+   * callers that receive a cross-namespace chain get a predictable `null`
+   * instead of silently passing `undefined` into a chain-specific client.
+   */
+  getChainId?(chain: ChainConfig): number | string | null;
+  /**
+   * Returns a human-readable label for `chain` (e.g. `"Ethereum Mainnet"`,
+   * `"Solana Mainnet"`). Falls back to `displayName` via
+   * `services/walletKit/chainInfo.ts#formatChainLabel` when omitted.
+   */
+  formatChainLabel?(chain: ChainConfig): string | null;
 }
