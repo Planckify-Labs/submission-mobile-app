@@ -115,7 +115,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   web: {
     bundler: "metro",
-    output: "server",
+    output: "single",
     favicon: "./assets/images/takumipay-no-bg.png",
   },
   plugins: [
