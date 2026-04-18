@@ -5,7 +5,6 @@ import type { Account, PublicClient, WalletClient } from "viem";
 import { useAppLocked } from "@/app/_layout";
 import { runWithChainSwitchingOverlay } from "@/components/common/ChainSwitchingOverlay";
 import { usePerformance } from "@/components/providers/PerformanceProvider";
-import { formatChainLabel } from "@/services/walletKit/chainInfo";
 import {
   type ChainConfig,
   supportedChains,
@@ -19,6 +18,7 @@ import type {
 import { useAgentBusy } from "@/hooks/useAgentBusy";
 import { storage } from "@/lib/storage/mmkv";
 import type { Namespace } from "@/services/chains/types";
+import { formatChainLabel } from "@/services/walletKit/chainInfo";
 import { deriveWalletsFromMnemonic } from "@/services/walletKit/deriveAll";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import type { WalletKitAdapter } from "@/services/walletKit/types";
@@ -59,9 +59,13 @@ export async function warmWalletSigner(w: TWallet): Promise<void> {
     }
   } catch (err) {
     if (__DEV__)
-      console.warn(`[useWallet] warmWalletSigner failed for ${w.address}:`, err);
+      console.warn(
+        `[useWallet] warmWalletSigner failed for ${w.address}:`,
+        err,
+      );
   }
 }
+
 import {
   buildChainConfigFromBlockchain,
   groupWalletsIntoAccounts,

@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { useAppLocked } from "@/app/_layout";
 import { smartContractApi } from "@/api/endpoints/smart-contracts";
+import { useAppLocked } from "@/app/_layout";
 import { useWallet } from "@/hooks/useWallet";
 import { getEvmChainId } from "@/services/walletKit/chainInfo";
 

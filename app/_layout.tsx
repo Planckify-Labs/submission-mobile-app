@@ -25,6 +25,7 @@ import {
   mmkvPersister,
   shouldPersistQuery,
 } from "@/lib/storage/queryPersister";
+import { installQRMatrixCache } from "@/services/qrMatrixCache";
 // Ordering (spec §6.2): polyfill import → bootWalletKits() → any screen/provider.
 import { bootWalletKits } from "@/services/walletKit/boot";
 import { hasStoredWallets } from "@/services/walletService";
@@ -32,6 +33,11 @@ import "../global.css";
 
 // Register WalletKit adapters before any screen/provider reads the registry.
 bootWalletKits();
+
+// Patch `qrcode.create` with an MMKV-backed cache so receive-sheet QRs
+// skip the Reed-Solomon compute on repeat opens. Must run before any
+// component imports `react-native-qrcode-styled`.
+installQRMatrixCache();
 
 SplashScreen.preventAutoHideAsync();
 

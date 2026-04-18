@@ -11,6 +11,7 @@ import {
 } from "lucide-react-native";
 import { useCallback, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Platform,
@@ -37,7 +38,6 @@ import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useAddressBook } from "@/hooks/useAddressBook";
 import { useWallet } from "@/hooks/useWallet";
 import { getChainFamilyLabel } from "@/services/walletKit/chainInfo";
-import { ActivityIndicator } from "react-native";
 
 export default function AddressBook() {
   const { isAuthenticated, hadPreviousSession } = useIsAuthenticated();

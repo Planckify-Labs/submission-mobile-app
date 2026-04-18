@@ -88,9 +88,7 @@ export const useRedemptionHistory = (
     // switch) contributed to the post-switch freeze. Same fix as
     // `usePointBalance`.
     enabled:
-      options?.enabled !== false &&
-      isAuthenticated === true &&
-      !isAuthLoading,
+      options?.enabled !== false && isAuthenticated === true && !isAuthLoading,
     staleTime: 5 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     retry: false,

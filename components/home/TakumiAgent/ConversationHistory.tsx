@@ -442,8 +442,9 @@ export default function ConversationHistory({
                         return (
                           <Pressable
                             key={chain.key}
-                            className={`flex-row items-center p-4 mb-2 rounded-xl ${isActive ? "bg-light-primary-red/10" : "bg-light"
-                              }`}
+                            className={`flex-row items-center p-4 mb-2 rounded-xl ${
+                              isActive ? "bg-light-primary-red/10" : "bg-light"
+                            }`}
                             onPress={() => handleChainSelect(chain.config)}
                           >
                             <View className="mr-3 rounded-full overflow-hidden">

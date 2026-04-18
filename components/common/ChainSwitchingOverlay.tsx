@@ -19,14 +19,7 @@
 import { BlurView } from "expo-blur";
 import { Loader2 } from "lucide-react-native";
 import React, { useEffect, useRef, useSyncExternalStore } from "react";
-import {
-  Animated,
-  Easing,
-  Modal,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Animated, Easing, Modal, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type State = { visible: boolean; message: string };

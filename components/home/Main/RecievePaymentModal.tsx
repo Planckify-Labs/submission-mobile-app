@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { Copy } from "lucide-react-native";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { memo, useEffect, useMemo, useState } from "react";
 import {
   Animated,
   Modal,
@@ -16,8 +16,53 @@ import type { ChainConfig } from "@/constants/configs/chainConfig";
 import { takumipayLogoBase64 } from "@/constants/takumipay";
 import { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
+import { prefetchQRMatrix } from "@/services/qrMatrixCache";
 import { copyToClipboard } from "@/utils/helperUtils";
 import Chip from "../../common/Chip";
+
+// Module-scope styling so `React.memo` below can compare QR props by
+// reference. Inlining these objects in JSX re-created a fresh identity
+// on every modal render, breaking memoization and forcing the SVG to
+// reconcile even when the address hadn't changed.
+const QR_SVG_STYLE = { backgroundColor: "rgb(245 246 249 / 0.5)" } as const;
+const QR_GRADIENT = {
+  type: "linear" as const,
+  options: {
+    colors: ["#c71c4b", "#20222c"],
+    start: [0, 0] as [number, number],
+    end: [1, 1] as [number, number],
+  },
+};
+const QR_OUTER_EYES = {
+  topLeft: { borderRadius: 15, color: "#c71c4b" },
+  topRight: { borderRadius: 15, color: "#c71c4b" },
+  bottomLeft: { borderRadius: 15, color: "#c71c4b" },
+};
+const QR_INNER_EYES = { borderRadius: 10, color: "#20222c" };
+const QR_LOGO = {
+  href: takumipayLogoBase64,
+  scale: 1.2,
+  padding: 2,
+};
+
+const MemoQRCode = memo(function MemoQRCode({ data }: { data: string }) {
+  return (
+    <QRCodeStyled
+      data={data}
+      style={QR_SVG_STYLE}
+      padding={0}
+      className="w-full h-full"
+      size={205}
+      pieceBorderRadius={3.5}
+      isPiecesGlued={true}
+      color="#20222c"
+      gradient={QR_GRADIENT}
+      outerEyesOptions={QR_OUTER_EYES}
+      innerEyesOptions={QR_INNER_EYES}
+      logo={QR_LOGO}
+    />
+  );
+});
 
 type ReceivePaymentModalProps = {
   modalVisible: boolean;
@@ -83,6 +128,21 @@ export default function RecievePaymentModal({
     pairedWallets.find((w) => w.namespace === tabNamespace) ??
     pairedWallets[0] ??
     activeWallet;
+
+  // The QR render is gated on `isModalAnimationComplete` so the
+  // slide-up never has to compete with native-SVG layout for the
+  // piece matrix — mounting it mid-animation makes the sheet look
+  // like it "jumps" to its resting position. The MMKV matrix cache
+  // still helps: when the QR finally mounts after the animation, it
+  // skips the ~1–3 ms Reed-Solomon compute and the paint lands sooner.
+  // `useQRPrefetch` on home warms the cache ahead of time; the
+  // effect below is a belt-and-braces synchronous warm that also
+  // covers tab switches between paired EVM / Solana addresses.
+  const qrAddress = displayWallet.address;
+  useEffect(() => {
+    if (!qrAddress) return;
+    prefetchQRMatrix(qrAddress, { errorCorrectionLevel: "M" });
+  }, [qrAddress]);
 
   const tabLabelFor = (ns: string): string =>
     ns === "eip155"
@@ -191,49 +251,7 @@ export default function RecievePaymentModal({
             <View className="bg-white rounded-3xl p-6 shadow-sm mb-5">
               <View className="items-center mb-6 h-64">
                 <View className="bg-light-main-container/50 p-4 rounded-2xl aspect-square grow">
-                  {isModalAnimationComplete && (
-                    <QRCodeStyled
-                      data={displayWallet.address}
-                      style={{ backgroundColor: "rgb(245 246 249 / 0.5)" }}
-                      padding={0}
-                      className="w-full h-full"
-                      size={205}
-                      pieceBorderRadius={3.5}
-                      isPiecesGlued={true}
-                      color="#20222c"
-                      gradient={{
-                        type: "linear",
-                        options: {
-                          colors: ["#c71c4b", "#20222c"],
-                          start: [0, 0],
-                          end: [1, 1],
-                        },
-                      }}
-                      outerEyesOptions={{
-                        topLeft: {
-                          borderRadius: 15,
-                          color: "#c71c4b",
-                        },
-                        topRight: {
-                          borderRadius: 15,
-                          color: "#c71c4b",
-                        },
-                        bottomLeft: {
-                          borderRadius: 15,
-                          color: "#c71c4b",
-                        },
-                      }}
-                      innerEyesOptions={{
-                        borderRadius: 10,
-                        color: "#20222c",
-                      }}
-                      logo={{
-                        href: takumipayLogoBase64,
-                        scale: 1.2,
-                        padding: 2,
-                      }}
-                    />
-                  )}
+                  {isModalAnimationComplete && <MemoQRCode data={qrAddress} />}
                 </View>
               </View>
 

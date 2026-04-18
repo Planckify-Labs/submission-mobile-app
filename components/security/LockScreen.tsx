@@ -44,14 +44,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { queryClient } from "@/app/_layout";
 import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
+import type { TWallet } from "@/constants/types/walletTypes";
 import { primeAuthState } from "@/hooks/queries/useAuth";
-import { groupWalletsIntoAccounts } from "@/hooks/useWallet.helpers";
 import { warmWalletSigner } from "@/hooks/useWallet";
+import { groupWalletsIntoAccounts } from "@/hooks/useWallet.helpers";
 import { storage } from "@/lib/storage/mmkv";
+import type { Namespace } from "@/services/chains/types";
 import { deriveWalletsFromMnemonic } from "@/services/walletKit/deriveAll";
 import { walletKitRegistry } from "@/services/walletKit/registry";
-import type { Namespace } from "@/services/chains/types";
-import type { TWallet } from "@/constants/types/walletTypes";
 import {
   clearWalletCache,
   loadWalletsFromStorage,

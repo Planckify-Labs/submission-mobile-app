@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { KeyPairSigner } from "@solana/kit";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { ArrowLeft, Shield, Wallet2 } from "lucide-react-native";
@@ -13,14 +14,13 @@ import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKe
 import { useNonce, useVerifySignature } from "@/hooks/queries/useAuth";
 import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { useWallet } from "@/hooks/useWallet";
+import { bytesToBase58 } from "@/services/chains/solana/codec";
 import {
   formatChainLabel,
   getEvmChainId,
 } from "@/services/walletKit/chainInfo";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import * as walletService from "@/services/walletService";
-import { bytesToBase58 } from "@/services/chains/solana/codec";
-import type { KeyPairSigner } from "@solana/kit";
 
 interface NonceData {
   message: string;

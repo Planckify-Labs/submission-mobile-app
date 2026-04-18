@@ -25,6 +25,7 @@ import "fastestsmallesttextencoderdecoder";
 import { install as installQuickCrypto } from "react-native-quick-crypto";
 
 installQuickCrypto();
+
 // TWV-2026-070 — Ed25519 polyfill MUST load after the CSPRNG polyfill and
 // the TextEncoder/TextDecoder shim, and BEFORE any `@solana/kit` import.
 // Hermes' WebCrypto ships without Ed25519; without this shim,

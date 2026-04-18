@@ -24,6 +24,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
@@ -34,6 +35,14 @@ import { walletKitRegistry } from "@/services/walletKit/registry";
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;
+// Approximate chrome above the scroll region (drag handle + title row
+// + search field + the mb-3/mb-4 gaps). Used as a cap on the ScrollView
+// itself so we never have to force an explicit sheet height — the
+// sheet can stay `height: "auto"` and grow to its content, while the
+// ScrollView takes over scrolling once its own content exceeds this
+// budget. Matches the fraction of MODAL_HEIGHT eaten by the header
+// on every platform we target.
+const SCROLL_MAX_HEIGHT = MODAL_HEIGHT - 140;
 
 export interface ChainSelectorRef {
   open: () => void;
@@ -86,6 +95,51 @@ function sortWithinGroup<T extends { isTestnet: boolean }>(rows: T[]): T[] {
   });
 }
 
+// Skeleton placeholder whose shape matches a real `<Pressable>` chain
+// row — avatar circle + two stacked text lines. Used while the modal
+// slide-up is in flight (and when the blockchains query is still
+// loading) so the user sees the list taking shape rather than a
+// generic spinner + "Loading networks…" string.
+function ChainRowSkeleton() {
+  return (
+    <View className="flex-row items-center p-4 mb-2 rounded-xl bg-light">
+      <SingleLoadingSekeleton
+        width={24}
+        height={24}
+        borderRadius={12}
+        style={{ marginRight: 12 }}
+      />
+      <View style={{ flex: 1 }}>
+        <SingleLoadingSekeleton
+          width="45%"
+          height={14}
+          style={{ marginBottom: 6 }}
+        />
+        <SingleLoadingSekeleton width="28%" height={12} />
+      </View>
+    </View>
+  );
+}
+
+function ChainListSkeleton() {
+  return (
+    <View>
+      {[0, 1].map((group) => (
+        <View key={group} className="mb-2">
+          <SingleLoadingSekeleton
+            width={96}
+            height={10}
+            style={{ marginTop: 8, marginBottom: 12 }}
+          />
+          <ChainRowSkeleton />
+          <ChainRowSkeleton />
+          <ChainRowSkeleton />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
@@ -102,9 +156,7 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
   // `await` is resolving. Drives the inline spinner on the tapped row
   // so the user sees "I'm switching to this" without a page-level
   // modal that would obscure deep-flow screens (send / deposit / etc).
-  const [switchingRowKey, setSwitchingRowKey] = useState<string | null>(
-    null,
-  );
+  const [switchingRowKey, setSwitchingRowKey] = useState<string | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
 
@@ -248,15 +300,6 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
 
   const openModal = useCallback(() => {
     setModalVisible(true);
-    // Warm-on-hover: the user opening the picker is strong signal they
-    // may switch namespace. Pre-derive EVM + Solana signers for every
-    // wallet of each namespace shown in the list, off the render path.
-    // By the time they tap a row, the BIP-32 / Ed25519 derivation is
-    // already cached and `handleChainSelect`'s `await` resolves almost
-    // immediately. Without this, first-touch cross-namespace taps pay
-    // a ~100–500 ms main-thread derivation cost.
-    warmNamespace("eip155");
-    warmNamespace("solana");
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -269,6 +312,18 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
         useNativeDriver: true,
       }),
     ]).start();
+    // Warm-on-hover: the user opening the picker is strong signal they
+    // may switch namespace. Pre-derive EVM + Solana signers for every
+    // wallet of each namespace shown in the list, off the render path.
+    // By the time they tap a row, the BIP-32 / Ed25519 derivation is
+    // already cached and `handleChainSelect`'s `await` resolves almost
+    // immediately. Deferred to the next frame so the promise-microtask
+    // churn from N fire-and-forget derivations doesn't contend with
+    // the first frames of the slide-up animation.
+    requestAnimationFrame(() => {
+      warmNamespace("eip155");
+      warmNamespace("solana");
+    });
   }, [fadeAnim, translateY, warmNamespace]);
 
   useImperativeHandle(ref, () => ({ open: openModal }), [openModal]);
@@ -420,14 +475,22 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
                 bottom: 0,
                 left: 0,
                 right: 0,
-                height: MODAL_HEIGHT,
+                // `height: "auto"` so the sheet hugs its content —
+                // short chain lists produce short sheets, no empty
+                // band under the last row (matches the receive-sheet
+                // pattern). Scrolling is capped on the ScrollView
+                // itself (`maxHeight: SCROLL_MAX_HEIGHT`) rather than
+                // on the sheet, which keeps the flex chain simple: no
+                // intermediate wrappers need flex-shrink to propagate
+                // a sheet-level cap down.
+                height: "auto",
                 paddingBottom: bottomOffset,
                 borderTopLeftRadius: 24,
                 borderTopRightRadius: 24,
                 transform: [{ translateY: translateY }],
               }}
             >
-              <View className="bg-light-main-container flex-1 rounded-t-3xl">
+              <View className="bg-light-main-container rounded-t-3xl">
                 <View
                   {...panResponder.panHandlers}
                   className="w-full items-center pt-4 pb-2"
@@ -435,7 +498,7 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
                   <View className="w-12 h-1 bg-gray-300 rounded-full" />
                 </View>
 
-                <View className="px-6 flex-1">
+                <View className="px-6">
                   <View className="flex-row justify-between items-center mb-4">
                     <Text className="text-light-matte-black text-xl font-bold">
                       Select Network
@@ -465,18 +528,13 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
                   </View>
 
                   <ScrollView
-                    className="flex-1"
+                    style={{ maxHeight: SCROLL_MAX_HEIGHT }}
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{ paddingBottom: 24 }}
                   >
                     {isLoading ? (
-                      <View className="items-center justify-center py-8">
-                        <ActivityIndicator color="#c71c4b" />
-                        <Text className="text-light-matte-black mt-2">
-                          Loading networks...
-                        </Text>
-                      </View>
+                      <ChainListSkeleton />
                     ) : filteredGrouped.size === 0 ? (
                       <View className="items-center justify-center py-8">
                         <Text className="text-light-matte-black/60 text-sm">

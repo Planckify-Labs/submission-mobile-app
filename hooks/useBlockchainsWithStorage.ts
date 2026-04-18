@@ -1,136 +1,123 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { blockchainApi } from "@/api/endpoints/blockchains";
 import type {
   TBlockchain,
   TUseBlockchainsWithStorageOptions,
 } from "@/api/types/blockchain";
+import { storage } from "@/lib/storage/mmkv";
 
-const BLOCKCHAIN_STORAGE_KEY = "cached_blockchains_with_storage";
-const BLOCKCHAIN_TIMESTAMP_KEY = "cached_blockchains_with_storage_timestamp";
-const CACHE_INVALIDATION_TIME = 24 * 60 * 60 * 1000;
-const BACKGROUND_REFRESH_INTERVAL = 5 * 60 * 1000;
+const BLOCKCHAIN_STORAGE_KEY = "cached_blockchains";
+const BLOCKCHAIN_TIMESTAMP_KEY = "cached_blockchains_timestamp";
+const OFFLINE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h — offline fallback only
+const STALE_TIME = 5 * 60 * 1000; // 5 min — React Query freshness window
 
+// Server-filtered paths: these options hit the `/search` endpoint and
+// can't be served from the single-payload MMKV cache. Everything else
+// falls through to "fetch the whole catalogue, filter in memory",
+// matching `useTokens`.
+function isServerFilteredQuery(
+  options?: TUseBlockchainsWithStorageOptions,
+): boolean {
+  if (!options) return false;
+  return Boolean(
+    options.forceRefresh ||
+      options.name ||
+      options.chainId ||
+      options.isEVM !== undefined ||
+      options.cursor ||
+      options.take ||
+      options.isNativeCurrency,
+  );
+}
+
+function filterBlockchains(
+  blockchains: TBlockchain[],
+  options?: TUseBlockchainsWithStorageOptions,
+): TBlockchain[] {
+  if (!options) return blockchains;
+  return blockchains.filter((b) => {
+    if (options.isActive !== undefined && b.isActive !== options.isActive)
+      return false;
+    return true;
+  });
+}
+
+function readCachedBlockchains(): TBlockchain[] | undefined {
+  const raw = storage.getString(BLOCKCHAIN_STORAGE_KEY);
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw) as TBlockchain[];
+  } catch {
+    return undefined;
+  }
+}
+
+function readCacheTimestamp(): number {
+  const raw = storage.getString(BLOCKCHAIN_TIMESTAMP_KEY);
+  return raw ? Number.parseInt(raw, 10) || 0 : 0;
+}
+
+async function fetchAndCacheBlockchains(): Promise<TBlockchain[]> {
+  const response = await blockchainApi.getBlockchainList();
+  // Synchronous MMKV writes — persist the full catalogue so every
+  // `useBlockchainsWithStorage({...})` consumer can seed its
+  // `initialData` from the same bundle without per-filter cache entries.
+  storage.set(BLOCKCHAIN_STORAGE_KEY, JSON.stringify(response));
+  storage.set(BLOCKCHAIN_TIMESTAMP_KEY, Date.now().toString());
+  return response;
+}
+
+/**
+ * Optimistic blockchain catalogue hook. Reads the last-known
+ * `/blockchains` payload synchronously from MMKV via `initialData` so
+ * consumers (ChainSelector, wallet derivation, agent router) render
+ * real rows on frame 0 instead of the `isLoading: true` spinner path
+ * that the previous AsyncStorage-inside-queryFn layer forced.
+ *
+ * React Query still runs a background refetch under `STALE_TIME` to
+ * reconcile against the server; the MMKV snapshot rehydrates on next
+ * launch via the regular write path in `fetchAndCacheBlockchains`.
+ *
+ * Server-filtered variants (name / chainId / isEVM / …) bypass the
+ * cache — they're keyed off user input / chain selection and must be
+ * a fresh round-trip.
+ */
 export const useBlockchainsWithStorage = (
   options?: TUseBlockchainsWithStorageOptions,
 ) => {
-  const queryClient = useQueryClient();
-
-  const fetchAndCacheBlockchains = useCallback(async () => {
-    try {
-      const response = await blockchainApi.getBlockchainList();
-      console.log("Background refresh: Fetched new blockchain data");
-
-      await AsyncStorage.setItem(
-        BLOCKCHAIN_STORAGE_KEY,
-        JSON.stringify(response),
-      );
-      await AsyncStorage.setItem(
-        BLOCKCHAIN_TIMESTAMP_KEY,
-        Date.now().toString(),
-      );
-
-      await queryClient.invalidateQueries({ queryKey: ["blockchains"] });
-      return response;
-    } catch (error) {
-      console.error("Background refresh failed:", error);
-      return null;
-    }
-  }, [queryClient]);
-
-  useEffect(() => {
-    let backgroundRefreshInterval: ReturnType<typeof setInterval>;
-
-    const setupBackgroundRefresh = async () => {
-      try {
-        const timestampStr = await AsyncStorage.getItem(
-          BLOCKCHAIN_TIMESTAMP_KEY,
-        );
-        const now = Date.now();
-        const timestamp = timestampStr ? parseInt(timestampStr, 10) : 0;
-
-        if (!timestampStr || now - timestamp > CACHE_INVALIDATION_TIME) {
-          console.log("Cache invalid or expired, triggering refresh");
-          await fetchAndCacheBlockchains();
-        }
-      } catch (error) {
-        console.error("Failed to check cache validity:", error);
-      }
-
-      backgroundRefreshInterval = setInterval(async () => {
-        console.log("Starting background refresh of blockchain data");
-        await fetchAndCacheBlockchains();
-      }, BACKGROUND_REFRESH_INTERVAL);
-    };
-
-    setupBackgroundRefresh();
-
-    return () => {
-      if (backgroundRefreshInterval) {
-        clearInterval(backgroundRefreshInterval);
-      }
-    };
-  }, [fetchAndCacheBlockchains]);
+  const serverFiltered = isServerFilteredQuery(options);
 
   return useQuery<TBlockchain[]>({
     queryKey: ["blockchains", options],
+    initialData: () => {
+      if (serverFiltered) return undefined;
+      const cached = readCachedBlockchains();
+      if (!cached) return undefined;
+      return filterBlockchains(cached, options);
+    },
+    initialDataUpdatedAt: () => (serverFiltered ? 0 : readCacheTimestamp()),
     queryFn: async () => {
+      if (serverFiltered) {
+        return await blockchainApi.searchBlockchains(options);
+      }
       try {
-        if (
-          options?.forceRefresh ||
-          options?.name ||
-          options?.chainId ||
-          options?.isEVM !== undefined ||
-          options?.cursor ||
-          options?.take ||
-          options?.isNativeCurrency
-        ) {
-          const response = await blockchainApi.searchBlockchains(options);
-          console.log("Search query executed with options:", options);
-          return response;
+        const fresh = await fetchAndCacheBlockchains();
+        return filterBlockchains(fresh, options);
+      } catch (err) {
+        // Offline / transient network failure: serve whatever's in MMKV
+        // while the request is recoverable. 24h TTL matches gcTime.
+        const cached = readCachedBlockchains();
+        const ts = readCacheTimestamp();
+        if (cached && Date.now() - ts < OFFLINE_CACHE_TTL) {
+          return filterBlockchains(cached, options);
         }
-
-        const cachedData = await AsyncStorage.getItem(BLOCKCHAIN_STORAGE_KEY);
-        if (cachedData) {
-          const parsedData = JSON.parse(cachedData);
-          console.log("Using cached blockchain data");
-
-          const timestampStr = await AsyncStorage.getItem(
-            BLOCKCHAIN_TIMESTAMP_KEY,
-          );
-          const now = Date.now();
-          const timestamp = timestampStr ? parseInt(timestampStr, 10) : 0;
-
-          if (now - timestamp > BACKGROUND_REFRESH_INTERVAL) {
-            console.log(
-              "Cache older than refresh interval, triggering background update",
-            );
-            fetchAndCacheBlockchains();
-          }
-
-          return parsedData;
-        }
-
-        return (await fetchAndCacheBlockchains()) || [];
-      } catch (error) {
-        console.error("Query execution failed:", error);
-
-        try {
-          const cachedData = await AsyncStorage.getItem(BLOCKCHAIN_STORAGE_KEY);
-          if (cachedData) {
-            console.log("Using cached data as fallback after error");
-            return JSON.parse(cachedData);
-          }
-        } catch (storageError) {
-          console.error("Failed to read from cache:", storageError);
-        }
-
-        throw error;
+        throw err;
       }
     },
-    staleTime: BACKGROUND_REFRESH_INTERVAL,
-    gcTime: CACHE_INVALIDATION_TIME,
+    staleTime: STALE_TIME,
+    gcTime: OFFLINE_CACHE_TTL,
+    refetchOnMount: true,
+    refetchOnReconnect: "always",
   });
 };
 

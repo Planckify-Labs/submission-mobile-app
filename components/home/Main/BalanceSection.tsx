@@ -32,6 +32,7 @@ import TakumiWalletHeaderLogo from "@/components/common/TakumiWalletHeaderLogo";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { usePointBalance } from "@/hooks/queries/usePoints";
 import { usePaymentFeatured } from "@/hooks/queries/useProducts";
+import { useQRPrefetch } from "@/hooks/useQRPrefetch";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { copyToClipboard } from "@/utils/helperUtils";
@@ -67,6 +68,9 @@ export interface BalanceSectionRef {
 
 const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   const { activeWallet, activeChain } = useWallet();
+  // Warm the QR-matrix cache for every wallet on idle so the receive
+  // sheet's QR is paint-ready the instant it mounts.
+  useQRPrefetch();
   // TODO(task-13): source native metadata via a namespace-aware kit accessor.
   const nativeSymbol =
     activeChain.namespace === "eip155"

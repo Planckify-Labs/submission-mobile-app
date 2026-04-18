@@ -71,10 +71,7 @@ function getSolanaKit() {
 function requireSolanaAddress(value: string, key: string): string {
   const kit = getSolanaKit();
   if (!kit.validateAddress(value)) {
-    throw new ExecutorError(
-      ExecutorErrorCode.InvalidInput,
-      `invalid_${key}`,
-    );
+    throw new ExecutorError(ExecutorErrorCode.InvalidInput, `invalid_${key}`);
   }
   return value;
 }
