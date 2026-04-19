@@ -2,6 +2,7 @@ import {
   Check,
   Plus,
   Search,
+  Star,
   Wallet as WalletIcon,
   X,
 } from "lucide-react-native";
@@ -22,6 +23,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Chip from "@/components/common/Chip";
 import type { TWallet } from "@/constants/types/walletTypes";
+import { usePinnedWallets } from "@/hooks/usePinnedWallets";
 import type { Namespace } from "@/services/chains/types";
 import { truncateAddress } from "@/utils/walletUtils";
 
@@ -60,6 +62,8 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
   const [nsFilter, setNsFilter] = useState<NamespaceFilter>("all");
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+
+  const { isPinned, togglePin, canPinMore, maxPinned } = usePinnedWallets();
 
   // Only surface namespace pills the user actually has wallets in —
   // a solo-EVM user shouldn't see a dead "Solana" pill.
@@ -165,6 +169,11 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
         (w) => w.address === item.address,
       );
       const isActive = originalIndex === activeWalletIndex;
+      const pinned = isPinned(item.address);
+      // Disabling the pin tap when the cap is hit (and this row isn't
+      // already pinned) keeps the UX honest — tapping would otherwise
+      // silently no-op and leave users guessing why nothing happened.
+      const pinDisabled = !pinned && !canPinMore;
 
       return (
         <Pressable
@@ -193,6 +202,32 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
             </View>
           </View>
 
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              if (pinDisabled) return;
+              togglePin(item.address);
+            }}
+            disabled={pinDisabled}
+            accessibilityRole="button"
+            accessibilityLabel={pinned ? "Unpin wallet" : "Pin wallet"}
+            accessibilityHint={
+              pinDisabled
+                ? `Pin limit reached (max ${maxPinned}).`
+                : undefined
+            }
+            hitSlop={8}
+            className="w-9 h-9 rounded-full items-center justify-center mr-2"
+          >
+            <Star
+              size={20}
+              color={
+                pinned ? "#c71c4b" : pinDisabled ? "#20222c30" : "#20222c80"
+              }
+              fill={pinned ? "#c71c4b" : "transparent"}
+            />
+          </Pressable>
+
           {isActive && (
             <View className="w-6 h-6 rounded-full bg-light-primary-red items-center justify-center">
               <Check size={14} color="#ffffff" strokeWidth={3} />
@@ -201,7 +236,15 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
         </Pressable>
       );
     },
-    [wallets, activeWalletIndex, handleWalletSelect],
+    [
+      wallets,
+      activeWalletIndex,
+      handleWalletSelect,
+      isPinned,
+      togglePin,
+      canPinMore,
+      maxPinned,
+    ],
   );
 
   const keyExtractor = useCallback(

@@ -32,6 +32,7 @@ import WalletCompactCard from "@/components/wallet/WalletCompactCard";
 import WalletDetails from "@/components/wallet/WalletDetails";
 import WalletSwitcherModal from "@/components/wallet/WalletSwitcherModal";
 import { TWallet } from "@/constants/types/walletTypes";
+import { usePinnedWallets } from "@/hooks/usePinnedWallets";
 import { useWallet, warmWalletSigner } from "@/hooks/useWallet";
 import { chainCacheKey } from "@/hooks/useWallet.helpers";
 
@@ -235,9 +236,18 @@ export default function Wallet() {
 
   const keyExtractor = useCallback((item: TWallet) => item.address, []);
 
-  // Show at most 3 wallet rows in the horizontal strip, preferring the
-  // active one up front when there are more.
+  const { pinnedAddresses } = usePinnedWallets();
+
+  // Horizontal strip is the user's "pinned" set (max 3, in pin order).
+  // When nothing is pinned we fall back to the first 3 wallets so the
+  // strip isn't empty for users who haven't discovered pinning yet.
   const displayedWallets = useMemo(() => {
+    if (pinnedAddresses.length > 0) {
+      return pinnedAddresses
+        .map((addr) => wallets.find((w) => w.address === addr))
+        .filter((w): w is TWallet => !!w)
+        .slice(0, 3);
+    }
     if (wallets.length <= 3) return wallets;
     const activeIdx = wallets.findIndex(
       (w) => w.address === activeWallet?.address,
@@ -246,7 +256,7 @@ export default function Wallet() {
     const result = wallets.slice(0, 3);
     result[0] = wallets[activeIdx];
     return result;
-  }, [wallets, activeWallet?.address]);
+  }, [wallets, activeWallet?.address, pinnedAddresses]);
 
   const getItemLayout = useCallback(
     (_: any, index: number) => ({
