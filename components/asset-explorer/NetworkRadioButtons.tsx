@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import { Maximize2 } from "lucide-react-native";
-import React, { useCallback, useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Platform,
   ScrollView,
@@ -73,39 +73,46 @@ const NetworkRadioButtons = () => {
     return activeTab === "my-assets" ? "#c71c4b" : "#20222c";
   };
 
-  const getNetworkIdFromChainId = useCallback(
-    (chainId: number): string => {
-      const blockchain = blockchains?.find(
-        (b) => typeof b.chainId === "number" && b.chainId === chainId,
-      );
-      if (blockchain && typeof blockchain.chainId === "number") {
-        return blockchain.chainId.toString();
-      }
-      return "ethereum";
-    },
-    [blockchains],
-  );
-
   const activeChainId = getEvmChainId(activeChain);
 
+  // Sync asset-explorer's selected network to the globally-active chain on
+  // mount and whenever the user switches chains elsewhere (header / agent).
+  // Namespace-aware: matches EVM rows by numeric chainId and non-EVM rows
+  // by namespace (backend `isEVM === false` → "solana" in v2.3.0). Without
+  // this branch, Solana never selected itself here because the previous
+  // `getEvmChainId`-only path returned `undefined` for non-EVM chains.
+  //
+  // Keyed on a `namespace|chainId` signature (not on the blockchains
+  // array itself) so pull-to-refresh — which refetches the blockchains
+  // query and hands back a new array reference — doesn't re-run the
+  // effect and stomp the user's manual network pick. Only real global
+  // chain changes flip the signature and cause a resync.
+  const lastSyncedChainRef = useRef<string | null>(null);
   useEffect(() => {
-    if (activeChainId) {
-      const networkId = getNetworkIdFromChainId(activeChainId);
-      const blockchain = blockchains?.find((b) => b.chainId === activeChainId);
+    if (!blockchains) return;
 
-      if (blockchain) {
-        selectNetwork(networkId, blockchain.id);
-      } else if (displayNetworks.some((network) => network.id === networkId)) {
-        selectNetwork(networkId);
+    const signature = `${activeChain.namespace}|${activeChainId ?? ""}`;
+    if (lastSyncedChainRef.current === signature) return;
+
+    const matching = blockchains.find((b) => {
+      const bNamespace = b.isEVM === false ? "solana" : "eip155";
+      if (bNamespace !== activeChain.namespace) return false;
+      if (typeof activeChainId === "number") {
+        return typeof b.chainId === "number" && b.chainId === activeChainId;
       }
-    }
-  }, [
-    activeChainId,
-    blockchains,
-    displayNetworks,
-    selectNetwork,
-    getNetworkIdFromChainId,
-  ]);
+      return true;
+    });
+
+    if (!matching) return;
+
+    const networkId =
+      typeof matching.chainId === "number"
+        ? matching.chainId.toString()
+        : matching.id;
+
+    selectNetwork(networkId, matching.id);
+    lastSyncedChainRef.current = signature;
+  }, [activeChain.namespace, activeChainId, blockchains, selectNetwork]);
 
   const accentColor = getAccentColor();
 

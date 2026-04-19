@@ -1,7 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Search, X } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Pressable,
+  RefreshControl,
   ScrollView,
   StatusBar,
   TextInput,
@@ -19,6 +21,7 @@ import UserAssetList from "@/components/asset-explorer/UserAssetList";
 import WalletInfo from "@/components/asset-explorer/WalletInfo";
 import { SAMPLE_ASSETS } from "@/constants/dummyData/assets";
 import type { TCryptoAsset } from "@/constants/types/assetTypes";
+import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useTokens } from "@/hooks/queries/useTokens";
 import {
   useActiveNetwork,
@@ -43,12 +46,30 @@ export default function AssetExplorer() {
   const [_isLoading, setIsLoading] = useState(false);
   const [availableAssets, setAvailableAssets] = useState<TCryptoAsset[]>([]);
 
-  const { wallets, activeWalletIndex } = useWallet();
+  const { wallets, activeWalletIndex, activeChain } = useWallet();
   const activeWallet = wallets[activeWalletIndex];
 
   const { activeTab, setActiveTab } = useActiveTab();
   const { activeNetwork, activeBlockchainId } = useActiveNetwork();
   const { searchQuery } = useAssetSearchQuery();
+
+  const { data: blockchains } = useBlockchains({ isActive: true });
+
+  // Namespace of the network the user is currently browsing in this
+  // screen. Falls back to the globally-active chain's namespace when the
+  // per-screen selection hasn't synced yet (first render before
+  // `NetworkRadioButtons` commits). Drives the wallet-selector filter so
+  // adding a Solana asset only surfaces Solana wallets, and vice versa.
+  const activeNamespace = useMemo(() => {
+    const blockchain = blockchains?.find((b) => b.id === activeBlockchainId);
+    if (blockchain) return blockchain.isEVM === false ? "solana" : "eip155";
+    return activeChain.namespace;
+  }, [blockchains, activeBlockchainId, activeChain.namespace]);
+
+  const walletsForActiveNamespace = useMemo(
+    () => wallets.filter((w) => w.namespace === activeNamespace),
+    [wallets, activeNamespace],
+  );
 
   const {
     userAssets,
@@ -57,7 +78,39 @@ export default function AssetExplorer() {
     addCustomToken,
     addMultipleAssets,
     isAssetAdded,
+    refetchBalances,
   } = useUserAssetsWithBalances();
+
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull-to-refresh: drop server-backed caches that the asset explorer
+  // reads (token catalogue + blockchain catalogue) and re-fetch balances
+  // for the user's added assets. `refetchQueries` forces a round-trip
+  // even when the cache is still within `staleTime`, which is the point —
+  // the user is explicitly asking "re-sync now".
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.refetchQueries({
+          queryKey: ["tokens"],
+          exact: false,
+        }),
+        queryClient.refetchQueries({
+          queryKey: ["blockchains"],
+          exact: false,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["userAssets"],
+          exact: false,
+        }),
+      ]);
+      refetchBalances();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient, refetchBalances]);
 
   const {
     selectionMode,
@@ -183,6 +236,14 @@ export default function AssetExplorer() {
           className="flex-1"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#c71c4b"]}
+              tintColor="#c71c4b"
+            />
+          }
         >
           <View className="flex-1 px-4 pt-2">
             <AssetExplorerHeader
@@ -241,7 +302,7 @@ export default function AssetExplorer() {
         data={{
           asset: currentAsset,
           assets: selectionMode ? selectedAssets : undefined,
-          wallets,
+          wallets: walletsForActiveNamespace,
           activeNetwork,
         }}
         onClose={closeWalletSelector}
