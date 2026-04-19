@@ -22,7 +22,16 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Chip from "@/components/common/Chip";
 import type { TWallet } from "@/constants/types/walletTypes";
+import type { Namespace } from "@/services/chains/types";
 import { truncateAddress } from "@/utils/walletUtils";
+
+type NamespaceFilter = "all" | Namespace;
+
+const NAMESPACE_LABEL: Record<Namespace, string> = {
+  eip155: "EVM",
+  solana: "Solana",
+  sui: "Sui",
+};
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.75;
@@ -48,19 +57,32 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 16;
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [nsFilter, setNsFilter] = useState<NamespaceFilter>("all");
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
 
+  // Only surface namespace pills the user actually has wallets in —
+  // a solo-EVM user shouldn't see a dead "Solana" pill.
+  const availableNamespaces = useMemo(() => {
+    const set = new Set<Namespace>();
+    for (const w of wallets) {
+      if (w.namespace) set.add(w.namespace);
+    }
+    return Array.from(set);
+  }, [wallets]);
+
   const filteredWallets = useMemo(() => {
-    if (!searchQuery.trim()) return wallets;
-    const query = searchQuery.toLowerCase();
-    return wallets.filter(
-      (wallet) =>
+    const query = searchQuery.trim().toLowerCase();
+    return wallets.filter((wallet) => {
+      if (nsFilter !== "all" && wallet.namespace !== nsFilter) return false;
+      if (!query) return true;
+      return (
         wallet.name.toLowerCase().includes(query) ||
         wallet.address.toLowerCase().includes(query) ||
-        wallet.type.toLowerCase().includes(query),
-    );
-  }, [wallets, searchQuery]);
+        wallet.type.toLowerCase().includes(query)
+      );
+    });
+  }, [wallets, searchQuery, nsFilter]);
 
   const closeModal = useCallback(() => {
     Animated.parallel([
@@ -76,6 +98,7 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
       }),
     ]).start(() => {
       setSearchQuery("");
+      setNsFilter("all");
       onClose();
     });
   }, [fadeAnim, translateY, onClose]);
@@ -122,6 +145,7 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
             useNativeDriver: true,
           }).start(() => {
             setSearchQuery("");
+            setNsFilter("all");
             onClose();
           });
         } else {
@@ -239,6 +263,41 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
                   ) : null}
                 </View>
               </View>
+
+              {availableNamespaces.length > 1 ? (
+                <View className="px-4 mb-3 flex-row">
+                  {(["all", ...availableNamespaces] as NamespaceFilter[]).map(
+                    (key) => {
+                      const isActive = nsFilter === key;
+                      const label =
+                        key === "all" ? "All" : NAMESPACE_LABEL[key];
+                      return (
+                        <Pressable
+                          key={key}
+                          onPress={() => setNsFilter(key)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isActive }}
+                          className={`px-4 py-2 rounded-full mr-2 ${
+                            isActive
+                              ? "bg-light-primary-red"
+                              : "bg-light-matte-black/5"
+                          }`}
+                        >
+                          <Text
+                            className={`text-sm font-semibold ${
+                              isActive
+                                ? "text-light"
+                                : "text-light-matte-black/70"
+                            }`}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      );
+                    },
+                  )}
+                </View>
+              ) : null}
 
               <FlatList
                 data={filteredWallets}

@@ -33,11 +33,7 @@ import WalletDetails from "@/components/wallet/WalletDetails";
 import WalletSwitcherModal from "@/components/wallet/WalletSwitcherModal";
 import { TWallet } from "@/constants/types/walletTypes";
 import { useWallet, warmWalletSigner } from "@/hooks/useWallet";
-import {
-  chainCacheKey,
-  type WalletAccount,
-  walletForNamespace,
-} from "@/hooks/useWallet.helpers";
+import { chainCacheKey } from "@/hooks/useWallet.helpers";
 
 const CARD_WIDTH = 160;
 
@@ -60,10 +56,9 @@ export default function Wallet() {
     wallets,
     accounts,
     activeWallet,
-    activeAccount,
     activeChain,
     isLoading,
-    setActiveAccount,
+    setActiveWallet,
     loadWallets,
     renameAccount,
     getActiveWalletKit,
@@ -149,30 +144,22 @@ export default function Wallet() {
   // freeze the thread. Guard locks the switch for the duration.
   const switchInFlightRef = useRef(false);
 
-  const handleAccountSwitch = useCallback(
-    async (accountId: string) => {
+  const handleWalletSwitch = useCallback(
+    async (walletIndex: number) => {
       if (switchInFlightRef.current) return;
+
+      const targetWallet = wallets[walletIndex];
+      if (!targetWallet) return;
 
       // No-op if already active — avoids firing the overlay and the
       // downstream mutation cascade for a tap on the already-selected
       // card.
-      if (accountId === activeAccount?.id) {
+      if (targetWallet.address === activeWallet?.address) {
         setShowWalletInfo(false);
         return;
       }
 
-      const target = accounts.find((a) => a.id === accountId);
-      if (!target) return;
-
       switchInFlightRef.current = true;
-
-      // Resolve the target wallet row we'll actually switch to (the one
-      // matching the active chain's namespace inside this account).
-      // Pre-warming THIS wallet before flipping state means the signer
-      // cache is hot by the time downstream hooks render against it —
-      // avoids the first-touch BIP-32 / Ed25519 derivation tax landing
-      // on the render thread immediately after state commits.
-      const targetWallet = walletForNamespace(target, activeChain.namespace);
 
       Animated.sequence([
         Animated.timing(detailsOpacity, {
@@ -187,27 +174,15 @@ export default function Wallet() {
         }),
       ]).start();
 
-      // Same overlay the cross-namespace chain switcher uses — gives the
-      // user a clear "this is working, don't navigate away" signal. The
-      // Modal blocks hardware-back + gesture-back while the switch is
-      // in flight, so a user who presses back mid-switch doesn't end
-      // up stranded on the previous screen with stale state.
       try {
         await runWithChainSwitchingOverlay(
-          `Switching to ${target.name}…`,
+          `Switching to ${targetWallet.name}…`,
           async () => {
-            // 1. HEAVY — derivation for the target wallet's signer.
-            if (targetWallet) {
-              await warmWalletSigner(targetWallet);
-            }
-            // 2. State commit — inside `deferredTask` so it runs after
-            //    the overlay's initial paint frame.
+            await warmWalletSigner(targetWallet);
             await deferredTask(async () => {
-              setActiveAccount(accountId);
+              setActiveWallet(walletIndex);
               setShowWalletInfo(false);
             }, "Switching wallet");
-            // 3. Tail yield so the post-commit render paints against
-            //    warm caches before the overlay fades.
             await new Promise((r) => setTimeout(r, 50));
           },
         );
@@ -216,60 +191,62 @@ export default function Wallet() {
       }
     },
     [
-      accounts,
-      activeAccount?.id,
-      activeChain.namespace,
-      setActiveAccount,
+      wallets,
+      activeWallet?.address,
+      setActiveWallet,
       deferredTask,
       detailsOpacity,
     ],
   );
 
-  // The card surface stays wallet-shaped (balance, address pill, etc.)
-  // so we render each account by picking its wallet row for the active
-  // chain namespace and overriding the name to the canonical account
-  // name (e.g. "Main Wallet" instead of "Main Wallet · ETH").
-  const renderCompactAccountItem = useCallback(
-    ({ item }: { item: WalletAccount }) => {
-      const pick = walletForNamespace(item, activeChain.namespace);
-      const display: TWallet = { ...pick, name: item.name };
-      const isActive = activeAccount?.id === item.id;
+  // Render every wallet row flat — EVM and Solana rows of the same
+  // account are both visible regardless of the active chain. Rename
+  // still operates at account level so both rows stay name-synced.
+  const renderCompactWalletItem = useCallback(
+    ({ item }: { item: TWallet }) => {
+      const isActive = activeWallet?.address === item.address;
+      const owningAccount = accounts.find((a) =>
+        a.wallets.some((w) => w.address === item.address),
+      );
+      const walletIndex = wallets.findIndex((w) => w.address === item.address);
       return (
         <WalletCompactCard
-          wallet={display}
+          wallet={item}
           isActive={isActive}
-          onPress={() => handleAccountSwitch(item.id)}
-          allowRename={true}
+          onPress={() => handleWalletSwitch(walletIndex)}
+          allowRename={!!owningAccount}
           onRename={async (newName: string) => {
-            // Rename both rows in the account in a single save so the
-            // user sees ONE biometric prompt, not one per namespace.
-            await renameAccount(item.id, newName);
+            if (!owningAccount) return;
+            await renameAccount(owningAccount.id, newName);
             loadWallets();
           }}
         />
       );
     },
     [
-      activeChain.namespace,
-      activeAccount?.id,
-      handleAccountSwitch,
+      wallets,
+      accounts,
+      activeWallet?.address,
+      handleWalletSwitch,
       renameAccount,
       loadWallets,
     ],
   );
 
-  const keyExtractor = useCallback((item: WalletAccount) => item.id, []);
+  const keyExtractor = useCallback((item: TWallet) => item.address, []);
 
-  // Show at most 3 accounts in the horizontal strip, preferring the
+  // Show at most 3 wallet rows in the horizontal strip, preferring the
   // active one up front when there are more.
-  const displayedAccounts = useMemo(() => {
-    if (accounts.length <= 3) return accounts;
-    const activeIdx = accounts.findIndex((a) => a.id === activeAccount?.id);
-    if (activeIdx < 3) return accounts.slice(0, 3);
-    const result = accounts.slice(0, 3);
-    result[0] = accounts[activeIdx];
+  const displayedWallets = useMemo(() => {
+    if (wallets.length <= 3) return wallets;
+    const activeIdx = wallets.findIndex(
+      (w) => w.address === activeWallet?.address,
+    );
+    if (activeIdx < 0 || activeIdx < 3) return wallets.slice(0, 3);
+    const result = wallets.slice(0, 3);
+    result[0] = wallets[activeIdx];
     return result;
-  }, [accounts, activeAccount?.id]);
+  }, [wallets, activeWallet?.address]);
 
   const getItemLayout = useCallback(
     (_: any, index: number) => ({
@@ -402,16 +379,16 @@ export default function Wallet() {
               </TouchableOpacity>
             </View>
             <Text className="text-light-matte-black/50 text-sm">
-              You have {accounts.length}{" "}
-              {accounts.length === 1 ? "account" : "accounts"}
+              You have {wallets.length}{" "}
+              {wallets.length === 1 ? "wallet" : "wallets"}
             </Text>
           </View>
 
           <View className="mb-4">
             <FlatList
               ref={flatListRef}
-              data={displayedAccounts}
-              renderItem={renderCompactAccountItem}
+              data={displayedWallets}
+              renderItem={renderCompactWalletItem}
               keyExtractor={keyExtractor}
               getItemLayout={getItemLayout}
               horizontal
@@ -444,13 +421,13 @@ export default function Wallet() {
               </View>
               <View className="flex-1">
                 <Text className="text-light-matte-black/50 text-xs mb-0.5">
-                  Active Account
+                  Active Wallet
                 </Text>
                 <Text
                   className="text-light-matte-black font-semibold text-base"
                   numberOfLines={1}
                 >
-                  {activeAccount?.name ?? activeWallet.name}
+                  {activeWallet.name}
                 </Text>
                 <Text
                   className="text-light-matte-black/60 text-xs mt-0.5"
@@ -558,24 +535,15 @@ export default function Wallet() {
         <WalletSwitcherModal
           visible={showSwitcherModal}
           onClose={() => setShowSwitcherModal(false)}
-          // Feed the switcher one representative row per account so it
-          // renders accounts, not raw EVM/Solana pairs. The row's name
-          // is the canonical account name; the address matches the
-          // active chain's namespace. Selecting by list index maps back
-          // to the matching account id.
-          wallets={accounts.map((a) => {
-            const pick = walletForNamespace(a, activeChain.namespace);
-            return { ...pick, name: a.name };
-          })}
-          activeWalletIndex={
-            accounts.findIndex((a) => a.id === activeAccount?.id) >= 0
-              ? accounts.findIndex((a) => a.id === activeAccount?.id)
-              : 0
-          }
+          // Feed every wallet row flat — EVM and Solana rows show as
+          // separate entries regardless of the active chain.
+          wallets={wallets}
+          activeWalletIndex={Math.max(
+            0,
+            wallets.findIndex((w) => w.address === activeWallet?.address),
+          )}
           onSelectWallet={(index: number) => {
-            const target = accounts[index];
-            if (!target) return;
-            handleAccountSwitch(target.id);
+            handleWalletSwitch(index);
           }}
           onAddWallet={() => {
             // Close the switcher first so the sheet doesn't stack on
