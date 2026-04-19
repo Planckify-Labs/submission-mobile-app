@@ -1,68 +1,23 @@
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { Check, Copy, Wallet } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { formatUnits } from "viem";
 import { TWalletInfoProps } from "@/constants/types/networkTypes";
 import { useWallet } from "@/hooks/useWallet";
-import { formatChainLabel } from "@/services/walletKit/chainInfo";
-import { formatTokenAmount } from "@/utils/helperUtils";
+import { useWalletBalance } from "@/hooks/useWalletBalance";
+import {
+  formatChainLabel,
+  getNativeSymbol,
+} from "@/services/walletKit/chainInfo";
 
 const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
-  const { activeChain, getPublicClientForActiveChain } = useWallet();
-  const [balance, setBalance] = useState<bigint>(BigInt(0));
-  const [isLoading, setIsLoading] = useState(false);
+  const { activeChain } = useWallet();
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    const fetchBalance = async () => {
-      if (!activeWallet?.address) return;
-
-      try {
-        setIsLoading(true);
-        const publicClient = getPublicClientForActiveChain();
-        // §7.5: returns `null` on non-EVM chains. This component is
-        // EVM-only today; Task 14/15 will dispatch via
-        // `getActiveWalletKit().getNativeBalance` uniformly.
-        if (!publicClient) {
-          setBalance(BigInt(0));
-          return;
-        }
-        const walletBalance = await publicClient.getBalance({
-          address: activeWallet.address as `0x${string}`,
-        });
-        setBalance(walletBalance);
-      } catch (error) {
-        console.error("Error fetching balance:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchBalance();
-  }, [activeWallet?.address, getPublicClientForActiveChain]);
-
-  // Native decimals / symbol are still derived inline — a future
-  // `getNativeCurrency` kit hook would make this chain-agnostic, but the
-  // current read uses viem's `nativeCurrency` field, which only exists
-  // on EVM chains. Keep the inline branch until the kit hook lands.
-  // chain-agnostic-exempt: native-currency read is still chain-shaped
-  const nativeDecimals =
-    activeChain.namespace === "eip155"
-      ? (activeChain.chain.nativeCurrency?.decimals ?? 18)
-      : 9;
-  // chain-agnostic-exempt: native-currency read is still chain-shaped
-  const nativeSymbol =
-    activeChain.namespace === "eip155"
-      ? (activeChain.chain.nativeCurrency?.symbol ?? "ETH")
-      : "SOL";
+  const { balance, isFetching } = useWalletBalance(activeWallet, activeChain);
+  const nativeSymbol = getNativeSymbol(activeChain) ?? "N/A";
   const chainDisplayName = formatChainLabel(activeChain);
-
-  const formatBalance = (value: bigint): string => {
-    const formatted = formatUnits(value, nativeDecimals);
-    return formatTokenAmount(formatted, { simplify: false });
-  };
 
   const copyAddress = async () => {
     if (activeWallet?.address) {
@@ -113,13 +68,11 @@ const WalletInfo = ({ activeWallet }: TWalletInfoProps) => {
       <View className="mb-4">
         <Text className="text-white/50 text-xs mb-1">Native Balance</Text>
         <View className="flex-row items-end">
-          {isLoading ? (
+          {isFetching ? (
             <ActivityIndicator size="small" color="#c71c4b" />
           ) : (
             <>
-              <Text className="text-white font-bold text-3xl">
-                {formatBalance(balance)}
-              </Text>
+              <Text className="text-white font-bold text-3xl">{balance}</Text>
               <Text className="text-white/60 text-lg ml-2 mb-0.5">
                 {nativeSymbol}
               </Text>

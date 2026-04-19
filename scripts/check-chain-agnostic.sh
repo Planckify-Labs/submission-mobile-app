@@ -56,7 +56,6 @@ ALLOWLIST=(
   # compatibility messaging that is still chain-shaped. Allowlist
   # each with a TODO pointer — these remain the top refactor targets.
   "components/home/Main/RecievePaymentModal.tsx"   # TODO: kit hook for "can wallet receive on chain"
-  "components/home/Main/BalanceSection.tsx"         # TODO: kit hook for per-chain balance display
   "components/dapps-browser/approvals/SwitchChainSheet.tsx" # EVM-only sheet by design
   "components/home/TakumiAgent/ConversationHistory.tsx"    # EVM-only chain list render
 
@@ -68,12 +67,8 @@ ALLOWLIST=(
   "app/dapps-browser.tsx"
   "app/transfer-thresholds.tsx"
   "hooks/useWallet.ts"
-  "hooks/useWalletBalance.ts"
   "hooks/deposit/useDepositState.ts"
 
-  # Still reads viem `nativeCurrency` inline for decimals/symbol; kit
-  # hook `getNativeCurrency` would remove the remaining branch.
-  "components/asset-explorer/WalletInfo.tsx"
 )
 
 if ! command -v rg >/dev/null 2>&1; then

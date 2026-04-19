@@ -129,6 +129,9 @@ export default function AssetExplorer() {
   const { data: tokens, isLoading: isLoadingTokens } = useTokens({
     blockchainId: activeBlockchainId,
     isActive: true,
+    // Native currency is implicit for every chain (shown in the balance
+    // pill / WalletInfo header), so exclude it from the Explore list.
+    isNativeCurrency: false,
   });
 
   useEffect(() => {

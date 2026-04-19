@@ -35,6 +35,7 @@ import { usePaymentFeatured } from "@/hooks/queries/useProducts";
 import { useQRPrefetch } from "@/hooks/useQRPrefetch";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { getNativeSymbol } from "@/services/walletKit/chainInfo";
 import { copyToClipboard } from "@/utils/helperUtils";
 import RecievePaymentModal from "./RecievePaymentModal";
 
@@ -71,11 +72,7 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   // Warm the QR-matrix cache for every wallet on idle so the receive
   // sheet's QR is paint-ready the instant it mounts.
   useQRPrefetch();
-  // TODO(task-13): source native metadata via a namespace-aware kit accessor.
-  const nativeSymbol =
-    activeChain.namespace === "eip155"
-      ? (activeChain.chain.nativeCurrency?.symbol ?? "ETH")
-      : "SOL";
+  const nativeSymbol = getNativeSymbol(activeChain) ?? "N/A";
   const {
     isAuthenticated,
     isLoading: isAuthLoading,
@@ -89,7 +86,7 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   const { data: paymentFeatured, refetch: refetchPayment } =
     usePaymentFeatured();
   const { balance, isFetching, refetch } = useWalletBalance(
-    activeWallet?.address as `0x${string}` | string,
+    activeWallet,
     activeChain,
   );
 

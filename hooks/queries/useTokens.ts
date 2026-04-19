@@ -20,6 +20,11 @@ const filterTokens = (tokens: TToken[], options?: TTokenSearchParams) => {
       return false;
     if (options.isActive !== undefined && token.isActive !== options.isActive)
       return false;
+    if (
+      options.isNativeCurrency !== undefined &&
+      token.isNativeCurrency !== options.isNativeCurrency
+    )
+      return false;
     return true;
   });
 };

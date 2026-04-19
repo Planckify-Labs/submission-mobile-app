@@ -2,34 +2,50 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
-import { formatUnits } from "viem";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
-import { getPublicClient } from "@/utils/clients";
+import type { TWallet } from "@/constants/types/walletTypes";
+import { chainCacheKey } from "@/hooks/useWallet.helpers";
+import { walletKitRegistry } from "@/services/walletKit/registry";
 
-export function useWalletBalance(
-  address?: `0x${string}` | string,
-  chain?: ChainConfig,
-) {
-  // TODO(task-13): replace direct `chain.chain.*` reach-through with a
-  // namespace-aware balance accessor on the kit adapter.
-  const evmChain = chain?.namespace === "eip155" ? chain : undefined;
-  const enabled = Boolean(address && evmChain);
+export function useWalletBalance(wallet?: TWallet, chain?: ChainConfig) {
+  // §6.2 — balance is only meaningful when the active chain's namespace
+  // matches the wallet's namespace. Same guard `app/wallet.tsx` uses on
+  // the header pill. Kit dispatch lives on `walletKitRegistry`, so the
+  // EVM/Solana branch disappears from this hook.
+  const kit = useMemo(() => {
+    if (!wallet?.namespace) return null;
+    try {
+      return walletKitRegistry.get(wallet.namespace);
+    } catch {
+      return null;
+    }
+  }, [wallet?.namespace]);
+
+  const namespaceMatches =
+    !!wallet && !!chain && chain.namespace === wallet.namespace;
+
+  const enabled = Boolean(wallet?.address && kit && namespaceMatches);
   const queryClient = useQueryClient();
+  const chainKey = chain ? chainCacheKey(chain) : null;
   const queryKey = useMemo(
-    () => [QKEY_Wallets.balance, address, evmChain?.chain.id] as const,
-    [address, evmChain?.chain.id],
+    () =>
+      [
+        QKEY_Wallets.balance,
+        wallet?.address,
+        wallet?.namespace,
+        chainKey,
+      ] as const,
+    [wallet?.address, wallet?.namespace, chainKey],
   );
 
   const balanceQuery = useQuery({
     queryKey,
     queryFn: async () => {
-      if (!address || !evmChain) return BigInt(0);
-      const publicClient = getPublicClient(evmChain.chain);
-      const balance = await publicClient.getBalance({
-        address: address as `0x${string}`,
-      });
-      return balance;
+      if (!wallet?.address || !kit || !chain || !namespaceMatches) {
+        return BigInt(0);
+      }
+      return kit.getNativeBalance(wallet.address, chain);
     },
     enabled,
     refetchOnMount: true,
@@ -64,13 +80,12 @@ export function useWalletBalance(
   }, [enabled]);
 
   const balanceFormatted = useMemo(() => {
-    const decimals = evmChain?.chain.nativeCurrency?.decimals ?? 18;
-    const asString = formatUnits(balanceQuery.data ?? BigInt(0), decimals);
-    const [intPart, fracPart = ""] = asString.split(".");
-    const truncated = fracPart.slice(0, 6);
-    const trimmed = truncated.replace(/0+$/g, "");
-    return trimmed ? `${intPart}.${trimmed}` : intPart;
-  }, [balanceQuery.data, evmChain?.chain.nativeCurrency?.decimals]);
+    if (!kit || !chain || !namespaceMatches) return "—";
+    if (balanceQuery.data === undefined) return "0";
+    // Kit emits `"<amount> <symbol>"`; BalanceSection renders the
+    // symbol separately (via `selectedToken`) so strip the suffix.
+    return kit.formatNativeAmount(balanceQuery.data, chain).split(" ")[0];
+  }, [balanceQuery.data, chain, kit, namespaceMatches]);
 
   return {
     balance: balanceFormatted,
