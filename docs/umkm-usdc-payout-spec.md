@@ -856,6 +856,50 @@ Xendit callbacks `POST /webhooks/xendit` with `x-callback-token` for verificatio
 - **Mainnet addresses:** TBD — filed in §12 Q1 until Arc publishes its mainnet reference page. **v1 ships on testnet.**
 - **Treasury:** v1 uses a **platform-owned EOA** (not a contract) as the USDC destination for every merchant payment. Backend matches incoming `Transfer(to=treasury, value, …)` events to pending intents by the `(value, nonce)` pair set at intent creation (§6.2 `NanopayPayload`). A `MerchantTreasury.sol` contract — referenced in the architecture diagram, §5.1, §10.1, and §13 as a forward-looking concept — is **out of v1 scope.** We'll add it when bulk settlement, on-chain fee splits, or per-merchant escrow become load-bearing. Until then, treasury = one EOA per environment, custody = our relayer key, rescue = off-chain.
 
+### 7.1 Backend database setup for Arc (`takumipay-api`)
+
+Three inserts and one audit pass. Mobile's `useBlockchains()` and `useTokens()` hooks pick the rows up automatically on the next cache refresh; no mobile release required after this.
+
+**Insert 1 — `blockchains` row for Arc Testnet:**
+
+```
+INSERT INTO blockchains (chain_id, name, is_evm, rpc_url, explorer_url,
+                         native_currency, is_testnet, is_active)
+VALUES (5042002, 'Arc Testnet', true, 'https://rpc.testnet.arc.network',
+        'https://testnet.arcscan.app', 'USDC', true, true);
+```
+
+Note `native_currency = 'USDC'`, **not `'ETH'`.** This is Arc's defining quirk — gas is paid in USDC. If the backend currently assumes every EVM row has `native_currency = 'ETH'` in any code path (gas-price helpers, analytics labels, balance-formatting utilities), that code misbehaves on Arc. See audit below.
+
+**Insert 2 — `tokens` row for USDC-as-native on Arc:**
+
+```
+INSERT INTO tokens (symbol, name, contract_address, decimals, blockchain_id,
+                    is_stablecoin, is_native_currency, is_active)
+VALUES ('USDC', 'USD Coin', '0x3600000000000000000000000000000000000000',
+        6,                                    -- ERC-20 interface view — USDC micros
+        <id of the Arc row above>,
+        true, true,                           -- is_stablecoin + is_native_currency both true
+        true);
+```
+
+Decimals = 6 is the **ERC-20 interface view** of Arc USDC. The underlying precompile has an 18-decimal "native gas view" too, but every read path (`balanceOf`, `transfer`, `transferWithAuthorization`) and every mobile-side amount calculation uses the 6-decimal view — same math as USDC on Ethereum / Base / Polygon / Arbitrum. The 18-decimal view only matters if backend ever calls `estimateGas` on a native-transfer path, which Nanopayments avoids entirely.
+
+**Insert 3 — mainnet cut-over.** When Arc mainnet launches (§12 Q1), flip `is_testnet` to `false`, swap `chain_id` / `rpc_url` / `explorer_url` to the mainnet values, re-point the Arc USDC token row at the mainnet contract. No schema changes.
+
+**Audit — grep for hardcoded ETH assumptions.** Quick sweep the `takumipay-api` codebase for:
+
+```
+grep -r "'ETH'"        takumipay-api/src/
+grep -r '"ETH"'        takumipay-api/src/
+grep -r "nativeCurrency" takumipay-api/src/
+grep -rE "native.*ETH" takumipay-api/src/
+```
+
+Common offender locations: gas-price fetch helpers, analytics event tagging (`chain_family = "ethereum"` assumptions), balance-formatting utilities that hardcode `decimals: 18` for EVM natives. Anything that branches on `native_currency` string-equal should be updated to read the row value, not a hardcoded constant.
+
+**Space-docking payoff.** Because chain metadata lives in the DB and is fetched by the mobile's existing `useBlockchains()` hook (per memory `feedback_filter_at_source.md`), adding Arc is literally "insert two rows + audit grep." No mobile release, no `WalletKitAdapter` subclass, no `if (chainId === 5042002)` branches anywhere. Future chains (Arc mainnet, Solana-Arc bridge settlement, whatever) follow the exact same two-row pattern.
+
 Add a new `ChainConfig` entry to `constants/configs/chainConfig.ts`:
 
 ```ts
