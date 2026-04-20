@@ -51,10 +51,12 @@ criteria are green.**
 
 - **M1** (tasks 01–05) — Normalization layer. No networking, no chain writes.
 - **M1.5** (tasks 06–09) — Merchant onboarding shell (additive; ships alongside M1).
-- **M2** (tasks 10–15) — Nanopayments core (the default gasless rail).
+- **M2** (tasks 10–15, **prereq: task 26**) — Nanopayments core (the default gasless rail).
 - **M3** (tasks 16–18) — Xendit payout UX + error matrix.
 - **M4** (tasks 19–22) — Gateway deposit + Circle Paymaster wrap.
 - **M5** (tasks 23–25) — x402 + direct-on-Arc fallback paths.
+- **Backend prerequisites** (task 26) — `takumipay-api` DB setup for Arc
+  + ETH-hardcoding audit. Must land before M2 tasks activate on staging.
 
 Agent mode (§8), multi-country expansion (§12 Q3), and `MerchantTreasury.sol`
 (§7) are intentionally not yet broken into tasks — they live beyond v1.
@@ -115,6 +117,12 @@ Agent mode (§8), multi-country expansion (§12 Q3), and `MerchantTreasury.sol`
 | 23 | `23_x402_fallback_path_istaken_false.md` | Path C — raw x402 `fetch → 402 → sign → refetch` reusing the M2 signer |
 | 24 | `24_direct_on_arc_path_istaken_false.md` | Path A — direct ERC-20 `transfer` on Arc (tokenized `WalletKitAdapter` write) |
 | 25 | `25_pay_executor_path_selector_istaken_false.md` | `PayExecutor` path selector (§5.6) unifying A / B / C |
+
+### Backend prerequisites (§7.1)
+
+| # | File | Title |
+|---|---|---|
+| 26 | `26_backend_arc_db_setup_istaken_false.md` | `takumipay-api` seed: `blockchains` + `tokens` upserts for Arc + ETH-hardcoding audit |
 
 ## Source of truth
 

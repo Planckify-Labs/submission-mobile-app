@@ -2,13 +2,20 @@
 
 **Status:** Not taken
 **Owner:** Mobile (mobile-app)
-**Spec reference:** `umkm-usdc-payout-spec.md` §7, §10, §11 M2
+**Spec reference:** `umkm-usdc-payout-spec.md` §7, §7.1, §10, §11 M2
+**Coordinates with:** task 26 (backend `takumipay-api` DB inserts for the
+Arc `blockchains` + `tokens` rows). Task 26 must ship **before** this task
+enables Arc on staging — mobile's `useBlockchains()` / `useTokens()` hooks
+read Arc metadata from the DB, and the `ChainConfig` entry added here is
+the UI-layer mirror (icon, viem chain shape) used by the wallet switcher.
 
 ## Why this matters
 
 M2 needs the mobile app to hold USDC on Base Sepolia (Nanopay source) and
-talk to Arc Testnet (settlement destination). Both need to be in
-`chainConfig.ts` so `useWallet` can activate them through the usual seam.
+talk to Arc Testnet (settlement destination). The backend row (task 26)
+surfaces Arc through `useBlockchains()` automatically; this task adds the
+UI-layer `ChainConfig` so the wallet switcher, icon, and viem client all
+resolve. Both pieces are needed — skip either and Arc shows up broken.
 
 ## Scope
 
@@ -68,3 +75,4 @@ talk to Arc Testnet (settlement destination). Both need to be in
 
 - Adding `WalletKitAdapter` methods — that's task 11.
 - Mainnet addresses — §10.1 migration, separate PR.
+- Backend `blockchains` / `tokens` rows + ETH-hardcoding audit — task 26.
