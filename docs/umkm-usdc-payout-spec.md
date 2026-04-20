@@ -841,6 +841,149 @@ Xendit callbacks `POST /webhooks/xendit` with `x-callback-token` for verificatio
 - **Key hygiene.** Circle Developer API key (for Gateway enrollment / attestation inspection) stays server-side. The mobile app carries no Circle credentials — Nanopayments is permissionless on the client side anyway (§5.2), so this costs us nothing.
 - **Evolvability.** When we add our own Arc facilitator or swap in CCTP v2 as a fallback, the mobile app doesn't learn about it. One endpoint, stable shape.
 
+### 6.6 Database schema (`takumipay-api`)
+
+Six new tables. Columns deliberately mirror the §6 API types — the on-wire shape is the canonical contract, this section just names the persistence. Engine-agnostic (Postgres/MySQL fine); use whatever `takumipay-api` already has. Existing tables are untouched except the two inserts in §7.1.
+
+**Sensitive fields** (encrypt at rest — use KMS, `pgcrypto`, or application-level envelope encryption — whichever the backend already uses elsewhere):
+
+- `merchants.xendit_account_number`
+- `xendit_payouts.account_number_encrypted`
+
+Nothing else here is sensitive — JWS signatures and tx hashes are public.
+
+#### `merchants`
+
+Merchant profile. Created by `POST /v1/merchants/signup` (§6.1). One row per auth principal; `user_id` is the foreign key back into the existing `users` table.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `TEXT PK` | ULID, `mch_…` |
+| `user_id` | `FK users` | unique (one merchant profile per user) |
+| `display_name` | `TEXT NOT NULL` | |
+| `contact_phone` | `TEXT NOT NULL` | WhatsApp, E.164 |
+| `country` | `CHAR(2) NOT NULL` | `"ID"` for v1 |
+| `xendit_channel_code` | `TEXT NOT NULL` | e.g. `"GOPAY"`, `"BCA"` |
+| `xendit_account_number` | `BYTEA NOT NULL` | **encrypted at rest** |
+| `xendit_account_holder_name` | `TEXT NOT NULL` | |
+| `qris_pan` | `TEXT UNIQUE NULL` | first-claim-wins (§12 Q9) |
+| `qris_sticker_photo_key` | `TEXT NULL` | object-storage key for evidence photo |
+| `jws_qr` | `TEXT NOT NULL` | cached signed JWS so we don't re-sign on every read |
+| `jws_issued_at` | `TIMESTAMPTZ NOT NULL` | |
+| `jws_expires_at` | `TIMESTAMPTZ NULL` | null = non-expiring |
+| `payout_provider` | `TEXT NOT NULL DEFAULT 'xendit'` | pluggability hook (§6.4) |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | |
+
+#### `payment_intents`
+
+Every scan-to-pay attempt. Created by `POST /v1/pay/intents` (§6.2). `nanopay_nonce` is the correlation key the backend uses to match an incoming USDC `Transfer` event to the right intent — the same nonce lives inside the EIP-3009 authorization the user signs.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `TEXT PK` | ULID, `pi_…` |
+| `payer_user_id` | `FK users` | |
+| `merchant_id` | `FK merchants` | |
+| `fiat_amount_minor` | `INTEGER NOT NULL` | e.g. 25000 for IDR 25,000 |
+| `fiat_currency` | `TEXT NOT NULL` | `"IDR"` for v1 |
+| `usdc_amount_micros` | `BIGINT NOT NULL` | 6-decimal USDC |
+| `usdc_source_chain_id` | `INTEGER NOT NULL` | e.g. `84532` (Base Sepolia) |
+| `usdc_treasury_address` | `TEXT NOT NULL` | platform EOA |
+| `fx_rate` | `NUMERIC NOT NULL` | |
+| `fx_pair` | `TEXT NOT NULL` | e.g. `"USDC/IDR"` |
+| `fx_source` | `TEXT NOT NULL` | |
+| `fees_network_usd_micros` | `INTEGER NOT NULL` | |
+| `fees_platform_bps` | `INTEGER NOT NULL` | |
+| `path` | `TEXT NOT NULL` | `"nanopay" \| "x402" \| "direct_arc"` |
+| `nanopay_nonce` | `BYTEA UNIQUE NOT NULL` | 32 bytes — matches on-chain `Transfer` event correlation |
+| `nanopay_valid_after`, `nanopay_valid_before` | `INTEGER NOT NULL` | unix seconds |
+| `gasless_mode` | `TEXT NOT NULL` | `"nanopay" \| "arc_native" \| "x402_eip3009" \| "none"` |
+| `requires_deposit` | `BOOLEAN NOT NULL` | |
+| `status` | `TEXT NOT NULL` | `"QUOTED" \| "SIGNED" \| "SETTLED" \| "PAID_OUT" \| "FAILED" \| "EXPIRED"` |
+| `created_at`, `expires_at`, `updated_at` | `TIMESTAMPTZ` | |
+
+#### `nanopay_submissions`
+
+The signed authorizations the mobile app POSTs to our proxy, which we then forward to Circle. Separate from `payment_intents` so we can track retries (signature invalid → user re-signs → new row) and the Circle attestation arrival independently of the intent lifecycle.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `TEXT PK` | |
+| `intent_id` | `FK payment_intents` | |
+| `signature` | `BYTEA NOT NULL` | 65 bytes |
+| `submitted_at` | `TIMESTAMPTZ NOT NULL` | |
+| `circle_attestation_id` | `TEXT NULL` | populated once Circle responds |
+| `circle_attestation_received_at` | `TIMESTAMPTZ NULL` | |
+| `failure_code` | `TEXT NULL` | one of `NanopayFailureCode` (§6.2) |
+| `failure_message` | `TEXT NULL` | |
+
+#### `xendit_payouts`
+
+One row per Xendit `POST /v2/payouts` call. The `reference_id` equals `intent_id` and is used as the Idempotency-Key so retries don't double-disburse. The full Xendit response is stashed as JSONB for debugging failed payouts — Xendit occasionally returns nested error structures that are painful to normalize up-front.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `TEXT PK` | |
+| `intent_id` | `FK payment_intents` | |
+| `xendit_payout_id` | `TEXT UNIQUE NULL` | Xendit's own id from their response |
+| `reference_id` | `TEXT NOT NULL` | `= intent_id` (idempotency-key) |
+| `channel_code` | `TEXT NOT NULL` | echo of merchant's channel at payout time |
+| `account_number_encrypted` | `BYTEA NOT NULL` | **encrypted at rest** |
+| `amount` | `INTEGER NOT NULL` | fiat minor units |
+| `currency` | `TEXT NOT NULL` | `"IDR"` for v1 |
+| `status` | `TEXT NOT NULL` | `"PENDING" \| "PROCESSING" \| "COMPLETED" \| "FAILED"` |
+| `requested_at`, `completed_at`, `webhook_received_at` | `TIMESTAMPTZ` | |
+| `xendit_response_body` | `JSONB NULL` | full Xendit response, for debugging |
+
+#### `gateway_deposits`
+
+One-time USDC deposit each user makes into `GatewayWallet` on their source chain. Prerequisite for any Nanopay payment. A user has zero or one `CONFIRMED` row; pending/failed rows may accumulate.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `TEXT PK` | |
+| `user_id` | `FK users` | |
+| `source_chain_id` | `INTEGER NOT NULL` | |
+| `tx_hash` | `TEXT NOT NULL` | |
+| `amount_micros` | `BIGINT NOT NULL` | |
+| `used_circle_paymaster` | `BOOLEAN NOT NULL` | tracks whether gasless onboarding worked |
+| `status` | `TEXT NOT NULL` | `"PENDING_ATTESTATION" \| "CONFIRMED" \| "FAILED"` |
+| `created_at`, `confirmed_at` | `TIMESTAMPTZ` | |
+
+#### `merchant_qris_claims`
+
+Audit trail for QRIS PAN disputes (§12 Q9). Separate table — not inline on `merchants` — so that claim history survives merchant profile updates and can't be silently overwritten. Ops tool reads from here when resolving disputes.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `TEXT PK` | |
+| `merchant_id` | `FK merchants` | |
+| `qris_pan` | `TEXT NOT NULL` | |
+| `sticker_photo_key` | `TEXT NOT NULL` | object-storage key |
+| `claimed_at` | `TIMESTAMPTZ NOT NULL` | |
+| `reviewed_at` | `TIMESTAMPTZ NULL` | |
+| `dispute_status` | `TEXT NOT NULL DEFAULT 'none'` | `"none" \| "open" \| "resolved_valid" \| "resolved_invalid"` |
+
+#### Indexes
+
+```
+CREATE UNIQUE INDEX ON merchants (user_id);
+CREATE UNIQUE INDEX ON merchants (qris_pan) WHERE qris_pan IS NOT NULL;
+CREATE INDEX        ON payment_intents (status, expires_at);   -- background expiry sweeper
+CREATE UNIQUE INDEX ON payment_intents (nanopay_nonce);
+CREATE INDEX        ON payment_intents (merchant_id, created_at DESC);  -- merchant payout history
+CREATE INDEX        ON nanopay_submissions (intent_id);
+CREATE INDEX        ON xendit_payouts (intent_id);
+CREATE UNIQUE INDEX ON xendit_payouts (xendit_payout_id) WHERE xendit_payout_id IS NOT NULL;
+CREATE INDEX        ON gateway_deposits (user_id, status);     -- "has this user completed onboarding?"
+CREATE INDEX        ON merchant_qris_claims (qris_pan);
+```
+
+#### What's **not** in the schema (deliberate)
+
+- **No `is_merchant` flag on `users`.** Existence of a `merchants.user_id = users.id` row is the source of truth. Cheaper than denormalizing, no drift risk.
+- **No `channels` table.** Xendit `channel_code` enum is served by `takumipay-api` as config (either a hand-maintained JSON file or fetched from Xendit's channel-list endpoint and cached). Hardcoding a table would just add churn when Xendit renames channels (`SHOPEEPAY_ID` has moved before).
+- **No `merchant_treasury_contracts` table.** v1 treasury is a platform EOA per §7 — one address per environment, lives in env vars, doesn't need a DB row.
+
 ## 7. On-Chain: Arc Network Specifics
 
 - **RPC (testnet):** `https://rpc.testnet.arc.network`
