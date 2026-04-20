@@ -119,13 +119,22 @@ No per-merchant caps in v1. Tiered KYC (NIK + selfie → NPWP/PT) is a future co
                    └────────┼────────────┼─────────────┼────────┘
                             │            │             │
                   ╔═════════▼════════════▼═════════════▼══════╗
-                  ║            Arc Network (USDC = gas)       ║
-                  ║  PLATFORM_TREASURY_ADDRESS (platform EOA) ║
-                  ║  — single seller address for all payers   ║
-                  ║  — credited via Circle settle response    ║
-                  ║    (Path B); backend watches USDC         ║
-                  ║    `Transfer` events only for Path A      ║
-                  ║    direct-on-Arc fallback                 ║
+                  ║   Settlement — any of the 13 Gateway      ║
+                  ║   domains (Ethereum, Avalanche, OP,       ║
+                  ║   Arbitrum, Solana, Base, Polygon,        ║
+                  ║   Unichain, Sonic, World, Sei, HyperEVM,  ║
+                  ║   Arc). Destination = wherever the user   ║
+                  ║   deposited into Gateway; platform        ║
+                  ║   withdraws to Arc by default (USDC=gas)  ║
+                  ║   but is not bound to it.                 ║
+                  ║                                           ║
+                  ║   PLATFORM_TREASURY_ADDRESS_EVM (EOA) +   ║
+                  ║   PLATFORM_TREASURY_ADDRESS_SVM (keypair) ║
+                  ║   — single seller address per namespace   ║
+                  ║   — credited via Circle settle response   ║
+                  ║     (Path B); backend watches USDC        ║
+                  ║     `Transfer` events only for Path A     ║
+                  ║     direct-on-chain fallback              ║
                   ╚═════════════════════╤═════════════════════╝
                                         │ (settle 200 OK for B, event for A)
                             ┌───────────▼───────────┐
