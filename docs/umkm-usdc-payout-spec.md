@@ -697,15 +697,45 @@ export interface USDCAmount {
   chainId:      number;
 }
 
-export interface FxQuote {
-  rate:   string;                                     // decimal as string to avoid float drift — "16234.50"
-  pair:   `USDC/${Currency}`;
-  source: string;                                     // "coinbase+wise"
+/**
+ * FX rates reuse the **existing** `exchange_rates` table on `takumipay-api`
+ * (see `api/types/exchange-rate.ts` → `TExchangeRate`, endpoint
+ * `GET /exchange-rates/latest?fromCurrency=USDC&toCurrency=IDR`).
+ *
+ * Do NOT define a new rate type here. The existing row already carries
+ * everything we need: `rate`, `markup` (FX margin), `region`, `provider`,
+ * `sourceProvider` (audit payload), `isActive`, `createdAt`, `cursor`.
+ *
+ * Prerequisite for M3: the seed at `api/src/scripts/prisma/seed.ts:1133-1141`
+ * today seeds USDT/IDR, USDC/SGD, IDRX/IDR, ETH/IDR. Add one row:
+ *   { fromCurrency: "USDC", toCurrency: "IDR", rate: <live>, region: "ID", markup: <bps/100> }
+ * and confirm a rate-refresh cron exists (updates `rate` every 1–5 min
+ * from Wise / OpenExchangeRates / Chainlink). If no cron exists today,
+ * M3 adds one alongside the seed row.
+ */
+import type { TExchangeRate } from "@/api/types/exchange-rate";
+
+/** What the intent row snapshots at quote time — freezes the rate for 60 s
+ *  on the intent itself so the live rate table stays fresh without breaking
+ *  the quote guarantee (§9 "FX manipulation"). */
+export interface FxQuoteSnapshot {
+  exchangeRateId: number;                             // FK to exchange_rates.id — audit trail
+  rate:           string;                             // decimal as string to avoid float drift — "16234.50"
+  markup:         number;                             // FX margin from the rate row at snapshot time
+  fromCurrency:   "USDC";
+  toCurrency:     Currency;                           // "IDR" v1
+  provider:       string;                             // echo of TExchangeRate.provider — for disputes
+  quotedAt:       number;                             // unix seconds when the intent snapshotted
 }
 
+/** Two layered fees. `markup` already on the rate row covers the FX margin;
+ *  `platformBps` is our platform fee *on top* — charged over the USDC amount
+ *  after the FX conversion. Keep the two distinct: markup is how we survive
+ *  rate-move risk, platformBps is how we monetize. */
 export interface FeeBreakdown {
-  networkUsdMicros: number;                           // gas + facilitator margin in USDC micros
-  platformBps:      number;                           // our take, basis points (25 = 0.25%)
+  networkUsdMicros: number;                           // gas + facilitator margin in USDC micros (0 for Path B)
+  xenditFeeIdr:     number;                           // per-channel disbursement fee, quoted at intent creation
+  platformBps:      number;                           // our take, basis points (25 = 0.25%) — layered over markup
 }
 ```
 
@@ -921,7 +951,9 @@ export interface PaymentIntent {
   };
   fiat:    MoneyMinor;
   usdc:    USDCAmount & { treasury: `0x${string}` };
-  fx:      FxQuote;
+  /** Snapshot of the `exchange_rates` row used at quote time — 60 s freeze
+   *  lives on this field, not on the live rate table. */
+  fx:      FxQuoteSnapshot;
   fees:    FeeBreakdown;
   path:    PaymentPath;
   nanopay: NanopayPayload | null;
@@ -1085,11 +1117,16 @@ Every scan-to-pay attempt. Created by `POST /v1/pay/intents` (§6.2). `nanopay_n
 | `usdc_amount_micros` | `BIGINT NOT NULL` | 6-decimal USDC |
 | `usdc_source_chain_id` | `INTEGER NOT NULL` | e.g. `84532` (Base Sepolia) |
 | `usdc_treasury_address` | `TEXT NOT NULL` | platform EOA |
-| `fx_rate` | `NUMERIC NOT NULL` | |
-| `fx_pair` | `TEXT NOT NULL` | e.g. `"USDC/IDR"` |
-| `fx_source` | `TEXT NOT NULL` | |
-| `fees_network_usd_micros` | `INTEGER NOT NULL` | |
-| `fees_platform_bps` | `INTEGER NOT NULL` | |
+| `exchange_rate_id` | `FK exchange_rates` | the live row the quote was snapshotted from (audit trail) |
+| `fx_rate_snapshot` | `NUMERIC NOT NULL` | frozen rate value at `quoted_at` — survives rate-row updates |
+| `fx_markup_snapshot` | `NUMERIC NOT NULL` | frozen `exchange_rates.markup` value at `quoted_at` |
+| `fx_from_currency` | `TEXT NOT NULL` | `"USDC"` |
+| `fx_to_currency` | `TEXT NOT NULL` | `"IDR"` v1 |
+| `fx_provider` | `TEXT NOT NULL` | echo of `exchange_rates.provider` |
+| `fx_quoted_at` | `TIMESTAMPTZ NOT NULL` | when the 60 s freeze started |
+| `fees_network_usd_micros` | `INTEGER NOT NULL` | gas + facilitator margin in USDC micros (0 for Path B) |
+| `fees_xendit_idr` | `INTEGER NOT NULL` | per-channel Xendit disbursement fee snapshot (IDR minor) |
+| `fees_platform_bps` | `INTEGER NOT NULL` | our platform fee on top of FX markup (e.g. 25 = 0.25%) |
 | `path` | `TEXT NOT NULL` | `"nanopay" \| "x402" \| "direct_arc"` |
 | `nanopay_nonce` | `BYTEA UNIQUE NOT NULL` | 32 bytes — matches on-chain `Transfer` event correlation |
 | `nanopay_valid_after`, `nanopay_valid_before` | `INTEGER NOT NULL` | unix seconds |
@@ -1175,6 +1212,24 @@ CREATE UNIQUE INDEX ON xendit_payouts (xendit_payout_id) WHERE xendit_payout_id 
 CREATE INDEX        ON gateway_deposits (user_id, status);     -- "has this user completed onboarding?"
 CREATE INDEX        ON merchant_qris_claims (qris_pan);
 ```
+
+#### FX prerequisites (reuses existing `exchange_rates` table)
+
+No new FX table. v1 reuses the `exchange_rates` table already in `takumipay-api` — schema at `api/types/exchange-rate.ts:TExchangeRate`, endpoint at `api/endpoints/exchange-rates.ts:exchangeRateApi.getLatestExchangeRate`. The quote pipeline reads `fromCurrency="USDC"` + `toCurrency="IDR"` + `region="ID"`, snapshots the row onto `payment_intents` at intent creation, and freezes for 60 s (§9).
+
+One prerequisite the backend engineer must handle in M3:
+
+**Seed the `USDC/IDR` row.** The current seed at `api/src/scripts/prisma/seed.ts:1133-1141` covers `USDT/IDR`, `USDC/SGD`, `IDRX/IDR`, `ETH/IDR` but **not** `USDC/IDR`. Add:
+
+```ts
+{ fromCurrency: "USDC", toCurrency: "IDR", rate: 16234.50, region: "ID", markup: 1.5 }
+```
+
+`markup: 1.5` means 1.5% FX margin — tune against the current Xendit effective rate, with a buffer wide enough to absorb rate drift between manual updates. Platform fee (§6.0 `FeeBreakdown.platformBps`) is separate, layered on top.
+
+**No rate-refresh cron in v1.** Rate stays whatever was last written by seed or ops update. Rationale: simplicity over freshness for the testnet + early mainnet window. Tuning `markup` generously (1.5–2.0%) absorbs the drift. A scheduled refresh job pulling from Wise / OpenExchangeRates / Chainlink is a clear post-v1 follow-up (tracked in §12 Q10) but explicitly out of scope now.
+
+Backend-only — nothing changes on mobile, which already consumes the rate via `exchangeRateApi.getLatestExchangeRate`.
 
 #### What's **not** in the schema (deliberate)
 
@@ -1562,6 +1617,7 @@ All compatible with Expo 54 + Hermes. Pin exact versions in `package.json`; upgr
 - **Q6 — Paymaster on EOAs.** ✅ Resolved upstream — Circle Paymaster supports EOAs via EIP-7702 since July 2025 (post-Pectra), live on Arbitrum + Base. No special smart-account onboarding required; existing EOA wallets can consume Paymaster-sponsored UserOps via `authorization_list`. Engineer should still gate the path behind the existing `EIP7702_ALLOWLIST` per our own security discipline.
 - **Q7 — Solana gasless.** ✅ In scope, shipping in **M6** (§11). Architectural slot defined in M2 (`SolanaWalletKit.signX402SvmPayment`, `NanopayPayload` discriminated union). M2–M5 run EVM-only while the Solana integration lands; until M6 ships, a Solana-active payer is offered "Switch to supported wallet" in the path selector (§5.6). **Open questions still live:** (a) does Circle's Nanopayments `/gateway/v1/x402/settle` accept `solana:*` networks natively, or do we integrate a separate Solana x402 facilitator? Answered at M6 kickoff via `GET /gateway/v1/x402/supported`. (b) Is the x402 SVM scheme (`scheme_exact_svm`) stable enough to build on — track the RFC in `github.com/coinbase/x402/issues/646` (Deadline Validation + Smart Wallet Support).
 - **Q9 — QRIS PAN claim verification.** At onboarding the merchant asserts "this QRIS Merchant PAN is mine." v1 mitigations: unique-constraint the `qrisPan` column (first claim wins → duplicate claim returns `PAN_ALREADY_CLAIMED`), require a photo upload of the physical sticker as lightweight evidence archived for manual dispute review, and trust-on-first-use otherwise. Real merchants notice immediately when TakumiPay payouts stop reaching them; dispute reverses the claim. Stronger verification (e.g. SMS to a phone number bound to the QRIS at the acquirer level) requires acquirer API access — post-v1.
+- **Q10 — Live rate-refresh cron.** v1 ships with the `exchange_rates.USDC→IDR` row updated manually by ops (seeded initial, tuned via `markup` column). Explicit non-scope for v1 per product decision — simplicity beats freshness for the early window. Add a scheduled refresh job (Wise / OpenExchangeRates / Chainlink) post-v1 once payment volume justifies it, or if the effective FX drift starts exceeding the `markup` buffer.
 - **Q8 — Closed vs open merchant network.** V1 assumes the scanned QRIS / PromptPay / DuitNow / VietQR / QR Ph merchant has **already onboarded with us** (their merchant ID is in `takumipay-api`'s registry alongside a Xendit `channel_code` + `account_number`). Paying a merchant the backend has never seen requires either (a) proxying through a QRIS acquirer license so we can route over the national QR rails natively, or (b) Xendit exposing a "pay any QRIS acquirer ID" disbursement channel. Decide before marketing says "pay any UMKM." If we ship closed-network v1, the unknown-merchant error on `POST /v1/pay/intents` surfaces as `MERCHANT_NOT_ONBOARDED` in §9.1 with copy *"This merchant isn't part of the TakumiPay ecosystem yet. Invite them?"* — merchant-framed, no USDC/IDR language in the fallback.
 
 ## 13. Credential Setup Guide (for the user to do later)
