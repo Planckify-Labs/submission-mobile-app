@@ -466,7 +466,7 @@ For UMKM payment sizes (Rp 1 000 = $0.06 minimum), both schemes work cleanly. Su
 
 ### 5.3 Path C — Direct x402 on a non-Nanopayments merchant
 
-If we scan an x402 resource from a merchant that isn't registered with our backend (arbitrary internet merchant, agent-initiated purchase), we fall through to the raw x402 flow: `fetch(resource)` → 402 → sign EIP-3009 → re-fetch with `X-PAYMENT` header. The Coinbase CDP facilitator settles on Base/Polygon/Arbitrum/World/Solana; on Arc we operate our own `x402-facilitator` instance. From the mobile app's perspective, the signing step is **identical** to the Nanopayments one — only the POST destination differs. The quote endpoint decides which one to target.
+If we scan an x402 resource from a merchant that isn't registered with our backend (arbitrary internet merchant, agent-initiated purchase), we fall through to the raw x402 flow: `fetch(resource)` → 402 → sign EIP-3009 → re-fetch with `X-PAYMENT` header. The Coinbase CDP facilitator settles on Base/Polygon/Arbitrum/World/Solana; on Arc we operate our own `x402-facilitator` instance. Facilitator URL per chain comes from `blockchains.x402_facilitator_url` via §6.7 — ops-managed, no env var. When the scanned merchant's 402 response names a specific facilitator URL, we use that; our stored default is the fallback. From the mobile app's perspective, the signing step is **identical** to the Nanopayments one — only the POST destination differs. The quote endpoint decides which one to target.
 
 ### 5.4 Gasless UX — Summary
 
@@ -510,14 +510,23 @@ interface WalletKitAdapter {
    * Paymaster in USDC. Only used for the one-time Gateway deposit
    * (and future arbitrary contract calls). Nanopayments does not use
    * this — it's gasless by design.
+   *
+   * Adapter ONLY signs the UserOp — it does NOT submit. Submission
+   * goes through `takumipay-api`'s `/v1/userop/submit` proxy which
+   * holds the bundler API key server-side (same discipline as
+   * Nanopayments submission). Mobile never sees Pimlico/Alchemy URLs
+   * or their keys.
+   *
+   * `paymaster` address is read from the chain-config endpoint
+   * (§6.7) at runtime — not from env.
    */
   sendUserOpWithUsdcPaymaster?(args: {
     wallet: TWallet;
     chain: ChainConfig;
     calls: Array<{ to: string; data: `0x${string}`; value: bigint }>;
-    paymaster: string;
+    paymaster: string;     // from chain-config response, not env
     permit: { deadline: bigint; v: number; r: `0x${string}`; s: `0x${string}` };
-  }): Promise<{ userOp: UserOperation; userOpHash: `0x${string}` }>;
+  }): Promise<{ userOpHash: `0x${string}` }>;   // server returns after submission
 }
 ```
 
@@ -592,17 +601,21 @@ signX402SvmPayment?(args: {
 /**
  * One-time Gateway deposit wrapped as an ERC-4337 UserOp that pays gas
  * in USDC via Circle Paymaster. Only used on source chains where
- * Paymaster is live (Base, Arbitrum). On chains without Paymaster, fall
- * back to a plain viem `sendTransaction` — caller picks; the kit just
- * exposes both.
+ * Paymaster is live (chain-config endpoint returns a non-null
+ * `paymaster.address`). On chains without Paymaster, fall back to a
+ * plain viem `sendTransaction` — caller picks; the kit just exposes both.
  *
  * EVM-only. Solana kit leaves this undefined.
+ *
+ * Adapter signs the UserOp and POSTs to `takumipay-api /v1/userop/submit`
+ * (§6.7). Backend forwards to Pimlico/Alchemy with the bundler API key
+ * it holds. Returns the submitted `userOpHash` once the bundler accepts.
  */
 sendUserOpWithUsdcPaymaster?(args: {
   wallet: TWallet;
   chain: ChainConfig;
   calls: Array<{ to: `0x${string}`; data: `0x${string}`; value: bigint }>;
-  paymaster: `0x${string}`;
+  paymaster: `0x${string}`;              // from chain-config endpoint, not env
   permit: { deadline: bigint; v: number; r: `0x${string}`; s: `0x${string}` };
 }): Promise<{ userOpHash: `0x${string}` }>;
 ```
@@ -668,20 +681,24 @@ All types below are the **canonical interfaces** the mobile app codes against. I
 ```ts
 // api/types/payouts.ts
 
-/** Xendit channel code, narrowed to Indonesia v1. Update the enum when we ship other countries. */
-export type ChannelCode =
-  | "GOPAY" | "OVO" | "DANA" | "LINKAJA" | "SHOPEEPAY" | "ASTRAPAY" | "JENIUSPAY"
-  | "BCA" | "MANDIRI" | "BNI" | "BRI" | "CIMB" | "PERMATA" | "DANAMON" | "BSI"
-  | (string & { readonly __brand: "OtherIdBank" });    // full Xendit list via /v1/merchants/channels
-
-// Verification note: the exact channel_code strings above are based on
-// Xendit's public docs + acceptance-channels page. Xendit occasionally
-// renames codes (e.g. MANDIRI_SYARIAH → BSI in 2021, SHOPEEPAY has
-// suffixed variants in some regions). Backend engineer should sanity-
-// check each code against Xendit Test Mode during M3 by submitting a
-// dry-run POST /v2/payouts — the API returns a validation error for
-// unknown channel_codes. Any corrections land in the Xendit config
-// file (no mobile release needed — served via /v1/merchants/channels).
+/**
+ * Xendit channel code. Intentionally `string`, not a union — the canonical
+ * list is served from the `channels` DB table (§6.6) via
+ * `GET /v1/merchants/channels?country=ID`. Ops maintains rows in SQL;
+ * no mobile release needed to add / rename / disable a channel.
+ *
+ * Backend validates incoming `channelCode` against the table on every
+ * merchant signup / intent creation. Unknown codes → 400 with a pointer
+ * to the current list. Xendit occasionally renames codes (e.g.
+ * MANDIRI_SYARIAH → BSI in 2021); ops updates the row, mobile picks up
+ * the new list on next refresh.
+ *
+ * Common Indonesia codes today (for context, NOT a binding enum):
+ *   e-wallet: GOPAY OVO DANA LINKAJA SHOPEEPAY ASTRAPAY JENIUSPAY
+ *   bank:     BCA MANDIRI BNI BRI CIMB PERMATA DANAMON BSI
+ * Canonical source: the `channels` table. When in doubt, query the API.
+ */
+export type ChannelCode = string;
 
 export type ChannelKind = "ewallet" | "bank";
 
@@ -689,7 +706,11 @@ export interface ChannelDescriptor {
   channelCode:   ChannelCode;
   label:         string;                              // "GoPay", "BCA", …
   kind:          ChannelKind;
-  accountFormat: "phone_id" | `digits:${number}`;     // e.g. "digits:10" = 10-digit account
+  /** Format hint for the mobile input. "phone_id" → E.164 Indonesian phone,
+   *  "digits:N" → N-digit numeric account number. Parsed client-side to pick
+   *  the right keyboard type + length validation. Stored as a string (not
+   *  a typed union) so ops can add new formats without a schema change. */
+  accountFormat: string;
   priority:      number;                              // lower = shown first in picker
 }
 
@@ -1193,6 +1214,54 @@ One-time USDC deposit each user makes into `GatewayWallet` on their source chain
 | `status` | `TEXT NOT NULL` | `"PENDING_ATTESTATION" \| "CONFIRMED" \| "FAILED"` |
 | `created_at`, `confirmed_at` | `TIMESTAMPTZ` | |
 
+#### `channels`
+
+Xendit payout channels, ops-managed. Served by `GET /v1/merchants/channels?country=ID` — consumed by the merchant-signup form on mobile (§1.1.1) to render the channel picker. Adding / renaming / disabling a channel is a single SQL update: no mobile release, no server deploy.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `channel_code` | `TEXT PK` | e.g. `"GOPAY"`, `"BCA"` — matches Xendit's `channel_code` in `POST /v2/payouts` |
+| `country` | `CHAR(2) NOT NULL` | `"ID"` for v1; `"PH"` / `"TH"` / `"MY"` / `"VN"` when those ship (§12 Q3) |
+| `label` | `TEXT NOT NULL` | display name — "GoPay", "BCA", "Bank Central Asia" |
+| `kind` | `TEXT NOT NULL` | `"ewallet" \| "bank"` |
+| `account_format` | `TEXT NOT NULL` | `"phone_id"` or `"digits:N"` — hint for mobile input validation |
+| `priority` | `INTEGER NOT NULL` | lower = shown first in picker |
+| `is_active` | `BOOLEAN NOT NULL DEFAULT true` | ops kill-switch if a channel goes wonky |
+| `xendit_min_amount_idr` | `INTEGER NULL` | per-channel disbursement minimum, for quote validation |
+| `xendit_max_amount_idr` | `INTEGER NULL` | per-channel cap (Q4) |
+| `xendit_fee_idr` | `INTEGER NOT NULL` | per-payout fee; snapshot onto `payment_intents.fees_xendit_idr` at quote time |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | |
+
+**M3 seed — update `api/src/scripts/prisma/seed.ts`.** The same seed file that currently seeds `exchange_rates` (rows at lines 1133-1141) and the `blockchains` + `tokens` rows gets a new block for the `channels` table. Backend engineer adds the common Indonesia channels during M3 setup by cross-referencing Xendit's channel-list endpoint / public docs. Sample seed block to drop into `seed.ts`:
+
+```ts
+// api/src/scripts/prisma/seed.ts — new block alongside the existing exchange_rates seed
+const channels = [
+  { channel_code: "GOPAY",     country: "ID", label: "GoPay",     kind: "ewallet", account_format: "phone_id",  priority: 10, xendit_fee_idr: 2500 },
+  { channel_code: "OVO",       country: "ID", label: "OVO",       kind: "ewallet", account_format: "phone_id",  priority: 11, xendit_fee_idr: 2500 },
+  { channel_code: "DANA",      country: "ID", label: "DANA",      kind: "ewallet", account_format: "phone_id",  priority: 12, xendit_fee_idr: 2500 },
+  { channel_code: "SHOPEEPAY", country: "ID", label: "ShopeePay", kind: "ewallet", account_format: "phone_id",  priority: 13, xendit_fee_idr: 2500 },
+  { channel_code: "BCA",       country: "ID", label: "BCA",       kind: "bank",    account_format: "digits:10", priority: 20, xendit_fee_idr: 5000 },
+  { channel_code: "MANDIRI",   country: "ID", label: "Mandiri",   kind: "bank",    account_format: "digits:13", priority: 21, xendit_fee_idr: 5000 },
+  { channel_code: "BNI",       country: "ID", label: "BNI",       kind: "bank",    account_format: "digits:10", priority: 22, xendit_fee_idr: 5000 },
+  { channel_code: "BRI",       country: "ID", label: "BRI",       kind: "bank",    account_format: "digits:15", priority: 23, xendit_fee_idr: 5000 },
+  // … verify each against Xendit Test Mode by dry-running POST /v2/payouts;
+  //   the API returns 400 on unknown channel_code, which is the right-sized
+  //   integration test for this seed.
+];
+for (const ch of channels) {
+  await prisma.channel.upsert({
+    where:  { channel_code_country: { channel_code: ch.channel_code, country: ch.country } },
+    update: ch,     // idempotent — re-running seed.ts updates existing rows
+    create: ch,
+  });
+}
+```
+
+Use `upsert` (not `create`) so re-running `seed.ts` in dev is idempotent and ops can re-run it to apply fee updates without manual SQL.
+
+`xendit_fee_idr` and the `xendit_min_amount_idr` / `xendit_max_amount_idr` columns are ops-tunable — update when Xendit changes its pricing or limits. Quote pipeline reads them at intent creation, snapshots onto the intent row. Post-seed, ops either re-runs `seed.ts` after updating the array, or issues a direct SQL `UPDATE` — both paths are fine because the table's the source of truth.
+
 #### `merchant_qris_claims`
 
 Audit trail for QRIS PAN disputes (§12 Q9). Separate table — not inline on `merchants` — so that claim history survives merchant profile updates and can't be silently overwritten. Ops tool reads from here when resolving disputes.
@@ -1220,6 +1289,7 @@ CREATE INDEX        ON xendit_payouts (intent_id);
 CREATE UNIQUE INDEX ON xendit_payouts (xendit_payout_id) WHERE xendit_payout_id IS NOT NULL;
 CREATE INDEX        ON gateway_deposits (user_id, status);     -- "has this user completed onboarding?"
 CREATE INDEX        ON merchant_qris_claims (qris_pan);
+CREATE INDEX        ON channels (country, is_active, priority);   -- picker query path
 ```
 
 #### FX prerequisites (reuses existing `exchange_rates` table)
@@ -1243,8 +1313,119 @@ Backend-only — nothing changes on mobile, which already consumes the rate via 
 #### What's **not** in the schema (deliberate)
 
 - **No `is_merchant` flag on `users`.** Existence of a `merchants.user_id = users.id` row is the source of truth. Cheaper than denormalizing, no drift risk.
-- **No `channels` table.** Xendit `channel_code` enum is served by `takumipay-api` as config (either a hand-maintained JSON file or fetched from Xendit's channel-list endpoint and cached). Hardcoding a table would just add churn when Xendit renames channels (`SHOPEEPAY_ID` has moved before).
 - **No `treasury_contracts` table.** v1 treasury is a single platform EOA per §7 — one address per environment, lives in env vars, doesn't need a DB row.
+
+### 6.7 Chain-config endpoint + UserOp submit proxy (config-as-data)
+
+Two server endpoints that replace what would otherwise be ~8 mobile env vars. This is the same config-as-data discipline the `blockchains` + `tokens` tables already enforce for RPC URLs and token addresses — extended to cover Circle's contract coordinates.
+
+**`GET /v1/blockchains` (existing endpoint, enriched payload).** Mobile's `useBlockchains()` hook consumes this; schema extends the existing `TBlockchain` type in `api/types/blockchain.ts`:
+
+```ts
+// api/types/blockchain.ts (additions — keep existing fields)
+export interface TBlockchain {
+  chainId:        number;
+  name:           string;
+  isEvm:          boolean;
+  rpcUrl:         string;
+  explorerUrl:    string;
+  nativeCurrency: string;
+  isTestnet:      boolean;
+  isActive:       boolean;
+
+  /** Circle Gateway contracts on this chain. Null on chains that aren't Gateway-supported. */
+  gateway: {
+    walletContract: `0x${string}`;   // GatewayWallet
+    minterContract: `0x${string}`;   // GatewayMinter
+  } | null;
+
+  /** Circle Paymaster. Null on chains where it's not deployed (Arc itself
+   *  doesn't need one — USDC=gas natively). UserOp submission goes through
+   *  `/v1/userop/submit` below, so mobile never sees the bundler URL. */
+  paymaster: {
+    address: `0x${string}`;
+  } | null;
+
+  /** EIP-712 domain for EIP-3009 signing against Gateway. Backend populates
+   *  these by calling `GET /gateway/v1/x402/supported` at boot and on a slow
+   *  cron (§6.5). Mobile signs `signTransferWithAuthorization` against these
+   *  values verbatim — do NOT hardcode. Null on chains without an x402 scheme. */
+  x402: {
+    domainName:        string;                 // e.g. "GatewayWalletBatched"
+    domainVersion:     string;                 // e.g. "1"
+    verifyingContract: `0x${string}`;          // the address we sign against
+    /** Default facilitator URL for Path C (raw x402 to non-Nanopayments merchants, §5.3).
+     *  Examples:
+     *    "https://api.cdp.coinbase.com/x402"    — Coinbase CDP (Base/Polygon/Arbitrum/World/Solana)
+     *    "https://x402-facilitator.takumipay.dev" — our own on Arc
+     *  Only used as a fallback: when a merchant's 402 response names a specific
+     *  facilitator, we use that. This field covers the case where a payer
+     *  pastes a raw x402 URL or the 402 response omits the facilitator hint.
+     *  Null on chains where we don't operate or recommend a default. */
+    facilitatorUrl:    string | null;
+  } | null;
+}
+```
+
+Mobile consumption is unchanged shape-wise — `useBlockchains()` already exists — just more fields on each row. Rollout is additive: old mobile clients ignore the new fields; new mobile clients need them.
+
+**`POST /v1/userop/submit` (new endpoint, server-side proxy for ERC-4337).** The mobile adapter signs a UserOp locally (via `sendUserOpWithUsdcPaymaster`, §5.5) and POSTs the signed payload to this endpoint. `takumipay-api` forwards to Pimlico/Alchemy with the bundler key it holds. Keeps the API key off-device and off-git.
+
+```ts
+/** POST /v1/userop/submit   → 200 OK */
+export interface UserOpSubmitRequest {
+  chainId:    number;
+  userOp:     object;                            // signed UserOperation v0.7 shape from viem/permissionless
+  entryPoint: `0x${string}`;                     // EntryPoint contract the UserOp targets
+  intentId?:  `pi_${string}`;                    // optional correlation for the Gateway deposit flow
+}
+export interface UserOpSubmitResponse {
+  userOpHash: `0x${string}`;
+  bundler:    string;                            // opaque provider tag for audit ("pimlico" | "alchemy" | …)
+}
+```
+
+Server-side pseudocode:
+
+```ts
+// takumipay-api: src/userop/submit.controller.ts
+const bundlerUrl = process.env[`BUNDLER_URL_${chainId}`] ?? process.env.BUNDLER_URL_DEFAULT;
+const response = await fetch(bundlerUrl, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ method: "eth_sendUserOperation", params: [userOp, entryPoint], jsonrpc: "2.0", id: 1 }),
+});
+// forward response, record audit row keyed on intentId if present
+```
+
+Bundler API keys live **only** in server env — `BUNDLER_URL_84532`, `BUNDLER_URL_42161`, etc. Never `EXPO_PUBLIC_*`.
+
+### 6.8 Seed script updates (consolidated)
+
+Every DB prerequisite this spec introduces lands in a single file: **`api/src/scripts/prisma/seed.ts`** — the same file that today seeds exchange rates (rows at lines 1133-1141), blockchains, tokens, and products. All new seed blocks use `upsert` keyed on a natural PK so re-running `seed.ts` is idempotent and doubles as the ops update path (edit the array, re-run).
+
+Four additions, ordered by which milestone needs them:
+
+| # | Table | Milestone | Rows | Source section |
+| --- | --- | --- | --- | --- |
+| 1 | `blockchains` | M2 | 1 row for Arc Testnet with the new Gateway / Paymaster / x402 columns | §7.1 |
+| 2 | `tokens` | M2 | 1 row for USDC on Arc (`0x3600…0000`, decimals 6, `is_native_currency: true`) | §7.1 |
+| 3 | `exchange_rates` | M3 | 1 row for `USDC → IDR`, region `"ID"`, markup `1.5` | §6.6 FX prerequisites |
+| 4 | `channels` | M3 | 8 rows for common Indonesia payout channels (GoPay, OVO, DANA, ShopeePay, BCA, Mandiri, BNI, BRI) | §6.6 `channels` |
+
+**Discipline for all four:**
+
+- `upsert` keyed on the natural key (`chain_id` for blockchains, `(contract_address, blockchain_id)` for tokens, `(fromCurrency, toCurrency, region)` for exchange_rates, `(channel_code, country)` for channels) so running `pnpm prisma db seed` in any environment is safe at any time.
+- Values that drift (`fx.rate`, `channels.xendit_fee_idr`, `blockchains.rpc_url` in an outage, etc.) are **editable by re-running the seed** after updating the array. No direct SQL `UPDATE` needed for routine ops changes; manual SQL stays available as an escape hatch.
+- Testnet vs mainnet swap lands in the same file — guard with an `if (process.env.NODE_ENV === "production")` block or split into `seed.testnet.ts` / `seed.mainnet.ts`, whichever matches the existing repo convention.
+
+**What the seed file does NOT need changes for** (already config-as-data or server-env):
+
+- Circle Paymaster / GatewayWallet / GatewayMinter addresses — live on the `blockchains` rows above, populated at boot from `GET /gateway/v1/x402/supported` (§6.5). Hand-seeding is fine for the testnet Arc row; the boot refresh keeps them current for chains added later.
+- Bundler URLs — server env (`BUNDLER_URL_<chainId>`), never DB.
+- x402 facilitator URLs — `blockchains.x402_facilitator_url`, but can stay `NULL` at seed time (Coinbase CDP auto-discovered per 402 response; our own Arc facilitator URL fills in once deployed in M5).
+- Merchant data — per-user, created via `POST /v1/merchants/signup`, not seeded.
+- Xendit credentials — server env, not DB.
 
 ## 7. On-Chain: Arc Network Specifics
 
@@ -1263,15 +1444,40 @@ Backend-only — nothing changes on mobile, which already consumes the rate via 
 
 ### 7.1 Backend database setup for Arc (`takumipay-api`)
 
-Three inserts and one audit pass. Mobile's `useBlockchains()` and `useTokens()` hooks pick the rows up automatically on the next cache refresh; no mobile release required after this.
+Schema extension + three inserts + one audit pass. Mobile's `useBlockchains()` and `useTokens()` hooks pick the rows up automatically on the next cache refresh; no mobile release required after this.
+
+**Schema change — extend `blockchains` table with Circle-specific contract columns.** The mobile app consumes these through the enriched `GET /v1/blockchains` response (§6.7). Putting them in the DB means adding a chain, rotating a paymaster, or repointing a Gateway contract is a SQL update — zero mobile release, zero env-file edit.
+
+```
+ALTER TABLE blockchains
+  ADD COLUMN gateway_wallet_contract     TEXT NULL,    -- null on non-Gateway chains
+  ADD COLUMN gateway_minter_contract     TEXT NULL,
+  ADD COLUMN paymaster_address           TEXT NULL,    -- null on chains without Circle Paymaster
+  ADD COLUMN x402_domain_name            TEXT NULL,    -- e.g. "GatewayWalletBatched"
+  ADD COLUMN x402_domain_version         TEXT NULL,    -- e.g. "1"
+  ADD COLUMN x402_verifying_contract     TEXT NULL,    -- address signed against for EIP-3009 (EVM)
+  ADD COLUMN x402_facilitator_url        TEXT NULL;    -- default facilitator for Path C (§5.3)
+```
+
+The backend's boot-time fetch of `GET /gateway/v1/x402/supported` (§6.5) writes the last three columns automatically on refresh — ops doesn't hand-maintain them.
 
 **Insert 1 — `blockchains` row for Arc Testnet:**
 
 ```
 INSERT INTO blockchains (chain_id, name, is_evm, rpc_url, explorer_url,
-                         native_currency, is_testnet, is_active)
+                         native_currency, is_testnet, is_active,
+                         gateway_wallet_contract, gateway_minter_contract,
+                         paymaster_address,
+                         x402_domain_name, x402_domain_version, x402_verifying_contract,
+                         x402_facilitator_url)
 VALUES (5042002, 'Arc Testnet', true, 'https://rpc.testnet.arc.network',
-        'https://testnet.arcscan.app', 'USDC', true, true);
+        'https://testnet.arcscan.app', 'USDC', true, true,
+        '0x0077777d7EBA4688BDeF3E311b846F25870A19B9',   -- GatewayWallet
+        '0x0022222ABE238Cc2C7Bb1f21003F0a260052475B',   -- GatewayMinter
+        NULL,                                           -- no Paymaster needed — Arc has USDC=gas natively
+        'GatewayWalletBatched', '1',
+        '0x0077777d7EBA4688BDeF3E311b846F25870A19B9',   -- matches gateway_wallet_contract on Arc
+        NULL);                                          -- Path C on Arc uses our own facilitator once deployed; NULL until then
 ```
 
 Note `native_currency = 'USDC'`, **not `'ETH'`.** This is Arc's defining quirk — gas is paid in USDC. If the backend currently assumes every EVM row has `native_currency = 'ETH'` in any code path (gas-price helpers, analytics labels, balance-formatting utilities), that code misbehaves on Arc. See audit below.
@@ -1467,60 +1673,31 @@ Every copy string lives in `constants/paymentErrors.ts` keyed by code so i18n & 
 
 ## 10. Environment Variables (mobile-app)
 
-Add to `.env.example`:
+Config-as-data is the default: every per-chain coordinate (RPC URLs, USDC addresses, Gateway contracts, Paymaster, x402 domain) is served from `takumipay-api` via the enriched `GET /v1/blockchains` endpoint (§6.7). Adding/rotating/disabling a chain is a DB update, not a mobile release.
+
+Only three env vars survive on mobile — all of them bootstrap or security-critical values that can't come from the API:
 
 ```dotenv
 # ── UMKM payout ─────────────────────────────────────────────────────
-# Arc RPC — testnet URL is public; mainnet TBD. We override the RPC
-# in `chainStore` when the active chain is Arc.
-EXPO_PUBLIC_ARC_RPC_URL=https://rpc.testnet.arc.network
-EXPO_PUBLIC_ARC_CHAIN_ID=5042002                                    # Arc Testnet; mainnet TBD
-EXPO_PUBLIC_USDC_ARC_ADDRESS=0x3600000000000000000000000000000000000000
 
-# Default source chain for the user's one-time Gateway deposit. Most
-# users land here on Arc Testnet directly (USDC faucet at
-# faucet.circle.com covers Arc); the user can deposit from any other
-# supported source chain — Gateway unifies the balance across all 13
-# domains. Read by the onboarding screen only.
-EXPO_PUBLIC_NANOPAY_SOURCE_CHAIN_ID=5042002                          # Arc Testnet (Circle domain 26)
-EXPO_PUBLIC_USDC_BASE_SEPOLIA_ADDRESS=0x036CbD53842c5426634e7929541eC2318f3dCF7e   # only used when the user explicitly picks Base Sepolia at deposit
+# API endpoints — bootstrap coordinates. Can't fetch these from the
+# API itself (chicken/egg); must be baked into the build.
+EXPO_PUBLIC_API_URL=https://api.takumipay.dev            # takumipay-api base URL
+EXPO_PUBLIC_AI_API_URL=https://agent.takumipay.dev       # takumi-agent-api base URL (agent mode §8)
 
-# Circle Gateway — public contract addresses, no secret required.
-# `GatewayWallet` is also the EIP-712 `verifyingContract` for the
-# EIP-3009 signature (the canonical address per source chain is fetched
-# at backend boot from `GET /gateway/v1/x402/supported`; the env value
-# below is the testnet default for Arc and is shown to the user during
-# onboarding so they know which contract they're depositing into).
-EXPO_PUBLIC_CIRCLE_GATEWAY_WALLET=0x0077777d7EBA4688BDeF3E311b846F25870A19B9
-EXPO_PUBLIC_CIRCLE_GATEWAY_MINTER=0x0022222ABE238Cc2C7Bb1f21003F0a260052475B
-
-# Circle Nanopayments — the default gasless rail. Endpoint is part of
-# the public Gateway API, no key required (the OpenAPI declares
-# `security: []` for /gateway/v1/x402/*). Mobile never hits Circle
-# directly in v1 — every signed authorization is POSTed to
-# takumipay-api, which proxies to the URL below. The flag exists only
-# as a dev-time escape hatch.
-EXPO_PUBLIC_CIRCLE_NANOPAY_API=https://gateway-api-testnet.circle.com   # https://gateway-api.circle.com in prod
-EXPO_PUBLIC_CIRCLE_NANOPAY_SUBMIT_VIA_SERVER=true                       # v1 locked to true; mobile POSTs to takumipay-api proxy
-
-# Circle Paymaster — permissionless, no API key required. Only used for
-# the one-time Gateway deposit (and future non-USDC-transfer calls).
-# Arbitrum & Base today; Arc tracked in §12 Q1.
-EXPO_PUBLIC_CIRCLE_PAYMASTER_V07=   # fill from developers.circle.com/paymaster
-EXPO_PUBLIC_ERC4337_BUNDLER_BASE=
-EXPO_PUBLIC_ERC4337_BUNDLER_ARBITRUM=
-EXPO_PUBLIC_ERC4337_BUNDLER_ARC=    # fill once Arc paymaster support lands
-
-# x402 — the facilitator URL we recommend by default. Mobile only reads
-# this for display; the actual facilitator is chosen by the merchant's
-# 402 response. EIP-3009 signing works against this facilitator with no
-# additional config (gas-abstraction is implicit in the scheme).
-EXPO_PUBLIC_X402_DEFAULT_FACILITATOR=https://api.cdp.coinbase.com/x402
-
-# Public key used to verify `takumipay:v1:<JWS>` QR signatures. Rotate
-# via EAS OTA update when the backend key rotates.
+# Public key used to verify `takumipay:v1:<JWS>` QR signatures OFFLINE
+# (no network). Must be bundled — we can't trust an API-delivered
+# pubkey to verify a merchant QR the user scanned without a connection.
+# Rotate via EAS OTA update when the backend private key rotates.
 EXPO_PUBLIC_TAKUMIPAY_QR_PUBKEY_JWK=
 ```
+
+That's it. Every other chain/contract/RPC/bundler value that used to live here now rides on `/v1/blockchains` rows. Benefits:
+
+- **Zero-release chain additions** — Arc mainnet, HyperEVM, Sei, etc. land via DB insert; mobile picks them up on next `useBlockchains()` refresh.
+- **Bundler API keys stay server-side** — `/v1/userop/submit` proxies to Pimlico/Alchemy with keys held in `takumipay-api` env. Mobile never sees them.
+- **Testnet/mainnet separation happens at the server** — `is_testnet` column on `blockchains` decides what's served; no env-per-environment gymnastics in the app.
+- **Ops kill switch** — `is_active = false` on any row disables the chain for every user on the next refresh, without a release.
 
 **Secrets in `takumipay-api` only** (do NOT add to mobile):
 
@@ -1529,68 +1706,102 @@ EXPO_PUBLIC_TAKUMIPAY_QR_PUBKEY_JWK=
 XENDIT_SECRET_KEY=xnd_production_…            # HTTP Basic, empty password
 XENDIT_WEBHOOK_TOKEN=…                         # x-callback-token verifier
 CIRCLE_API_KEY=SAND_API_KEY:…                  # OPTIONAL — Developer Console only; settle endpoints are permissionless
+CIRCLE_GATEWAY_API=https://gateway-api-testnet.circle.com   # testnet vs prod — flip for mainnet
 PLATFORM_TREASURY_ADDRESS_EVM=0x…              # platform-owned EOA; seller `payTo` for Path B-EVM + Path A
 PLATFORM_TREASURY_ADDRESS_SVM=…                # platform-owned Solana keypair pubkey (base58); seller `payTo` for Path B-SVM — M6 only, can be blank until then
 ARC_SETTLER_PRIVATE_KEY=0x…                    # EVM private key for PLATFORM_TREASURY_ADDRESS_EVM — also signs balance withdrawals
 SVM_SETTLER_PRIVATE_KEY=…                      # Solana private key for PLATFORM_TREASURY_ADDRESS_SVM — M6 only
 TAKUMIPAY_QR_PRIVATE_KEY_PEM=…                 # signs merchant QRs
+
+# ERC-4337 bundler URLs per chain — server-side only, API keys embedded.
+# Mobile never sees these; the adapter's sendUserOpWithUsdcPaymaster
+# posts the signed UserOp to /v1/userop/submit which forwards here.
+# Add one row per chain where Paymaster is live. M4 only.
+BUNDLER_URL_84532=https://api.pimlico.io/v2/base-sepolia/rpc?apikey=…     # Base Sepolia
+BUNDLER_URL_421614=https://api.pimlico.io/v2/arbitrum-sepolia/rpc?apikey=…# Arbitrum Sepolia
+BUNDLER_URL_DEFAULT=                                                       # optional fallback
 ```
 
 ### 10.1 Testnet → Mainnet Migration Checklist
 
-Every var here is flipped in **one config change**. Nothing in `services/` or `app/` code has to change — chain IDs and contract addresses are read from env at boot time. Run the checklist during the cut-over window:
+**Mobile app:** zero release required. All chain coordinates (RPC URLs, contract addresses, Gateway + Paymaster + x402 domain, token addresses) live in the `blockchains` + `tokens` tables served by `/v1/blockchains` (§6.7). Migration is a DB update, picked up on the next `useBlockchains()` refresh.
+
+The only mobile env var that touches mainnet graduation:
 
 ```dotenv
-# Mobile app — swap these when graduating from testnet to mainnet
-EXPO_PUBLIC_ARC_RPC_URL=https://rpc.arc.network                       # was: rpc.testnet.arc.network
-EXPO_PUBLIC_ARC_CHAIN_ID=<MAINNET_ID>                                 # was: 5042002    — fill from docs.arc.network once published (§12 Q1)
-EXPO_PUBLIC_USDC_ARC_ADDRESS=<MAINNET_USDC>                           # was: 0x3600…00   — confirm with Circle / Arc
-
-EXPO_PUBLIC_NANOPAY_SOURCE_CHAIN_ID=<ARC_MAINNET_ID>                  # was: 5042002 (Arc Testnet) — flip to Arc mainnet domain when published (§12 Q1)
-EXPO_PUBLIC_USDC_BASE_SEPOLIA_ADDRESS= → EXPO_PUBLIC_USDC_BASE_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913    # only relevant if users still deposit from Base; Arc remains the recommended default
-
-EXPO_PUBLIC_CIRCLE_GATEWAY_WALLET=<MAINNET_WALLET>                    # confirm with Circle
-EXPO_PUBLIC_CIRCLE_GATEWAY_MINTER=<MAINNET_MINTER>                    # confirm with Circle
-
-EXPO_PUBLIC_CIRCLE_PAYMASTER_V07=<MAINNET_PAYMASTER>                  # from developers.circle.com/paymaster
-
-EXPO_PUBLIC_ERC4337_BUNDLER_BASE=<MAINNET_BUNDLER>                    # Pimlico/Alchemy mainnet endpoint
-EXPO_PUBLIC_ERC4337_BUNDLER_ARBITRUM=<MAINNET_BUNDLER>
-EXPO_PUBLIC_ERC4337_BUNDLER_ARC=<MAINNET_BUNDLER>                     # once Arc paymaster support lands
-
-EXPO_PUBLIC_X402_DEFAULT_FACILITATOR=https://api.cdp.coinbase.com/x402  # same URL, but it now settles on mainnet by default
-EXPO_PUBLIC_TAKUMIPAY_QR_PUBKEY_JWK=<ROTATED_KEY>                      # rotate to a separate prod-only signing key
+EXPO_PUBLIC_TAKUMIPAY_QR_PUBKEY_JWK=<ROTATED_KEY>  # rotate to a separate prod-only JWS signing key (§13 step 6)
 ```
 
+And that only needs an EAS OTA update (minutes), not a store release.
+
+**Server (`takumipay-api`) — flip these values:**
+
 ```dotenv
-# takumipay-api — swap these
-XENDIT_SECRET_KEY=xnd_production_…                                     # was: xnd_development_…
-XENDIT_ENV=production                                                   # was: sandbox
-CIRCLE_API_KEY=LIVE_API_KEY:…                                           # only if using Developer Console; settle is permissionless
-EXPO_PUBLIC_CIRCLE_NANOPAY_API=https://gateway-api.circle.com           # was: gateway-api-testnet.circle.com (server-side env mirror)
-PLATFORM_TREASURY_ADDRESS=<prod EOA — NEW KEY>                          # was: testnet platform treasury
+# Xendit
+XENDIT_SECRET_KEY=xnd_production_…                # was: xnd_development_…
+XENDIT_ENV=production                              # was: sandbox
+
+# Circle Gateway — flip base URL, everything else is DB-served
+CIRCLE_GATEWAY_API=https://gateway-api.circle.com  # was: gateway-api-testnet.circle.com
+CIRCLE_API_KEY=LIVE_API_KEY:…                      # only if using Developer Console; settle is permissionless
+
+# Platform treasury — rotate to prod keys, fund with mainnet USDC
+PLATFORM_TREASURY_ADDRESS_EVM=<prod EOA — NEW KEY>
+PLATFORM_TREASURY_ADDRESS_SVM=<prod Solana keypair — NEW KEY, M6 only>
 ARC_SETTLER_PRIVATE_KEY=<prod relayer — NEW KEY, funded with mainnet USDC>
+SVM_SETTLER_PRIVATE_KEY=<prod Solana signer — NEW KEY, M6 only>
+
+# Bundler — prod Pimlico/Alchemy endpoints (per-chain)
+BUNDLER_URL_8453=https://api.pimlico.io/v2/base/rpc?apikey=…          # Base mainnet
+BUNDLER_URL_42161=https://api.pimlico.io/v2/arbitrum/rpc?apikey=…     # Arbitrum mainnet
+BUNDLER_URL_<ARC_MAINNET_ID>=<prod endpoint>                           # once Arc Paymaster lands
+
+# JWS signing
 TAKUMIPAY_QR_PRIVATE_KEY_PEM=<prod signing key — NEW KEY>
 ```
 
+**DB updates on `blockchains`:**
+
+```sql
+-- For each supported mainnet chain, update or INSERT the row:
+UPDATE blockchains SET
+  chain_id                 = <MAINNET_ID>,
+  name                     = 'Arc',
+  rpc_url                  = 'https://rpc.arc.network',
+  explorer_url             = 'https://arcscan.app',
+  is_testnet               = false,
+  gateway_wallet_contract  = '<mainnet GatewayWallet>',
+  gateway_minter_contract  = '<mainnet GatewayMinter>',
+  paymaster_address        = '<mainnet Paymaster, or NULL>',
+  x402_domain_name         = 'GatewayWalletBatched',
+  x402_domain_version      = '1',
+  x402_verifying_contract  = '<mainnet verifying contract>'
+WHERE chain_id = 5042002;   -- or whatever the testnet row's chain_id was
+
+-- Token rows similarly (tokens table) — repoint USDC to mainnet contract.
+```
+
+Values come from `docs.arc.network/arc/references/contract-addresses` (Arc contracts) and `developers.circle.com/paymaster` + `/gateway/v1/x402/supported` (Circle contracts).
+
 Migration runbook (server-side):
 
-1. Generate fresh prod signing key-pair for JWS merchant QRs. Bundle the new public JWK with an EAS OTA update — roll out 48h before go-live so pre-update clients upgrade.
-2. Generate a fresh `PLATFORM_TREASURY_ADDRESS` (EOA) for mainnet; pin in `takumipay-api/.env`. No contract to deploy in v1 — see §7. If/when the `PlatformTreasury.sol` contract becomes load-bearing, its mainnet deploy step lands here.
+1. Generate fresh prod signing key-pair for JWS merchant QRs. Bundle the new public JWK with an EAS OTA update — roll out 48h before go-live so pre-update clients upgrade. **This is the only mobile-facing change.**
+2. Generate fresh `PLATFORM_TREASURY_ADDRESS_EVM` (EOA) and `PLATFORM_TREASURY_ADDRESS_SVM` (Solana keypair, M6 only) for mainnet; pin private keys in `takumipay-api/.env`. No contract to deploy in v1 — see §7. If/when the `PlatformTreasury.sol` contract becomes load-bearing, its mainnet deploy step lands here.
 3. Fund the prod relayer wallet with mainnet USDC on each Gateway source chain we support.
-4. Flip `XENDIT_ENV=production` last — triggers real IDR disbursements on the next webhook.
-5. Re-issue every onboarded merchant's TakumiPay JWS QR (server-side script, no merchant action needed — the JWS is chain-agnostic per §4.4 so merchants don't reprint). Old testnet-signed JWSes get rejected by the new pubkey; the script runs in the same window as the EAS OTA.
-6. Watch the first production intent end-to-end before taking the feature out of staff-only rollout.
+4. Update the `blockchains` + `tokens` rows to mainnet values (SQL block above) — mobile picks up the change on next `useBlockchains()` refresh.
+5. Flip `XENDIT_ENV=production` last — triggers real IDR disbursements on the next webhook.
+6. Re-issue every onboarded merchant's TakumiPay JWS QR (server-side script, no merchant action needed — the JWS is chain-agnostic per §4.4 so merchants don't reprint). Old testnet-signed JWSes get rejected by the new pubkey; the script runs in the same window as the EAS OTA.
+7. Watch the first production intent end-to-end before taking the feature out of staff-only rollout.
 
-The chain-agnostic JWS design (§4.4) pays off here: **merchants do not need to reprint their TakumiPay stickers for the mainnet cut-over**; only the signing key rotates server-side, and the client verifies against the OTA'd pubkey.
+The chain-agnostic JWS design (§4.4) + config-as-data (§6.7) pay off here: **merchants do not need to reprint their TakumiPay stickers**, and **mobile does not need a store release** — only the signing key rotates server-side (pushed via EAS OTA), and the DB drives every other coordinate.
 
 ## 11. Mobile-App Implementation Milestones
 
 Each milestone is shippable on its own. **Do not** ship partial work at milestone boundaries.
 
 - **M1 — Normalization layer.** `services/paymentIntent/*` + tests. Wire `app/scan-to-pay.tsx` to call `classify()`. `/pay-merchant` is a stub screen that renders the decoded intent JSON. No networking, no chain writes. **Shippable:** user can scan QRIS/TakumiPay QR and see parsed fields.
-- **M2 — Nanopayments core (gasless primary rail).** Extend `WalletKitAdapter` with `signTransferWithAuthorization` (EIP-3009 typed-data signer). Add Arc `ChainConfig`. Implement Path B end-to-end against Circle Nanopayments testnet: sign → POST → display instant attestation. Backend stubs `POST /v1/pay/intents` emitting `path: "nanopay"` and proxies submission. **Shippable with a flag-gated demo of scan-to-pay where the user signs once and the merchant sees "PAID" in <500 ms.** No Xendit hookup yet — settlement is logged, not disbursed.
-- **M3 — Xendit payout.** Backend integration: real quotes, real `POST /v2/payouts` calls, webhook handler, receipts. Mobile shows live status via TanStack Query invalidation. Now a Nanopayments attestation actually disburses IDR to the merchant.
+- **M2 — Nanopayments core (gasless primary rail).** Extend `WalletKitAdapter` with `signTransferWithAuthorization` (EIP-3009 typed-data signer). Add Arc `ChainConfig`. Implement Path B end-to-end against Circle Nanopayments testnet: sign → POST → display instant attestation. Backend stubs `POST /v1/pay/intents` emitting `path: "nanopay"` and proxies submission. **Seed prerequisites (per §6.8):** rows #1 + #2 — `blockchains` (Arc Testnet with Gateway / x402 columns) + `tokens` (USDC on Arc). **Shippable with a flag-gated demo of scan-to-pay where the user signs once and the merchant sees "PAID" in <500 ms.** No Xendit hookup yet — settlement is logged, not disbursed.
+- **M3 — Xendit payout.** Backend integration: real quotes, real `POST /v2/payouts` calls, webhook handler, receipts. Mobile shows live status via TanStack Query invalidation. Now a Nanopayments attestation actually disburses IDR to the merchant. **Seed prerequisites (per §6.8):** rows #3 + #4 — `exchange_rates` (USDC/IDR) + `channels` (8 Indonesia rows). Both are `upsert` so ops can re-run `seed.ts` to apply fee/rate updates.
 - **M4 — Gateway onboarding + Paymaster-wrapped deposit.** The one-time USDC deposit into `GatewayWallet`. On Base/Arbitrum source chains, route the deposit through Circle Paymaster so the user's first-ever interaction is also gasless. Implements `sendUserOpWithUsdcPaymaster`. Everywhere else the user pays source-chain gas for this single step.
 - **M5 — Raw x402 (Path C) + direct-on-Arc (Path A) fallbacks.** Re-use the EIP-3009 signer from M2 against arbitrary x402 resources (unlocks online merchants + agent payments). Implement direct-on-Arc settlement for large transfers where Nanopayments batch latency is undesirable.
 - **M6 — Solana x402 scheme (Path B-SVM).** Implement `SolanaWalletKit.signX402SvmPayment` — the adapter slot defined in M2 stays `undefined` until this milestone. Backend: discover Solana support via `/gateway/v1/x402/supported` at boot; if Circle's settle endpoint accepts `solana:*` networks, use it directly — otherwise integrate a Solana-compatible x402 facilitator (Coinbase CDP, rapid402, or self-hosted). Provision `PLATFORM_TREASURY_ADDRESS_SVM` (a Solana keypair) and its USDC ATA. Unlocks every user who holds USDC on Solana — a meaningful reach expansion since Solana is one of the largest USDC footprints outside Ethereum. **Shippable:** a Solana-native payer scans the same UMKM QR and pays without switching wallets.
@@ -1653,9 +1864,9 @@ All compatible with Expo 54 + Hermes. Pin exact versions in `package.json`; upgr
 3. **Arc Network**
    - No account needed. For testnet, fund a wallet at Arc's Circle Faucet (link in `docs.arc.network`). For mainnet, Arc + USDC go live per Arc's release schedule.
    - No contract to deploy in v1 — `PLATFORM_TREASURY_ADDRESS` is an EOA funded per environment. If/when a `PlatformTreasury.sol` contract becomes load-bearing (on-chain fee splits, escrow, bulk settle), deploy it via `forge create --rpc-url $ARC_RPC --private-key $ARC_SETTLER_PRIVATE_KEY` and repoint `PLATFORM_TREASURY_ADDRESS`.
-4. **Circle Paymaster**
-   - **No account required.** Pull the canonical paymaster contract address per chain from `developers.circle.com/paymaster` and paste into `EXPO_PUBLIC_CIRCLE_PAYMASTER_V07`. Arbitrum and Base are the two supported mainnets at the time of writing; Arc support tracked in §12 Q1.
-   - Provision an ERC-4337 bundler per chain — Pimlico and Alchemy both offer permissioned endpoints; obtain API keys and paste them into the `EXPO_PUBLIC_ERC4337_BUNDLER_*` vars.
+4. **Circle Paymaster** *(M4 — config-as-data, everything server-side)*
+   - **No Circle account required.** Pull the canonical paymaster contract address per chain from `developers.circle.com/paymaster` and insert it into the `blockchains.paymaster_address` column for that chain. Mobile consumes it via `/v1/blockchains` (§6.7) — no mobile env var, no mobile release. Arbitrum and Base are the two supported mainnets at the time of writing; Arc doesn't need one (USDC = gas natively).
+   - **Provision a bundler** — Pimlico and Alchemy both offer ERC-4337 endpoints. Obtain one API key and use it across all chains. Store the **full bundler URL with key embedded** in `takumipay-api/.env` as `BUNDLER_URL_<chainId>` (e.g. `BUNDLER_URL_8453` for Base mainnet). **Never** put bundler URLs or keys in mobile `.env` — mobile posts signed UserOps to `POST /v1/userop/submit` (§6.7), and the server forwards.
    - No custom paymaster contract to deploy. Usage is metered at 10% of the underlying gas cost (passed through to the user, surfaced in the intent quote's `fees.gasSurchargeBps` field).
 5. **x402**
    - For the Coinbase CDP facilitator (Base/Polygon/Arbitrum/World/Solana): sign up at `cdp.coinbase.com`, create a project, enable x402, generate an API key. First 1,000 tx/month are free.
