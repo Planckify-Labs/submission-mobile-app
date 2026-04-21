@@ -12,6 +12,7 @@ import React, {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -30,14 +31,20 @@ import WithdrawIcon from "@/assets/icons/withdraw-duotone.svg";
 import ChainSelector from "@/components/common/ChainSelector";
 import TakumiWalletHeaderLogo from "@/components/common/TakumiWalletHeaderLogo";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
+import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { usePointBalance } from "@/hooks/queries/usePoints";
 import { usePaymentFeatured } from "@/hooks/queries/useProducts";
+import { useTokens } from "@/hooks/queries/useTokens";
 import { useQRPrefetch } from "@/hooks/useQRPrefetch";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { storage } from "@/lib/storage/mmkv";
 import { getNativeSymbol } from "@/services/walletKit/chainInfo";
 import { copyToClipboard } from "@/utils/helperUtils";
+import DisplayTokenPickerModal from "./DisplayTokenPickerModal";
 import RecievePaymentModal from "./RecievePaymentModal";
+
+const SELECTED_DISPLAY_TOKEN_SYMBOL_KEY = "balance_section_display_token_symbol";
 
 const quickPaymentItems = [
   {
@@ -134,10 +141,46 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
     }
   };
   const [isShowBalance, setShowBalance] = useState(false);
-  const [selectedToken, setSelectedToken] = useState(nativeSymbol);
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(
+    () => storage.getString(SELECTED_DISPLAY_TOKEN_SYMBOL_KEY) ?? nativeSymbol,
+  );
+  const [tokenPickerVisible, setTokenPickerVisible] = useState(false);
+
+  const { data: blockchains } = useBlockchains({ isActive: true });
+
+  // Resolve the DB `blockchainId` for the currently-active chain so we can
+  // query its token list. EVM chains match by numeric chainId; Solana has a
+  // single active non-EVM blockchain row.
+  const activeBlockchainId = useMemo(() => {
+    if (!blockchains) return undefined;
+    if (activeChain.namespace === "eip155") {
+      return blockchains.find(
+        (b) => b.isEVM && b.chainId === activeChain.chain.id,
+      )?.id;
+    }
+    return blockchains.find((b) => !b.isEVM)?.id;
+  }, [blockchains, activeChain]);
+
+  const { data: chainTokens } = useTokens({
+    blockchainId: activeBlockchainId,
+    isActive: true,
+  });
+
+  // Keep the user's display-token choice across chain switches by symbol.
+  // If the picked symbol doesn't exist on the new chain, fall back to the
+  // native token of that chain.
   useEffect(() => {
-    setSelectedToken(nativeSymbol);
-  }, [nativeSymbol]);
+    if (!chainTokens || chainTokens.length === 0) return;
+    const hasSelected = chainTokens.some((t) => t.symbol === selectedSymbol);
+    if (hasSelected) return;
+    const nativeToken = chainTokens.find((t) => t.isNativeCurrency);
+    setSelectedSymbol(nativeToken?.symbol ?? nativeSymbol);
+  }, [chainTokens, selectedSymbol, nativeSymbol]);
+
+  useEffect(() => {
+    storage.set(SELECTED_DISPLAY_TOKEN_SYMBOL_KEY, selectedSymbol);
+  }, [selectedSymbol]);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [isModalAnimationComplete, setIsModalAnimationComplete] =
     useState(false);
@@ -246,14 +289,11 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
             <View className="flex-row items-center justify-between mb-1">
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={() => {
-                  setSelectedToken(nativeSymbol);
-                  router.push("/asset-explorer");
-                }}
+                onPress={() => setTokenPickerVisible(true)}
                 className="flex-row items-center"
               >
                 <Text className="text-light-matte-black font-medium text-sm mr-1">
-                  {selectedToken}
+                  {selectedSymbol}
                 </Text>
                 <ChevronDown size={14} color="#c71c4b" />
               </TouchableOpacity>
@@ -425,6 +465,14 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
           isModalAnimationComplete={isModalAnimationComplete}
         />
       )}
+
+      <DisplayTokenPickerModal
+        visible={tokenPickerVisible}
+        onClose={() => setTokenPickerVisible(false)}
+        tokens={chainTokens ?? []}
+        selectedSymbol={selectedSymbol}
+        onSelectSymbol={setSelectedSymbol}
+      />
     </>
   );
 });
