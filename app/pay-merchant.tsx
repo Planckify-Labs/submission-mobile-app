@@ -72,6 +72,7 @@ import {
   useCreateIntent,
   useIntentStatus,
   useSubmitNanopay,
+  useSubmitOnchain,
 } from "@/services/nanopay";
 import {
   executePathA,
@@ -81,6 +82,13 @@ import {
   postOnChainReceipt,
   watchArcPayoutEvent,
 } from "@/services/nanopay/pathADirectArc";
+import {
+  executeOnchainSettlement,
+  type OnchainSubmitRequest,
+  type OnchainSubmitResponse,
+  onchainSubmitEndpoint,
+  postOnchainSubmit,
+} from "@/services/nanopay/pathOnchainSettlement";
 
 /** Arc Testnet viem chainId — source chain for the Nanopay EIP-3009 sig. */
 const ARC_TESTNET_CHAIN_ID = 5042002;
@@ -428,6 +436,19 @@ function IntentFlow({ intentId }: { intentId: string }) {
     );
   }
 
+  // Onchain settlement — backend set `path = "direct_arc"` with a signed
+  // quoteCommitment. The wallet calls `processMerchantPayment` on the
+  // TakumiWallet contract, then POSTs the txHash to the backend.
+  if (extractIntentPath(intent) === "onchain") {
+    return (
+      <OnchainCard
+        intent={intent}
+        intentId={intentId}
+        onBack={() => router.back()}
+      />
+    );
+  }
+
   return <QuoteCard intent={intent} phase={phase} onPay={onPay} />;
 }
 
@@ -622,6 +643,272 @@ function PathACard({
       </TouchableOpacity>
     </View>
   );
+}
+
+/** ── Onchain settlement — TakumiWallet contract (onchain-settlement spec) ── */
+
+/**
+ * Single-card onchain settlement flow. The user pays by calling
+ * `processMerchantPayment(quoteCommitment, backendSignature)` on the
+ * TakumiWallet contract. After the tx confirms, the backend is notified
+ * via `POST /v1/pay/intents/:id/onchain`.
+ *
+ * Shows a countdown timer to `quoteCommitment.expiresAt` so the user
+ * knows how long the quote is valid. Handles chain switching, tx
+ * broadcast, backend notification, and revert errors.
+ */
+function OnchainCard({
+  intent,
+  intentId,
+  onBack,
+}: {
+  intent: PaymentIntentResponse;
+  intentId: string;
+  onBack: () => void;
+}) {
+  const {
+    activeWallet,
+    activeChain,
+    getActiveWalletKit,
+    changeActiveChainToConfig,
+  } = useWallet();
+
+  const [phase, setPhase] = useState<LocalPhase>("idle");
+  const [error, setError] = useState<LocalError | null>(null);
+
+  // Countdown timer — `quoteCommitment.expiresAt` is unix seconds
+  const expiresAtMs = intent.quoteCommitment
+    ? intent.quoteCommitment.expiresAt * 1000
+    : intent.expiresAt;
+  const [remainingMs, setRemainingMs] = useState(() =>
+    Math.max(0, expiresAtMs - Date.now()),
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const left = Math.max(0, expiresAtMs - Date.now());
+      setRemainingMs(left);
+      if (left === 0) clearInterval(timer);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [expiresAtMs]);
+
+  const countdownLabel = useMemo(() => {
+    if (remainingMs <= 0) return "Expired";
+    const totalSecs = Math.ceil(remainingMs / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  }, [remainingMs]);
+
+  const isExpired = remainingMs <= 0;
+
+  const onPay = useCallback(async () => {
+    if (!activeWallet?.namespace) {
+      setError({ code: "wallet_unsupported" });
+      setPhase("error");
+      return;
+    }
+    const kit = getActiveWalletKit();
+
+    if (typeof kit.sendContractTransaction !== "function") {
+      setError({ code: "wallet_unsupported" });
+      setPhase("error");
+      return;
+    }
+
+    // Resolve the source chain from the intent
+    const sourceChainId = intent.usdcSourceChainId ?? ARC_TESTNET_CHAIN_ID;
+    const sourceChainConfig = findEvmChainById(sourceChainId);
+    if (!sourceChainConfig) {
+      setError({
+        code: "chain_mismatch",
+        devMessage: `No chain config for id=${sourceChainId}`,
+      });
+      setPhase("error");
+      return;
+    }
+
+    // Chain switch if needed
+    const activeEvmChainId =
+      activeChain.namespace === "eip155" ? activeChain.chain.id : null;
+    if (activeEvmChainId !== sourceChainId) {
+      const ok = await changeActiveChainToConfig(sourceChainConfig);
+      if (!ok) {
+        setError({ code: "chain_mismatch" });
+        setPhase("error");
+        return;
+      }
+    }
+
+    // Resolve contract address from intent or chain config
+    const contractAddress = intent.contractAddress;
+    if (!contractAddress) {
+      setError({
+        code: "unknown",
+        devMessage: "Intent missing contractAddress for onchain settlement",
+      });
+      setPhase("error");
+      return;
+    }
+
+    try {
+      setPhase("signing");
+      setError(null);
+
+      const result = await executeOnchainSettlement({
+        intent,
+        wallet: activeWallet,
+        walletKit: kit,
+        chain: sourceChainConfig,
+        contractAddress,
+      });
+
+      setPhase("submitting");
+
+      // Notify backend (best-effort — 404 is swallowed)
+      await postOnchainSubmit({
+        intentId,
+        txHash: result.txHash,
+        chainId: result.chainId,
+        poster: defaultOnchainSubmitPoster,
+      }).catch(() => null);
+
+      // Local "done" — the backend event watcher will flip
+      // `intent.status` to `"paid"` once it observes the event, at
+      // which point `IntentFlow`'s effect navigates to the receipt.
+      setPhase("settled");
+    } catch (err) {
+      setError(classifyError(err));
+      setPhase("error");
+    }
+  }, [
+    activeChain,
+    activeWallet,
+    changeActiveChainToConfig,
+    getActiveWalletKit,
+    intent,
+    intentId,
+  ]);
+
+  if (phase === "error" && error) {
+    const resetToIdle = () => {
+      setError(null);
+      setPhase("idle");
+    };
+    return (
+      <PaymentError
+        code={error.code}
+        devMessage={error.devMessage}
+        intentId={intentId}
+        onRetry={resetToIdle}
+        onBack={onBack}
+        onRescan={onBack}
+        onTopUp={resetToIdle}
+      />
+    );
+  }
+
+  const isBusy = phase === "signing" || phase === "submitting";
+  const ctaLabel =
+    phase === "signing"
+      ? "Confirming…"
+      : phase === "submitting"
+        ? "Confirming payment…"
+        : isExpired
+          ? "Quote expired"
+          : "Pay";
+
+  // Display the token amount — prefer `tokenAmountMinor` (multi-token),
+  // fall back to `usdcAmountMicros`.
+  const tokenDisplay = intent.tokenAmountMinor
+    ? formatUsdcMicros(intent.tokenAmountMinor)
+    : formatUsdcMicros(intent.usdcAmountMicros);
+
+  return (
+    <View className="bg-light rounded-3xl p-6 shadow-md-">
+      <View className="flex-row items-center mb-5">
+        <View className="w-11 h-11 bg-light-primary-red/10 rounded-full items-center justify-center mr-3">
+          <Store color="#c71c4b" size={20} />
+        </View>
+        <View className="flex-1">
+          <Text className="text-light-matte-black font-semibold text-base">
+            {extractMerchantName(intent)}
+          </Text>
+          <Text className="text-light-matte-black/50 text-xs">
+            Pay via onchain settlement
+          </Text>
+        </View>
+      </View>
+
+      <View className="bg-light-main-container rounded-xl p-4 mb-4">
+        <Text className="text-light-matte-black/50 text-xs mb-1">Amount</Text>
+        <Text className="text-light-matte-black text-3xl font-bold">
+          {formatIdrMinor(extractFiatMinor(intent))}
+        </Text>
+        <Text className="text-light-matte-black/60 text-sm mt-2">
+          ~{tokenDisplay} from your balance
+        </Text>
+      </View>
+
+      <View className="flex-row items-center justify-center mb-4">
+        <Text
+          className={`text-sm font-medium ${
+            isExpired
+              ? "text-red-500"
+              : remainingMs < 60_000
+                ? "text-orange-500"
+                : "text-light-matte-black/60"
+          }`}
+        >
+          {isExpired ? "Quote expired" : `Expires in ${countdownLabel}`}
+        </Text>
+      </View>
+
+      {phase === "submitting" ? (
+        <View className="flex-row items-center justify-center mb-4">
+          <ActivityIndicator size="small" color="#c71c4b" />
+          <Text className="text-light-matte-black/60 text-sm ml-2">
+            Waiting for confirmation…
+          </Text>
+        </View>
+      ) : null}
+
+      <TouchableOpacity
+        activeOpacity={0.7}
+        className={`py-4 px-5 rounded-xl items-center ${
+          isBusy || isExpired
+            ? "bg-light-matte-black/20"
+            : "bg-light-primary-red"
+        }`}
+        disabled={isBusy || isExpired}
+        onPress={onPay}
+      >
+        {isBusy ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text className="text-light font-semibold">{ctaLabel}</Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+/**
+ * Default poster for `/v1/pay/intents/:id/onchain` wired to the shared
+ * `api` ky instance. `postOnchainSubmit` swallows a 404 from here so
+ * the user's on-chain settle is never gated on backend deploy timing.
+ */
+async function defaultOnchainSubmitPoster({
+  intentId,
+  body,
+}: {
+  intentId: string;
+  body: OnchainSubmitRequest;
+}): Promise<OnchainSubmitResponse> {
+  return api
+    .post(onchainSubmitEndpoint(intentId), { json: body })
+    .json<OnchainSubmitResponse>();
 }
 
 /**
@@ -957,13 +1244,14 @@ function extractMerchantName(intent: PaymentIntentResponse): string {
  */
 function extractIntentPath(
   intent: PaymentIntentResponse,
-): "A" | "B" | "C" | null {
+): "A" | "B" | "C" | "onchain" | null {
   const anyIntent = intent as unknown as {
     path?: string;
     settlementPath?: string;
   };
   const raw = anyIntent.path ?? anyIntent.settlementPath;
   if (raw === "A" || raw === "B" || raw === "C") return raw;
+  if (raw === "direct_arc") return "onchain";
   return null;
 }
 

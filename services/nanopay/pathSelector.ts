@@ -58,7 +58,7 @@ import type { PaymentIntentResponse } from "./types";
  * them split means the consumer can route to the right orchestrator
  * without re-inspecting the adapter.
  */
-export type PayPath = "A" | "B-EVM" | "B-SVM" | "C" | "gasless";
+export type PayPath = "A" | "B-EVM" | "B-SVM" | "C" | "gasless" | "onchain";
 
 /**
  * Typed error raised when no branch matches the given inputs. Screens
@@ -136,6 +136,17 @@ function isRawX402Channel(intent: PaymentIntentResponse): boolean {
 }
 
 /**
+ * Backend sets `path === "direct_arc"` when the intent should be settled
+ * via the TakumiWallet `processMerchantPayment` contract call. The name
+ * "direct_arc" is the backend's internal label; mobile maps it to the
+ * `"onchain"` pay path discriminator.
+ */
+function isOnchainSettlement(intent: PaymentIntentResponse): boolean {
+  const view = intent as unknown as { path?: string };
+  return view.path === "direct_arc";
+}
+
+/**
  * Chain is Arc (or any future USDC-as-native chain) when
  * `nativeCurrency.symbol === "USDC"`. Keying off the symbol (not a
  * chainId allowlist) mirrors `pathADirectArc.ts`'s own guard — Arc
@@ -192,6 +203,24 @@ function intentPermitsGasless(intent: PaymentIntentResponse): boolean {
 export function selectPayPath(args: SelectPayPathArgs): PayPath {
   const { intent, walletKit, chainConfig } = args;
 
+  // Onchain settlement — server explicitly set path = "direct_arc"
+  // when the intent should go through the TakumiWallet contract.
+  // Checked first because it's an explicit server decision that
+  // overrides the chain-based heuristics below.
+  if (isOnchainSettlement(intent)) {
+    if (typeof walletKit.sendContractTransaction !== "function") {
+      throw new NoSuitablePayPathError({
+        intentId: intent.id,
+        walletNamespace: walletKit.namespace,
+        chainNamespace: chainConfig.namespace,
+        message:
+          `selectPayPath: intent ${intent.id} requires onchain settlement ` +
+          `but wallet does not support sendContractTransaction.`,
+      });
+    }
+    return "onchain";
+  }
+
   if (isRawX402Channel(intent)) {
     return "C";
   }
@@ -244,6 +273,7 @@ export interface PathOrchestrators<TResult = unknown> {
   "B-SVM": () => Promise<TResult>;
   C: () => Promise<TResult>;
   gasless: () => Promise<TResult>;
+  onchain: () => Promise<TResult>;
 }
 
 /**

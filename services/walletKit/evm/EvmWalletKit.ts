@@ -33,6 +33,7 @@ import type {
   CreateWalletFromPrivateKeyParams,
   EstimateMaxTransferableArgs,
   NativeTransferArgs,
+  SendContractTransactionArgs,
   SendUserOpResult,
   SendUserOpWithUsdcPaymasterArgs,
   SignTransferWithAuthorizationArgs,
@@ -165,6 +166,29 @@ export function createEvmWalletKit(): WalletKitAdapter {
         );
       }
       return sendUserOpWithUsdcPaymasterPure(account, args);
+    },
+
+    // ── Onchain settlement contract call (spec §5.7, M6) ─────────────
+    //
+    // Sends a raw contract transaction with pre-encoded calldata.
+    // Used by the onchain settlement path to call
+    // `processMerchantPayment` on the TakumiWallet contract.
+    async sendContractTransaction({
+      wallet,
+      chain,
+      to,
+      data,
+      value,
+    }: SendContractTransactionArgs): Promise<string> {
+      assertEvm(chain);
+      const account = getAccountForWallet(wallet);
+      if (!account) {
+        throw new Error(
+          "EvmWalletKit.sendContractTransaction: unable to reconstruct signer",
+        );
+      }
+      const wc = getWalletClient(account, chain.chain);
+      return wc.sendTransaction({ to, data, value: value ?? 0n });
     },
 
     async estimateMaxTransferable({

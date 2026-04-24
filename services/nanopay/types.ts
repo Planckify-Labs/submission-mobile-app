@@ -56,6 +56,8 @@ export interface CreateIntentRequest {
   /** Amount in minor units (null for open-amount QRs — user types it in `/pay-merchant`). */
   fiatAmountMinor?: number;
   currency: Currency;
+  /** Source token the payer wants to pay with (onchain settlement rail). */
+  sourceTokenId?: string;
 }
 
 /**
@@ -102,6 +104,24 @@ export interface NanopayPayload {
  * drives UI state, `nanopay` is `null` once the payload has been
  * consumed (post-settle).
  */
+/**
+ * Quote commitment for the onchain settlement rail. The backend signs
+ * this struct and the wallet calls `processMerchantPayment(quote, sig)`
+ * on the TakumiWallet contract. Every field matches the Solidity
+ * `QuoteCommitment` struct layout exactly.
+ */
+export interface QuoteCommitment {
+  refId: string;
+  merchantId: string;
+  tokenAddress: `0x${string}`;
+  amount: string;
+  platformFeeAmount: string;
+  fiatAmountMinor: number;
+  fiatCurrency: string;
+  exchangeRateId: number;
+  expiresAt: number;
+}
+
 export interface PaymentIntentResponse {
   id: string;
   status: PaymentIntentStatus;
@@ -115,6 +135,25 @@ export interface PaymentIntentResponse {
   nanopay: NanopayPayload | null;
   /** Unix ms — quote freeze (60s typically). */
   expiresAt: number;
+  /**
+   * Server-selected settlement path. `"nanopay"` = Path B (Circle),
+   * `"x402"` = Path C, `"direct_arc"` = onchain settlement via
+   * TakumiWallet contract.
+   */
+  path?: "nanopay" | "x402" | "direct_arc";
+  /**
+   * Token amount in minor units (e.g. 6-decimal for USDC). Renamed from
+   * `usdcAmountMicros` on backend for token-agnostic settlement.
+   */
+  tokenAmountMinor?: string;
+  /** Source token identifier for multi-token settlement. */
+  sourceTokenId?: string;
+  /** Signed quote commitment for the onchain settlement rail. */
+  quoteCommitment?: QuoteCommitment;
+  /** Backend ECDSA signature over the `quoteCommitment` struct. */
+  quoteSignature?: `0x${string}`;
+  /** TakumiWallet contract address for onchain settlement. */
+  contractAddress?: `0x${string}`;
 }
 
 /** Body of `POST /v1/pay/intents/:id/nanopay`. */

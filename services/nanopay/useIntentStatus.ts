@@ -30,6 +30,7 @@ import {
   type SubmitResult,
   submitNanopayAuthorization,
 } from "./submit";
+import type { OnchainSubmitResponse } from "./pathOnchainSettlement";
 import {
   type CreateIntentRequest,
   isTerminalIntentStatus,
@@ -110,6 +111,31 @@ export function useSubmitNanopay() {
       // Signal the polling query that something changed upstream so the
       // next status read happens immediately (instead of waiting for
       // the 3 s interval).
+      queryClient.invalidateQueries({ queryKey: intentQueryKey(intentId) });
+    },
+  });
+}
+
+/**
+ * POST /v1/pay/intents/:id/onchain — notifies the backend that the
+ * user settled via the onchain settlement rail (TakumiWallet contract).
+ * The backend reconciles via on-chain events; this POST is a latency hint.
+ */
+export function useSubmitOnchain() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    OnchainSubmitResponse,
+    Error,
+    { intentId: string; txHash: `0x${string}`; chainId: number }
+  >({
+    mutationFn: async ({ intentId, txHash, chainId }) => {
+      return api
+        .post(`v1/pay/intents/${encodeURIComponent(intentId)}/onchain`, {
+          json: { txHash, chainId },
+        })
+        .json<OnchainSubmitResponse>();
+    },
+    onSuccess: (_, { intentId }) => {
       queryClient.invalidateQueries({ queryKey: intentQueryKey(intentId) });
     },
   });

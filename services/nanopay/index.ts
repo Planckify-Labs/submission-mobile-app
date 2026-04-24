@@ -37,6 +37,17 @@ export {
   X402SettlementError,
 } from "./pathCRawX402";
 export {
+  type ExecuteOnchainSettlementArgs,
+  type ExecuteOnchainSettlementResult,
+  executeOnchainSettlement,
+  OnchainSettlementError,
+  onchainSubmitEndpoint,
+  type OnchainSubmitRequest,
+  type OnchainSubmitResponse,
+  postOnchainSubmit,
+  type PostOnchainSubmit,
+} from "./pathOnchainSettlement";
+export {
   NanopaySubmitError,
   redactForLog,
   type SubmitNanopayAuthorizationArgs,
@@ -51,6 +62,7 @@ export {
   type NanopaySignArgs,
   type PaymentIntentResponse,
   type PaymentIntentStatus,
+  type QuoteCommitment,
   type SubmitNanopayRequest,
   type SubmitNanopayResponse,
   TERMINAL_INTENT_STATUSES,
@@ -60,4 +72,5 @@ export {
   useCreateIntent,
   useIntentStatus,
   useSubmitNanopay,
+  useSubmitOnchain,
 } from "./useIntentStatus";

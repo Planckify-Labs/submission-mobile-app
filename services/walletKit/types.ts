@@ -252,6 +252,20 @@ export interface TruncateAddressOptions {
   end?: number;
 }
 
+/**
+ * Arguments for `WalletKitAdapter.sendContractTransaction` — sends an
+ * arbitrary contract call (pre-encoded calldata) via the wallet's signer.
+ * Used by the onchain settlement rail to call `processMerchantPayment`
+ * on the TakumiWallet contract.
+ */
+export interface SendContractTransactionArgs {
+  wallet: TWallet;
+  chain: ChainConfig;
+  to: `0x${string}`;
+  data: `0x${string}`;
+  value?: bigint;
+}
+
 export interface WalletKitAdapter {
   readonly namespace: Namespace;
 
@@ -341,6 +355,16 @@ export interface WalletKitAdapter {
    * user's signature attached. Never broadcasts.
    */
   signX402SvmPayment?(args: SignX402SvmPaymentArgs): Promise<string>;
+
+  /**
+   * Sends a raw contract transaction with pre-encoded calldata. Used by
+   * the onchain settlement rail (`pathOnchainSettlement.ts`) to call
+   * `processMerchantPayment` on the TakumiWallet contract. EVM-only;
+   * Solana kit leaves this `undefined`. Consumers presence-check.
+   */
+  sendContractTransaction?(
+    args: SendContractTransactionArgs,
+  ): Promise<string>;
 
   // ── Optional capability flags ───────────────────────────────────────
   /** `false` for Solana in v2.3.0 (no SPL token support yet). */
