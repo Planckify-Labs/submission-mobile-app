@@ -872,12 +872,12 @@ function OverridePickerSheet({
         (t) =>
           !t.isNativeCurrency &&
           t.isActive !== false &&
-          t.contractAddress.length > 0 &&
+          (t.contractAddress?.length ?? 0) > 0 &&
           (blockchainId ? t.blockchainId === blockchainId : true),
       )
       .map((t) => ({
         chainId,
-        contractAddress: t.contractAddress.toLowerCase(),
+        contractAddress: t.contractAddress!.toLowerCase(),
         symbol: t.symbol,
         isNative: false,
         threshold_usd: 0,

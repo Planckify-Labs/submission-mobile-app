@@ -55,36 +55,33 @@ async function fetchAndCacheTokens(): Promise<TToken[]> {
 }
 
 export const useTokens = (options?: TTokenSearchParams) => {
-  const isTextSearch = !!(
+  const isServerFiltered = !!(
     options?.name ||
     options?.symbol ||
-    options?.contractAddress
+    options?.contractAddress ||
+    options?.blockchainId ||
+    options?.isNativeCurrency !== undefined ||
+    options?.isStablecoin !== undefined ||
+    options?.isActive !== undefined
   );
 
   return useQuery<TToken[]>({
     queryKey: ["tokens", options],
-    // Seed the query with MMKV-cached tokens so UI renders
-    // immediately (optimistic). React Query still fires a background
-    // refetch (`refetchOnMount: "always"` below) to reconcile with
-    // the server. Text searches skip the cache entirely — they're
-    // always one-shot server lookups keyed by user input.
     initialData: () => {
-      if (isTextSearch) return undefined;
+      if (isServerFiltered) return undefined;
       const cached = readCachedTokens();
       if (!cached) return undefined;
       return filterTokens(cached, options);
     },
-    initialDataUpdatedAt: () => (isTextSearch ? 0 : readCacheTimestamp()),
+    initialDataUpdatedAt: () => (isServerFiltered ? 0 : readCacheTimestamp()),
     queryFn: async () => {
-      if (isTextSearch) {
+      if (isServerFiltered) {
         return await tokenApi.searchTokens(options ?? {});
       }
       try {
         const fresh = await fetchAndCacheTokens();
         return filterTokens(fresh, options);
       } catch (err) {
-        // Offline / transient: serve whatever's in MMKV while the
-        // request is recoverable. 24h TTL matches the gcTime below.
         const cached = readCachedTokens();
         const ts = readCacheTimestamp();
         if (cached && Date.now() - ts < OFFLINE_CACHE_TTL) {
@@ -95,20 +92,6 @@ export const useTokens = (options?: TTokenSearchParams) => {
     },
     staleTime: STALE_TIME,
     gcTime: OFFLINE_CACHE_TTL,
-    // `refetchOnMount: true` (stale-only) instead of `"always"`. With
-    // STALE_TIME = 5 min, a token catalog fetched 30 seconds ago
-    // doesn't need another /tokens HTTP round-trip just because a
-    // screen re-mounted. The old `"always"` setting was the main
-    // source of the post-unlock freeze — each `useTokens({...opts})`
-    // consumer on home (ChainSelector + whatever else) mounted,
-    // re-mounted under StrictMode dev double-fire + home re-renders
-    // from state settle, each firing a fresh `/tokens` request →
-    // `JSON.stringify` a ~200-token catalog + `storage.set` in the
-    // queryFn, per call, on the main thread. 5 parallel /tokens calls
-    // in the Metro log = 5× stringify+MMKV-write blocks.
-    //
-    // Text-search variants still refetch per input because their
-    // queryKey changes; this flag only affects the mount path.
     refetchOnMount: true,
     refetchOnReconnect: "always",
   });

@@ -178,7 +178,9 @@ export function buildChainConfigFromBlockchain(
       namespace: "solana",
       cluster,
       rpcUrl: b.rpcUrl,
-      iconUrl: b.tokens?.[0]?.logoUrl,
+      iconUrl:
+        (b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0])?.logoUrl ??
+        undefined,
       isTestnet: cluster === "devnet",
     };
   }
@@ -218,7 +220,7 @@ export function buildChainConfigFromBlockchain(
           }
         : undefined,
     },
-    iconUrl: b.tokens?.[0]?.logoUrl,
+    iconUrl: nativeToken?.logoUrl ?? undefined,
     isTestnet:
       b.name.toLowerCase().includes("testnet") ||
       b.name.toLowerCase().includes("sepolia") ||

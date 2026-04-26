@@ -287,7 +287,7 @@ export function useDepositState() {
       activeWallet.address,
       activeChainId,
       contractAddress,
-      selectedToken.contractAddress,
+      selectedToken.contractAddress!,
     );
     const isTrusted = !!state?.trustedSpenders?.[trustKey];
     // Until the user explicitly trusts this spender for this wallet, always
@@ -382,7 +382,7 @@ export function useDepositState() {
             activeWallet.address,
             activeChainId,
             contractAddress,
-            selectedToken.contractAddress,
+            selectedToken.contractAddress!,
           );
           updateState({
             trustedSpenders: {

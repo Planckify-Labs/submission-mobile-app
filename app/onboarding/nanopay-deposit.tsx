@@ -82,28 +82,6 @@ const USDC_DECIMALS = 6;
 const DEFAULT_DEPOSIT_USDC = "10";
 
 /**
- * Superset of the legacy `TBlockchain` shape that includes the
- * enriched fields task 21's `/v1/blockchains` response surfaces
- * (`gateway`, `paymaster`, `usdc`). The mobile-side `TBlockchain`
- * hasn't been regenerated yet — we narrow by structural duck-check at
- * the screen boundary so this file stays self-contained per the task
- * constraint ("touch only `app/onboarding/nanopay-deposit.tsx`").
- */
-interface EnrichedBlockchain extends TBlockchain {
-  gateway?: {
-    walletContract: string;
-    minterContract: string;
-  } | null;
-  paymaster?: { address: string } | null;
-  usdc?: {
-    address: string;
-    decimals: number;
-    symbol: string;
-    isNativeCurrency: boolean;
-  } | null;
-}
-
-/**
  * Deposit-capable row shape — narrowed so every chain field the screen
  * hands to `useDepositForPaymaster` is non-null. Prevents the mutation
  * call site from repeating null checks.
@@ -139,7 +117,7 @@ interface LocalError {
 
 /** Chain-extension discipline (hook-level filter, memory `feedback_filter_at_source.md`). */
 function selectDepositCapableChains(
-  rows: EnrichedBlockchain[] | undefined,
+  rows: TBlockchain[] | undefined,
 ): DepositCapableChain[] {
   if (!rows) return [];
   const out: DepositCapableChain[] = [];
@@ -240,7 +218,7 @@ function DepositFlow({ intentId }: { intentId?: string }) {
   });
 
   const depositChains = useMemo(
-    () => selectDepositCapableChains(blockchains as EnrichedBlockchain[]),
+    () => selectDepositCapableChains(blockchains as TBlockchain[]),
     [blockchains],
   );
 

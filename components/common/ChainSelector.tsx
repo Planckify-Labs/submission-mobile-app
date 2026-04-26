@@ -188,7 +188,9 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
 
     if (blockchains && nativeTokens) {
       for (const blockchain of blockchains) {
-        const token = blockchain.tokens?.[0];
+        const token =
+          blockchain.tokens?.find((t) => t.isNativeCurrency) ??
+          blockchain.tokens?.[0];
         const config = buildChainConfigFromBlockchain(blockchain);
         const row: ChainRowItem =
           config.namespace === "eip155"
@@ -197,7 +199,7 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
                 namespace: "eip155",
                 label: blockchain.name,
                 symbol: token?.symbol ?? "",
-                iconUrl: token?.logoUrl,
+                iconUrl: token?.logoUrl ?? undefined,
                 isTestnet: Boolean(config.isTestnet),
                 evmChainId: blockchain.chainId ?? undefined,
                 config,

@@ -4,8 +4,8 @@ export interface TToken {
   symbol: string;
   decimals: number;
   blockchainId: string;
-  contractAddress: string;
-  logoUrl: string;
+  contractAddress: string | null;
+  logoUrl: string | null;
   isStablecoin: boolean;
   isActive: boolean;
   createdAt: string;

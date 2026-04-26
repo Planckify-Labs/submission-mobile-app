@@ -144,7 +144,7 @@ export default function AssetExplorer() {
         balance: "0",
         value: "0.00",
         change: "0%",
-        contractAddress: token.contractAddress,
+        contractAddress: token.contractAddress ?? undefined,
         decimals: token.decimals,
       }));
 
