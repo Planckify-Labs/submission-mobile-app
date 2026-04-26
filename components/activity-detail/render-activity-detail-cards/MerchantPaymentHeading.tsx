@@ -3,7 +3,7 @@ import React from "react";
 import { Text, View } from "react-native";
 import { formatUnits } from "viem";
 import type { TPaymentTransactionDetail } from "@/api/types/transaction";
-import OptimizedImage from "@/components/common/OptimizedImage";
+
 import { formatTokenAmount } from "@/utils/helperUtils";
 
 interface MerchantPaymentHeadingProps {
@@ -40,26 +40,12 @@ export default function MerchantPaymentHeading({
 
   return (
     <View className="items-center mb-6">
-      <View className="w-24 h-24 rounded-3xl mb-4 overflow-hidden bg-light-main-container">
-        {payment.token?.logoUrl ? (
-          <OptimizedImage
-            source={{ uri: payment.token.logoUrl }}
-            contentFit="contain"
-          />
-        ) : (
-          <View className="w-full h-full items-center justify-center">
-            <View className="bg-light-primary-red/10 p-4 rounded-2xl">
-              <Store size={24} color="#c71c4b" />
-            </View>
-          </View>
-        )}
+      <View className="w-24 h-24 rounded-3xl mb-4 items-center justify-center bg-light-primary-red/10">
+        <Store size={40} color="#c71c4b" />
       </View>
 
       <Text className="text-light-primary-red font-extrabold text-2xl text-center">
         {formatAmount()} {payment.token?.symbol}
-      </Text>
-      <Text className="text-light-matte-black/70 text-base mb-1 text-center font-medium">
-        Merchant Payment
       </Text>
       <Text className="text-light-matte-black font-bold text-base text-center">
         {merchantName}
