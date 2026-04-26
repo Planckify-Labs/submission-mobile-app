@@ -19,12 +19,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import ImportPrivateKeySheet from "@/components/wallet/create/ImportPrivateKeySheet";
 import ImportSeedPhraseSheet from "@/components/wallet/create/ImportSeedPhraseSheet";
 import {
   configureGoogleSignIn,
   useGoogleSignIn,
 } from "@/hooks/queries/useGoogleAuth";
+import { useLoadingSteps } from "@/hooks/useLoadingSteps";
 import { useWallet } from "@/hooks/useWallet";
 import { bootstrapFirstLoginWallets } from "@/services/walletKit/bootstrap";
 import {
@@ -40,6 +42,19 @@ export default function Login() {
   const [creating, setCreating] = useState(false);
   const [seedSheetVisible, setSeedSheetVisible] = useState(false);
   const [pkSheetVisible, setPkSheetVisible] = useState(false);
+  const {
+    isLoading: isCreatingSpinner,
+    currentMessage: creatingMessage,
+    completeStep,
+    start: startCreating,
+    stop: stopCreating,
+    delay,
+  } = useLoadingSteps([
+    "Setting things up for you...",
+    "Generating your wallets...",
+    "Securing your keys...",
+    "You're all set! 🎉",
+  ]);
 
   // Configure Google Sign-In on mount
   useEffect(() => {
@@ -49,19 +64,32 @@ export default function Login() {
   const handleCreateWallet = useCallback(async () => {
     if (creating) return;
     setCreating(true);
+    startCreating();
     try {
+      completeStep(0);
+      await delay(200);
+
+      completeStep(1);
       const minted = await bootstrapFirstLoginWallets();
       if (minted.length === 0) {
+        stopCreating();
         Alert.alert(
           "Create Failed",
           "Could not create a wallet. Please try again.",
         );
         return;
       }
+
+      completeStep(2);
       await addWallets(minted);
+
+      completeStep(3);
+      await delay(300);
+
       router.replace("/");
     } catch (error) {
       console.error("create wallet failed:", error);
+      stopCreating();
       Alert.alert(
         "Create Failed",
         "Could not create a wallet. Please try again.",
@@ -69,7 +97,7 @@ export default function Login() {
     } finally {
       setCreating(false);
     }
-  }, [creating, addWallets]);
+  }, [creating, addWallets, startCreating, stopCreating, completeStep, delay]);
 
   const handleSeedWalletsAdded = useCallback(() => {
     setSeedSheetVisible(false);
@@ -292,6 +320,12 @@ export default function Login() {
           onClose={() => setPkSheetVisible(false)}
           onWalletAdded={handlePrivateKeyWalletAdded}
           onImportSeedPhraseInstead={handleImportSeedPhraseInstead}
+        />
+
+        <LoadinngSpinnerPopup
+          visible={isCreatingSpinner}
+          title="Creating Wallet"
+          message={creatingMessage}
         />
       </SafeAreaView>
     </>

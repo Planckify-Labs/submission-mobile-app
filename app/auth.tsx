@@ -12,6 +12,7 @@ import SignMessageModal from "@/components/common/SignMessageModal";
 import { usePerformance } from "@/components/providers/PerformanceProvider";
 import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
 import { useNonce, useVerifySignature } from "@/hooks/queries/useAuth";
+import { useLoadingSteps } from "@/hooks/useLoadingSteps";
 import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { useWallet } from "@/hooks/useWallet";
 import { bytesToBase58 } from "@/services/chains/solana/codec";
@@ -29,19 +30,19 @@ interface NonceData {
 export default function AuthScreen() {
   const [isPinModalVisible, setIsPinModalVisible] = useState(false);
   const [isStatementModalVisible, setIsStatementModalVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingSteps, setLoadingSteps] = useState<
-    {
-      message: string;
-      completed: boolean;
-    }[]
-  >([
-    { message: "Preparing to sign message...", completed: false },
-    { message: "Signing message with your wallet...", completed: false },
-    { message: "Verifying signature...", completed: false },
-    { message: "Authentication successful!", completed: false },
+  const {
+    isLoading,
+    currentMessage: loadingMessage,
+    completeStep,
+    start: startLoading,
+    stop: stopLoading,
+    delay,
+  } = useLoadingSteps([
+    "Preparing to sign message...",
+    "Signing message with your wallet...",
+    "Verifying signature...",
+    "Authentication successful!",
   ]);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
   const queryClient = useQueryClient();
   const { deferredTask } = usePerformance();
@@ -118,21 +119,6 @@ export default function AuthScreen() {
 
   const { mutateAsync: verifySignature } = useVerifySignature();
 
-  const updateLoadingStep = useCallback((index: number, completed: boolean) => {
-    setLoadingSteps((prev) =>
-      prev.map((step, i) => (i === index ? { ...step, completed } : step)),
-    );
-    setCurrentStepIndex(index);
-  }, []);
-
-  const createDelay = useCallback((ms: number) => {
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        resolve();
-      }, ms);
-    });
-  }, []);
-
   const handleSignMessage = useCallback(async () => {
     if (!nonceData?.message) {
       console.error("Error: Failed to get authentication message");
@@ -140,13 +126,13 @@ export default function AuthScreen() {
     }
 
     setIsPinModalVisible(false);
-    setIsLoading(true);
+    startLoading();
 
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     try {
-      updateLoadingStep(0, true);
-      await createDelay(800);
+      completeStep(0);
+      await delay(800);
 
       let signature: string;
 
@@ -154,7 +140,7 @@ export default function AuthScreen() {
         if (!activeWallet) {
           throw new Error("No active Solana wallet");
         }
-        updateLoadingStep(1, true);
+        completeStep(1);
         signature = await deferredTask(async () => {
           const kit = walletKitRegistry.get("solana");
           const signer = (await kit.getSignerForWallet(
@@ -188,7 +174,7 @@ export default function AuthScreen() {
           return acc;
         }, "Getting wallet account");
 
-        updateLoadingStep(1, true);
+        completeStep(1);
 
         signature = await deferredTask(async () => {
           return await walletClient.signMessage({
@@ -202,8 +188,8 @@ export default function AuthScreen() {
         );
       }
 
-      updateLoadingStep(2, true);
-      await createDelay(800);
+      completeStep(2);
+      await delay(800);
 
       await deferredTask(async () => {
         const authResponse = await verifySignature({
@@ -216,8 +202,8 @@ export default function AuthScreen() {
         queryClient.invalidateQueries({ queryKey: transactionsQueryKeys.all });
       }, "Verifying signature");
 
-      updateLoadingStep(3, true);
-      await createDelay(1000);
+      completeStep(3);
+      await delay(1000);
 
       router.replace("/");
     } catch (error: any) {
@@ -226,7 +212,7 @@ export default function AuthScreen() {
         "Authentication Failed:",
         error?.message || "Failed to authenticate with wallet",
       );
-      setIsLoading(false);
+      stopLoading();
     }
   }, [
     nonceData,
@@ -236,8 +222,10 @@ export default function AuthScreen() {
     verifySignature,
     queryClient,
     deferredTask,
-    updateLoadingStep,
-    createDelay,
+    completeStep,
+    startLoading,
+    stopLoading,
+    delay,
   ]);
 
   const startAuthentication = useCallback(() => {
@@ -425,7 +413,7 @@ export default function AuthScreen() {
       <LoadinngSpinnerPopup
         visible={isLoading}
         title="Authenticating"
-        message={loadingSteps[currentStepIndex]?.message}
+        message={loadingMessage}
       />
     </SafeAreaView>
   );
