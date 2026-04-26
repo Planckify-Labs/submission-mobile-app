@@ -24,7 +24,7 @@
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import type { KeyPairSigner } from "@solana/kit";
-import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
+import { address, createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 
 import type { ChainConfig } from "../../../constants/configs/chainConfig.ts";
 import type { TWallet } from "../../../constants/types/walletTypes.ts";
@@ -161,6 +161,28 @@ export function createSolanaWalletKit(): WalletKitAdapter {
       return getSolanaBalance(rpc, address);
     },
 
+    async getTokenBalance(
+      ownerAddress: string,
+      chain: ChainConfig,
+      contractAddress: string,
+    ): Promise<bigint> {
+      assertSolana(chain);
+      const rpc = createSolanaRpc(chain.rpcUrl);
+      const { value: accounts } = await rpc
+        .getTokenAccountsByOwner(
+          address(ownerAddress),
+          { mint: address(contractAddress) },
+          { encoding: "jsonParsed" },
+        )
+        .send();
+
+      if (accounts.length === 0) return BigInt(0);
+      const data = accounts[0].account.data;
+      const tokenAmount =
+        "parsed" in data ? data.parsed.info.tokenAmount : undefined;
+      return tokenAmount ? BigInt(tokenAmount.amount) : BigInt(0);
+    },
+
     // ── Writes ──────────────────────────────────────────────────────
     async sendNativeTransfer({
       wallet,
@@ -239,7 +261,16 @@ export function createSolanaWalletKit(): WalletKitAdapter {
 
       const rpc = createSolanaRpc(args.chain.rpcUrl);
 
-      const { TransactionMessage, VersionedTransaction, PublicKey: PK } = await import("@solana/web3.js");
+      const {
+        TransactionMessage,
+        VersionedTransaction,
+        PublicKey: PK,
+        Keypair,
+        Connection,
+      } = await import("@solana/web3.js");
+      const { parseSolanaPrivateKey } = await import(
+        "@/services/chains/solana/codec"
+      );
 
       const payerKey = new PK(signer.address);
 
@@ -257,46 +288,29 @@ export function createSolanaWalletKit(): WalletKitAdapter {
         };
       }
 
-      const messageV0 = TransactionMessage.compile({
+      const message = new TransactionMessage({
         payerKey,
         recentBlockhash: blockhashInfo.blockhash,
         instructions: args.instructions,
-        addressLookupTableAccounts: args.addressLookupTables,
       });
-
+      const messageV0 = message.compileToV0Message(args.addressLookupTables);
       const tx = new VersionedTransaction(messageV0);
 
-      // Sign with the wallet signer
-      const { Keypair } = await import("@solana/web3.js");
-      const secretKey = await (signer as any).keyPair;
-      // The signer from @solana/kit is a KeyPairSigner — we need the raw secret for @solana/web3.js signing
-      // Use the wallet service path to get the raw keypair bytes
-      const walletPrivateKey = await import("@/services/walletService").then(
-        (m) => m.getWalletPrivateKey(args.wallet),
-      );
-      if (!walletPrivateKey) throw new Error("Could not retrieve wallet private key");
-
-      const { bs58 } = await import("@/utils/walletUtils").then(async (m) => {
-        const bs58Module = await import("bs58");
-        return { bs58: bs58Module.default ?? bs58Module };
-      });
-      const keypairBytes = bs58.decode(walletPrivateKey);
+      if (!args.wallet.privateKey) {
+        throw new Error("Could not retrieve wallet private key");
+      }
+      const seed = parseSolanaPrivateKey(args.wallet.privateKey);
       const keypair = Keypair.fromSecretKey(
-        keypairBytes.length === 32
-          ? new Uint8Array([...keypairBytes, ...payerKey.toBytes()])
-          : keypairBytes,
+        new Uint8Array([...seed, ...payerKey.toBytes()]),
       );
       tx.sign([keypair, ...(args.additionalSigners ?? [])]);
 
-      // Broadcast
-      const { Connection } = await import("@solana/web3.js");
       const connection = new Connection(args.chain.rpcUrl, "confirmed");
       const signature = await connection.sendRawTransaction(tx.serialize(), {
         skipPreflight: false,
         preflightCommitment: "confirmed",
       });
 
-      // Wait for confirmation
       await connection.confirmTransaction(
         { signature, blockhash: blockhashInfo.blockhash, lastValidBlockHeight: blockhashInfo.lastValidBlockHeight },
         "confirmed",

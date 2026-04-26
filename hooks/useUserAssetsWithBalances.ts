@@ -2,9 +2,10 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
-import { erc20Abi, formatUnits } from "viem";
-import { getPublicClient } from "@/utils/clients";
+import { formatUnits } from "viem";
 import { formatTokenAmount } from "@/utils/helperUtils";
+import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
+import { walletKitRegistry } from "@/services/walletKit/registry";
 import { useActiveNetwork } from "./useAssetExplorerState";
 import { useBlockchainsWithStorage } from "./useBlockchainsWithStorage";
 import { useUserAssets } from "./useUserAssets";
@@ -26,34 +27,32 @@ export function useUserAssetsWithBalances() {
 
   const selectedBlockchain = useMemo(() => {
     if (!blockchains || !activeNetwork) return null;
-    return blockchains.find(
-      (b) =>
-        typeof b.chainId === "number" && b.chainId.toString() === activeNetwork,
+    return (
+      blockchains.find(
+        (b) =>
+          typeof b.chainId === "number" &&
+          b.chainId.toString() === activeNetwork,
+      ) ?? blockchains.find((b) => b.id === activeNetwork) ?? null
     );
   }, [blockchains, activeNetwork]);
 
-  const selectedChain = useMemo(() => {
+  const chainConfig = useMemo(() => {
     if (!selectedBlockchain) return null;
-    // Asset balances are EVM-only (N1). If a Solana row somehow
-    // matched, bail out — viem's Chain expects a numeric id.
-    if (typeof selectedBlockchain.chainId !== "number") return null;
-    const nativeToken =
-      selectedBlockchain.tokens?.find((t) => t.isNativeCurrency) ??
-      selectedBlockchain.tokens?.[0];
-    return {
-      id: selectedBlockchain.chainId,
-      name: selectedBlockchain.name,
-      nativeCurrency: {
-        name: nativeToken?.name ?? selectedBlockchain.name,
-        symbol: nativeToken?.symbol ?? "N/A",
-        decimals: nativeToken?.decimals ?? 18,
-      },
-      rpcUrls: {
-        default: { http: [selectedBlockchain.rpcUrl] },
-        public: { http: [selectedBlockchain.rpcUrl] },
-      },
-    };
+    try {
+      return buildChainConfigFromBlockchain(selectedBlockchain);
+    } catch {
+      return null;
+    }
   }, [selectedBlockchain]);
+
+  const kit = useMemo(() => {
+    if (!chainConfig) return null;
+    try {
+      return walletKitRegistry.get(chainConfig.namespace);
+    } catch {
+      return null;
+    }
+  }, [chainConfig]);
 
   const queryKey = useMemo(
     () =>
@@ -67,57 +66,41 @@ export function useUserAssetsWithBalances() {
   );
 
   const enabled = Boolean(
-    activeWallet?.address && selectedChain && userAssets.length > 0,
+    activeWallet?.address && kit && chainConfig && userAssets.length > 0,
   );
 
   const balancesQuery = useQuery({
     queryKey,
     queryFn: async (): Promise<TAssetBalance[]> => {
-      if (!activeWallet?.address || !selectedChain) return [];
+      if (!activeWallet?.address || !kit || !chainConfig) return [];
 
-      const publicClient = getPublicClient(selectedChain);
-      if (!publicClient) return [];
+      const nativeDecimals =
+        selectedBlockchain?.nativeCurrency?.decimals ??
+        selectedBlockchain?.tokens?.find((t) => t.isNativeCurrency)?.decimals;
 
       const balancePromises = userAssets.map(async (asset) => {
         try {
           let balance: bigint;
-          let decimals: number;
-
-          if (
+          const isNative =
             !asset.contractAddress ||
             asset.contractAddress ===
-              "0x0000000000000000000000000000000000000000"
-          ) {
-            // Native currency
-            balance = await publicClient.getBalance({
-              address: activeWallet.address as `0x${string}`,
-            });
-            decimals = selectedChain.nativeCurrency?.decimals ?? 18;
-          } else {
-            // ERC-20 token
-            balance = (await publicClient.readContract({
-              address: asset.contractAddress as `0x${string}`,
-              abi: erc20Abi,
-              functionName: "balanceOf",
-              args: [activeWallet.address as `0x${string}`],
-            })) as bigint;
+              "0x0000000000000000000000000000000000000000" ||
+            asset.contractAddress === "native";
 
-            // Use asset decimals if available, otherwise fetch from contract
-            if (asset.decimals !== undefined) {
-              decimals = asset.decimals;
-            } else {
-              try {
-                decimals = (await publicClient.readContract({
-                  address: asset.contractAddress as `0x${string}`,
-                  abi: erc20Abi,
-                  functionName: "decimals",
-                })) as number;
-              } catch {
-                decimals = 18; // Fallback to 18 if decimals call fails
-              }
-            }
+          if (isNative) {
+            balance = await kit.getNativeBalance(
+              activeWallet.address,
+              chainConfig,
+            );
+          } else {
+            balance = await kit.getTokenBalance(
+              activeWallet.address,
+              chainConfig,
+              asset.contractAddress!,
+            );
           }
 
+          const decimals = asset.decimals ?? nativeDecimals ?? 18;
           const formatted = formatUnits(balance, decimals);
           const balanceFormatted = formatTokenAmount(formatted, {
             simplify: false,

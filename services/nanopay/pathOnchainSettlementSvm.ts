@@ -12,7 +12,7 @@ import {
   createApproveInstruction,
   createRevokeInstruction,
 } from "@solana/spl-token";
-import { decode as base64Decode } from "base64-js";
+import { toByteArray as base64Decode } from "base64-js";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import type { TWallet } from "@/constants/types/walletTypes";
 import type { WalletKitAdapter } from "@/services/walletKit/types";

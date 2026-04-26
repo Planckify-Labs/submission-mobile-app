@@ -2,17 +2,26 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
+import { formatUnits } from "viem";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { chainCacheKey } from "@/hooks/useWallet.helpers";
 import { walletKitRegistry } from "@/services/walletKit/registry";
+import { formatTokenAmount } from "@/utils/helperUtils";
 
-export function useWalletBalance(wallet?: TWallet, chain?: ChainConfig) {
-  // §6.2 — balance is only meaningful when the active chain's namespace
-  // matches the wallet's namespace. Same guard `app/wallet.tsx` uses on
-  // the header pill. Kit dispatch lives on `walletKitRegistry`, so the
-  // EVM/Solana branch disappears from this hook.
+export interface TokenInfo {
+  contractAddress: string | null;
+  decimals: number;
+  isNativeCurrency: boolean;
+}
+
+export function useWalletBalance(
+  wallet?: TWallet,
+  chain?: ChainConfig,
+  token?: TokenInfo,
+  tokenInfoReady = true,
+) {
   const kit = useMemo(() => {
     if (!wallet?.namespace) return null;
     try {
@@ -25,7 +34,11 @@ export function useWalletBalance(wallet?: TWallet, chain?: ChainConfig) {
   const namespaceMatches =
     !!wallet && !!chain && chain.namespace === wallet.namespace;
 
-  const enabled = Boolean(wallet?.address && kit && namespaceMatches);
+  const isNative = !token || token.isNativeCurrency || !token.contractAddress;
+
+  const enabled = Boolean(
+    wallet?.address && kit && namespaceMatches && tokenInfoReady,
+  );
   const queryClient = useQueryClient();
   const chainKey = chain ? chainCacheKey(chain) : null;
   const queryKey = useMemo(
@@ -35,8 +48,9 @@ export function useWalletBalance(wallet?: TWallet, chain?: ChainConfig) {
         wallet?.address,
         wallet?.namespace,
         chainKey,
+        token?.contractAddress ?? "native",
       ] as const,
-    [wallet?.address, wallet?.namespace, chainKey],
+    [wallet?.address, wallet?.namespace, chainKey, token?.contractAddress],
   );
 
   const balanceQuery = useQuery({
@@ -45,7 +59,16 @@ export function useWalletBalance(wallet?: TWallet, chain?: ChainConfig) {
       if (!wallet?.address || !kit || !chain || !namespaceMatches) {
         return BigInt(0);
       }
-      return kit.getNativeBalance(wallet.address, chain);
+
+      if (isNative) {
+        return kit.getNativeBalance(wallet.address, chain);
+      }
+
+      return kit.getTokenBalance(
+        wallet.address,
+        chain,
+        token!.contractAddress!,
+      );
     },
     enabled,
     refetchOnMount: true,
@@ -82,10 +105,14 @@ export function useWalletBalance(wallet?: TWallet, chain?: ChainConfig) {
   const balanceFormatted = useMemo(() => {
     if (!kit || !chain || !namespaceMatches) return "—";
     if (balanceQuery.data === undefined) return "0";
-    // Kit emits `"<amount> <symbol>"`; BalanceSection renders the
-    // symbol separately (via `selectedToken`) so strip the suffix.
-    return kit.formatNativeAmount(balanceQuery.data, chain).split(" ")[0];
-  }, [balanceQuery.data, chain, kit, namespaceMatches]);
+
+    if (isNative) {
+      return kit.formatNativeAmount(balanceQuery.data, chain).split(" ")[0];
+    }
+
+    const formatted = formatUnits(balanceQuery.data, token!.decimals);
+    return formatTokenAmount(formatted, { simplify: false });
+  }, [balanceQuery.data, chain, kit, namespaceMatches, isNative, token]);
 
   return {
     balance: balanceFormatted,

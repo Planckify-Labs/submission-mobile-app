@@ -314,6 +314,18 @@ export interface WalletKitAdapter {
   // ── Reads ───────────────────────────────────────────────────────────
   getNativeBalance(address: string, chain: ChainConfig): Promise<bigint>;
 
+  /**
+   * Returns the raw token balance for a non-native token identified by
+   * `contractAddress`. EVM: ERC-20 `balanceOf`; Solana: SPL Token /
+   * Token-2022 ATA lookup. Returns `0n` when the account has no balance.
+   * Future chains (SUI, etc.) implement this for their own token standard.
+   */
+  getTokenBalance(
+    address: string,
+    chain: ChainConfig,
+    contractAddress: string,
+  ): Promise<bigint>;
+
   // ── Writes ──────────────────────────────────────────────────────────
   /** Returns tx hash (EVM) or signature (Solana) as a string. */
   sendNativeTransfer(args: NativeTransferArgs): Promise<string>;

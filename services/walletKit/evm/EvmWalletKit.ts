@@ -13,7 +13,7 @@
  * entry and throws on mismatch.
  */
 
-import { formatUnits, isAddress, parseUnits } from "viem";
+import { erc20Abi, formatUnits, isAddress, parseUnits } from "viem";
 import type { ChainConfig } from "../../../constants/configs/chainConfig.ts";
 import type { TWallet } from "../../../constants/types/walletTypes.ts";
 import { getPublicClient, getWalletClient } from "../../../utils/clients.ts";
@@ -105,6 +105,21 @@ export function createEvmWalletKit(): WalletKitAdapter {
       assertEvm(chain);
       const pc = getPublicClient(chain.chain);
       return pc.getBalance({ address: address as `0x${string}` });
+    },
+
+    async getTokenBalance(
+      address: string,
+      chain: ChainConfig,
+      contractAddress: string,
+    ): Promise<bigint> {
+      assertEvm(chain);
+      const pc = getPublicClient(chain.chain);
+      return (await pc.readContract({
+        address: contractAddress as `0x${string}`,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [address as `0x${string}`],
+      })) as bigint;
     },
 
     // ── Writes ──────────────────────────────────────────────────────

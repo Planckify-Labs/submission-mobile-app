@@ -76,10 +76,81 @@ export interface BalanceSectionRef {
 
 const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   const { activeWallet, activeChain } = useWallet();
-  // Warm the QR-matrix cache for every wallet on idle so the receive
-  // sheet's QR is paint-ready the instant it mounts.
   useQRPrefetch();
   const nativeSymbol = getNativeSymbol(activeChain) ?? "N/A";
+
+  const [isShowBalance, setShowBalance] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(
+    () => storage.getString(SELECTED_DISPLAY_TOKEN_SYMBOL_KEY) ?? nativeSymbol,
+  );
+  const [tokenPickerVisible, setTokenPickerVisible] = useState(false);
+
+  const { data: blockchains } = useBlockchains({ isActive: true });
+
+  const activeBlockchainId = useMemo(() => {
+    if (!blockchains) return undefined;
+    if (activeChain.namespace === "eip155") {
+      return blockchains.find(
+        (b) => b.isEVM && b.chainId === activeChain.chain.id,
+      )?.id;
+    }
+    const isTestnet = activeChain.isTestnet ?? false;
+    return blockchains.find(
+      (b) => !b.isEVM && b.isTestnet === isTestnet,
+    )?.id;
+  }, [blockchains, activeChain]);
+
+  const { data: chainTokens } = useTokens({
+    blockchainId: activeBlockchainId,
+    isActive: true,
+  });
+
+  // On chain switch: keep the user's symbol choice if the new chain has
+  // the same token (e.g. USDC exists on both EVM and Solana). Only fall
+  // back to native when the symbol genuinely doesn't exist on the target.
+  const prevChainKeyRef = useRef(activeBlockchainId);
+  useEffect(() => {
+    if (!chainTokens || chainTokens.length === 0) return;
+    const chainChanged = prevChainKeyRef.current !== activeBlockchainId;
+    prevChainKeyRef.current = activeBlockchainId;
+
+    const hasSelected = chainTokens.some((t) => t.symbol === selectedSymbol);
+    if (hasSelected) return;
+
+    if (chainChanged) {
+      // Chain switched — try the persisted symbol from storage first
+      const stored = storage.getString(SELECTED_DISPLAY_TOKEN_SYMBOL_KEY);
+      if (stored && chainTokens.some((t) => t.symbol === stored)) {
+        setSelectedSymbol(stored);
+        return;
+      }
+    }
+
+    const nativeToken = chainTokens.find((t) => t.isNativeCurrency);
+    setSelectedSymbol(nativeToken?.symbol ?? nativeSymbol);
+  }, [chainTokens, selectedSymbol, nativeSymbol, activeBlockchainId]);
+
+  useEffect(() => {
+    storage.set(SELECTED_DISPLAY_TOKEN_SYMBOL_KEY, selectedSymbol);
+  }, [selectedSymbol]);
+
+  // `tokenInfoReady` gates the balance query: when the user has selected
+  // a non-native symbol but chainTokens hasn't loaded yet, we must NOT
+  // let the balance hook fall back to native — that shows the wrong
+  // number. Only mark ready once we can resolve the selected symbol.
+  const selectedTokenInfo = useMemo(() => {
+    if (!chainTokens) return undefined;
+    const token = chainTokens.find((t) => t.symbol === selectedSymbol);
+    if (!token) return undefined;
+    return {
+      contractAddress: token.contractAddress,
+      decimals: token.decimals,
+      isNativeCurrency: token.isNativeCurrency,
+    };
+  }, [chainTokens, selectedSymbol]);
+
+  const tokenInfoReady = !!chainTokens && chainTokens.length > 0;
+
   const {
     isAuthenticated,
     isLoading: isAuthLoading,
@@ -95,6 +166,8 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   const { balance, isFetching, refetch } = useWalletBalance(
     activeWallet,
     activeChain,
+    selectedTokenInfo,
+    tokenInfoReady,
   );
 
   useImperativeHandle(ref, () => ({
@@ -140,46 +213,6 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
       });
     }
   };
-  const [isShowBalance, setShowBalance] = useState(false);
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(
-    () => storage.getString(SELECTED_DISPLAY_TOKEN_SYMBOL_KEY) ?? nativeSymbol,
-  );
-  const [tokenPickerVisible, setTokenPickerVisible] = useState(false);
-
-  const { data: blockchains } = useBlockchains({ isActive: true });
-
-  // Resolve the DB `blockchainId` for the currently-active chain so we can
-  // query its token list. EVM chains match by numeric chainId; Solana has a
-  // single active non-EVM blockchain row.
-  const activeBlockchainId = useMemo(() => {
-    if (!blockchains) return undefined;
-    if (activeChain.namespace === "eip155") {
-      return blockchains.find(
-        (b) => b.isEVM && b.chainId === activeChain.chain.id,
-      )?.id;
-    }
-    return blockchains.find((b) => !b.isEVM)?.id;
-  }, [blockchains, activeChain]);
-
-  const { data: chainTokens } = useTokens({
-    blockchainId: activeBlockchainId,
-    isActive: true,
-  });
-
-  // Keep the user's display-token choice across chain switches by symbol.
-  // If the picked symbol doesn't exist on the new chain, fall back to the
-  // native token of that chain.
-  useEffect(() => {
-    if (!chainTokens || chainTokens.length === 0) return;
-    const hasSelected = chainTokens.some((t) => t.symbol === selectedSymbol);
-    if (hasSelected) return;
-    const nativeToken = chainTokens.find((t) => t.isNativeCurrency);
-    setSelectedSymbol(nativeToken?.symbol ?? nativeSymbol);
-  }, [chainTokens, selectedSymbol, nativeSymbol]);
-
-  useEffect(() => {
-    storage.set(SELECTED_DISPLAY_TOKEN_SYMBOL_KEY, selectedSymbol);
-  }, [selectedSymbol]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isModalAnimationComplete, setIsModalAnimationComplete] =

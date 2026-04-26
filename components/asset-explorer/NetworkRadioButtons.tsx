@@ -74,24 +74,13 @@ const NetworkRadioButtons = () => {
   };
 
   const activeChainId = getEvmChainId(activeChain);
+  const activeIsTestnet = activeChain.isTestnet ?? false;
 
-  // Sync asset-explorer's selected network to the globally-active chain on
-  // mount and whenever the user switches chains elsewhere (header / agent).
-  // Namespace-aware: matches EVM rows by numeric chainId and non-EVM rows
-  // by namespace (backend `isEVM === false` → "solana" in v2.3.0). Without
-  // this branch, Solana never selected itself here because the previous
-  // `getEvmChainId`-only path returned `undefined` for non-EVM chains.
-  //
-  // Keyed on a `namespace|chainId` signature (not on the blockchains
-  // array itself) so pull-to-refresh — which refetches the blockchains
-  // query and hands back a new array reference — doesn't re-run the
-  // effect and stomp the user's manual network pick. Only real global
-  // chain changes flip the signature and cause a resync.
   const lastSyncedChainRef = useRef<string | null>(null);
   useEffect(() => {
     if (!blockchains) return;
 
-    const signature = `${activeChain.namespace}|${activeChainId ?? ""}`;
+    const signature = `${activeChain.namespace}|${activeChainId ?? ""}|${activeIsTestnet}`;
     if (lastSyncedChainRef.current === signature) return;
 
     const matching = blockchains.find((b) => {
@@ -100,7 +89,7 @@ const NetworkRadioButtons = () => {
       if (typeof activeChainId === "number") {
         return typeof b.chainId === "number" && b.chainId === activeChainId;
       }
-      return true;
+      return b.isTestnet === activeIsTestnet;
     });
 
     if (!matching) return;
@@ -112,7 +101,7 @@ const NetworkRadioButtons = () => {
 
     selectNetwork(networkId, matching.id);
     lastSyncedChainRef.current = signature;
-  }, [activeChain.namespace, activeChainId, blockchains, selectNetwork]);
+  }, [activeChain.namespace, activeChainId, activeIsTestnet, blockchains, selectNetwork]);
 
   const accentColor = getAccentColor();
 

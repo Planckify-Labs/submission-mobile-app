@@ -169,9 +169,7 @@ export function buildChainConfigFromBlockchain(
   const namespace = resolveNamespace(b);
 
   if (namespace === "solana") {
-    const cluster: "mainnet-beta" | "devnet" = b.name
-      ?.toLowerCase()
-      .includes("devnet")
+    const cluster: "mainnet-beta" | "devnet" = b.isTestnet
       ? "devnet"
       : "mainnet-beta";
     return {
@@ -181,7 +179,7 @@ export function buildChainConfigFromBlockchain(
       iconUrl:
         (b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0])?.logoUrl ??
         undefined,
-      isTestnet: cluster === "devnet",
+      isTestnet: b.isTestnet,
     };
   }
 
