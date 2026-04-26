@@ -10,7 +10,13 @@ import {
   Send,
 } from "lucide-react-native";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -39,6 +45,7 @@ import { useCreateTransaction } from "@/hooks/queries/useTransactions";
 import { useAddressBook } from "@/hooks/useAddressBook";
 import { useNavigationReady } from "@/hooks/useNavigationReady";
 import { useWallet } from "@/hooks/useWallet";
+import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
 
 /**
  * Splits a `kit.formatNativeAmount` output into `[amount, symbol]`.
@@ -73,6 +80,7 @@ export default function SendScreen() {
     activeWalletIndex,
     setActiveWallet,
     activeChain,
+    changeActiveChainToConfig,
     getActiveWalletKit,
   } = useWallet();
 
@@ -151,7 +159,61 @@ export default function SendScreen() {
 
   const { contacts: addressBookContacts } = useAddressBook();
 
-  const { recipientAddress } = useLocalSearchParams();
+  const { recipientAddress, namespace: scannedNamespaceParam } =
+    useLocalSearchParams();
+  const scannedNamespace =
+    typeof scannedNamespaceParam === "string"
+      ? scannedNamespaceParam
+      : undefined;
+
+  // Align the active chain with the scanned target's namespace. The
+  // wallet itself is left alone — `changeActiveChainToConfig` runs
+  // `pickWalletForChain` internally and atomically swaps the wallet
+  // only when the namespace actually crosses (see `useWallet.ts`
+  // `pickWalletForChain` / `changeActiveChainToConfig`). So same-
+  // namespace scans keep the user's current wallet untouched.
+  //
+  // Policy:
+  //   - EVM scan + already on EVM → no-op (preserve current chain).
+  //   - EVM scan + on Solana → flip to first EVM backend row, which
+  //     also flips the wallet to the first matching EVM wallet.
+  //   - Solana scan → pin to Solana mainnet-beta (never devnet, even
+  //     if devnet appears first in the feed). Wallet flips only if
+  //     the user wasn't already on a Solana wallet.
+  //
+  // Ref guard prevents re-firing if the user navigates within /send.
+  const didApplyScannedNamespaceRef = useRef(false);
+  useEffect(() => {
+    if (didApplyScannedNamespaceRef.current) return;
+    if (!scannedNamespace) return;
+    if (!blockchains) return;
+
+    if (activeChain.namespace === "eip155" && scannedNamespace === "eip155") {
+      didApplyScannedNamespaceRef.current = true;
+      return;
+    }
+    if (
+      activeChain.namespace === "solana" &&
+      scannedNamespace === "solana" &&
+      activeChain.cluster === "mainnet-beta"
+    ) {
+      didApplyScannedNamespaceRef.current = true;
+      return;
+    }
+
+    const targetRow =
+      scannedNamespace === "solana"
+        ? blockchains.find((b) => b.isEVM === false && !b.isTestnet)
+        : blockchains.find((b) => b.isEVM !== false);
+
+    if (!targetRow) {
+      didApplyScannedNamespaceRef.current = true;
+      return;
+    }
+
+    didApplyScannedNamespaceRef.current = true;
+    void changeActiveChainToConfig(buildChainConfigFromBlockchain(targetRow));
+  }, [scannedNamespace, blockchains, activeChain, changeActiveChainToConfig]);
 
   // Presentation-only derived values — both come from the kit so EVM
   // and Solana display paths converge. Guard against the brief window

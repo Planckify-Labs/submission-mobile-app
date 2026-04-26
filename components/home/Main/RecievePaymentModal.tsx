@@ -39,13 +39,33 @@ const QR_OUTER_EYES = {
   bottomLeft: { borderRadius: 15, color: "#c71c4b" },
 };
 const QR_INNER_EYES = { borderRadius: 10, color: "#20222c" };
-const QR_LOGO = {
+const QR_LOGO_BASE = {
   href: takumipayLogoBase64,
-  scale: 1.2,
   padding: 2,
 };
 
-const MemoQRCode = memo(function MemoQRCode({ data }: { data: string }) {
+// Per-namespace scale to compensate for `useQRCodeLogoSize` snapping the
+// logo to an odd multiple of `pieceSize`. Solana addresses encode in byte
+// mode (vs EVM hex/alphanumeric), producing a denser matrix and a smaller
+// `pieceSize` that snaps the logo to a visibly larger bucket at the same
+// scale. Tune these to keep the visual size consistent across tabs.
+const QR_LOGO_SCALE_BY_NAMESPACE: Record<string, number> = {
+  eip155: 1.2,
+  solana: 1.0,
+};
+const QR_LOGO_SCALE_DEFAULT = 1.2;
+
+const MemoQRCode = memo(function MemoQRCode({
+  data,
+  logoScale,
+}: {
+  data: string;
+  logoScale: number;
+}) {
+  const logo = useMemo(
+    () => ({ ...QR_LOGO_BASE, scale: logoScale }),
+    [logoScale],
+  );
   return (
     <QRCodeStyled
       data={data}
@@ -59,7 +79,7 @@ const MemoQRCode = memo(function MemoQRCode({ data }: { data: string }) {
       gradient={QR_GRADIENT}
       outerEyesOptions={QR_OUTER_EYES}
       innerEyesOptions={QR_INNER_EYES}
-      logo={QR_LOGO}
+      logo={logo}
     />
   );
 });
@@ -139,6 +159,9 @@ export default function RecievePaymentModal({
   // effect below is a belt-and-braces synchronous warm that also
   // covers tab switches between paired EVM / Solana addresses.
   const qrAddress = displayWallet.address;
+  const qrLogoScale =
+    QR_LOGO_SCALE_BY_NAMESPACE[displayWallet.namespace] ??
+    QR_LOGO_SCALE_DEFAULT;
   useEffect(() => {
     if (!qrAddress) return;
     prefetchQRMatrix(qrAddress, { errorCorrectionLevel: "M" });
@@ -251,7 +274,9 @@ export default function RecievePaymentModal({
             <View className="bg-white rounded-3xl p-6 shadow-sm mb-5">
               <View className="items-center mb-6 h-64">
                 <View className="bg-light-main-container/50 p-4 rounded-2xl aspect-square grow">
-                  {isModalAnimationComplete && <MemoQRCode data={qrAddress} />}
+                  {isModalAnimationComplete && (
+                    <MemoQRCode data={qrAddress} logoScale={qrLogoScale} />
+                  )}
                 </View>
               </View>
 
