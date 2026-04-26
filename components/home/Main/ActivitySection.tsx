@@ -113,6 +113,11 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
       { type: "TRANSFER", take: 4 },
       { enabled: shouldFetchTransactions },
     );
+  const { data: paymentHistory, refetch: refetchPaymentHistory } =
+    useTransactionHistory(
+      { type: "PAYMENT", take: 4 },
+      { enabled: shouldFetchTransactions },
+    );
   const { data: redemptionData, refetch: refetchRedemptionHistory } =
     useRedemptionHistory({ limit: 4 }, { enabled: shouldFetchTransactions });
 
@@ -121,6 +126,7 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
   useImperativeHandle(ref, () => ({
     refetch: () => {
       refetchTransferHistory();
+      refetchPaymentHistory();
       refetchRedemptionHistory();
     },
   }));
@@ -136,6 +142,7 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
       !isAuthLoading
     ) {
       refetchTransferHistory();
+      refetchPaymentHistory();
       refetchRedemptionHistory();
     }
 
@@ -145,6 +152,7 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
     isAuthenticated,
     isAuthLoading,
     refetchTransferHistory,
+    refetchPaymentHistory,
     refetchRedemptionHistory,
   ]);
 
@@ -236,6 +244,53 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
       </View>
       <Text className="text-light-matte-black text-center text-xs font-bold mt-1">
         {truncateAddress({ address: transfer.recipientAddress })}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const paymentHistoryButton = (payment: TTransaction) => (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      className="justify-center items-center"
+      onPress={() =>
+        router.push({
+          pathname: "/activity-detail",
+          params: { paymentId: payment.id },
+        })
+      }
+    >
+      <View className="aspect-square w-full max-w-[70px] relative bg-light-primary-red/10 rounded-full items-center justify-center p-3">
+        <Text className="text-light-primary-red font-bold text-lg">
+          {(() => {
+            try {
+              const formattedUnits = formatUnits(
+                BigInt(payment.amount),
+                payment.token.decimals,
+              );
+              return formatTokenAmount(formattedUnits);
+            } catch {
+              return "0";
+            }
+          })()}
+        </Text>
+        <Text className="text-light-matte-black font-bold text-xs">
+          {payment.token.symbol.length > 6
+            ? payment.token.symbol.slice(0, 6) + "…"
+            : payment.token.symbol}
+        </Text>
+        <View className="bg-light-main-container aspect-square overflow-hidden w-4 rounded-full border border-light-matte-black absolute bottom-[12px] right-0 items-center justify-center">
+          <OptimizedImage
+            source={{ uri: payment.token.logoUrl }}
+            style={{ width: 14, height: 14 }}
+            contentFit="contain"
+          />
+        </View>
+      </View>
+      <Text
+        className="text-light-matte-black text-center text-xs font-bold mt-1 max-w-[70px]"
+        numberOfLines={1}
+      >
+        {payment.merchantName ?? "Merchant"}
       </Text>
     </TouchableOpacity>
   );
@@ -353,7 +408,9 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
   }
 
   const isNoTransactionHistory =
-    transferHistory?.[0] === undefined && redemptionHistory.length === 0;
+    transferHistory?.[0] === undefined &&
+    paymentHistory?.[0] === undefined &&
+    redemptionHistory.length === 0;
   return (
     <View className="px-4">
       {!isNoTransactionHistory ? (
@@ -377,6 +434,18 @@ const ActivitySection = forwardRef<ActivitySectionRef>((props, ref) => {
               <FlashList
                 data={redemptionHistory.slice(0, 4)}
                 renderItem={({ item }) => redemptionHistoryButton(item)}
+                keyExtractor={(item) => item.id}
+                numColumns={4}
+                showsVerticalScrollIndicator={false}
+                showsHorizontalScrollIndicator={false}
+              />
+            </View>
+          )}
+          {paymentHistory?.[0] !== undefined && (
+            <View>
+              <FlashList
+                data={paymentHistory || []}
+                renderItem={({ item }) => paymentHistoryButton(item)}
                 keyExtractor={(item) => item.id}
                 numColumns={4}
                 showsVerticalScrollIndicator={false}

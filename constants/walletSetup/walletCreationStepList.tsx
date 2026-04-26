@@ -133,8 +133,8 @@ export const createWalletSteps = (
           <View className="flex-row items-start gap-2">
             <Info size={22} color="#c71c4b" className="mr-3 mt-0.5" />
             <Text className="text-light-matte-black flex-1 font-medium">
-              Never share this phrase with anyone. TakumiPay will never ask
-              for it.
+              Never share this phrase with anyone. TakumiPay will never ask for
+              it.
             </Text>
           </View>
         </View>

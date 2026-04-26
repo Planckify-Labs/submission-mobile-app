@@ -1,8 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
-import { describe, it, expect } from "vitest";
-import { buildDepositPointsInstruction } from "../buildDepositPoints";
-import { computeRefIdHash } from "@/services/chains/solana/takumiPay/refIdHash";
+import { describe, expect, it } from "vitest";
 import { TAKUMI_PAY_PROGRAM_ID } from "@/services/chains/solana/takumiPay";
+import { computeRefIdHash } from "@/services/chains/solana/takumiPay/refIdHash";
+import { buildDepositPointsInstruction } from "../buildDepositPoints";
 
 const programId = TAKUMI_PAY_PROGRAM_ID;
 const payer = PublicKey.unique();
@@ -50,7 +50,9 @@ describe("buildDepositPointsInstruction", () => {
     const refIdBytes = new TextEncoder().encode(refId);
     const hashOffset = 8 + 4 + refIdBytes.length;
     const actualHash = data.subarray(hashOffset, hashOffset + 32);
-    expect(Buffer.from(actualHash).equals(Buffer.from(expectedHash))).toBe(true);
+    expect(Buffer.from(actualHash).equals(Buffer.from(expectedHash))).toBe(
+      true,
+    );
   });
 
   it("payer is signer and writable", () => {
@@ -85,10 +87,20 @@ describe("buildDepositPointsInstruction", () => {
 
   it("different refIds produce different instruction data", () => {
     const ix1 = buildDepositPointsInstruction({
-      payer, programId, tokenMint, refId: "ref-a", amount: 100n, pointDepositCounter: 0n,
+      payer,
+      programId,
+      tokenMint,
+      refId: "ref-a",
+      amount: 100n,
+      pointDepositCounter: 0n,
     });
     const ix2 = buildDepositPointsInstruction({
-      payer, programId, tokenMint, refId: "ref-b", amount: 100n, pointDepositCounter: 0n,
+      payer,
+      programId,
+      tokenMint,
+      refId: "ref-b",
+      amount: 100n,
+      pointDepositCounter: 0n,
     });
     expect(ix1[1].data.equals(ix2[1].data)).toBe(false);
   });

@@ -24,7 +24,11 @@
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import type { KeyPairSigner } from "@solana/kit";
-import { address, createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
+import {
+  address,
+  createSolanaRpc,
+  createSolanaRpcSubscriptions,
+} from "@solana/kit";
 
 import type { ChainConfig } from "../../../constants/configs/chainConfig.ts";
 import type { TWallet } from "../../../constants/types/walletTypes.ts";
@@ -35,11 +39,11 @@ import {
   isValidSolanaPrivateKey,
   truncateAddress as truncateAddressUtil,
 } from "../../../utils/walletUtils.ts";
+import { buildAndSendSplTransfer } from "../../chains/solana/splTransferService.ts";
 import {
   buildAndSendSolTransfer,
   getSolanaBalance,
 } from "../../chains/solana/transferService.ts";
-import { buildAndSendSplTransfer } from "../../chains/solana/splTransferService.ts";
 import {
   generateWalletMnemonic,
   getSolanaSignerForWallet,
@@ -284,9 +288,13 @@ export function createSolanaWalletKit(): WalletKitAdapter {
       return signX402SvmPaymentWithSigner(signer, args.transaction);
     },
 
-    async sendAnchorInstruction(args: SendAnchorInstructionArgs): Promise<string> {
+    async sendAnchorInstruction(
+      args: SendAnchorInstructionArgs,
+    ): Promise<string> {
       assertSolana(args.chain);
-      const signer: KeyPairSigner | null = await getSolanaSignerForWallet(args.wallet);
+      const signer: KeyPairSigner | null = await getSolanaSignerForWallet(
+        args.wallet,
+      );
       if (!signer) {
         throw new Error("No Solana signer for wallet");
       }
@@ -313,7 +321,9 @@ export function createSolanaWalletKit(): WalletKitAdapter {
           lastValidBlockHeight: Number.MAX_SAFE_INTEGER,
         };
       } else {
-        const { value } = await rpc.getLatestBlockhash({ commitment: "confirmed" }).send();
+        const { value } = await rpc
+          .getLatestBlockhash({ commitment: "confirmed" })
+          .send();
         blockhashInfo = {
           blockhash: value.blockhash,
           lastValidBlockHeight: Number(value.lastValidBlockHeight),
@@ -354,7 +364,10 @@ export function createSolanaWalletKit(): WalletKitAdapter {
         if (status?.err) {
           throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
         }
-        if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
+        if (
+          status?.confirmationStatus === "confirmed" ||
+          status?.confirmationStatus === "finalized"
+        ) {
           return signature;
         }
       }

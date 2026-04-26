@@ -6,7 +6,7 @@ import { formatUnits } from "viem/utils";
 import { TTransaction } from "@/api/types/transaction";
 import { formatDate } from "@/utils/dateUtils";
 import { copyToClipboard } from "@/utils/helperUtils";
-import { truncateAddress } from "@/utils/walletUtils";
+import { buildExplorerTxUrl, truncateAddress } from "@/utils/walletUtils";
 
 interface TransferDetailCardProps {
   transfer: TTransaction;
@@ -17,7 +17,7 @@ const TransferDetailCard = React.memo(
     const openBlockExplorer = useCallback(() => {
       if (transfer.txHash && transfer.token?.blockchain?.blockExplorer) {
         openBrowserAsync(
-          `${transfer.token.blockchain.blockExplorer}/tx/${transfer.txHash}`,
+          buildExplorerTxUrl(transfer.token.blockchain.blockExplorer, transfer.txHash),
         );
       }
     }, [transfer.txHash, transfer.token?.blockchain?.blockExplorer]);
@@ -93,8 +93,8 @@ const TransferDetailCard = React.memo(
                       activeOpacity={0.7}
                       onPress={() =>
                         copyToClipboard(
-                          "Transaction hash",
                           transfer.txHash || "",
+                          "Transaction hash",
                         )
                       }
                       className="p-1"
@@ -129,7 +129,7 @@ const TransferDetailCard = React.memo(
                   <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={() =>
-                      copyToClipboard("Sender address", transfer.senderAddress)
+                      copyToClipboard(transfer.senderAddress, "Sender address")
                     }
                   >
                     <Copy size={16} color="#c71c4b" />
@@ -151,8 +151,8 @@ const TransferDetailCard = React.memo(
                     activeOpacity={0.7}
                     onPress={() =>
                       copyToClipboard(
-                        "Recipient address",
                         transfer.recipientAddress,
+                        "Recipient address",
                       )
                     }
                   >

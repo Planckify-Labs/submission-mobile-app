@@ -14,13 +14,8 @@ function bigintToLeBytes(value: bigint, byteLength: number): Uint8Array {
   return buf;
 }
 
-export function deriveConfigPda(
-  programId: PublicKey,
-): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("config")],
-    programId,
-  );
+export function deriveConfigPda(programId: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([Buffer.from("config")], programId);
 }
 
 export function deriveRefRecordPda(

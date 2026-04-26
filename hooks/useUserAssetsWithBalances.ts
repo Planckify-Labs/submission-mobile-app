@@ -3,9 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { formatUnits } from "viem";
-import { formatTokenAmount } from "@/utils/helperUtils";
 import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
 import { walletKitRegistry } from "@/services/walletKit/registry";
+import { formatTokenAmount } from "@/utils/helperUtils";
 import { useActiveNetwork } from "./useAssetExplorerState";
 import { useBlockchainsWithStorage } from "./useBlockchainsWithStorage";
 import { useUserAssets } from "./useUserAssets";
@@ -32,7 +32,9 @@ export function useUserAssetsWithBalances() {
         (b) =>
           typeof b.chainId === "number" &&
           b.chainId.toString() === activeNetwork,
-      ) ?? blockchains.find((b) => b.id === activeNetwork) ?? null
+      ) ??
+      blockchains.find((b) => b.id === activeNetwork) ??
+      null
     );
   }, [blockchains, activeNetwork]);
 

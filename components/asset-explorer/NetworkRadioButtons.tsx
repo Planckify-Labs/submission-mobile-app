@@ -101,7 +101,13 @@ const NetworkRadioButtons = () => {
 
     selectNetwork(networkId, matching.id);
     lastSyncedChainRef.current = signature;
-  }, [activeChain.namespace, activeChainId, activeIsTestnet, blockchains, selectNetwork]);
+  }, [
+    activeChain.namespace,
+    activeChainId,
+    activeIsTestnet,
+    blockchains,
+    selectNetwork,
+  ]);
 
   const accentColor = getAccentColor();
 

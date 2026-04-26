@@ -41,11 +41,11 @@ export {
   type ExecuteOnchainSettlementResult,
   executeOnchainSettlement,
   OnchainSettlementError,
-  onchainSubmitEndpoint,
   type OnchainSubmitRequest,
   type OnchainSubmitResponse,
-  postOnchainSubmit,
+  onchainSubmitEndpoint,
   type PostOnchainSubmit,
+  postOnchainSubmit,
 } from "./pathOnchainSettlement";
 export {
   NanopaySubmitError,

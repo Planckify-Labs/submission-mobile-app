@@ -70,6 +70,8 @@ export interface TTransaction {
   txHash: string | null;
   senderAddress: string;
   recipientAddress: string;
+  merchantName?: string | null;
+  paymentIntentId?: string | null;
   createdAt: string;
   updatedAt: string;
   token: TToken;
@@ -88,6 +90,21 @@ export interface TTransactionSearchParams {
 }
 
 export type TTransactionListResponse = TTransaction[];
+
+export interface TPaymentIntentDetail {
+  fiatAmountMinor: number;
+  fiatCurrency: string;
+  createdAt: string;
+  expiresAt: string;
+  merchant: {
+    displayName: string;
+    country: string;
+  } | null;
+}
+
+export interface TPaymentTransactionDetail extends TTransaction {
+  intent: TPaymentIntentDetail | null;
+}
 
 export interface TCreateTransactionRequest {
   tokenId: string;

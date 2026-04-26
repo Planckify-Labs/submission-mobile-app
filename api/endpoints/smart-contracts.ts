@@ -53,9 +53,12 @@ export const smartContractApi = {
     isActive?: boolean;
   }) => {
     const searchParams = new URLSearchParams();
-    if (params.blockchainId) searchParams.set("blockchainId", params.blockchainId);
-    if (params.chainId != null) searchParams.set("chainId", String(params.chainId));
-    if (params.isActive != null) searchParams.set("isActive", String(params.isActive));
+    if (params.blockchainId)
+      searchParams.set("blockchainId", params.blockchainId);
+    if (params.chainId != null)
+      searchParams.set("chainId", String(params.chainId));
+    if (params.isActive != null)
+      searchParams.set("isActive", String(params.isActive));
     try {
       return await publicApi
         .get(`smart-contracts/search?${searchParams}`)

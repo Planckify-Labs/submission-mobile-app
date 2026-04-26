@@ -26,8 +26,8 @@
  *     says "Pay" — no contract / calldata / ABI jargon in user copy.
  */
 
-import { encodeFunctionData, type Address } from "viem";
 import { HTTPError } from "ky";
+import { type Address, encodeFunctionData } from "viem";
 import type {
   ChainConfig,
   EvmChainConfig,

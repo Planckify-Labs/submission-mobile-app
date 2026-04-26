@@ -8,6 +8,7 @@ import { storage } from "@/lib/storage/mmkv";
 import * as walletService from "@/services/walletService";
 import type {
   TCreateTransactionRequest,
+  TPaymentTransactionDetail,
   TTransaction,
   TTransactionListResponse,
   TTransactionType,
@@ -44,6 +45,20 @@ export const transactionApi = {
       "transactions",
       id,
       "Failed to fetch transaction",
+    );
+  },
+
+  getPaymentDetail: async (id: string) => {
+    const isAuthed = await isAuthenticatedForActiveWallet();
+    if (!isAuthed) {
+      return {} as TPaymentTransactionDetail;
+    }
+
+    return fetchById<TPaymentTransactionDetail>(
+      api,
+      "transactions/payment",
+      id,
+      "Failed to fetch payment detail",
     );
   },
 

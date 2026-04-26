@@ -16,10 +16,15 @@
  *   - No `viem` imports — viem lives inside `services/walletKit/evm/` only.
  */
 
+import type {
+  AddressLookupTableAccount,
+  PublicKey,
+  Signer,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import type { TWallet } from "@/constants/types/walletTypes";
 import type { Namespace } from "@/services/chains/types";
-import type { TransactionInstruction, Signer, AddressLookupTableAccount, PublicKey } from "@solana/web3.js";
 
 export type { Namespace };
 
@@ -416,9 +421,7 @@ export interface WalletKitAdapter {
    * `processMerchantPayment` on the TakumiWallet contract. EVM-only;
    * Solana kit leaves this `undefined`. Consumers presence-check.
    */
-  sendContractTransaction?(
-    args: SendContractTransactionArgs,
-  ): Promise<string>;
+  sendContractTransaction?(args: SendContractTransactionArgs): Promise<string>;
 
   /**
    * Broadcasts a Solana transaction containing Anchor program instructions.
@@ -426,9 +429,7 @@ export interface WalletKitAdapter {
    * call TakumiPay program instructions. Solana-only; EVM kit leaves this
    * `undefined`. Consumers presence-check per chain-extension discipline.
    */
-  sendAnchorInstruction?(
-    args: SendAnchorInstructionArgs,
-  ): Promise<string>;
+  sendAnchorInstruction?(args: SendAnchorInstructionArgs): Promise<string>;
 
   // ── Optional capability flags ───────────────────────────────────────
   /** Whether this kit supports non-native token transfers. */

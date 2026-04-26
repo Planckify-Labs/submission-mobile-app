@@ -1,30 +1,30 @@
 import {
-  PublicKey,
-  Ed25519Program,
-  SystemProgram,
-  TransactionInstruction,
-  SYSVAR_INSTRUCTIONS_PUBKEY,
-} from "@solana/web3.js";
-import {
-  TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
-  getAssociatedTokenAddressSync,
   createApproveInstruction,
   createRevokeInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
+import {
+  Ed25519Program,
+  PublicKey,
+  SYSVAR_INSTRUCTIONS_PUBKEY,
+  SystemProgram,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import { toByteArray as base64Decode } from "base64-js";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import type { TWallet } from "@/constants/types/walletTypes";
-import type { WalletKitAdapter } from "@/services/walletKit/types";
-import type { PaymentIntentResponse, QuoteCommitmentSvm } from "./types";
-import { computeRefIdHash } from "@/services/chains/solana/takumiPay/refIdHash";
 import {
   deriveConfigPda,
   deriveMerchantPaymentPda,
   derivePlatformFeePda,
   isNativeSol,
 } from "@/services/chains/solana/takumiPay";
+import { computeRefIdHash } from "@/services/chains/solana/takumiPay/refIdHash";
+import type { WalletKitAdapter } from "@/services/walletKit/types";
 import { onchainSubmitEndpoint } from "./pathOnchainSettlement";
+import type { PaymentIntentResponse, QuoteCommitmentSvm } from "./types";
 
 export class OnchainSettlementSvmError extends Error {
   readonly name = "OnchainSettlementSvmError";
@@ -110,22 +110,41 @@ function buildQuoteMessage(
   return msg;
 }
 
-function encodeMerchantQuoteParams(quote: QuoteCommitmentSvm, refIdHash: Uint8Array): Buffer {
+function encodeMerchantQuoteParams(
+  quote: QuoteCommitmentSvm,
+  refIdHash: Uint8Array,
+): Buffer {
   const enc = new TextEncoder();
   const refIdBytes = enc.encode(quote.refId);
   const merchantIdBytes = enc.encode(quote.merchantId);
 
-  const bufSize = 4 + refIdBytes.length + 32 + 4 + merchantIdBytes.length + 8 + 8 + 8 + 3 + 8 + 8;
+  const bufSize =
+    4 +
+    refIdBytes.length +
+    32 +
+    4 +
+    merchantIdBytes.length +
+    8 +
+    8 +
+    8 +
+    3 +
+    8 +
+    8;
   const buf = Buffer.alloc(bufSize);
   let offset = 0;
 
-  buf.writeUInt32LE(refIdBytes.length, offset); offset += 4;
-  buf.set(refIdBytes, offset); offset += refIdBytes.length;
+  buf.writeUInt32LE(refIdBytes.length, offset);
+  offset += 4;
+  buf.set(refIdBytes, offset);
+  offset += refIdBytes.length;
 
-  buf.set(refIdHash, offset); offset += 32;
+  buf.set(refIdHash, offset);
+  offset += 32;
 
-  buf.writeUInt32LE(merchantIdBytes.length, offset); offset += 4;
-  buf.set(merchantIdBytes, offset); offset += merchantIdBytes.length;
+  buf.writeUInt32LE(merchantIdBytes.length, offset);
+  offset += 4;
+  buf.set(merchantIdBytes, offset);
+  offset += merchantIdBytes.length;
 
   const writeBigU64LE = (val: bigint) => {
     const b = Buffer.alloc(8);
@@ -139,14 +158,16 @@ function encodeMerchantQuoteParams(quote: QuoteCommitmentSvm, refIdHash: Uint8Ar
   writeBigU64LE(BigInt(quote.fiatAmountMinor));
 
   for (let i = 0; i < 3; i++) {
-    buf[offset++] = i < quote.fiatCurrency.length ? quote.fiatCurrency.charCodeAt(i) : 0;
+    buf[offset++] =
+      i < quote.fiatCurrency.length ? quote.fiatCurrency.charCodeAt(i) : 0;
   }
 
   writeBigU64LE(BigInt(quote.exchangeRateId));
 
   const expBuf = Buffer.alloc(8);
   expBuf.writeBigInt64LE(BigInt(quote.expiresAt));
-  buf.set(expBuf, offset); offset += 8;
+  buf.set(expBuf, offset);
+  offset += 8;
 
   return buf.subarray(0, offset);
 }
@@ -158,19 +179,31 @@ export async function executeOnchainSettlementSvm(
   const programId = new PublicKey(programIdStr);
 
   if (chain.namespace !== "solana") {
-    throw new OnchainSettlementSvmError("WRONG_CHAIN_NAMESPACE", "Expected Solana chain");
+    throw new OnchainSettlementSvmError(
+      "WRONG_CHAIN_NAMESPACE",
+      "Expected Solana chain",
+    );
   }
 
   if (!intent.quoteCommitmentSvm || !intent.quoteSignatureSvm) {
-    throw new OnchainSettlementSvmError("MISSING_QUOTE", "Intent missing quoteCommitmentSvm or quoteSignatureSvm");
+    throw new OnchainSettlementSvmError(
+      "MISSING_QUOTE",
+      "Intent missing quoteCommitmentSvm or quoteSignatureSvm",
+    );
   }
 
   if (typeof walletKit.sendAnchorInstruction !== "function") {
-    throw new OnchainSettlementSvmError("WALLET_UNSUPPORTED", "Wallet does not support sendAnchorInstruction");
+    throw new OnchainSettlementSvmError(
+      "WALLET_UNSUPPORTED",
+      "Wallet does not support sendAnchorInstruction",
+    );
   }
 
   if (!intent.backendSignerPubkey) {
-    throw new OnchainSettlementSvmError("MISSING_SIGNER", "Intent missing backendSignerPubkey");
+    throw new OnchainSettlementSvmError(
+      "MISSING_SIGNER",
+      "Intent missing backendSignerPubkey",
+    );
   }
 
   const quote = intent.quoteCommitmentSvm;
@@ -179,7 +212,9 @@ export async function executeOnchainSettlementSvm(
   const refIdHash = computeRefIdHash(quote.refId);
 
   const isNative = quote.tokenMint === "native";
-  const tokenMintPubkey = isNative ? PublicKey.default : new PublicKey(quote.tokenMint);
+  const tokenMintPubkey = isNative
+    ? PublicKey.default
+    : new PublicKey(quote.tokenMint);
 
   const quoteMessage = buildQuoteMessage(quote, tokenMintPubkey);
 
@@ -192,8 +227,16 @@ export async function executeOnchainSettlementSvm(
 
   // Build merchant payment instruction
   const [configPda] = deriveConfigPda(programId);
-  const [merchantPaymentPda] = deriveMerchantPaymentPda(programId, configPda, refIdHash);
-  const [platformFeePda] = derivePlatformFeePda(programId, configPda, tokenMintPubkey);
+  const [merchantPaymentPda] = deriveMerchantPaymentPda(
+    programId,
+    configPda,
+    refIdHash,
+  );
+  const [platformFeePda] = derivePlatformFeePda(
+    programId,
+    configPda,
+    tokenMintPubkey,
+  );
 
   const paramData = encodeMerchantQuoteParams(quote, refIdHash);
 
@@ -204,11 +247,19 @@ export async function executeOnchainSettlementSvm(
     const data = Buffer.concat([discriminator, paramData]);
 
     const keys = [
-      { pubkey: new PublicKey(wallet.address), isSigner: true, isWritable: true },
+      {
+        pubkey: new PublicKey(wallet.address),
+        isSigner: true,
+        isWritable: true,
+      },
       { pubkey: configPda, isSigner: false, isWritable: true },
       { pubkey: merchantPaymentPda, isSigner: false, isWritable: true },
       { pubkey: platformFeePda, isSigner: false, isWritable: true },
-      { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
+      {
+        pubkey: SYSVAR_INSTRUCTIONS_PUBKEY,
+        isSigner: false,
+        isWritable: false,
+      },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ];
 
@@ -218,8 +269,15 @@ export async function executeOnchainSettlementSvm(
     const data = Buffer.concat([discriminator, paramData]);
 
     const payerPubkey = new PublicKey(wallet.address);
-    const payerTokenAccount = getAssociatedTokenAddressSync(tokenMintPubkey, payerPubkey);
-    const vaultTokenAccount = getAssociatedTokenAddressSync(tokenMintPubkey, configPda, true);
+    const payerTokenAccount = getAssociatedTokenAddressSync(
+      tokenMintPubkey,
+      payerPubkey,
+    );
+    const vaultTokenAccount = getAssociatedTokenAddressSync(
+      tokenMintPubkey,
+      configPda,
+      true,
+    );
 
     const keys = [
       { pubkey: payerPubkey, isSigner: true, isWritable: true },
@@ -229,14 +287,25 @@ export async function executeOnchainSettlementSvm(
       { pubkey: tokenMintPubkey, isSigner: false, isWritable: false },
       { pubkey: payerTokenAccount, isSigner: false, isWritable: true },
       { pubkey: vaultTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
+      {
+        pubkey: SYSVAR_INSTRUCTIONS_PUBKEY,
+        isSigner: false,
+        isWritable: false,
+      },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      {
+        pubkey: ASSOCIATED_TOKEN_PROGRAM_ID,
+        isSigner: false,
+        isWritable: false,
+      },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ];
 
     const approveIx = createApproveInstruction(
-      payerTokenAccount, configPda, payerPubkey, BigInt(quote.amount),
+      payerTokenAccount,
+      configPda,
+      payerPubkey,
+      BigInt(quote.amount),
     );
     const revokeIx = createRevokeInstruction(payerTokenAccount, payerPubkey);
 

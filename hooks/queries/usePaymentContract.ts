@@ -1,5 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { smartContractApi, type TSmartContract } from "@/api/endpoints/smart-contracts";
+import {
+  smartContractApi,
+  type TSmartContract,
+} from "@/api/endpoints/smart-contracts";
 
 interface UsePaymentContractOptions {
   blockchainId?: string;

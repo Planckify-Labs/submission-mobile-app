@@ -44,7 +44,8 @@ import { copyToClipboard } from "@/utils/helperUtils";
 import DisplayTokenPickerModal from "./DisplayTokenPickerModal";
 import RecievePaymentModal from "./RecievePaymentModal";
 
-const SELECTED_DISPLAY_TOKEN_SYMBOL_KEY = "balance_section_display_token_symbol";
+const SELECTED_DISPLAY_TOKEN_SYMBOL_KEY =
+  "balance_section_display_token_symbol";
 
 const quickPaymentItems = [
   {
@@ -95,9 +96,7 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
       )?.id;
     }
     const isTestnet = activeChain.isTestnet ?? false;
-    return blockchains.find(
-      (b) => !b.isEVM && b.isTestnet === isTestnet,
-    )?.id;
+    return blockchains.find((b) => !b.isEVM && b.isTestnet === isTestnet)?.id;
   }, [blockchains, activeChain]);
 
   const { data: chainTokens } = useTokens({

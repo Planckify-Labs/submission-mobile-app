@@ -1,15 +1,15 @@
 import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  createApproveInstruction,
+  createRevokeInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import {
   PublicKey,
   SystemProgram,
   TransactionInstruction,
 } from "@solana/web3.js";
-import {
-  TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  getAssociatedTokenAddressSync,
-  createApproveInstruction,
-  createRevokeInstruction,
-} from "@solana/spl-token";
 import {
   deriveConfigPda,
   derivePointDepositPda,
@@ -22,7 +22,11 @@ const DEPOSIT_POINTS_DISCRIMINATOR = Buffer.from([
   184, 73, 55, 238, 103, 247, 76, 228,
 ]);
 
-function encodeDepositPointsArgs(refId: string, refIdHash: Uint8Array, amount: bigint): Buffer {
+function encodeDepositPointsArgs(
+  refId: string,
+  refIdHash: Uint8Array,
+  amount: bigint,
+): Buffer {
   const encoder = new TextEncoder();
   const refIdBytes = encoder.encode(refId);
 
@@ -31,16 +35,20 @@ function encodeDepositPointsArgs(refId: string, refIdHash: Uint8Array, amount: b
   let offset = 0;
 
   // refId (len-prefixed string)
-  buf.writeUInt32LE(refIdBytes.length, offset); offset += 4;
-  buf.set(refIdBytes, offset); offset += refIdBytes.length;
+  buf.writeUInt32LE(refIdBytes.length, offset);
+  offset += 4;
+  buf.set(refIdBytes, offset);
+  offset += refIdBytes.length;
 
   // refIdHash ([u8; 32])
-  buf.set(refIdHash, offset); offset += 32;
+  buf.set(refIdHash, offset);
+  offset += 32;
 
   // amount (u64 LE)
   const amtBuf = Buffer.alloc(8);
   amtBuf.writeBigUInt64LE(amount);
-  buf.set(amtBuf, offset); offset += 8;
+  buf.set(amtBuf, offset);
+  offset += 8;
 
   return buf.subarray(0, offset);
 }
@@ -56,19 +64,42 @@ export function buildDepositPointsInstruction(params: {
   const refIdHash = computeRefIdHash(params.refId);
   const [configPda] = deriveConfigPda(params.programId);
   const nextDepositId = params.pointDepositCounter + 1n;
-  const [pointDepositPda] = derivePointDepositPda(params.programId, configPda, nextDepositId);
-  const [pointRefRecordPda] = derivePointRefRecordPda(params.programId, configPda, refIdHash);
+  const [pointDepositPda] = derivePointDepositPda(
+    params.programId,
+    configPda,
+    nextDepositId,
+  );
+  const [pointRefRecordPda] = derivePointRefRecordPda(
+    params.programId,
+    configPda,
+    refIdHash,
+  );
 
-  const payerTokenAccount = getAssociatedTokenAddressSync(params.tokenMint, params.payer);
-  const vaultTokenAccount = getAssociatedTokenAddressSync(params.tokenMint, configPda, true);
+  const payerTokenAccount = getAssociatedTokenAddressSync(
+    params.tokenMint,
+    params.payer,
+  );
+  const vaultTokenAccount = getAssociatedTokenAddressSync(
+    params.tokenMint,
+    configPda,
+    true,
+  );
 
   // Find the allowed_pt PDA
   const [allowedTokenPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("allowed_pt"), configPda.toBuffer(), params.tokenMint.toBuffer()],
+    [
+      Buffer.from("allowed_pt"),
+      configPda.toBuffer(),
+      params.tokenMint.toBuffer(),
+    ],
     params.programId,
   );
 
-  const argData = encodeDepositPointsArgs(params.refId, refIdHash, params.amount);
+  const argData = encodeDepositPointsArgs(
+    params.refId,
+    refIdHash,
+    params.amount,
+  );
   const data = Buffer.concat([DEPOSIT_POINTS_DISCRIMINATOR, argData]);
 
   const keys = [
@@ -92,7 +123,11 @@ export function buildDepositPointsInstruction(params: {
     params.amount,
   );
   const revokeIx = createRevokeInstruction(payerTokenAccount, params.payer);
-  const programIx = new TransactionInstruction({ keys, programId: params.programId, data });
+  const programIx = new TransactionInstruction({
+    keys,
+    programId: params.programId,
+    data,
+  });
 
   return [approveIx, programIx, revokeIx];
 }

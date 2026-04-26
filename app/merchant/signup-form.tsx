@@ -117,8 +117,7 @@ const toChannelOption = (row: TChannel): ChannelOption => {
 const findChannel = (
   channels: ChannelOption[],
   code: string | null,
-): ChannelOption | null =>
-  channels.find((c) => c.code === code) ?? null;
+): ChannelOption | null => channels.find((c) => c.code === code) ?? null;
 
 /**
  * Polymorphic account-number validator. Returns `null` on success, a

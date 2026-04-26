@@ -1,8 +1,12 @@
 import { PublicKey, SystemProgram } from "@solana/web3.js";
-import { describe, it, expect } from "vitest";
-import { buildCreateTransactionInstruction } from "../buildCreateTransaction";
+import { describe, expect, it } from "vitest";
+import {
+  deriveConfigPda,
+  isNativeSol,
+  TAKUMI_PAY_PROGRAM_ID,
+} from "@/services/chains/solana/takumiPay";
 import { computeRefIdHash } from "@/services/chains/solana/takumiPay/refIdHash";
-import { deriveConfigPda, isNativeSol, TAKUMI_PAY_PROGRAM_ID } from "@/services/chains/solana/takumiPay";
+import { buildCreateTransactionInstruction } from "../buildCreateTransaction";
 
 const programId = TAKUMI_PAY_PROGRAM_ID;
 const payer = PublicKey.unique();
@@ -49,8 +53,8 @@ describe("buildCreateTransactionInstruction", () => {
         params: baseParams,
         txCounter: 5n,
       });
-      const hasSystemProgram = ix.keys.some(
-        (k) => k.pubkey.equals(SystemProgram.programId),
+      const hasSystemProgram = ix.keys.some((k) =>
+        k.pubkey.equals(SystemProgram.programId),
       );
       expect(hasSystemProgram).toBe(true);
     });
@@ -78,7 +82,9 @@ describe("buildCreateTransactionInstruction", () => {
         txCounter: 0n,
       });
       const discriminator = ix.data.subarray(0, 8);
-      expect(Array.from(discriminator)).toEqual([15, 148, 64, 222, 85, 10, 108, 111]);
+      expect(Array.from(discriminator)).toEqual([
+        15, 148, 64, 222, 85, 10, 108, 111,
+      ]);
     });
   });
 
@@ -105,7 +111,9 @@ describe("buildCreateTransactionInstruction", () => {
         txCounter: 0n,
       });
       // SPL Token approve instruction program ID
-      const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+      const TOKEN_PROGRAM_ID = new PublicKey(
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      );
       expect(instructions[0].programId.equals(TOKEN_PROGRAM_ID)).toBe(true);
     });
 
@@ -117,7 +125,9 @@ describe("buildCreateTransactionInstruction", () => {
         params: baseParams,
         txCounter: 0n,
       });
-      const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+      const TOKEN_PROGRAM_ID = new PublicKey(
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      );
       expect(instructions[2].programId.equals(TOKEN_PROGRAM_ID)).toBe(true);
     });
 
@@ -141,7 +151,9 @@ describe("buildCreateTransactionInstruction", () => {
         txCounter: 0n,
       });
       const discriminator = instructions[1].data.subarray(0, 8);
-      expect(Array.from(discriminator)).toEqual([102, 151, 178, 25, 248, 110, 102, 235]);
+      expect(Array.from(discriminator)).toEqual([
+        102, 151, 178, 25, 248, 110, 102, 235,
+      ]);
     });
   });
 

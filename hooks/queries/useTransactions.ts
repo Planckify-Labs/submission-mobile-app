@@ -3,6 +3,7 @@ import { tokenApi } from "@/api/endpoints/tokens";
 import { transactionApi } from "@/api/endpoints/transactions";
 import type {
   TCreateTransactionRequest,
+  TPaymentTransactionDetail,
   TTransaction,
   TTransactionType,
 } from "@/api/types/transaction";
@@ -42,6 +43,21 @@ export const useTransaction = (id: string) => {
 
       const response = await transactionApi.getTransactionById(id);
       return response;
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    enabled: !!id && isAuthenticated === true && isLoading === false,
+    retry: false,
+  });
+};
+
+export const usePaymentDetail = (id: string | undefined) => {
+  const { isAuthenticated, isLoading } = useIsAuthenticated();
+  return useQuery({
+    queryKey: transactionsQueryKeys.detail(`payment-${id}`),
+    queryFn: async () => {
+      if (!id) return {} as TPaymentTransactionDetail;
+      return transactionApi.getPaymentDetail(id);
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,

@@ -7,7 +7,7 @@ import { formatUnits } from "viem/utils";
 import { TTransaction } from "@/api/types/transaction";
 import { formatDate } from "@/utils/dateUtils";
 import { copyToClipboard, formatTokenAmount } from "@/utils/helperUtils";
-import { truncateAddress } from "@/utils/walletUtils";
+import { buildExplorerTxUrl, truncateAddress } from "@/utils/walletUtils";
 import Chip from "../common/Chip";
 
 const TransferCard = React.memo(
@@ -18,7 +18,7 @@ const TransferCard = React.memo(
       (event: any) => {
         event.stopPropagation();
         openBrowserAsync(
-          `${transaction.token.blockchain.blockExplorer}/tx/${transaction.txHash}`,
+          buildExplorerTxUrl(transaction.token.blockchain.blockExplorer, transaction.txHash!),
         );
       },
       [transaction.txHash, transaction.token.blockchain.blockExplorer],

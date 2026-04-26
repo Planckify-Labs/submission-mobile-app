@@ -48,6 +48,7 @@
  * JWS fragments / authorization nonces are NOT copyable.
  */
 
+import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   AlertCircle,
@@ -58,7 +59,7 @@ import {
   Copy,
   Store,
 } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -71,6 +72,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatUnits } from "viem";
+import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
 import type { PaymentIntentResponse } from "@/services/nanopay";
 import { useIntentStatus } from "@/services/nanopay";
 import { copyToClipboard } from "@/utils/helperUtils";
@@ -194,6 +196,17 @@ export default function PayMerchantReceipt() {
 
   const intentQ = useIntentStatus(intentId);
   const intent = intentQ.data;
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!intent) return;
+    if (intent.status === "paid" || intent.status === "paid_out") {
+      queryClient.invalidateQueries({
+        queryKey: transactionsQueryKeys.all,
+        exact: false,
+      });
+    }
+  }, [intent?.status, queryClient]);
 
   return (
     <>
@@ -409,7 +422,10 @@ function DetailsSection({ intent }: { intent: PaymentIntentResponse }) {
               value={shortenHex(intent.nanopayUsdcTreasuryAddress)}
             />
           ) : null}
-          <ReceiptRow label="Token amount" value={formatUsdcMicros(intent.nanopayUsdcAmountMicros)} />
+          <ReceiptRow
+            label="Token amount"
+            value={formatUsdcMicros(intent.nanopayUsdcAmountMicros)}
+          />
         </View>
       ) : null}
     </View>

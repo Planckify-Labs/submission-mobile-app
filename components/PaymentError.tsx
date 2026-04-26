@@ -32,7 +32,6 @@ import {
 } from "@/services/errors/paymentErrors";
 import { logPaymentError } from "@/services/errors/telemetry";
 
-
 export interface PaymentErrorProps {
   code: PaymentErrorCode;
   /** Optional dev-only context string. Rendered in `__DEV__` only; never sent to telemetry. */

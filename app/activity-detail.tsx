@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import ActivityDetailHeader from "@/components/activity-detail/ActivityDetailHeader";
 import RenderActivityDetailCards from "@/components/activity-detail/RenderActivityDetailCards";
+import MerchantPaymentHeading from "@/components/activity-detail/render-activity-detail-cards/MerchantPaymentHeading";
 import PurchasedProductHeading from "@/components/activity-detail/render-activity-detail-cards/PurchasedProductHeading";
 import TransferDetailHeading from "@/components/activity-detail/render-activity-detail-cards/TransferDetailHeading";
 import PurchasedProductDetailCardSkeleton from "@/components/activity-detail/skeletons/PurchasedProductDetailCardSkeleton";
@@ -18,14 +19,19 @@ import TransferDetailCardSkeleton from "@/components/activity-detail/skeletons/T
 import TransferDetailHeadingSkeleton from "@/components/activity-detail/skeletons/TransferDetailHeadingSkeleton";
 import { usePurchaseById } from "@/hooks/queries/usePurchases";
 import { useRedemptionById } from "@/hooks/queries/useRedeem";
-import { useTransaction } from "@/hooks/queries/useTransactions";
+import {
+  usePaymentDetail,
+  useTransaction,
+} from "@/hooks/queries/useTransactions";
 
 export default function ActivityDetailScreen() {
-  const { purchaseId, transferId, redemptionId } = useLocalSearchParams<{
-    purchaseId: string;
-    transferId: string;
-    redemptionId: string;
-  }>();
+  const { purchaseId, transferId, paymentId, redemptionId } =
+    useLocalSearchParams<{
+      purchaseId: string;
+      transferId: string;
+      paymentId: string;
+      redemptionId: string;
+    }>();
 
   const {
     data: redemption,
@@ -48,15 +54,24 @@ export default function ActivityDetailScreen() {
     refetch: refetchTransfer,
   } = useTransaction(transferId);
 
+  const {
+    data: payment,
+    isLoading: isPaymentLoading,
+    error: paymentError,
+    refetch: refetchPayment,
+  } = usePaymentDetail(paymentId);
+
   const [isRefetchingActivityDetail, setIsRefetchingActivityDetail] =
     useState(false);
 
   const isLoading =
     (isRedemptionLoading && !!redemptionId) ||
     (isPurchaseLoading && !!purchaseId) ||
-    (isTransferLoading && !!transferId);
+    (isTransferLoading && !!transferId) ||
+    (isPaymentLoading && !!paymentId);
 
-  const hasError = redemptionError || purchaseError || transferError;
+  const hasError =
+    redemptionError || purchaseError || transferError || paymentError;
 
   const handleSharePress = () => {
     console.log("Share: Share receipt functionality coming soon!");
@@ -72,6 +87,7 @@ export default function ActivityDetailScreen() {
       if (redemptionId) await refetchRedemption();
       if (purchaseId) await refetchPurchase();
       if (transferId) await refetchTransfer();
+      if (paymentId) await refetchPayment();
     } catch (error) {
       console.error("Error refreshing activity detail:", error);
     } finally {
@@ -99,7 +115,7 @@ export default function ActivityDetailScreen() {
             />
           }
         >
-          {transferId ? (
+          {transferId || paymentId ? (
             <>
               <TransferDetailHeadingSkeleton />
               <TransferDetailCardSkeleton />
@@ -132,6 +148,7 @@ export default function ActivityDetailScreen() {
             {redemptionError?.message ||
               purchaseError?.message ||
               transferError?.message ||
+              paymentError?.message ||
               "An error occurred while loading the activity details."}
           </Text>
         </View>
@@ -139,7 +156,7 @@ export default function ActivityDetailScreen() {
     );
   }
 
-  if (!redemption && !purchase && !transfer) {
+  if (!redemption && !purchase && !transfer && !payment) {
     return (
       <SafeAreaView className="flex-1 bg-light-main-container">
         <ActivityDetailHeader
@@ -172,7 +189,9 @@ export default function ActivityDetailScreen() {
     ? "Redemption Information"
     : purchase
       ? "Purchase Information"
-      : "Transfer Information";
+      : payment
+        ? "Payment Information"
+        : "Transfer Information";
 
   return (
     <SafeAreaView className="flex-1 bg-light-main-container">
@@ -196,6 +215,7 @@ export default function ActivityDetailScreen() {
       >
         {redemption && <PurchasedProductHeading redemption={redemption} />}
         {purchase && <PurchasedProductHeading purchase={purchase} />}
+        {payment && <MerchantPaymentHeading payment={payment} />}
         {transfer && <TransferDetailHeading transfer={transfer} />}
         {isPendingVoucher && (
           <View className="mx-4 mt-2 mb-1 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex-row items-center gap-3">
@@ -214,6 +234,7 @@ export default function ActivityDetailScreen() {
         <RenderActivityDetailCards
           purchase={purchase}
           transfer={transfer}
+          payment={payment}
           redemption={redemption}
         />
       </ScrollView>

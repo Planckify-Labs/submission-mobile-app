@@ -66,8 +66,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatUnits } from "viem";
-import { PaymentError } from "@/components/PaymentError";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
+import { PaymentError } from "@/components/PaymentError";
 import { findEvmChainById } from "@/constants/configs/chainConfig";
 import { api } from "@/constants/configs/ky";
 import { usePaymentContract } from "@/hooks/queries/usePaymentContract";
@@ -104,9 +104,7 @@ import {
   onchainSubmitEndpoint,
   postOnchainSubmit,
 } from "@/services/nanopay/pathOnchainSettlement";
-import {
-  executeOnchainSettlementSvm,
-} from "@/services/nanopay/pathOnchainSettlementSvm";
+import { executeOnchainSettlementSvm } from "@/services/nanopay/pathOnchainSettlementSvm";
 
 /** Arc Testnet viem chainId — source chain for the Nanopay EIP-3009 sig. */
 const ARC_TESTNET_CHAIN_ID = 5042002;
@@ -183,7 +181,10 @@ const resolveKind = (
  * shared `classifyPaymentError` intentionally drops it so sensitive
  * hex blobs never make it to telemetry / prod logs).
  */
-const makeLocalError = (code: PaymentErrorCode, devMessage?: string): LocalError => {
+const makeLocalError = (
+  code: PaymentErrorCode,
+  devMessage?: string,
+): LocalError => {
   if (__DEV__) {
     console.error(`[pay-merchant] code=${code}`, devMessage ?? "");
   }
@@ -359,7 +360,12 @@ function IntentFlow({ intentId }: { intentId: string }) {
     const sourceChainId = intent.nanopay?.sourceChainId ?? ARC_TESTNET_CHAIN_ID;
     const sourceChainConfig = findEvmChainById(sourceChainId);
     if (!sourceChainConfig) {
-      setError(makeLocalError("chain_mismatch", `No chain config for id=${sourceChainId}`));
+      setError(
+        makeLocalError(
+          "chain_mismatch",
+          `No chain config for id=${sourceChainId}`,
+        ),
+      );
       setPhase("error");
       return;
     }
@@ -545,10 +551,16 @@ function PathACard({
     // Chain flip — Path A is Arc-only (enforced inside `executePathA`
     // via `nativeCurrency.symbol === "USDC"`). Re-use the pre-flight
     // switch so biometrics prompt on the right network.
-    const sourceChainId = intent.nanopayUsdcSourceChainId ?? ARC_TESTNET_CHAIN_ID;
+    const sourceChainId =
+      intent.nanopayUsdcSourceChainId ?? ARC_TESTNET_CHAIN_ID;
     const sourceChainConfig = findEvmChainById(sourceChainId);
     if (!sourceChainConfig) {
-      setError(makeLocalError("chain_mismatch", `No chain config for id=${sourceChainId}`));
+      setError(
+        makeLocalError(
+          "chain_mismatch",
+          `No chain config for id=${sourceChainId}`,
+        ),
+      );
       setPhase("error");
       return;
     }
@@ -726,7 +738,8 @@ function OnchainCard({
   const { data: paymentContract, isLoading: isLoadingContract } =
     usePaymentContract({
       blockchainId: intent.blockchainId,
-      chainId: !intent.blockchainId && sourceChainId > 0 ? sourceChainId : undefined,
+      chainId:
+        !intent.blockchainId && sourceChainId > 0 ? sourceChainId : undefined,
     });
 
   // Countdown timer — `quoteCommitment.expiresAt` is unix seconds
@@ -768,16 +781,29 @@ function OnchainCard({
       setPhase("signing");
       setError(null);
 
-      if (activeWallet.namespace === "solana" || activeChain.namespace === "solana") {
+      if (
+        activeWallet.namespace === "solana" ||
+        activeChain.namespace === "solana"
+      ) {
         if (typeof kit.sendAnchorInstruction !== "function") {
-          setError(makeLocalError("wallet_unsupported", "Solana kit missing sendAnchorInstruction"));
+          setError(
+            makeLocalError(
+              "wallet_unsupported",
+              "Solana kit missing sendAnchorInstruction",
+            ),
+          );
           setPhase("error");
           return;
         }
 
         const programIdStr = paymentContract?.address;
         if (!programIdStr) {
-          setError(makeLocalError("unknown", "No payment contract found for this chain"));
+          setError(
+            makeLocalError(
+              "unknown",
+              "No payment contract found for this chain",
+            ),
+          );
           setPhase("error");
           return;
         }
@@ -799,20 +825,32 @@ function OnchainCard({
         }).catch(() => null);
       } else {
         if (typeof kit.sendContractTransaction !== "function") {
-          setError(makeLocalError("wallet_unsupported", "EVM kit missing sendContractTransaction"));
+          setError(
+            makeLocalError(
+              "wallet_unsupported",
+              "EVM kit missing sendContractTransaction",
+            ),
+          );
           setPhase("error");
           return;
         }
 
-        const sourceChainId = intent.nanopayUsdcSourceChainId ?? ARC_TESTNET_CHAIN_ID;
+        const sourceChainId =
+          intent.nanopayUsdcSourceChainId ?? ARC_TESTNET_CHAIN_ID;
         const sourceChainConfig = findEvmChainById(sourceChainId);
         if (!sourceChainConfig) {
-          setError(makeLocalError("chain_mismatch", `No chain config for id=${sourceChainId}`));
+          setError(
+            makeLocalError(
+              "chain_mismatch",
+              `No chain config for id=${sourceChainId}`,
+            ),
+          );
           setPhase("error");
           return;
         }
 
-        const activeEvmChainId = activeChain.namespace === "eip155" ? activeChain.chain.id : null;
+        const activeEvmChainId =
+          activeChain.namespace === "eip155" ? activeChain.chain.id : null;
         if (activeEvmChainId !== sourceChainId) {
           const ok = await changeActiveChainToConfig(sourceChainConfig);
           if (!ok) {
@@ -822,9 +860,16 @@ function OnchainCard({
           }
         }
 
-        const contractAddress = paymentContract?.address as `0x${string}` | undefined;
+        const contractAddress = paymentContract?.address as
+          | `0x${string}`
+          | undefined;
         if (!contractAddress) {
-          setError(makeLocalError("unknown", "No payment contract found for this chain"));
+          setError(
+            makeLocalError(
+              "unknown",
+              "No payment contract found for this chain",
+            ),
+          );
           setPhase("error");
           return;
         }
@@ -878,17 +923,17 @@ function OnchainCard({
     );
   }
 
-  const isBusy = phase === "signing" || phase === "submitting" || isLoadingContract;
-  const ctaLabel =
-    isLoadingContract
-      ? "Loading…"
-      : phase === "signing"
-        ? "Confirming…"
-        : phase === "submitting"
-          ? "Confirming payment…"
-          : isExpired
-            ? "Quote expired"
-            : "Pay";
+  const isBusy =
+    phase === "signing" || phase === "submitting" || isLoadingContract;
+  const ctaLabel = isLoadingContract
+    ? "Loading…"
+    : phase === "signing"
+      ? "Confirming…"
+      : phase === "submitting"
+        ? "Confirming payment…"
+        : isExpired
+          ? "Quote expired"
+          : "Pay";
 
   // Display the token amount — prefer `tokenAmountMinor` (multi-token),
   // fall back to `nanopayUsdcAmountMicros`.
@@ -1185,9 +1230,7 @@ function MintFallback({ kind, raw }: { kind: MerchantKind; raw: string }) {
       )}
 
       <View className="mb-6">
-        <Text className="text-light-matte-black/60 text-sm mb-2">
-          Network
-        </Text>
+        <Text className="text-light-matte-black/60 text-sm mb-2">Network</Text>
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={() => setChainPickerOpen(true)}
@@ -1217,9 +1260,7 @@ function MintFallback({ kind, raw }: { kind: MerchantKind; raw: string }) {
       </View>
 
       <View className="mb-6">
-        <Text className="text-light-matte-black/60 text-sm mb-2">
-          Pay with
-        </Text>
+        <Text className="text-light-matte-black/60 text-sm mb-2">Pay with</Text>
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={() => setTokenPickerOpen(true)}
@@ -1365,7 +1406,8 @@ function MintFallback({ kind, raw }: { kind: MerchantKind; raw: string }) {
             ) : (
               availableChains.map((b) => {
                 const active = b.id === selectedChainId;
-                const nativeToken = b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0];
+                const nativeToken =
+                  b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0];
                 return (
                   <TouchableOpacity
                     key={b.id}

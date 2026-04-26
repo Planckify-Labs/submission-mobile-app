@@ -298,3 +298,22 @@ export function truncateAddress({
 
   return `${address.slice(0, start)}...${address.slice(-end)}`;
 }
+
+/**
+ * Build a block-explorer transaction URL. Handles explorers that store
+ * query params in the base URL (e.g. Solana's
+ * `https://explorer.solana.com?cluster=devnet`) by inserting the
+ * `/tx/{hash}` path before the query string.
+ */
+export function buildExplorerTxUrl(
+  blockExplorer: string,
+  txHash: string,
+): string {
+  try {
+    const url = new URL(blockExplorer);
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/tx/${txHash}`;
+    return url.toString();
+  } catch {
+    return `${blockExplorer}/tx/${txHash}`;
+  }
+}

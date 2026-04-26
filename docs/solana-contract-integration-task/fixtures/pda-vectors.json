@@ -25,7 +25,11 @@
     {
       "function": "deriveMerchantPaymentPda",
       "inputs": { "refId": "merchant-payment-ref" },
-      "seeds": ["merchant_payment", "<configPda>", "<sha256('merchant-payment-ref')>"]
+      "seeds": [
+        "merchant_payment",
+        "<configPda>",
+        "<sha256('merchant-payment-ref')>"
+      ]
     },
     {
       "function": "derivePointDepositPda",

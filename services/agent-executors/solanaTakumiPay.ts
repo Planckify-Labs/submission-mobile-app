@@ -1,10 +1,14 @@
+import { Connection, PublicKey } from "@solana/web3.js";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import { storage } from "@/lib/storage/mmkv";
-import { walletKitRegistry } from "@/services/walletKit/registry";
+import {
+  deriveConfigPda,
+  TAKUMI_PAY_PROGRAM_ID,
+} from "@/services/chains/solana/takumiPay";
 import { computeRefIdHash } from "@/services/chains/solana/takumiPay/refIdHash";
 import { buildCreateTransactionInstruction } from "@/services/nanopay/solana/buildCreateTransaction";
 import { buildDepositPointsInstruction } from "@/services/nanopay/solana/buildDepositPoints";
-import { TAKUMI_PAY_PROGRAM_ID, deriveConfigPda } from "@/services/chains/solana/takumiPay";
+import { walletKitRegistry } from "@/services/walletKit/registry";
 import {
   ExecutorError,
   ExecutorErrorCode,
@@ -13,25 +17,33 @@ import {
   requireString,
   safeExecute,
 } from "./types";
-import { PublicKey, Connection } from "@solana/web3.js";
 
 const SOLANA_NAMESPACE = "solana" as const;
 
 function getActiveSolanaChain(): Extract<ChainConfig, { namespace: "solana" }> {
   const raw = storage.getString("active_chain");
   if (!raw) {
-    throw new ExecutorError(ExecutorErrorCode.UnsupportedChain, "no_active_chain");
+    throw new ExecutorError(
+      ExecutorErrorCode.UnsupportedChain,
+      "no_active_chain",
+    );
   }
   const parsed = JSON.parse(raw) as ChainConfig;
   if (parsed.namespace !== SOLANA_NAMESPACE) {
-    throw new ExecutorError(ExecutorErrorCode.UnsupportedChain, "active_chain_is_not_solana");
+    throw new ExecutorError(
+      ExecutorErrorCode.UnsupportedChain,
+      "active_chain_is_not_solana",
+    );
   }
   return parsed;
 }
 
 function getSolanaKit() {
   if (!walletKitRegistry.has(SOLANA_NAMESPACE)) {
-    throw new ExecutorError(ExecutorErrorCode.NotImplemented, "solana_kit_not_registered");
+    throw new ExecutorError(
+      ExecutorErrorCode.NotImplemented,
+      "solana_kit_not_registered",
+    );
   }
   return walletKitRegistry.get(SOLANA_NAMESPACE);
 }
@@ -41,7 +53,10 @@ async function fetchTakumiPayConfig(rpcUrl: string, programId: PublicKey) {
   const [configPda] = deriveConfigPda(programId);
   const accountInfo = await connection.getAccountInfo(configPda);
   if (!accountInfo) {
-    throw new ExecutorError(ExecutorErrorCode.NetworkError, "config_account_not_found");
+    throw new ExecutorError(
+      ExecutorErrorCode.NetworkError,
+      "config_account_not_found",
+    );
   }
   // Parse the Config account data (skip 8-byte discriminator)
   const data = accountInfo.data.subarray(8);
@@ -79,17 +94,26 @@ async function fetchTakumiPayConfig(rpcUrl: string, programId: PublicKey) {
 export const executeBookingSol: MobileToolExecutor = (input, context) =>
   safeExecute(async () => {
     if (!context.wallet?.address) {
-      throw new ExecutorError(ExecutorErrorCode.WalletCannotExecute, "no connected wallet");
+      throw new ExecutorError(
+        ExecutorErrorCode.WalletCannotExecute,
+        "no connected wallet",
+      );
     }
     if (context.wallet.namespace !== SOLANA_NAMESPACE) {
-      throw new ExecutorError(ExecutorErrorCode.UnsupportedChain, "wallet_not_solana");
+      throw new ExecutorError(
+        ExecutorErrorCode.UnsupportedChain,
+        "wallet_not_solana",
+      );
     }
 
     const kit = getSolanaKit();
     const chain = getActiveSolanaChain();
 
     if (typeof kit.sendAnchorInstruction !== "function") {
-      throw new ExecutorError(ExecutorErrorCode.NotImplemented, "sendAnchorInstruction_not_available");
+      throw new ExecutorError(
+        ExecutorErrorCode.NotImplemented,
+        "sendAnchorInstruction_not_available",
+      );
     }
 
     const bookingId = requireString(input, "booking_id");
@@ -143,17 +167,26 @@ export const executeBookingSol: MobileToolExecutor = (input, context) =>
 export const depositPointsSol: MobileToolExecutor = (input, context) =>
   safeExecute(async () => {
     if (!context.wallet?.address) {
-      throw new ExecutorError(ExecutorErrorCode.WalletCannotExecute, "no connected wallet");
+      throw new ExecutorError(
+        ExecutorErrorCode.WalletCannotExecute,
+        "no connected wallet",
+      );
     }
     if (context.wallet.namespace !== SOLANA_NAMESPACE) {
-      throw new ExecutorError(ExecutorErrorCode.UnsupportedChain, "wallet_not_solana");
+      throw new ExecutorError(
+        ExecutorErrorCode.UnsupportedChain,
+        "wallet_not_solana",
+      );
     }
 
     const kit = getSolanaKit();
     const chain = getActiveSolanaChain();
 
     if (typeof kit.sendAnchorInstruction !== "function") {
-      throw new ExecutorError(ExecutorErrorCode.NotImplemented, "sendAnchorInstruction_not_available");
+      throw new ExecutorError(
+        ExecutorErrorCode.NotImplemented,
+        "sendAnchorInstruction_not_available",
+      );
     }
 
     const tokenMintStr = requireString(input, "token_mint");
@@ -169,7 +202,10 @@ export const depositPointsSol: MobileToolExecutor = (input, context) =>
     // For simplicity, assume 6 decimals (USDC/stablecoins)
     const amountFloat = parseFloat(tokenAmountHuman);
     if (!Number.isFinite(amountFloat) || amountFloat <= 0) {
-      throw new ExecutorError(ExecutorErrorCode.InvalidInput, "invalid_token_amount");
+      throw new ExecutorError(
+        ExecutorErrorCode.InvalidInput,
+        "invalid_token_amount",
+      );
     }
     const amount = BigInt(Math.round(amountFloat * 1e6));
 

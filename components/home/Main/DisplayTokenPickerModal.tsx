@@ -22,8 +22,8 @@ import {
   ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import OptimizedImage from "@/components/common/OptimizedImage";
 import type { TToken } from "@/api/types/token";
+import OptimizedImage from "@/components/common/OptimizedImage";
 
 interface DisplayTokenPickerModalProps {
   visible: boolean;
