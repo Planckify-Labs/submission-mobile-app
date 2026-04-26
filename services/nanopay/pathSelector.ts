@@ -58,7 +58,7 @@ import type { PaymentIntentResponse } from "./types";
  * them split means the consumer can route to the right orchestrator
  * without re-inspecting the adapter.
  */
-export type PayPath = "A" | "B-EVM" | "B-SVM" | "C" | "gasless" | "onchain";
+export type PayPath = "A" | "B-EVM" | "B-SVM" | "C" | "gasless" | "takumipay";
 
 /**
  * Typed error raised when no branch matches the given inputs. Screens
@@ -135,15 +135,9 @@ function isRawX402Channel(intent: PaymentIntentResponse): boolean {
   return view.channel?.kind === "x402";
 }
 
-/**
- * Backend sets `path === "direct_arc"` when the intent should be settled
- * via the TakumiWallet `processMerchantPayment` contract call. The name
- * "direct_arc" is the backend's internal label; mobile maps it to the
- * `"onchain"` pay path discriminator.
- */
-function isOnchainSettlement(intent: PaymentIntentResponse): boolean {
+function isTakumipaySettlement(intent: PaymentIntentResponse): boolean {
   const view = intent as unknown as { path?: string };
-  return view.path === "direct_arc";
+  return view.path === "takumipay";
 }
 
 /**
@@ -203,11 +197,7 @@ function intentPermitsGasless(intent: PaymentIntentResponse): boolean {
 export function selectPayPath(args: SelectPayPathArgs): PayPath {
   const { intent, walletKit, chainConfig } = args;
 
-  // Onchain settlement — server explicitly set path = "direct_arc"
-  // when the intent should go through the TakumiWallet contract.
-  // Checked first because it's an explicit server decision that
-  // overrides the chain-based heuristics below.
-  if (isOnchainSettlement(intent)) {
+  if (isTakumipaySettlement(intent)) {
     if (
       typeof walletKit.sendContractTransaction !== "function" &&
       typeof walletKit.sendAnchorInstruction !== "function"
@@ -217,11 +207,11 @@ export function selectPayPath(args: SelectPayPathArgs): PayPath {
         walletNamespace: walletKit.namespace,
         chainNamespace: chainConfig.namespace,
         message:
-          `selectPayPath: intent ${intent.id} requires onchain settlement ` +
+          `selectPayPath: intent ${intent.id} requires takumipay settlement ` +
           `but wallet supports neither sendContractTransaction nor sendAnchorInstruction.`,
       });
     }
-    return "onchain";
+    return "takumipay";
   }
 
   if (isRawX402Channel(intent)) {
@@ -276,7 +266,7 @@ export interface PathOrchestrators<TResult = unknown> {
   "B-SVM": () => Promise<TResult>;
   C: () => Promise<TResult>;
   gasless: () => Promise<TResult>;
-  onchain: () => Promise<TResult>;
+  takumipay: () => Promise<TResult>;
 }
 
 /**

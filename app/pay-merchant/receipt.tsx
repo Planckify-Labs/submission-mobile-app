@@ -143,6 +143,22 @@ const extractMerchantName = (intent: PaymentIntentResponse): string => {
   );
 };
 
+const resolveChainName = (chainId: number): string => {
+  if (chainId === -101) return "Solana";
+  if (chainId === -102) return "Solana Devnet";
+  const names: Record<number, string> = {
+    1: "Ethereum",
+    137: "Polygon",
+    42161: "Arbitrum",
+    8453: "Base",
+    84532: "Base Sepolia",
+    11155111: "Ethereum Sepolia",
+    4202: "Lisk",
+    5042002: "Arc Testnet",
+  };
+  return names[chainId] ?? `Chain ${chainId}`;
+};
+
 const extractFiatMinor = (intent: PaymentIntentResponse): number => {
   const anyIntent = intent as unknown as {
     fiat?: { amountMinor?: number };
@@ -232,7 +248,7 @@ function StatusStrip({ intent }: { intent: PaymentIntentResponse }) {
         <View className="flex-row items-center bg-amber-50 rounded-xl px-4 py-3 mb-4">
           <ActivityIndicator size="small" color="#d97706" />
           <Text className="text-amber-800 text-sm ml-3 flex-1">
-            Paid to merchant via Nanopayments. Finalizing payout…
+            Payment successful. Processing to merchant…
           </Text>
         </View>
       );
@@ -384,14 +400,16 @@ function DetailsSection({ intent }: { intent: PaymentIntentResponse }) {
         <View className="mt-3">
           <ReceiptRow label="Status" value={intent.status} />
           <ReceiptRow
-            label="Source chain"
-            value={String(intent.nanopayUsdcSourceChainId)}
+            label="Network"
+            value={resolveChainName(intent.nanopayUsdcSourceChainId)}
           />
-          <ReceiptRow
-            label="Treasury"
-            value={shortenHex(intent.nanopayUsdcTreasuryAddress)}
-          />
-          <ReceiptRow label="USDC (micros)" value={intent.nanopayUsdcAmountMicros} />
+          {intent.nanopayUsdcTreasuryAddress ? (
+            <ReceiptRow
+              label="Treasury"
+              value={shortenHex(intent.nanopayUsdcTreasuryAddress)}
+            />
+          ) : null}
+          <ReceiptRow label="Token amount" value={formatUsdcMicros(intent.nanopayUsdcAmountMicros)} />
         </View>
       ) : null}
     </View>

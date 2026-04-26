@@ -3,9 +3,9 @@
  * Circle Nanopayments Path B (spec §6.2, §6.3).
  *
  * Three hooks:
- *   - `useCreateIntent()` — mutation wrapping `POST /v1/pay/intents`.
+ *   - `useCreateIntent()` — mutation wrapping `POST /pay/intents`.
  *   - `useSubmitNanopay()` — mutation wrapping `submitNanopayAuthorization`.
- *   - `useIntentStatus(intentId)` — query polling `GET /v1/pay/intents/:id`.
+ *   - `useIntentStatus(intentId)` — query polling `GET /pay/intents/:id`.
  *     `refetchInterval` returns `false` once `status` reaches a terminal
  *     value (`paid | paid_out | failed | expired`), so the component
  *     re-renders one more time and polling halts without the screen
@@ -18,6 +18,7 @@
  * second query client — one cache, one dev-tools graph.
  */
 
+import { randomUUID } from "react-native-quick-crypto";
 import {
   type UseQueryResult,
   useMutation,
@@ -43,7 +44,7 @@ export const intentQueryKey = (intentId: string | undefined) =>
 
 async function fetchIntent(intentId: string): Promise<PaymentIntentResponse> {
   return api
-    .get(`v1/pay/intents/${encodeURIComponent(intentId)}`)
+    .get(`pay/intents/${encodeURIComponent(intentId)}`)
     .json<PaymentIntentResponse>();
 }
 
@@ -51,7 +52,10 @@ async function createIntent(
   body: CreateIntentRequest,
 ): Promise<PaymentIntentResponse> {
   return api
-    .post("v1/pay/intents", { json: body })
+    .post("pay/intents", {
+      json: body,
+      headers: { "Idempotency-Key": randomUUID() },
+    })
     .json<PaymentIntentResponse>();
 }
 
@@ -89,7 +93,7 @@ export function useIntentStatus(
   });
 }
 
-/** `POST /v1/pay/intents` — returns the server-signed payment intent. */
+/** `POST /pay/intents` — returns the server-signed payment intent. */
 export function useCreateIntent() {
   const queryClient = useQueryClient();
   return useMutation<PaymentIntentResponse, Error, CreateIntentRequest>({
@@ -102,7 +106,7 @@ export function useCreateIntent() {
   });
 }
 
-/** POST /v1/pay/intents/:id/nanopay — wraps `submitNanopayAuthorization`. */
+/** POST /pay/intents/:id/nanopay — wraps `submitNanopayAuthorization`. */
 export function useSubmitNanopay() {
   const queryClient = useQueryClient();
   return useMutation<SubmitResult, Error, SubmitNanopayAuthorizationArgs>({
@@ -117,7 +121,7 @@ export function useSubmitNanopay() {
 }
 
 /**
- * POST /v1/pay/intents/:id/onchain — notifies the backend that the
+ * POST /pay/intents/:id/onchain — notifies the backend that the
  * user settled via the onchain settlement rail (TakumiWallet contract).
  * The backend reconciles via on-chain events; this POST is a latency hint.
  */
@@ -130,7 +134,7 @@ export function useSubmitOnchain() {
   >({
     mutationFn: async ({ intentId, txHash, chainId }) => {
       return api
-        .post(`v1/pay/intents/${encodeURIComponent(intentId)}/onchain`, {
+        .post(`pay/intents/${encodeURIComponent(intentId)}/onchain`, {
           json: { txHash, chainId },
         })
         .json<OnchainSubmitResponse>();

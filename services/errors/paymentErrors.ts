@@ -248,7 +248,7 @@ export const paymentErrorCopy: Record<PaymentErrorCode, PaymentErrorCopy> = {
   },
   wallet_unsupported: {
     title: "Wallet not supported",
-    body: "Switch to an EVM wallet to pay this merchant.",
+    body: "Your current wallet doesn't support this payment method. Try switching wallets.",
     cta: { label: "Switch wallet", action: "back" },
   },
   // ── M3 expansion rows ─────────────────────────────────────────────

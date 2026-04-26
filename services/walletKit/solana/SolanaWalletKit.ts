@@ -311,11 +311,24 @@ export function createSolanaWalletKit(): WalletKitAdapter {
         preflightCommitment: "confirmed",
       });
 
-      await connection.confirmTransaction(
-        { signature, blockhash: blockhashInfo.blockhash, lastValidBlockHeight: blockhashInfo.lastValidBlockHeight },
-        "confirmed",
-      );
+      // Poll via getSignatureStatuses instead of confirmTransaction
+      // (which relies on signatureSubscribe WebSocket — not supported
+      // by all RPC providers over HTTP).
+      const maxRetries = 30;
+      for (let i = 0; i < maxRetries; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const { value } = await connection.getSignatureStatuses([signature]);
+        const status = value?.[0];
+        if (status?.err) {
+          throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+        }
+        if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
+          return signature;
+        }
+      }
 
+      // Tx sent but not confirmed within timeout — return signature
+      // anyway so the backend can track it via its own watcher.
       return signature;
     },
 

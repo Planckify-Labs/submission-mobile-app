@@ -155,10 +155,9 @@ export interface PaymentIntentResponse {
   expiresAt: number;
   /**
    * Server-selected settlement path. `"nanopay"` = Path B (Circle),
-   * `"x402"` = Path C, `"direct_arc"` = onchain settlement via
-   * TakumiWallet contract.
+   * `"x402"` = Path C, `"takumipay"` = TakumiPay onchain settlement.
    */
-  path?: "nanopay" | "x402" | "direct_arc";
+  path?: "nanopay" | "x402" | "takumipay";
   /**
    * Token amount in minor units (e.g. 6-decimal for USDC). Renamed from
    * `nanopayUsdcAmountMicros` on backend for token-agnostic settlement.
@@ -176,6 +175,8 @@ export interface PaymentIntentResponse {
   quoteSignatureSvm?: string;
   programId?: string;
   backendSignerPubkey?: string;
+  /** Source token's blockchain ULID — used to fetch the payment contract. */
+  blockchainId?: string;
 }
 
 /** Body of `POST /v1/pay/intents/:id/nanopay`. */

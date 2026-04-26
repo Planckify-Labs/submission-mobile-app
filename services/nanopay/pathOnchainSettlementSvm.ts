@@ -40,7 +40,7 @@ export interface ExecuteOnchainSettlementSvmArgs {
   wallet: TWallet;
   walletKit: WalletKitAdapter;
   chain: ChainConfig;
-  programId: PublicKey;
+  programIdStr: string;
 }
 
 export interface ExecuteOnchainSettlementSvmResult {
@@ -154,7 +154,8 @@ function encodeMerchantQuoteParams(quote: QuoteCommitmentSvm, refIdHash: Uint8Ar
 export async function executeOnchainSettlementSvm(
   args: ExecuteOnchainSettlementSvmArgs,
 ): Promise<ExecuteOnchainSettlementSvmResult> {
-  const { intent, wallet, walletKit, chain, programId } = args;
+  const { intent, wallet, walletKit, chain, programIdStr } = args;
+  const programId = new PublicKey(programIdStr);
 
   if (chain.namespace !== "solana") {
     throw new OnchainSettlementSvmError("WRONG_CHAIN_NAMESPACE", "Expected Solana chain");

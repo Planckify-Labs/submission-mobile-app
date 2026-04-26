@@ -32,6 +32,7 @@ import {
 } from "@/services/errors/paymentErrors";
 import { logPaymentError } from "@/services/errors/telemetry";
 
+
 export interface PaymentErrorProps {
   code: PaymentErrorCode;
   /** Optional dev-only context string. Rendered in `__DEV__` only; never sent to telemetry. */
@@ -62,8 +63,6 @@ export function PaymentError({
   onRescan,
   onTopUp,
 }: PaymentErrorProps) {
-  // Fire-and-forget telemetry on mount. `logPaymentError` never throws
-  // and never blocks; safe to call unconditionally.
   useEffect(() => {
     logPaymentError({ code, intentId, merchantId });
   }, [code, intentId, merchantId]);

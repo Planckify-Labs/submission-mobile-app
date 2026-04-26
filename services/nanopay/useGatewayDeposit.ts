@@ -39,7 +39,7 @@ import {
 import { intentQueryKey } from "./useIntentStatus";
 
 /**
- * Production HTTP poster for `/v1/pay/intents/:id/deposit-receipt`.
+ * Production HTTP poster for `/pay/intents/:id/deposit-receipt`.
  * Threaded into `depositAndRecordReceipt` via
  * `useDepositForPaymaster` so the pure module (`gatewayDeposit.ts`)
  * never imports `@/constants/configs/ky` — that keeps the Node test
@@ -69,7 +69,7 @@ async function fetchIntentWithGasless(
   intentId: string,
 ): Promise<IntentWithGaslessBlock> {
   return api
-    .get(`v1/pay/intents/${encodeURIComponent(intentId)}`)
+    .get(`pay/intents/${encodeURIComponent(intentId)}`)
     .json<IntentWithGaslessBlock>();
 }
 
@@ -108,7 +108,7 @@ export function useDepositForPaymaster(): UseMutationResult<
 }
 
 /**
- * Polls `GET /v1/pay/intents/:id` until `gasless.requiresDeposit ===
+ * Polls `GET /pay/intents/:id` until `gasless.requiresDeposit ===
  * false`. While the deposit is still pending Circle attestation (task
  * 38 status machine), re-fetches every 3 s — matches the cadence
  * `useIntentStatus` uses for Nanopay attestation polling (§6.3).

@@ -122,6 +122,16 @@ if (typeof globalThis.crypto?.getRandomValues !== "function") {
   );
 }
 
+// Pre-load bn.js (used by @solana/web3.js v1) BEFORE the prototype
+// freeze below. bn.js assigns `BN.prototype.toString = …` which
+// fails after `Object.freeze(Object.prototype)` because `toString`
+// is inherited from the now-frozen `Object.prototype`. Loading the
+// module here lets it install its prototype methods while assignment
+// is still permitted.
+try {
+  require("bn.js");
+} catch {}
+
 // TWV-2026-021 — freeze the global prototypes before any third-party
 // code runs. CVE-2019-10744 (lodash) and friends mutate
 // `Object.prototype` to swap addresses / chainIds mid-request; freezing

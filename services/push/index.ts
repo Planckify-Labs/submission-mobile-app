@@ -6,7 +6,7 @@
  *
  * Shape:
  *   - `registerForPushNotifications()` — idempotent; requests permission,
- *     obtains the Expo push token, POSTs it to `v1/users/me/push-token`.
+ *     obtains the Expo push token, POSTs it to `users/me/push-token`.
  *     If the backend endpoint isn't implemented yet (404), we log and
  *     bail — this task ships the client half; the server half is
  *     orthogonal (task 50 / backend team).
@@ -141,7 +141,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 async function postPushToken(token: string): Promise<void> {
   try {
     await api
-      .post("v1/users/me/push-token", {
+      .post("users/me/push-token", {
         json: {
           token,
           platform: Platform.OS,
@@ -164,7 +164,7 @@ async function postPushToken(token: string): Promise<void> {
         : (err as { response?: { status?: number } })?.response?.status;
     if (status === 404) {
       console.log(
-        "[push] backend /v1/users/me/push-token not deployed yet — skipping",
+        "[push] backend /users/me/push-token not deployed yet — skipping",
       );
       return;
     }

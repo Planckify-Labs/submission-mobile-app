@@ -4,23 +4,12 @@ import { fetchList } from "../utils/api-helpers";
 export interface TBlockchain {
   id: string;
   name: string;
-  chainId: number;
+  chainId: number | null;
   rpcUrl: string;
   blockExplorer: string;
   isEVM: boolean;
   isActive: boolean;
   isTestnet: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface TAbi {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  abi: any[];
-  isVerified: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,11 +20,9 @@ export interface TSmartContract {
   blockchain: TBlockchain;
   blockchainId: string;
   address: string;
-  abiId: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  abi: TAbi;
 }
 
 export type TSmartContractListResponse = TSmartContract[];
@@ -56,6 +43,26 @@ export const smartContractApi = {
     } catch (error: any) {
       if (error?.response?.status === 404) return null;
       console.error("Failed to fetch smart contract by chain:", error);
+      throw error;
+    }
+  },
+
+  searchSmartContracts: async (params: {
+    blockchainId?: string;
+    chainId?: number;
+    isActive?: boolean;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params.blockchainId) searchParams.set("blockchainId", params.blockchainId);
+    if (params.chainId != null) searchParams.set("chainId", String(params.chainId));
+    if (params.isActive != null) searchParams.set("isActive", String(params.isActive));
+    try {
+      return await publicApi
+        .get(`smart-contracts/search?${searchParams}`)
+        .json<TSmartContract[]>();
+    } catch (error: any) {
+      if (error?.response?.status === 404) return [];
+      console.error("Failed to search smart contracts:", error);
       throw error;
     }
   },

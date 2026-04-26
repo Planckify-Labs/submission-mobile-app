@@ -44,10 +44,18 @@
  */
 
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, CheckCircle2, Store } from "lucide-react-native";
+import {
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Store,
+} from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
+  Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -59,8 +67,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatUnits } from "viem";
 import { PaymentError } from "@/components/PaymentError";
+import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import { findEvmChainById } from "@/constants/configs/chainConfig";
 import { api } from "@/constants/configs/ky";
+import { usePaymentContract } from "@/hooks/queries/usePaymentContract";
+import {
+  type PaymentToken,
+  usePaymentTokens,
+} from "@/hooks/queries/usePaymentTokens";
+import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { useWallet } from "@/hooks/useWallet";
 import {
   classifyPaymentError,
@@ -89,6 +104,9 @@ import {
   onchainSubmitEndpoint,
   postOnchainSubmit,
 } from "@/services/nanopay/pathOnchainSettlement";
+import {
+  executeOnchainSettlementSvm,
+} from "@/services/nanopay/pathOnchainSettlementSvm";
 
 /** Arc Testnet viem chainId — source chain for the Nanopay EIP-3009 sig. */
 const ARC_TESTNET_CHAIN_ID = 5042002;
@@ -165,16 +183,38 @@ const resolveKind = (
  * shared `classifyPaymentError` intentionally drops it so sensitive
  * hex blobs never make it to telemetry / prod logs).
  */
+const makeLocalError = (code: PaymentErrorCode, devMessage?: string): LocalError => {
+  if (__DEV__) {
+    console.error(`[pay-merchant] code=${code}`, devMessage ?? "");
+  }
+  return { code, devMessage };
+};
+
 const classifyError = (err: unknown): LocalError => {
   const code = classifyPaymentError(err);
-  const devMessage =
-    err && typeof err === "object" && "message" in err
-      ? typeof (err as { message?: unknown }).message === "string"
-        ? ((err as { message?: string }).message as string)
-        : undefined
-      : typeof err === "string"
-        ? err
-        : undefined;
+
+  let devMessage: string | undefined;
+  if (err && typeof err === "object") {
+    const e = err as {
+      name?: string;
+      message?: string;
+      status?: number;
+      response?: { status?: number };
+    };
+    const parts: string[] = [];
+    if (e.name) parts.push(`name=${e.name}`);
+    if (e.message) parts.push(e.message);
+    const httpStatus = e.status ?? e.response?.status;
+    if (httpStatus) parts.push(`HTTP ${httpStatus}`);
+    devMessage = parts.join(" | ") || undefined;
+  } else if (typeof err === "string") {
+    devMessage = err;
+  }
+
+  if (__DEV__) {
+    console.error(`[pay-merchant] code=${code}`, err);
+  }
+
   return { code, devMessage };
 };
 
@@ -266,12 +306,12 @@ function IntentFlow({ intentId }: { intentId: string }) {
     }
     if (intent.status === "failed") {
       setPhase("error");
-      setError({ code: "unknown", devMessage: "intent.status=failed" });
+      setError(makeLocalError("unknown", "intent.status=failed"));
       return;
     }
     if (intent.status === "expired") {
       setPhase("error");
-      setError({ code: "quote_expired" });
+      setError(makeLocalError("quote_expired"));
     }
   }, [intent]);
 
@@ -307,7 +347,7 @@ function IntentFlow({ intentId }: { intentId: string }) {
     // this undefined. No `if (namespace === "X")` branches.
     const kit = activeWallet?.namespace ? getActiveWalletKit() : null;
     if (!kit || typeof kit.signTransferWithAuthorization !== "function") {
-      setError({ code: "wallet_unsupported" });
+      setError(makeLocalError("wallet_unsupported"));
       setPhase("error");
       return;
     }
@@ -319,10 +359,7 @@ function IntentFlow({ intentId }: { intentId: string }) {
     const sourceChainId = intent.nanopay?.sourceChainId ?? ARC_TESTNET_CHAIN_ID;
     const sourceChainConfig = findEvmChainById(sourceChainId);
     if (!sourceChainConfig) {
-      setError({
-        code: "chain_mismatch",
-        devMessage: `No chain config for id=${sourceChainId}`,
-      });
+      setError(makeLocalError("chain_mismatch", `No chain config for id=${sourceChainId}`));
       setPhase("error");
       return;
     }
@@ -331,7 +368,7 @@ function IntentFlow({ intentId }: { intentId: string }) {
     if (activeEvmChainId !== sourceChainId) {
       const ok = await changeActiveChainToConfig(sourceChainConfig);
       if (!ok) {
-        setError({ code: "chain_mismatch" });
+        setError(makeLocalError("chain_mismatch"));
         setPhase("error");
         return;
       }
@@ -436,10 +473,21 @@ function IntentFlow({ intentId }: { intentId: string }) {
     );
   }
 
-  // Onchain settlement — backend set `path = "direct_arc"` with a signed
-  // quoteCommitment. The wallet calls `processMerchantPayment` on the
-  // TakumiWallet contract, then POSTs the txHash to the backend.
-  if (extractIntentPath(intent) === "onchain") {
+  if (extractIntentPath(intent) === "takumipay") {
+    return (
+      <OnchainCard
+        intent={intent}
+        intentId={intentId}
+        onBack={() => router.back()}
+      />
+    );
+  }
+
+  // No explicit path from backend — dispatch by wallet capability.
+  // Wallets without EIP-3009 (e.g. Solana kits) route to onchain
+  // settlement rather than erroring with "wallet_unsupported".
+  const kit = activeWallet?.namespace ? getActiveWalletKit() : null;
+  if (!kit || typeof kit.signTransferWithAuthorization !== "function") {
     return (
       <OnchainCard
         intent={intent}
@@ -488,7 +536,7 @@ function PathACard({
 
   const onSend = useCallback(async () => {
     if (!activeWallet?.namespace) {
-      setError({ code: "wallet_unsupported" });
+      setError(makeLocalError("wallet_unsupported"));
       setPhase("error");
       return;
     }
@@ -500,10 +548,7 @@ function PathACard({
     const sourceChainId = intent.nanopayUsdcSourceChainId ?? ARC_TESTNET_CHAIN_ID;
     const sourceChainConfig = findEvmChainById(sourceChainId);
     if (!sourceChainConfig) {
-      setError({
-        code: "chain_mismatch",
-        devMessage: `No chain config for id=${sourceChainId}`,
-      });
+      setError(makeLocalError("chain_mismatch", `No chain config for id=${sourceChainId}`));
       setPhase("error");
       return;
     }
@@ -512,7 +557,7 @@ function PathACard({
     if (activeEvmChainId !== sourceChainId) {
       const ok = await changeActiveChainToConfig(sourceChainConfig);
       if (!ok) {
-        setError({ code: "chain_mismatch" });
+        setError(makeLocalError("chain_mismatch"));
         setPhase("error");
         return;
       }
@@ -675,6 +720,14 @@ function OnchainCard({
 
   const [phase, setPhase] = useState<LocalPhase>("idle");
   const [error, setError] = useState<LocalError | null>(null);
+  const [isPinVisible, setIsPinVisible] = useState(false);
+
+  const sourceChainId = intent.nanopayUsdcSourceChainId;
+  const { data: paymentContract, isLoading: isLoadingContract } =
+    usePaymentContract({
+      blockchainId: intent.blockchainId,
+      chainId: !intent.blockchainId && sourceChainId > 0 ? sourceChainId : undefined,
+    });
 
   // Countdown timer — `quoteCommitment.expiresAt` is unix seconds
   const expiresAtMs = intent.quoteCommitment
@@ -705,78 +758,94 @@ function OnchainCard({
 
   const onPay = useCallback(async () => {
     if (!activeWallet?.namespace) {
-      setError({ code: "wallet_unsupported" });
+      setError(makeLocalError("wallet_unsupported"));
       setPhase("error");
       return;
     }
     const kit = getActiveWalletKit();
 
-    if (typeof kit.sendContractTransaction !== "function") {
-      setError({ code: "wallet_unsupported" });
-      setPhase("error");
-      return;
-    }
-
-    // Resolve the source chain from the intent
-    const sourceChainId = intent.nanopayUsdcSourceChainId ?? ARC_TESTNET_CHAIN_ID;
-    const sourceChainConfig = findEvmChainById(sourceChainId);
-    if (!sourceChainConfig) {
-      setError({
-        code: "chain_mismatch",
-        devMessage: `No chain config for id=${sourceChainId}`,
-      });
-      setPhase("error");
-      return;
-    }
-
-    // Chain switch if needed
-    const activeEvmChainId =
-      activeChain.namespace === "eip155" ? activeChain.chain.id : null;
-    if (activeEvmChainId !== sourceChainId) {
-      const ok = await changeActiveChainToConfig(sourceChainConfig);
-      if (!ok) {
-        setError({ code: "chain_mismatch" });
-        setPhase("error");
-        return;
-      }
-    }
-
-    // Resolve contract address from intent or chain config
-    const contractAddress = intent.contractAddress;
-    if (!contractAddress) {
-      setError({
-        code: "unknown",
-        devMessage: "Intent missing contractAddress for onchain settlement",
-      });
-      setPhase("error");
-      return;
-    }
-
     try {
       setPhase("signing");
       setError(null);
 
-      const result = await executeOnchainSettlement({
-        intent,
-        wallet: activeWallet,
-        walletKit: kit,
-        chain: sourceChainConfig,
-        contractAddress,
-      });
+      if (activeWallet.namespace === "solana" || activeChain.namespace === "solana") {
+        if (typeof kit.sendAnchorInstruction !== "function") {
+          setError(makeLocalError("wallet_unsupported", "Solana kit missing sendAnchorInstruction"));
+          setPhase("error");
+          return;
+        }
 
-      setPhase("submitting");
+        const programIdStr = paymentContract?.address;
+        if (!programIdStr) {
+          setError(makeLocalError("unknown", "No payment contract found for this chain"));
+          setPhase("error");
+          return;
+        }
 
-      // Notify backend (best-effort — 404 is swallowed)
-      await postOnchainSubmit({
-        intentId,
-        txHash: result.txHash,
-        chainId: result.chainId,
-        poster: defaultOnchainSubmitPoster,
-      }).catch(() => null);
+        const result = await executeOnchainSettlementSvm({
+          intent,
+          wallet: activeWallet,
+          walletKit: kit,
+          chain: activeChain,
+          programIdStr,
+        });
 
-      // Local "done" — the backend event watcher will flip
-      // `intent.status` to `"paid"` once it observes the event, at
-      // which point `IntentFlow`'s effect navigates to the receipt.
+        setPhase("submitting");
+        await postOnchainSubmit({
+          intentId,
+          txHash: result.txSignature,
+          blockchainId: intent.blockchainId!,
+          poster: defaultOnchainSubmitPoster,
+        }).catch(() => null);
+      } else {
+        if (typeof kit.sendContractTransaction !== "function") {
+          setError(makeLocalError("wallet_unsupported", "EVM kit missing sendContractTransaction"));
+          setPhase("error");
+          return;
+        }
+
+        const sourceChainId = intent.nanopayUsdcSourceChainId ?? ARC_TESTNET_CHAIN_ID;
+        const sourceChainConfig = findEvmChainById(sourceChainId);
+        if (!sourceChainConfig) {
+          setError(makeLocalError("chain_mismatch", `No chain config for id=${sourceChainId}`));
+          setPhase("error");
+          return;
+        }
+
+        const activeEvmChainId = activeChain.namespace === "eip155" ? activeChain.chain.id : null;
+        if (activeEvmChainId !== sourceChainId) {
+          const ok = await changeActiveChainToConfig(sourceChainConfig);
+          if (!ok) {
+            setError(makeLocalError("chain_mismatch"));
+            setPhase("error");
+            return;
+          }
+        }
+
+        const contractAddress = paymentContract?.address as `0x${string}` | undefined;
+        if (!contractAddress) {
+          setError(makeLocalError("unknown", "No payment contract found for this chain"));
+          setPhase("error");
+          return;
+        }
+
+        const result = await executeOnchainSettlement({
+          intent,
+          wallet: activeWallet,
+          walletKit: kit,
+          chain: sourceChainConfig,
+          contractAddress,
+        });
+
+        setPhase("submitting");
+        await postOnchainSubmit({
+          intentId,
+          txHash: result.txHash,
+          blockchainId: intent.blockchainId!,
+          poster: defaultOnchainSubmitPoster,
+        }).catch(() => null);
+      }
+
       setPhase("settled");
     } catch (err) {
       setError(classifyError(err));
@@ -809,15 +878,17 @@ function OnchainCard({
     );
   }
 
-  const isBusy = phase === "signing" || phase === "submitting";
+  const isBusy = phase === "signing" || phase === "submitting" || isLoadingContract;
   const ctaLabel =
-    phase === "signing"
-      ? "Confirming…"
-      : phase === "submitting"
-        ? "Confirming payment…"
-        : isExpired
-          ? "Quote expired"
-          : "Pay";
+    isLoadingContract
+      ? "Loading…"
+      : phase === "signing"
+        ? "Confirming…"
+        : phase === "submitting"
+          ? "Confirming payment…"
+          : isExpired
+            ? "Quote expired"
+            : "Pay";
 
   // Display the token amount — prefer `tokenAmountMinor` (multi-token),
   // fall back to `nanopayUsdcAmountMicros`.
@@ -882,7 +953,7 @@ function OnchainCard({
             : "bg-light-primary-red"
         }`}
         disabled={isBusy || isExpired}
-        onPress={onPay}
+        onPress={() => setIsPinVisible(true)}
       >
         {isBusy ? (
           <ActivityIndicator color="#fff" />
@@ -890,6 +961,16 @@ function OnchainCard({
           <Text className="text-light font-semibold">{ctaLabel}</Text>
         )}
       </TouchableOpacity>
+
+      <PinConfirmationModal
+        visible={isPinVisible}
+        onClose={() => setIsPinVisible(false)}
+        onConfirm={() => {
+          setIsPinVisible(false);
+          onPay();
+        }}
+        title="Confirm Payment"
+      />
     </View>
   );
 }
@@ -933,8 +1014,66 @@ async function defaultOnChainReceiptPoster({
 
 function MintFallback({ kind, raw }: { kind: MerchantKind; raw: string }) {
   const createIntent = useCreateIntent();
+  const { activeChain } = useWallet();
+  const { data: blockchains } = useBlockchainsWithStorage({ isActive: true });
+
   const [amountInput, setAmountInput] = useState("");
   const [error, setError] = useState<LocalError | null>(null);
+  const [selectedChainId, setSelectedChainId] = useState<string | null>(null);
+  const [selectedToken, setSelectedToken] = useState<PaymentToken | null>(null);
+  const [chainPickerOpen, setChainPickerOpen] = useState(false);
+  const [tokenPickerOpen, setTokenPickerOpen] = useState(false);
+
+  // Fetch all payment tokens — the source of truth for which chains
+  // support payments and which tokens are available per chain.
+  const { data: allPaymentTokens, isLoading: isLoadingTokens } =
+    usePaymentTokens();
+
+  // Chains that have at least one payment-enabled token
+  const paymentChainIds = useMemo(() => {
+    if (!allPaymentTokens?.length) return new Set<string>();
+    return new Set(allPaymentTokens.map((t) => t.blockchain.id));
+  }, [allPaymentTokens]);
+
+  const availableChains = useMemo(() => {
+    if (!blockchains?.length) return [];
+    return blockchains.filter((b) => paymentChainIds.has(b.id));
+  }, [blockchains, paymentChainIds]);
+
+  const selectedChain = useMemo(
+    () => availableChains.find((b) => b.id === selectedChainId) ?? null,
+    [availableChains, selectedChainId],
+  );
+
+  // Auto-select blockchain matching the current active chain.
+  // For Solana: match `cluster` to `isTestnet` so devnet ≠ mainnet.
+  useEffect(() => {
+    if (selectedChainId || !availableChains.length) return;
+    const match = availableChains.find((b) => {
+      if (activeChain.namespace === "eip155") {
+        return b.isEVM && b.chainId === activeChain.chain.id;
+      }
+      if (activeChain.namespace === "solana") {
+        return !b.isEVM && b.isTestnet === (activeChain.cluster === "devnet");
+      }
+      return false;
+    });
+    if (match) setSelectedChainId(match.id);
+  }, [activeChain, availableChains, selectedChainId]);
+
+  // Reset selected token when chain changes
+  useEffect(() => {
+    setSelectedToken(null);
+  }, [selectedChainId]);
+
+  // Tokens filtered to the selected chain
+  const paymentTokens = useMemo(() => {
+    if (!allPaymentTokens?.length) return [];
+    if (!selectedChainId) return allPaymentTokens;
+    return allPaymentTokens.filter((t) => t.blockchain.id === selectedChainId);
+  }, [allPaymentTokens, selectedChainId]);
+
+  const isLoadingChains = isLoadingTokens || !blockchains;
 
   // Lightweight TLV walk for the static-vs-dynamic QRIS branch. Scanner
   // already validated CRC upstream so we stay lenient here.
@@ -970,7 +1109,7 @@ function MintFallback({ kind, raw }: { kind: MerchantKind; raw: string }) {
     setError(null);
     const amountMinor = staticAmount ?? Number.parseInt(amountInput, 10);
     if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
-      setError({ code: "unknown", devMessage: "amount must be > 0" });
+      setError(makeLocalError("unknown", "amount must be > 0"));
       return;
     }
     try {
@@ -978,6 +1117,7 @@ function MintFallback({ kind, raw }: { kind: MerchantKind; raw: string }) {
         scannedPayload: raw,
         currency: "IDR",
         fiatAmountMinor: amountMinor,
+        sourceTokenId: selectedToken?.id,
       });
       // Replace so the user's back button returns to the scanner, not
       // to this fallback screen. The new URL is the canonical form.
@@ -990,7 +1130,7 @@ function MintFallback({ kind, raw }: { kind: MerchantKind; raw: string }) {
     } catch (err) {
       setError(classifyError(err));
     }
-  }, [amountInput, createIntent, raw, staticAmount]);
+  }, [amountInput, createIntent, raw, staticAmount, selectedToken]);
 
   if (error) {
     const dismiss = () => setError(null);
@@ -1044,14 +1184,83 @@ function MintFallback({ kind, raw }: { kind: MerchantKind; raw: string }) {
         </View>
       )}
 
+      <View className="mb-6">
+        <Text className="text-light-matte-black/60 text-sm mb-2">
+          Network
+        </Text>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => setChainPickerOpen(true)}
+          className="bg-light-main-container rounded-xl px-4 py-3 flex-row items-center justify-between"
+        >
+          {selectedChain ? (
+            <View className="flex-row items-center flex-1">
+              {selectedChain.tokens?.[0]?.logoUrl ? (
+                <Image
+                  source={{ uri: selectedChain.tokens[0].logoUrl }}
+                  style={{ width: 28, height: 28, borderRadius: 14 }}
+                />
+              ) : (
+                <View className="w-7 h-7 bg-light-primary-red/10 rounded-full" />
+              )}
+              <Text className="text-light-matte-black font-medium text-base ml-3">
+                {selectedChain.name}
+              </Text>
+            </View>
+          ) : (
+            <Text className="text-light-matte-black/50 text-base">
+              {isLoadingChains ? "Loading networks…" : "Select network"}
+            </Text>
+          )}
+          <ChevronDown color="#20222c" size={16} />
+        </TouchableOpacity>
+      </View>
+
+      <View className="mb-6">
+        <Text className="text-light-matte-black/60 text-sm mb-2">
+          Pay with
+        </Text>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => setTokenPickerOpen(true)}
+          className="bg-light-main-container rounded-xl px-4 py-3 flex-row items-center justify-between"
+        >
+          {selectedToken ? (
+            <View className="flex-row items-center flex-1">
+              {selectedToken.logoUrl ? (
+                <Image
+                  source={{ uri: selectedToken.logoUrl }}
+                  style={{ width: 28, height: 28, borderRadius: 14 }}
+                />
+              ) : (
+                <View className="w-7 h-7 bg-light-primary-red/10 rounded-full" />
+              )}
+              <View className="ml-3">
+                <Text className="text-light-matte-black font-medium text-base">
+                  {selectedToken.symbol}
+                </Text>
+                <Text className="text-light-matte-black/50 text-xs">
+                  {selectedToken.blockchain.name}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Text className="text-light-matte-black/50 text-base">
+              {isLoadingTokens ? "Loading tokens…" : "Select token"}
+            </Text>
+          )}
+          <ChevronDown color="#20222c" size={16} />
+        </TouchableOpacity>
+      </View>
+
       <TouchableOpacity
         activeOpacity={0.7}
         className={`py-4 px-5 rounded-xl items-center ${
-          createIntent.isPending
+          createIntent.isPending || !selectedToken
             ? "bg-light-matte-black/20"
             : "bg-light-primary-red"
         }`}
-        disabled={createIntent.isPending}
+        disabled={createIntent.isPending || !selectedToken}
         onPress={onMint}
       >
         {createIntent.isPending ? (
@@ -1060,6 +1269,138 @@ function MintFallback({ kind, raw }: { kind: MerchantKind; raw: string }) {
           <Text className="text-light font-semibold">Continue</Text>
         )}
       </TouchableOpacity>
+
+      <Modal
+        visible={tokenPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTokenPickerOpen(false)}
+      >
+        <Pressable
+          className="flex-1 bg-black/40 justify-end"
+          onPress={() => setTokenPickerOpen(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            className="bg-light rounded-t-3xl px-5 pt-5 pb-8"
+          >
+            <Text className="text-light-matte-black font-semibold text-lg mb-4">
+              Pay with
+            </Text>
+            {!paymentTokens?.length ? (
+              <View className="items-center py-8">
+                {isLoadingTokens ? (
+                  <ActivityIndicator color="#c71c4b" />
+                ) : (
+                  <Text className="text-light-matte-black/60 text-sm text-center">
+                    No payment tokens available.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              paymentTokens.map((t) => {
+                const active = t.id === selectedToken?.id;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setSelectedToken(t);
+                      setTokenPickerOpen(false);
+                    }}
+                    className="flex-row items-center py-3 border-b border-light-matte-black/5"
+                  >
+                    {t.logoUrl ? (
+                      <Image
+                        source={{ uri: t.logoUrl }}
+                        style={{ width: 36, height: 36, borderRadius: 18 }}
+                      />
+                    ) : (
+                      <View className="w-9 h-9 bg-light-primary-red/10 rounded-full" />
+                    )}
+                    <View className="flex-1 ml-3">
+                      <Text className="text-light-matte-black font-medium">
+                        {t.name}
+                      </Text>
+                      <Text className="text-light-matte-black/50 text-xs">
+                        {t.symbol} · {t.blockchain.name}
+                      </Text>
+                    </View>
+                    {active ? <Check color="#c71c4b" size={18} /> : null}
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={chainPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setChainPickerOpen(false)}
+      >
+        <Pressable
+          className="flex-1 bg-black/40 justify-end"
+          onPress={() => setChainPickerOpen(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            className="bg-light rounded-t-3xl px-5 pt-5 pb-8"
+          >
+            <Text className="text-light-matte-black font-semibold text-lg mb-4">
+              Select network
+            </Text>
+            {!availableChains.length ? (
+              <View className="items-center py-8">
+                {isLoadingChains ? (
+                  <ActivityIndicator color="#c71c4b" />
+                ) : (
+                  <Text className="text-light-matte-black/60 text-sm text-center">
+                    No networks available.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              availableChains.map((b) => {
+                const active = b.id === selectedChainId;
+                const nativeToken = b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0];
+                return (
+                  <TouchableOpacity
+                    key={b.id}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setSelectedChainId(b.id);
+                      setChainPickerOpen(false);
+                    }}
+                    className="flex-row items-center py-3 border-b border-light-matte-black/5"
+                  >
+                    {nativeToken?.logoUrl ? (
+                      <Image
+                        source={{ uri: nativeToken.logoUrl }}
+                        style={{ width: 36, height: 36, borderRadius: 18 }}
+                      />
+                    ) : (
+                      <View className="w-9 h-9 bg-light-primary-red/10 rounded-full" />
+                    )}
+                    <View className="flex-1 ml-3">
+                      <Text className="text-light-matte-black font-medium">
+                        {b.name}
+                      </Text>
+                      <Text className="text-light-matte-black/50 text-xs">
+                        {nativeToken?.symbol ?? (b.isEVM ? "EVM" : "Solana")}
+                        {b.isTestnet ? " · Testnet" : ""}
+                      </Text>
+                    </View>
+                    {active ? <Check color="#c71c4b" size={18} /> : null}
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1244,14 +1585,14 @@ function extractMerchantName(intent: PaymentIntentResponse): string {
  */
 function extractIntentPath(
   intent: PaymentIntentResponse,
-): "A" | "B" | "C" | "onchain" | null {
+): "A" | "B" | "C" | "takumipay" | null {
   const anyIntent = intent as unknown as {
     path?: string;
     settlementPath?: string;
   };
   const raw = anyIntent.path ?? anyIntent.settlementPath;
   if (raw === "A" || raw === "B" || raw === "C") return raw;
-  if (raw === "direct_arc") return "onchain";
+  if (raw === "takumipay") return "takumipay";
   return null;
 }
 

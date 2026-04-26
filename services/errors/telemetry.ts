@@ -17,11 +17,15 @@
  *   - **Endpoint may 404.** Backend counterpart is a follow-up; when
  *     the route isn't mounted yet a 404 (or any non-2xx / network
  *     failure) is swallowed silently.
+ *   - Uses raw `fetch` instead of the shared ky `api` instance so the
+ *     global ky error interceptor doesn't fire console.error / toasts
+ *     on expected 404s.
  */
 
-import { HTTPError } from "ky";
-import { api } from "@/constants/configs/ky";
 import type { PaymentErrorCode } from "./paymentErrors";
+
+const TELEMETRY_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
 
 export interface LogPaymentErrorArgs {
   code: PaymentErrorCode;
@@ -31,43 +35,27 @@ export interface LogPaymentErrorArgs {
 
 /**
  * POSTs `{ code, intentId?, merchantId? }` to
- * `${EXPO_PUBLIC_API_URL}/v1/telemetry/payment-error`. Fire-and-forget:
+ * `${EXPO_PUBLIC_API_URL}/telemetry/payment-error`. Fire-and-forget:
  * resolves without error regardless of the transport outcome.
- *
- * We intentionally don't log non-2xx responses at info level — the
- * backend route doesn't exist during M2/M3 so every call would spam
- * the console. In `__DEV__` we emit a single `console.debug` for
- * non-404 failures so local-dev issues surface.
  */
 export function logPaymentError(args: LogPaymentErrorArgs): void {
-  // `void` the promise — callers don't await this and we never want
-  // an unhandled-rejection tripping the error boundary.
   void sendPaymentErrorEvent(args);
 }
 
 async function sendPaymentErrorEvent(args: LogPaymentErrorArgs): Promise<void> {
   try {
-    await api
-      .post("v1/telemetry/payment-error", {
-        json: {
-          code: args.code,
-          ...(args.intentId ? { intentId: args.intentId } : {}),
-          ...(args.merchantId ? { merchantId: args.merchantId } : {}),
-        },
-        // Keep the request tiny — no retries, no long timeout. A failed
-        // telemetry post must never slow the error card.
-        retry: 0,
-        timeout: 3000,
-      })
-      .json<unknown>();
-  } catch (err) {
-    // 404 is expected while the backend endpoint is unimplemented.
-    if (err instanceof HTTPError && err.response.status === 404) return;
-    if (__DEV__) {
-      // Best-effort debug log — never includes raw error fields that
-      // might carry sensitive hex blobs.
-      // eslint-disable-next-line no-console
-      console.debug("[telemetry] logPaymentError swallowed failure", args.code);
-    }
+    const body: Record<string, string> = { code: args.code };
+    if (args.intentId) body.intentId = args.intentId;
+    if (args.merchantId) body.merchantId = args.merchantId;
+
+    await fetch(`${TELEMETRY_BASE_URL}/telemetry/payment-error`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(3000),
+    });
+  } catch {
+    // Swallow all failures — 404, network, timeout. This endpoint is
+    // best-effort and may not exist during early milestones.
   }
 }

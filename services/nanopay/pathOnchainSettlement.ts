@@ -5,7 +5,7 @@
  * Customers pay by calling `processMerchantPayment(quoteCommitment,
  * backendSignature)` on the TakumiWallet smart contract. After the tx
  * confirms, the mobile app POSTs the txHash to
- * `POST /v1/pay/intents/:id/onchain` so the backend can reconcile.
+ * `POST /pay/intents/:id/onchain` so the backend can reconcile.
  *
  * Layering (§5.5, matches `pathADirectArc.ts`):
  *   - `executeOnchainSettlement` is the orchestrator — validate inputs,
@@ -184,10 +184,10 @@ export async function executeOnchainSettlement(
 
 // ── Backend submit endpoint ─────────────────────────────────────────
 
-/** Body of `POST /v1/pay/intents/:id/onchain`. */
+/** Body of `POST /pay/intents/:id/onchain`. */
 export interface OnchainSubmitRequest {
-  txHash: `0x${string}`;
-  chainId: number;
+  txHash: string;
+  blockchainId: string;
 }
 
 export interface OnchainSubmitResponse {
@@ -211,7 +211,7 @@ export type PostOnchainSubmit = (args: {
  * Query-hook site and any future caller share exactly one copy.
  */
 export function onchainSubmitEndpoint(intentId: string): string {
-  return `v1/pay/intents/${encodeURIComponent(intentId)}/onchain`;
+  return `pay/intents/${encodeURIComponent(intentId)}/onchain`;
 }
 
 /**
@@ -222,13 +222,13 @@ export function onchainSubmitEndpoint(intentId: string): string {
  */
 export async function postOnchainSubmit(args: {
   intentId: string;
-  txHash: `0x${string}`;
-  chainId: number;
+  txHash: string;
+  blockchainId: string;
   poster: PostOnchainSubmit;
 }): Promise<OnchainSubmitResponse | null> {
   const body: OnchainSubmitRequest = {
     txHash: args.txHash,
-    chainId: args.chainId,
+    blockchainId: args.blockchainId,
   };
   try {
     return await args.poster({ intentId: args.intentId, body });

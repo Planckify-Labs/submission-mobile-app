@@ -188,7 +188,7 @@ export function buildGatewayDepositUserOp(
 }
 
 /**
- * Backend response shape for `/v1/pay/intents/:id/deposit-receipt`
+ * Backend response shape for `/pay/intents/:id/deposit-receipt`
  * (spec §6.2 `DepositReceiptResponse`).
  */
 export interface DepositReceiptResponse {
@@ -197,7 +197,7 @@ export interface DepositReceiptResponse {
 }
 
 /**
- * Body of `POST /v1/pay/intents/:id/deposit-receipt` (spec §6.2).
+ * Body of `POST /pay/intents/:id/deposit-receipt` (spec §6.2).
  * Exported so tests can assert the exact JSON shape without duplicating
  * the literal field names across modules.
  */
@@ -261,7 +261,7 @@ export interface DepositAndRecordReceiptResult {
  *      the adapter to submit the UserOp.
  *   3. Poll the bundler for the underlying tx hash (or fall back to
  *      the `userOpHash` when the hook is omitted).
- *   4. POST the receipt to `/v1/pay/intents/:id/deposit-receipt` per
+ *   4. POST the receipt to `/pay/intents/:id/deposit-receipt` per
  *      spec §6.2. Typed failure surface `DepositReceiptError`.
  *
  * Never logs signatures, raw call data, or permit sigs — only intent
@@ -349,5 +349,5 @@ export async function depositAndRecordReceipt(
  * share exactly one copy of the path.
  */
 export function depositReceiptEndpoint(intentId: string): string {
-  return `v1/pay/intents/${encodeURIComponent(intentId)}/deposit-receipt`;
+  return `pay/intents/${encodeURIComponent(intentId)}/deposit-receipt`;
 }

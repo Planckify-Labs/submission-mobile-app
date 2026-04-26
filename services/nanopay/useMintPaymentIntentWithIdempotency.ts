@@ -76,7 +76,7 @@ async function postMintWithIdempotency(
   idempotencyKey: string,
 ): Promise<PaymentIntentResponse> {
   return api
-    .post("v1/pay/intents", {
+    .post("pay/intents", {
       json: body,
       headers: { "Idempotency-Key": idempotencyKey },
     })

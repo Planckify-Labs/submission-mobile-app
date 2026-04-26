@@ -3,7 +3,7 @@
  * EIP-3009 authorization to `takumipay-api` (spec §5.5, §6.2, M2).
  *
  * Rules:
- *   - Always targets OUR proxy (`${EXPO_PUBLIC_API_URL}/v1/pay/intents/:id/nanopay`).
+ *   - Always targets OUR proxy (`${EXPO_PUBLIC_API_URL}/pay/intents/:id/nanopay`).
  *     Never posts to Circle Gateway directly — auditability + keystore
  *     hygiene + uniform Xendit payout handler fire off one server-side
  *     event stream (spec §5.5).
@@ -103,7 +103,7 @@ export async function submitNanopayAuthorization(
 
   try {
     const response = await api
-      .post(`v1/pay/intents/${encodeURIComponent(intentId)}/nanopay`, {
+      .post(`pay/intents/${encodeURIComponent(intentId)}/nanopay`, {
         json: body,
       })
       .json<SubmitNanopayResponse>();

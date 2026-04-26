@@ -248,7 +248,7 @@ export async function watchArcPayoutEvent(
 }
 
 /**
- * Body of `POST /v1/pay/intents/:id/on-chain-receipt`. Tells the backend
+ * Body of `POST /pay/intents/:id/on-chain-receipt`. Tells the backend
  * the user settled Path A directly on-chain so it can trigger the
  * Xendit payout leg without waiting for the (unused) Circle settle
  * response. Backend watcher still reconciles via on-chain `Transfer`
@@ -281,7 +281,7 @@ export type PostOnChainReceipt = (args: {
  * the Query-hook site and any future caller share exactly one copy.
  */
 export function onChainReceiptEndpoint(intentId: string): string {
-  return `v1/pay/intents/${encodeURIComponent(intentId)}/on-chain-receipt`;
+  return `pay/intents/${encodeURIComponent(intentId)}/on-chain-receipt`;
 }
 
 /**
