@@ -18,7 +18,10 @@ const TransferCard = React.memo(
       (event: any) => {
         event.stopPropagation();
         openBrowserAsync(
-          buildExplorerTxUrl(transaction.token.blockchain.blockExplorer, transaction.txHash!),
+          buildExplorerTxUrl(
+            transaction.token.blockchain.blockExplorer,
+            transaction.txHash!,
+          ),
         );
       },
       [transaction.txHash, transaction.token.blockchain.blockExplorer],

@@ -1,10 +1,5 @@
 import { router } from "expo-router";
-import {
-  ChevronRight,
-  KeyRound,
-  Plus,
-  ShieldCheck,
-} from "lucide-react-native";
+import { ChevronRight, KeyRound, Plus, ShieldCheck } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,

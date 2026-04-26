@@ -17,7 +17,10 @@ const TransferDetailCard = React.memo(
     const openBlockExplorer = useCallback(() => {
       if (transfer.txHash && transfer.token?.blockchain?.blockExplorer) {
         openBrowserAsync(
-          buildExplorerTxUrl(transfer.token.blockchain.blockExplorer, transfer.txHash),
+          buildExplorerTxUrl(
+            transfer.token.blockchain.blockExplorer,
+            transfer.txHash,
+          ),
         );
       }
     }, [transfer.txHash, transfer.token?.blockchain?.blockExplorer]);

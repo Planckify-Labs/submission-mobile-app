@@ -14,7 +14,9 @@ export function useLoadingSteps(stepMessages: string[]) {
 
   const completeStep = useCallback((index: number) => {
     setSteps((prev) =>
-      prev.map((step, i) => (i === index ? { ...step, completed: true } : step)),
+      prev.map((step, i) =>
+        i === index ? { ...step, completed: true } : step,
+      ),
     );
     setCurrentStepIndex(index);
   }, []);

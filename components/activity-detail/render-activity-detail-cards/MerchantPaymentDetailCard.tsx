@@ -26,7 +26,10 @@ const MerchantPaymentDetailCard = React.memo(
     const openBlockExplorer = useCallback(() => {
       if (payment.txHash && payment.token?.blockchain?.blockExplorer) {
         openBrowserAsync(
-          buildExplorerTxUrl(payment.token.blockchain.blockExplorer, payment.txHash),
+          buildExplorerTxUrl(
+            payment.token.blockchain.blockExplorer,
+            payment.txHash,
+          ),
         );
       }
     }, [payment.txHash, payment.token?.blockchain?.blockExplorer]);
