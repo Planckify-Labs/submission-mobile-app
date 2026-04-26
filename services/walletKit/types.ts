@@ -227,6 +227,23 @@ export interface NativeTransferArgs {
 }
 
 /**
+ * Arguments for `WalletKitAdapter.sendTokenTransfer`.
+ *
+ * `amount` is the raw token unit (smallest denomination — e.g. 6-decimal
+ * USDC units, 9-decimal SPL token units) so callers never convert at the
+ * adapter boundary. `contractAddress` is the ERC-20 contract (EVM) or SPL
+ * mint address (Solana).
+ */
+export interface TokenTransferArgs {
+  wallet: TWallet;
+  to: string;
+  amount: bigint;
+  chain: ChainConfig;
+  contractAddress: string;
+  decimals: number;
+}
+
+/**
  * Optional `name` tag applied to newly-created wallets. Kept loose so both
  * EVM and Solana implementations can match the `TWalletCreationParams`
  * shape without forcing a rigid call signature on future chains.
@@ -331,6 +348,12 @@ export interface WalletKitAdapter {
   sendNativeTransfer(args: NativeTransferArgs): Promise<string>;
 
   /**
+   * Transfers a non-native token (ERC-20 on EVM, SPL on Solana).
+   * Returns tx hash (EVM) or signature (Solana) as a string.
+   */
+  sendTokenTransfer(args: TokenTransferArgs): Promise<string>;
+
+  /**
    * Computes the max transferable amount given `balance`, accounting for
    * fee / rent reserves. Implementations may consult the network via
    * `chain` (gas estimate, rent exemption, …).
@@ -408,7 +431,7 @@ export interface WalletKitAdapter {
   ): Promise<string>;
 
   // ── Optional capability flags ───────────────────────────────────────
-  /** `false` for Solana in v2.3.0 (no SPL token support yet). */
+  /** Whether this kit supports non-native token transfers. */
   supportsTokenTransfer?: boolean;
   /** `true` by default; future MPC / HW-only chains return `false`. */
   supportsPrivateKeyImport?: boolean;

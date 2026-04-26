@@ -37,6 +37,7 @@ import type {
   SendUserOpResult,
   SendUserOpWithUsdcPaymasterArgs,
   SignTransferWithAuthorizationArgs,
+  TokenTransferArgs,
   TruncateAddressOptions,
   WalletKitAdapter,
 } from "../types.ts";
@@ -140,6 +141,30 @@ export function createEvmWalletKit(): WalletKitAdapter {
         value: amount,
       });
       return hash;
+    },
+
+    async sendTokenTransfer({
+      wallet,
+      to,
+      amount,
+      chain,
+      contractAddress,
+      decimals,
+    }: TokenTransferArgs): Promise<string> {
+      assertEvm(chain);
+      const account = getAccountForWallet(wallet);
+      if (!account) {
+        throw new Error("EvmWalletKit: unable to reconstruct signer");
+      }
+      const wc = getWalletClient(account, chain.chain);
+      return wc.writeContract({
+        abi: erc20Abi,
+        address: contractAddress as `0x${string}`,
+        functionName: "transfer",
+        args: [to as `0x${string}`, amount],
+        account: wc.account!,
+        chain: wc.chain,
+      });
     },
 
     // ── Gasless USDC signer (spec §5.5, milestone M2) ──────────────

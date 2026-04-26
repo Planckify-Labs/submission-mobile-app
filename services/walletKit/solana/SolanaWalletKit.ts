@@ -39,6 +39,7 @@ import {
   buildAndSendSolTransfer,
   getSolanaBalance,
 } from "../../chains/solana/transferService.ts";
+import { buildAndSendSplTransfer } from "../../chains/solana/splTransferService.ts";
 import {
   generateWalletMnemonic,
   getSolanaSignerForWallet,
@@ -50,6 +51,7 @@ import type {
   NativeTransferArgs,
   SendAnchorInstructionArgs,
   SignX402SvmPaymentArgs,
+  TokenTransferArgs,
   TruncateAddressOptions,
   WalletKitAdapter,
 } from "../types.ts";
@@ -79,7 +81,7 @@ function assertSolana(
 export function createSolanaWalletKit(): WalletKitAdapter {
   return {
     namespace: SOLANA_NAMESPACE,
-    supportsTokenTransfer: false,
+    supportsTokenTransfer: true,
     supportsPrivateKeyImport: true,
     displayName: "Solana",
     brandColor: "#9945FF",
@@ -206,6 +208,36 @@ export function createSolanaWalletKit(): WalletKitAdapter {
         signer,
         to,
         lamports: amount,
+      });
+      return String(signature);
+    },
+
+    async sendTokenTransfer({
+      wallet,
+      to,
+      amount,
+      chain,
+      contractAddress,
+      decimals,
+    }: TokenTransferArgs): Promise<string> {
+      assertSolana(chain);
+      const signer: KeyPairSigner | null =
+        await getSolanaSignerForWallet(wallet);
+      if (!signer) {
+        throw new Error("No Solana signer for wallet");
+      }
+      const rpc = createSolanaRpc(chain.rpcUrl);
+      const rpcSubs = chain.rpcSubscriptionsUrl
+        ? createSolanaRpcSubscriptions(chain.rpcSubscriptionsUrl)
+        : undefined;
+      const signature = await buildAndSendSplTransfer({
+        rpc,
+        rpcSubs,
+        signer,
+        to,
+        mint: contractAddress,
+        amount,
+        decimals,
       });
       return String(signature);
     },

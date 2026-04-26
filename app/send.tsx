@@ -23,7 +23,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { erc20Abi, parseUnits } from "viem";
+import { parseUnits } from "viem";
 import type { TToken } from "@/api/types/token";
 import ChainSelector from "@/components/common/ChainSelector";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
@@ -73,8 +73,6 @@ export default function SendScreen() {
     activeWalletIndex,
     setActiveWallet,
     activeChain,
-    getClientForActiveWallet,
-    getPublicClientForActiveChain,
     getActiveWalletKit,
   } = useWallet();
 
@@ -255,7 +253,10 @@ export default function SendScreen() {
         return;
       }
 
-      if (selectedToken.isNativeCurrency !== false) {
+      if (
+        selectedToken.isNativeCurrency !== false ||
+        !selectedToken.contractAddress
+      ) {
         // Native token balance mirrors the kit-formatted amount so the
         // display stays consistent with the balance pill.
         setTokenBalance(balanceAmountText);
@@ -264,23 +265,12 @@ export default function SendScreen() {
 
       try {
         setIsLoadingTokenBalance(true);
-        // ERC-20 balance reads still go through the legacy viem public
-        // client — SPL / non-EVM token transfers are deferred (spec N1 /
-        // F6). `getPublicClientForActiveChain` returns `null` on
-        // non-EVM chains, which keeps this path no-op for Solana.
-        const publicClient = getPublicClientForActiveChain();
-        if (!publicClient) {
-          setTokenBalance("0");
-          return;
-        }
-        const bal = await publicClient.readContract({
-          address: selectedToken.contractAddress as `0x${string}`,
-          abi: erc20Abi,
-          functionName: "balanceOf",
-          args: [activeWallet.address as `0x${string}`],
-        });
+        const raw = await kit.getTokenBalance(
+          activeWallet.address,
+          activeChain,
+          selectedToken.contractAddress,
+        );
         const decimals = selectedToken.decimals ?? 18;
-        const raw = bal as bigint;
         const divisor = 10n ** BigInt(decimals);
         const whole = raw / divisor;
         const frac = raw % divisor;
@@ -300,7 +290,8 @@ export default function SendScreen() {
   }, [
     activeWallet?.address,
     selectedToken,
-    getPublicClientForActiveChain,
+    kit,
+    activeChain,
     balanceAmountText,
   ]);
 
@@ -396,28 +387,19 @@ export default function SendScreen() {
 
       let hash: string;
       if (selectedToken && selectedToken.isNativeCurrency === false) {
-        // ERC-20 transfer — legacy viem write path. Non-EVM token
-        // transfers (SPL) are deferred (spec N1 / F6), so if the
-        // selected token is non-native and the active chain is Solana
-        // the viem client will be `null` and we bail early.
-        const walletClient = getClientForActiveWallet();
-        if (!walletClient || !walletClient.account) {
-          console.error("Error: Unable to initialize wallet client");
-          setIsLoading(false);
-          return;
-        }
         setTransactionStatus("Building transaction...");
-        const tokenAmount = parseUnits(amount, selectedToken.decimals);
+        const decimals = selectedToken.decimals ?? 18;
+        const tokenAmount = parseUnits(amount, decimals);
         setTransactionStatus(
           `Sending ${amount} ${selectedToken.symbol} to the network...`,
         );
-        hash = await walletClient.writeContract({
-          abi: erc20Abi,
-          address: selectedToken.contractAddress as `0x${string}`,
-          functionName: "transfer",
-          args: [recipient as `0x${string}`, tokenAmount],
-          account: walletClient.account,
-          chain: walletClient.chain,
+        hash = await kit.sendTokenTransfer({
+          wallet: activeWallet,
+          to: recipient,
+          amount: tokenAmount,
+          chain: activeChain,
+          contractAddress: selectedToken.contractAddress!,
+          decimals,
         });
       } else {
         // Native transfer — single path for every namespace.
@@ -439,10 +421,11 @@ export default function SendScreen() {
 
       try {
         if (isAuthenticated && activeWallet?.address) {
-          if (selectedToken && selectedToken.isNativeCurrency === false) {
-            // ERC-20 history path stays EVM-shaped; this branch already
-            // only runs when the selected token is ERC-20 (i.e. the
-            // active chain is EVM).
+          if (
+            selectedToken &&
+            selectedToken.isNativeCurrency === false &&
+            selectedToken.contractAddress
+          ) {
             const rawAmount = parseUnits(
               amount,
               selectedToken.decimals,
@@ -452,15 +435,11 @@ export default function SendScreen() {
               blockchainId: selectedToken.blockchainId,
               type: "TRANSFER",
               amount: rawAmount,
-              txHash: hash as `0x${string}`,
+              txHash: hash,
               fromAddress: activeWallet.address,
               toAddress: recipient,
             } as any);
-          } else if (activeChain.namespace === "eip155") {
-            // Native-transfer history recording is gated to EVM — the
-            // backend `createTransaction` API is EVM-shaped today.
-            // Solana history recording is deferred; see spec §12 Q4 /
-            // F1.
+          } else {
             const nativeTokenId =
               selectedToken?.id ??
               tokenList?.find((t) => t.isNativeCurrency)?.id;
@@ -472,7 +451,7 @@ export default function SendScreen() {
                 tokenId: nativeTokenId,
                 type: "TRANSFER",
                 amount: rawAmount,
-                txHash: hash as `0x${string}`,
+                txHash: hash,
                 fromAddress: activeWallet.address,
                 toAddress: recipient,
               });
