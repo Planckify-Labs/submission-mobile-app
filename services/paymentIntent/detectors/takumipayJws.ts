@@ -53,6 +53,8 @@ const TAKUMIPAY_V1_PREFIX = "takumipay:v1:";
 
 interface TakumipayClaims {
   merchantId?: unknown;
+  merchantName?: unknown;
+  displayName?: unknown;
   amountMinor?: unknown;
   currency?: unknown;
 }
@@ -166,6 +168,13 @@ export const verifyTakumipayJws = (
 
     const currency: "IDR" = claims.currency === "IDR" ? "IDR" : "IDR";
 
+    const merchantName =
+      typeof claims.merchantName === "string" && claims.merchantName !== ""
+        ? claims.merchantName
+        : typeof claims.displayName === "string" && claims.displayName !== ""
+          ? claims.displayName
+          : undefined;
+
     return {
       source: "qr",
       rawScan: raw,
@@ -176,6 +185,7 @@ export const verifyTakumipayJws = (
         amountMinor,
         currency,
         rawPayload: raw,
+        merchantName,
       },
     };
   } catch {

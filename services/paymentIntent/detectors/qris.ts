@@ -326,6 +326,8 @@ export const qrisDetector: Detector = {
         amountMinor,
         currency,
         rawPayload: trimmed,
+        merchantName,
+        merchantCity,
         qris: {
           pan: merchantAcct.pan,
           acquirerGui: merchantAcct.aidGui,

@@ -124,7 +124,7 @@ describe("switchToScannedTarget()", () => {
     });
   });
 
-  it("routes a TakumiPay merchant intent to /pay-merchant with raw JWS", () => {
+  it("routes a TakumiPay merchant intent to /pay-merchant with raw JWS and merchantName", () => {
     const jws = "takumipay:v1:eyJhbGciOiJFUzI1NiJ9.payload.signature";
     const intent: PaymentIntent = {
       source: "qr",
@@ -136,6 +136,7 @@ describe("switchToScannedTarget()", () => {
         amountMinor: 25000,
         currency: "IDR",
         rawPayload: jws,
+        merchantName: "Warung Kopi Ibu Sari",
       },
     };
 
@@ -147,12 +148,12 @@ describe("switchToScannedTarget()", () => {
       params: {
         provider: "takumipay",
         raw: jws,
-        merchantName: undefined,
+        merchantName: "Warung Kopi Ibu Sari",
       },
     });
   });
 
-  it("routes a QRIS merchant intent to /pay-merchant with raw EMVCo payload", () => {
+  it("routes a QRIS merchant intent to /pay-merchant with merchantName from top-level field", () => {
     const qris =
       "00020101021126660014ID.CO.QRIS.WWW01189360091400000099990215ID12345678901230303UMI5204581253033605802ID5920WARUNG KOPI IBU SARI6007JAKARTA61051031063041FDB";
     const intent: PaymentIntent = {
@@ -165,6 +166,12 @@ describe("switchToScannedTarget()", () => {
         amountMinor: undefined,
         currency: "IDR",
         rawPayload: qris,
+        merchantName: "WARUNG KOPI IBU SARI",
+        qris: {
+          pan: "9360091400000099990",
+          acquirerGui: "ID.CO.QRIS.WWW",
+          merchantName: "WARUNG KOPI IBU SARI",
+        },
       },
     };
 
@@ -176,7 +183,7 @@ describe("switchToScannedTarget()", () => {
       params: {
         provider: "xendit_qris",
         raw: qris,
-        merchantName: undefined,
+        merchantName: "WARUNG KOPI IBU SARI",
       },
     });
   });

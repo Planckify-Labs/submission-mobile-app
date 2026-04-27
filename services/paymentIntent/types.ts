@@ -41,6 +41,10 @@ export type PayChannel =
       amountMinor?: number;
       currency?: "IDR" | "PHP" | "THB" | "MYR" | "VND";
       rawPayload: string;
+      /** Display name from the QR payload (JWS `merchantName` or QRIS tag 59). */
+      merchantName?: string;
+      /** City from the QR payload (QRIS tag 60). */
+      merchantCity?: string;
       /**
        * QRIS-specific decoded metadata. Only populated when
        * `provider === "xendit_qris"`. The server (task 27) uses these

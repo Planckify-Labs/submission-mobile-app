@@ -101,6 +101,7 @@ describe("takumipayJwsDetector", () => {
       assert.equal(hit.channel.amountMinor, 25000);
       assert.equal(hit.channel.currency, "IDR");
       assert.equal(hit.channel.rawPayload, raw);
+      assert.equal(hit.channel.merchantName, "Warung Kopi Ibu Sari");
     }
   });
 
