@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/constants/configs/ky";
+import { publicApi } from "@/constants/configs/ky";
 
 export interface PaymentToken {
   id: string;
@@ -31,7 +31,7 @@ async function fetchPaymentTokens(
   if (blockchainId) {
     params.set("blockchainId", blockchainId);
   }
-  return api.get(`tokens/search?${params}`).json<PaymentToken[]>();
+  return publicApi.get(`tokens/search?${params}`).json<PaymentToken[]>();
 }
 
 export function usePaymentTokens(options?: UsePaymentTokensOptions) {

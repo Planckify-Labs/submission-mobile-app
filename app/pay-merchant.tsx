@@ -49,22 +49,32 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  Search,
   Store,
+  X,
 } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Dimensions,
   Image,
   Modal,
+  PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { formatUnits } from "viem";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import { PaymentError } from "@/components/PaymentError";
@@ -111,6 +121,11 @@ const ARC_TESTNET_CHAIN_ID = 5042002;
 
 /** USDC is a 6-decimal ERC-20 (the `nanopayUsdcAmountMicros` field is in micros). */
 const USDC_DECIMALS = 6;
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+/** Bottom-sheet sizing — mirrors `components/common/ChainSelector.tsx`. */
+const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.67;
+const SHEET_SCROLL_MAX_HEIGHT = SHEET_MAX_HEIGHT - 200;
 
 /** Merchant kinds we accept from the scanner fallback path. */
 type MerchantKind = "qris" | "takumipay";
@@ -1106,6 +1121,8 @@ function MintFallback({
   const [selectedToken, setSelectedToken] = useState<PaymentToken | null>(null);
   const [chainPickerOpen, setChainPickerOpen] = useState(false);
   const [tokenPickerOpen, setTokenPickerOpen] = useState(false);
+  const [chainSearch, setChainSearch] = useState("");
+  const [tokenSearch, setTokenSearch] = useState("");
 
   // Fetch all payment tokens — the source of truth for which chains
   // support payments and which tokens are available per chain.
@@ -1128,8 +1145,11 @@ function MintFallback({
     [availableChains, selectedChainId],
   );
 
-  // Auto-select blockchain matching the current active chain.
-  // For Solana: match `cluster` to `isTestnet` so devnet ≠ mainnet.
+  // Auto-select blockchain. Prefer the chain matching the current
+  // active wallet chain (Solana: match `cluster` to `isTestnet` so
+  // devnet ≠ mainnet); fall back to the first available chain so the
+  // picker is never empty after a scan when the active chain is
+  // payment-disabled.
   useEffect(() => {
     if (selectedChainId || !availableChains.length) return;
     const match = availableChains.find((b) => {
@@ -1141,13 +1161,8 @@ function MintFallback({
       }
       return false;
     });
-    if (match) setSelectedChainId(match.id);
+    setSelectedChainId(match?.id ?? availableChains[0].id);
   }, [activeChain, availableChains, selectedChainId]);
-
-  // Reset selected token when chain changes
-  useEffect(() => {
-    setSelectedToken(null);
-  }, [selectedChainId]);
 
   // Tokens filtered to the selected chain
   const paymentTokens = useMemo(() => {
@@ -1156,7 +1171,40 @@ function MintFallback({
     return allPaymentTokens.filter((t) => t.blockchain.id === selectedChainId);
   }, [allPaymentTokens, selectedChainId]);
 
+  // Auto-pick the first token for the current chain. Also handles the
+  // chain-change case: if the previously selected token isn't valid on
+  // the new chain, swap to the first one available there.
+  useEffect(() => {
+    if (!paymentTokens.length) {
+      if (selectedToken) setSelectedToken(null);
+      return;
+    }
+    const stillValid = paymentTokens.some((t) => t.id === selectedToken?.id);
+    if (!stillValid) setSelectedToken(paymentTokens[0]);
+  }, [paymentTokens, selectedToken]);
+
   const isLoadingChains = isLoadingTokens || !blockchains;
+
+  const filteredChains = useMemo(() => {
+    const q = chainSearch.trim().toLowerCase();
+    if (!q) return availableChains;
+    return availableChains.filter((b) => {
+      const native = b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0];
+      return (
+        b.name.toLowerCase().includes(q) ||
+        (native?.symbol?.toLowerCase().includes(q) ?? false)
+      );
+    });
+  }, [availableChains, chainSearch]);
+
+  const filteredTokens = useMemo(() => {
+    const q = tokenSearch.trim().toLowerCase();
+    if (!q) return paymentTokens;
+    return paymentTokens.filter(
+      (t) =>
+        t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q),
+    );
+  }, [paymentTokens, tokenSearch]);
 
   // Lightweight TLV walk for the static-vs-dynamic QRIS branch + merchant
   // name (tag 59). Scanner already validated CRC upstream so we stay lenient.
@@ -1372,139 +1420,328 @@ function MintFallback({
         )}
       </TouchableOpacity>
 
-      <Modal
+      <PickerSheet
         visible={tokenPickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setTokenPickerOpen(false)}
+        onClose={() => {
+          setTokenPickerOpen(false);
+          setTokenSearch("");
+        }}
+        title="Pay with"
+        searchQuery={tokenSearch}
+        onSearchChange={setTokenSearch}
+        searchPlaceholder="Search tokens"
       >
-        <Pressable
-          className="flex-1 bg-black/40 justify-end"
-          onPress={() => setTokenPickerOpen(false)}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            className="bg-light rounded-t-3xl px-5 pt-5 pb-8"
-          >
-            <Text className="text-light-matte-black font-semibold text-lg mb-4">
-              Pay with
-            </Text>
-            {!paymentTokens?.length ? (
-              <View className="items-center py-8">
-                {isLoadingTokens ? (
-                  <ActivityIndicator color="#c71c4b" />
-                ) : (
-                  <Text className="text-light-matte-black/60 text-sm text-center">
-                    No payment tokens available.
-                  </Text>
-                )}
-              </View>
+        {!paymentTokens?.length ? (
+          <View className="items-center justify-center py-8">
+            {isLoadingTokens ? (
+              <ActivityIndicator color="#c71c4b" />
             ) : (
-              paymentTokens.map((t) => {
-                const active = t.id === selectedToken?.id;
-                return (
-                  <TouchableOpacity
-                    key={t.id}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      setSelectedToken(t);
-                      setTokenPickerOpen(false);
-                    }}
-                    className="flex-row items-center py-3 border-b border-light-matte-black/5"
-                  >
-                    {t.logoUrl ? (
-                      <Image
-                        source={{ uri: t.logoUrl }}
-                        style={{ width: 36, height: 36, borderRadius: 18 }}
-                      />
-                    ) : (
-                      <View className="w-9 h-9 bg-light-primary-red/10 rounded-full" />
-                    )}
-                    <View className="flex-1 ml-3">
-                      <Text className="text-light-matte-black font-medium">
-                        {t.name}
-                      </Text>
-                      <Text className="text-light-matte-black/50 text-xs">
-                        {t.symbol} · {t.blockchain.name}
-                      </Text>
-                    </View>
-                    {active ? <Check color="#c71c4b" size={18} /> : null}
-                  </TouchableOpacity>
-                );
-              })
+              <Text className="text-light-matte-black/60 text-sm text-center">
+                No payment tokens available.
+              </Text>
             )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+        ) : !filteredTokens.length ? (
+          <View className="items-center justify-center py-8">
+            <Text className="text-light-matte-black/60 text-sm">
+              No tokens match "{tokenSearch}"
+            </Text>
+          </View>
+        ) : (
+          filteredTokens.map((t) => {
+            const active = t.id === selectedToken?.id;
+            return (
+              <Pressable
+                key={t.id}
+                onPress={() => {
+                  setSelectedToken(t);
+                  setTokenPickerOpen(false);
+                  setTokenSearch("");
+                }}
+                className={`flex-row items-center p-4 mb-2 rounded-xl ${
+                  active ? "bg-light-primary-red/10" : "bg-light"
+                }`}
+              >
+                {t.logoUrl ? (
+                  <Image
+                    source={{ uri: t.logoUrl }}
+                    style={{ width: 36, height: 36, borderRadius: 18 }}
+                    className="mr-3"
+                  />
+                ) : (
+                  <View className="w-9 h-9 bg-light-primary-red/10 rounded-full mr-3" />
+                )}
+                <View className="flex-1">
+                  <Text className="text-light-matte-black font-bold">
+                    {t.symbol}
+                  </Text>
+                  <Text className="text-light-matte-black/60 text-xs">
+                    {t.name} · {t.blockchain.name}
+                  </Text>
+                </View>
+                {active ? (
+                  <View className="w-6 h-6 rounded-full bg-light-primary-red/10 items-center justify-center">
+                    <Check size={14} color="#c71c4b" strokeWidth={3} />
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })
+        )}
+      </PickerSheet>
 
-      <Modal
+      <PickerSheet
         visible={chainPickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setChainPickerOpen(false)}
+        onClose={() => {
+          setChainPickerOpen(false);
+          setChainSearch("");
+        }}
+        title="Select network"
+        searchQuery={chainSearch}
+        onSearchChange={setChainSearch}
+        searchPlaceholder="Search networks"
       >
-        <Pressable
-          className="flex-1 bg-black/40 justify-end"
-          onPress={() => setChainPickerOpen(false)}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            className="bg-light rounded-t-3xl px-5 pt-5 pb-8"
-          >
-            <Text className="text-light-matte-black font-semibold text-lg mb-4">
-              Select network
-            </Text>
-            {!availableChains.length ? (
-              <View className="items-center py-8">
-                {isLoadingChains ? (
-                  <ActivityIndicator color="#c71c4b" />
-                ) : (
-                  <Text className="text-light-matte-black/60 text-sm text-center">
-                    No networks available.
-                  </Text>
-                )}
-              </View>
+        {!availableChains.length ? (
+          <View className="items-center justify-center py-8">
+            {isLoadingChains ? (
+              <ActivityIndicator color="#c71c4b" />
             ) : (
-              availableChains.map((b) => {
-                const active = b.id === selectedChainId;
-                const nativeToken =
-                  b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0];
-                return (
-                  <TouchableOpacity
-                    key={b.id}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      setSelectedChainId(b.id);
-                      setChainPickerOpen(false);
-                    }}
-                    className="flex-row items-center py-3 border-b border-light-matte-black/5"
-                  >
-                    {nativeToken?.logoUrl ? (
-                      <Image
-                        source={{ uri: nativeToken.logoUrl }}
-                        style={{ width: 36, height: 36, borderRadius: 18 }}
-                      />
-                    ) : (
-                      <View className="w-9 h-9 bg-light-primary-red/10 rounded-full" />
-                    )}
-                    <View className="flex-1 ml-3">
-                      <Text className="text-light-matte-black font-medium">
-                        {b.name}
-                      </Text>
-                      <Text className="text-light-matte-black/50 text-xs">
-                        {nativeToken?.symbol ?? (b.isEVM ? "EVM" : "Solana")}
-                        {b.isTestnet ? " · Testnet" : ""}
-                      </Text>
-                    </View>
-                    {active ? <Check color="#c71c4b" size={18} /> : null}
-                  </TouchableOpacity>
-                );
-              })
+              <Text className="text-light-matte-black/60 text-sm text-center">
+                No networks available.
+              </Text>
             )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+        ) : !filteredChains.length ? (
+          <View className="items-center justify-center py-8">
+            <Text className="text-light-matte-black/60 text-sm">
+              No networks match "{chainSearch}"
+            </Text>
+          </View>
+        ) : (
+          filteredChains.map((b) => {
+            const active = b.id === selectedChainId;
+            const nativeToken =
+              b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0];
+            return (
+              <Pressable
+                key={b.id}
+                onPress={() => {
+                  setSelectedChainId(b.id);
+                  setChainPickerOpen(false);
+                  setChainSearch("");
+                }}
+                className={`flex-row items-center p-4 mb-2 rounded-xl ${
+                  active ? "bg-light-primary-red/10" : "bg-light"
+                }`}
+              >
+                {nativeToken?.logoUrl ? (
+                  <Image
+                    source={{ uri: nativeToken.logoUrl }}
+                    style={{ width: 36, height: 36, borderRadius: 18 }}
+                    className="mr-3"
+                  />
+                ) : (
+                  <View className="w-9 h-9 bg-light-primary-red/10 rounded-full mr-3" />
+                )}
+                <View className="flex-1">
+                  <Text className="text-light-matte-black font-bold">
+                    {b.name}
+                  </Text>
+                  <Text className="text-light-matte-black/60 text-xs">
+                    {nativeToken?.symbol ?? (b.isEVM ? "EVM" : "Solana")}
+                  </Text>
+                </View>
+                {b.isTestnet ? (
+                  <View className="bg-yellow-500/20 px-2 py-1 rounded-full mr-2">
+                    <Text className="text-yellow-700 text-xs font-medium">
+                      Testnet
+                    </Text>
+                  </View>
+                ) : null}
+                {active ? (
+                  <View className="w-6 h-6 rounded-full bg-light-primary-red/10 items-center justify-center">
+                    <Check size={14} color="#c71c4b" strokeWidth={3} />
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })
+        )}
+      </PickerSheet>
     </View>
+  );
+}
+
+/** ── shared bottom-sheet shell ──────────────────────────────────────── */
+
+/**
+ * Slide-up bottom sheet for the chain / token pickers. Mirrors the
+ * animation + chrome of `components/common/ChainSelector.tsx` so the
+ * pay-merchant pickers feel native to the rest of the app: dim overlay
+ * fade, translate-Y slide, drag handle, swipe-down to dismiss, search
+ * row. Render-time visibility is gated on `visible` so the modal mounts
+ * fresh each open and the entry animation always plays.
+ */
+function PickerSheet({
+  visible,
+  onClose,
+  title,
+  searchQuery,
+  onSearchChange,
+  searchPlaceholder,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
+  searchPlaceholder: string;
+  children: React.ReactNode;
+}) {
+  const { bottom } = useSafeAreaInsets();
+  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(SHEET_MAX_HEIGHT)).current;
+
+  const animateOutAndClose = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: SHEET_MAX_HEIGHT,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  }, [fadeAnim, translateY, onClose]);
+
+  useEffect(() => {
+    if (!visible) return;
+    fadeAnim.setValue(0);
+    translateY.setValue(SHEET_MAX_HEIGHT);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [visible, fadeAnim, translateY]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 0,
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) translateY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 50 || g.vy > 0.5) {
+          animateOutAndClose();
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 5,
+          }).start();
+        }
+      },
+    }),
+  ).current;
+
+  if (!visible) return null;
+
+  return (
+    <Modal
+      transparent
+      visible
+      animationType="none"
+      onRequestClose={animateOutAndClose}
+    >
+      <View style={{ flex: 1 }}>
+        <TouchableWithoutFeedback onPress={animateOutAndClose}>
+          <Animated.View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0, 0, 0, 0.5)",
+              opacity: fadeAnim,
+            }}
+          />
+        </TouchableWithoutFeedback>
+
+        <Animated.View
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: "auto",
+            paddingBottom: bottomOffset,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            transform: [{ translateY }],
+          }}
+        >
+          <View className="bg-light-main-container rounded-t-3xl">
+            <View
+              {...panResponder.panHandlers}
+              className="w-full items-center pt-4 pb-2"
+            >
+              <View className="w-12 h-1 bg-gray-300 rounded-full" />
+            </View>
+
+            <View className="px-6">
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-light-matte-black text-xl font-bold">
+                  {title}
+                </Text>
+                <Pressable onPress={animateOutAndClose} hitSlop={8}>
+                  <X size={18} color="#c71c4b" />
+                </Pressable>
+              </View>
+
+              <View className="flex-row items-center bg-light rounded-2xl px-3 py-2 mb-3">
+                <Search size={16} color="#20222c80" />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={onSearchChange}
+                  placeholder={searchPlaceholder}
+                  placeholderTextColor="#20222c80"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  className="flex-1 ml-2 text-light-matte-black"
+                />
+                {searchQuery.length > 0 ? (
+                  <Pressable onPress={() => onSearchChange("")} hitSlop={8}>
+                    <X size={14} color="#20222c80" />
+                  </Pressable>
+                ) : null}
+              </View>
+
+              <ScrollView
+                style={{ maxHeight: SHEET_SCROLL_MAX_HEIGHT }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 24 }}
+              >
+                {children}
+              </ScrollView>
+            </View>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
