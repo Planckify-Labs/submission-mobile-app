@@ -26,6 +26,22 @@ import type { TAddressBookEntry } from "@/constants/types/addressBookTypes";
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const EVM_ADDRESS_REGEX = /^0x[0-9a-fA-F]{40}$/;
 const EXTRA_SPACE_ABOVE_KEYBOARD = 66;
+
+function validateAddressField(address: string): string | null {
+  const trimmed = address.trim();
+  if (!trimmed) return "Address is required";
+  if (/\s/.test(trimmed)) return "Address must not contain spaces";
+  if (trimmed.startsWith("0x")) {
+    if (!EVM_ADDRESS_REGEX.test(trimmed)) {
+      return "Invalid EVM address (must be 0x + 40 hex characters)";
+    }
+  } else if (trimmed.length < 25) {
+    return "Address is too short";
+  } else if (trimmed.length > 128) {
+    return "Address is too long";
+  }
+  return null;
+}
 const SHEET_INITIAL_TRANSLATE_Y = 300;
 const DRAG_TO_CLOSE_THRESHOLD = 100;
 
@@ -197,10 +213,11 @@ export default function AddContactModal({
     };
   }, [keyboardHeightAnimation]);
 
+  const isEvmAddress = walletAddress.trim().startsWith("0x");
+
   const validateForm = (): boolean => {
     let isValid = true;
     const trimmedLabel = contactLabel.trim();
-    const trimmedAddress = walletAddress.trim();
 
     if (!trimmedLabel) {
       setContactLabelError("Name is required");
@@ -212,11 +229,9 @@ export default function AddContactModal({
       setContactLabelError("");
     }
 
-    if (!trimmedAddress) {
-      setWalletAddressError("Address is required");
-      isValid = false;
-    } else if (!EVM_ADDRESS_REGEX.test(trimmedAddress)) {
-      setWalletAddressError("Invalid EVM address (must start with 0x)");
+    const addressError = validateAddressField(walletAddress);
+    if (addressError) {
+      setWalletAddressError(addressError);
       isValid = false;
     } else {
       setWalletAddressError("");
@@ -231,8 +246,9 @@ export default function AddContactModal({
     const payload: TCreateAddressBookDto = {
       label: contactLabel.trim(),
       address: walletAddress.trim(),
+      isEvm: isEvmAddress,
     };
-    if (ensName.trim()) payload.ensName = ensName.trim();
+    if (isEvmAddress && ensName.trim()) payload.ensName = ensName.trim();
     if (contactNotes.trim()) payload.notes = contactNotes.trim();
     if (chainName.trim()) payload.chainName = chainName.trim();
 
@@ -370,7 +386,7 @@ export default function AddContactModal({
               )}
             </View>
 
-            {/* EVM wallet address */}
+            {/* Wallet address (EVM or non-EVM) */}
             <View className="mb-4">
               <Text className="text-sm text-light-matte-black/70 mb-2">
                 Wallet Address *
@@ -381,7 +397,7 @@ export default function AddContactModal({
                   setWalletAddress(value);
                   if (walletAddressError) setWalletAddressError("");
                 }}
-                placeholder="0x..."
+                placeholder="0x... or base58 (Solana, etc.)"
                 placeholderTextColor="#20222c40"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -401,24 +417,26 @@ export default function AddContactModal({
               )}
             </View>
 
-            {/* ENS domain (optional) */}
-            <View className="mb-4">
-              <Text className="text-sm text-light-matte-black/70 mb-2">
-                ENS Name
-              </Text>
-              <TextInput
-                value={ensName}
-                onChangeText={setEnsName}
-                placeholder="e.g. vitalik.eth"
-                placeholderTextColor="#20222c40"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isSaving}
-                returnKeyType="next"
-                className="bg-white rounded-xl px-4 py-[14px] text-[15px] text-light-matte-black"
-                style={{ borderWidth: 1, borderColor: "#c71c4b33" }}
-              />
-            </View>
+            {/* ENS domain — EVM only */}
+            {isEvmAddress && (
+              <View className="mb-4">
+                <Text className="text-sm text-light-matte-black/70 mb-2">
+                  ENS Name
+                </Text>
+                <TextInput
+                  value={ensName}
+                  onChangeText={setEnsName}
+                  placeholder="e.g. vitalik.eth"
+                  placeholderTextColor="#20222c40"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isSaving}
+                  returnKeyType="next"
+                  className="bg-white rounded-xl px-4 py-[14px] text-[15px] text-light-matte-black"
+                  style={{ borderWidth: 1, borderColor: "#c71c4b33" }}
+                />
+              </View>
+            )}
 
             {/* Blockchain network name (optional) */}
             <View className="mb-4">
