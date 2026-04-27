@@ -70,7 +70,7 @@ export type PaymentErrorCode =
   | "unknown";
 
 /** Primary CTA semantic action — the component maps this to a handler prop. */
-export type PaymentErrorCtaAction = "retry" | "back" | "rescan" | "topup";
+export type PaymentErrorCtaAction = "retry" | "back" | "rescan" | "topup" | "invite_merchant";
 
 export interface PaymentErrorCopy {
   title: string;
@@ -237,9 +237,9 @@ export const paymentErrorCopy: Record<PaymentErrorCode, PaymentErrorCopy> = {
     cta: { label: "Rescan", action: "rescan" },
   },
   backend_not_ready: {
-    title: "Payment service unavailable",
-    body: "The merchant settle service isn't available yet. Please try again later.",
-    cta: { label: "OK", action: "back" },
+    title: "Merchant not on TakumiPay yet",
+    body: "This merchant isn't on TakumiPay yet. Be the first to invite them!",
+    cta: { label: "Invite them", action: "invite_merchant" },
   },
   chain_mismatch: {
     title: "Wrong network",
