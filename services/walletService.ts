@@ -298,6 +298,10 @@ export async function saveWalletsToStorage(
 export function getAccountForWallet(
   wallet: TWallet,
 ): HDAccount | PrivateKeyAccount | null {
+  // Non-EVM wallets (Solana, …) use their own signer paths —
+  // viem's privateKeyToAccount / mnemonicToAccount are EVM-only.
+  if (wallet.namespace !== "eip155") return null;
+
   if (accountCache[wallet.address]) {
     return accountCache[wallet.address];
   }

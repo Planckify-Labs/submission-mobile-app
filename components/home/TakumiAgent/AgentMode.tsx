@@ -366,16 +366,25 @@ export default function AgentMode() {
   // to always include it).
   const activeChainId = getEvmChainId(activeChain);
 
+  // Derive the viem account separately from blockchains so key
+  // derivation (mnemonicToAccount) only runs on wallet changes, not on
+  // every blockchains refresh. Returns null for Solana wallets — they
+  // use their own signer path (getSolanaSignerForWallet).
+  const evmAccount = useMemo(
+    () =>
+      activeWallet ? (walletService.getAccountForWallet(activeWallet) ?? null) : null,
+    [activeWallet],
+  );
+
   const executorContext: ExecutorContext | null = useMemo(() => {
     if (!activeWallet?.address) return null;
-    const account = walletService.getAccountForWallet(activeWallet);
     return {
       wallet: activeWallet,
-      account: account ?? null,
+      account: evmAccount,
       blockchains,
       activeChainId,
     };
-  }, [activeWallet, blockchains, activeChainId]);
+  }, [activeWallet, evmAccount, blockchains, activeChainId]);
 
   // Points / redemption auth hint for `wallet_context.points_authenticated`
   // (protocol v1.1 §13). Read locally from secure storage on every

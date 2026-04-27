@@ -101,6 +101,7 @@ export const EXPECTED_MOBILE_TOOLS: ReadonlyArray<string> = [
   "get_wallet_sol_balance",
   "get_sol_balance",
   "send_sol",
+  "get_wallet_spl_tokens",
   // solana takumipay
   "execute_booking_sol",
   "deposit_points_sol",

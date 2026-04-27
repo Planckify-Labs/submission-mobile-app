@@ -1,9 +1,8 @@
 /**
- * WalletTokensCard — registry card for the `get_wallet_tokens` read tool.
+ * SolanaTokensCard — registry card for the `get_wallet_spl_tokens` read tool.
  *
- * Pure read: historical render is byte-identical to live render because
- * the output is already a snapshot from the executor. No store reads,
- * no timers, no interactive affordances.
+ * Solana counterpart to WalletTokensCard. Displays SPL tokens (and native SOL)
+ * from the active Solana cluster. Pure read — no store reads, no timers.
  */
 
 import { AlertTriangle, Coins } from "lucide-react-native";
@@ -13,7 +12,7 @@ import OptimizedImage from "@/components/common/OptimizedImage";
 import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 import type { ToolComponentProps } from "../types";
 
-type TokenRow = {
+type SplTokenRow = {
   symbol?: string;
   name?: string;
   address?: string;
@@ -21,42 +20,29 @@ type TokenRow = {
   is_native?: boolean;
   is_stable_coin?: boolean;
   logo_url?: string | null;
-  balance_wei?: string;
+  balance_lamports?: string;
   balance_display?: string;
 };
 
-type ChainGroup = {
-  chain_id?: number;
-  chain_name?: string;
-  chain_symbol?: string;
-  tokens: TokenRow[];
-};
-
-type WalletTokensInput = {
-  chain_id?: number;
-  chain_ids?: number[];
+type SolanaTokensInput = {
   include_balance?: boolean;
+  symbol?: string;
+  is_stable_coin?: boolean;
+  is_native_currency?: boolean;
 };
 
-type WalletTokensPayload = {
-  // Single-chain shape
-  chain_id?: number;
-  tokens?: TokenRow[];
-  // Multi-chain shape
-  chains?: ChainGroup[];
-  chain_errors?: Array<{ chain_id: number; error: string }>;
+type SolanaTokensPayload = {
+  cluster?: string;
+  tokens?: SplTokenRow[];
 };
 
-type WalletTokensOutput = {
+type SolanaTokensOutput = {
   status?: "success" | "failed" | string;
   error?: string;
-  // UI reads `display` (rich) first, falling back to `data` (compact
-  // agent-facing slice) — see `protocol.ts::ToolResult`.
-  display?: WalletTokensPayload;
-  data?: WalletTokensPayload;
+  display?: SolanaTokensPayload;
+  data?: SolanaTokensPayload;
 };
 
-const MUTED_GRAY = "#6b7280";
 const BRAND_RED = "#c71c4b";
 
 function formatBalance(display: string | undefined): string {
@@ -66,11 +52,10 @@ function formatBalance(display: string | undefined): string {
   if (num === 0) return "0";
   if (num >= 1)
     return num.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  // Small balances: keep up to 6 significant digits.
   return num.toLocaleString(undefined, { maximumSignificantDigits: 6 });
 }
 
-function hasAnyBalance(tokens: TokenRow[]): boolean {
+function hasAnyBalance(tokens: SplTokenRow[]): boolean {
   return tokens.some((t) => {
     const n = Number(t.balance_display ?? "0");
     return Number.isFinite(n) && n > 0;
@@ -109,7 +94,7 @@ function SkeletonRow() {
   );
 }
 
-function TokenRowItem({ token }: { token: TokenRow }) {
+function TokenRowItem({ token }: { token: SplTokenRow }) {
   const balance = formatBalance(token.balance_display);
   const hasBalance = token.balance_display !== undefined;
   return (
@@ -162,40 +147,8 @@ function TokenRowItem({ token }: { token: TokenRow }) {
   );
 }
 
-function ChainBlock({ group }: { group: ChainGroup }) {
-  const tokens = group.tokens ?? [];
-  const withBalance = tokens.filter((t) => {
-    const n = Number(t.balance_display ?? "0");
-    return Number.isFinite(n) && n > 0;
-  });
-  const display = withBalance.length > 0 ? withBalance : tokens.slice(0, 6);
-
-  return (
-    <View className="mt-2 first:mt-0">
-      {group.chain_name ? (
-        <Text className="text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1">
-          {group.chain_name}
-        </Text>
-      ) : null}
-      <View className="divide-y divide-gray-100">
-        {display.map((token, idx) => (
-          <TokenRowItem
-            key={`${token.address ?? token.symbol ?? "row"}-${idx}`}
-            token={token}
-          />
-        ))}
-      </View>
-      {withBalance.length === 0 && tokens.length > 0 ? (
-        <Text className="text-[11px] text-gray-400 mt-1">
-          No balances yet — showing supported tokens.
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-const WalletTokensCard: React.FC<
-  ToolComponentProps<WalletTokensInput, WalletTokensOutput>
+const SolanaTokensCard: React.FC<
+  ToolComponentProps<SolanaTokensInput, SolanaTokensOutput>
 > = ({ state, output }) => {
   if (state === "input-streaming" || state === "input-available" || !output) {
     return (
@@ -203,14 +156,13 @@ const WalletTokensCard: React.FC<
         <View className="flex-row items-center gap-2 mb-1">
           <Coins size={14} color={BRAND_RED} />
           <Text className="text-xs font-bold uppercase tracking-wide text-light-matte-black">
-            Wallet balances
+            Solana balances
           </Text>
           <View className="ml-auto">
             <SingleLoadingSekeleton width={50} height={10} borderRadius={4} />
           </View>
         </View>
         <View className="divide-y divide-gray-100">
-          <SkeletonRow />
           <SkeletonRow />
           <SkeletonRow />
           <SkeletonRow />
@@ -238,49 +190,54 @@ const WalletTokensCard: React.FC<
   }
 
   const payload = output.display ?? output.data ?? {};
-  const groups: ChainGroup[] = Array.isArray(payload.chains)
-    ? payload.chains
-    : Array.isArray(payload.tokens)
-      ? [{ chain_id: payload.chain_id, tokens: payload.tokens }]
-      : [];
+  const tokens: SplTokenRow[] = Array.isArray(payload.tokens)
+    ? payload.tokens
+    : [];
 
-  const totalTokens = groups.reduce(
-    (sum, g) => sum + (g.tokens?.length ?? 0),
-    0,
-  );
-  const anyBalance = groups.some((g) => hasAnyBalance(g.tokens ?? []));
+  const withBalance = tokens.filter((t) => {
+    const n = Number(t.balance_display ?? "0");
+    return Number.isFinite(n) && n > 0;
+  });
+  const display = withBalance.length > 0 ? withBalance : tokens.slice(0, 6);
+  const anyBalance = hasAnyBalance(tokens);
+  const clusterLabel =
+    payload.cluster === "devnet"
+      ? "Devnet"
+      : payload.cluster === "testnet"
+        ? "Testnet"
+        : "Mainnet";
 
   return (
     <View className="my-1.5 rounded-2xl border border-light-matte-black/10 bg-white px-3.5 py-3">
       <View className="flex-row items-center gap-2 mb-1">
         <Coins size={14} color={BRAND_RED} />
         <Text className="text-xs font-bold uppercase tracking-wide text-light-matte-black">
-          Wallet balances
+          Solana balances
         </Text>
         <Text className="text-[11px] text-gray-500 ml-auto">
-          {totalTokens} {totalTokens === 1 ? "token" : "tokens"}
+          {clusterLabel} · {tokens.length}{" "}
+          {tokens.length === 1 ? "token" : "tokens"}
         </Text>
       </View>
-      {groups.length === 0 ? (
+      {display.length === 0 ? (
         <Text className="text-sm text-gray-500">No tokens to show.</Text>
       ) : (
-        groups.map((g, i) => <ChainBlock key={g.chain_id ?? i} group={g} />)
-      )}
-      {!anyBalance && totalTokens > 0 ? (
-        <Text className="text-[11px] text-gray-400 mt-2">
-          Balances will appear once the wallet has funds on this chain.
-        </Text>
-      ) : null}
-      {Array.isArray(payload.chain_errors) &&
-      payload.chain_errors.length > 0 ? (
-        <View className="mt-2 rounded-xl bg-light-primary-red/5 border border-light-primary-red/20 px-2.5 py-1.5">
-          <Text className="text-[10px] uppercase tracking-wide text-light-primary-red font-bold">
-            Couldn't reach {payload.chain_errors.length} chain(s)
-          </Text>
+        <View className="divide-y divide-gray-100">
+          {display.map((token, idx) => (
+            <TokenRowItem
+              key={`${token.address ?? token.symbol ?? "row"}-${idx}`}
+              token={token}
+            />
+          ))}
         </View>
+      )}
+      {!anyBalance && tokens.length > 0 ? (
+        <Text className="text-[11px] text-gray-400 mt-2">
+          Balances will appear once the wallet has funds on this cluster.
+        </Text>
       ) : null}
     </View>
   );
 };
 
-export default WalletTokensCard;
+export default SolanaTokensCard;

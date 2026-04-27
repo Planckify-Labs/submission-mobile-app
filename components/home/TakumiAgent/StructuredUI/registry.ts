@@ -1,5 +1,6 @@
 import PendingTxCard from "./cards/PendingTxCard";
 import RedemptionCatalogCard from "./cards/RedemptionCatalogCard";
+import SolanaTokensCard from "./cards/SolanaTokensCard";
 import SpendingApprovalCard from "./cards/SpendingApprovalCard";
 import SwapQuoteCard from "./cards/SwapQuoteCard";
 import WalletTokensCard from "./cards/WalletTokensCard";
@@ -14,6 +15,7 @@ export const toolComponents: Record<string, ToolComponent<any, any>> = {
   approveSpending: SpendingApprovalCard,
   swap_quote: SwapQuoteCard,
   get_wallet_tokens: WalletTokensCard,
+  get_wallet_spl_tokens: SolanaTokensCard,
   get_redemption_catalog: RedemptionCatalogCard,
   search_redemption_catalog: RedemptionCatalogCard,
 };

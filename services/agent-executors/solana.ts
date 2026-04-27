@@ -17,9 +17,12 @@
  * spell this out (see `agent-api/src/tools/registry.ts`).
  */
 
+import { tokenApi } from "@/api/endpoints/tokens";
+import type { TToken } from "@/api/types/token";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import { storage } from "@/lib/storage/mmkv";
 import { walletKitRegistry } from "@/services/walletKit/registry";
+import { formatUnits } from "viem";
 import {
   ExecutorError,
   ExecutorErrorCode,
@@ -207,8 +210,215 @@ export const sendSol: MobileToolExecutor = (input, context) =>
     };
   });
 
+/**
+ * `get_wallet_spl_tokens` — list SPL tokens for the active Solana cluster.
+ * Solana counterpart to the EVM `get_wallet_tokens`. Loads the cached token
+ * list (same MMKV cache), filters by the Solana blockchain's id, and
+ * optionally resolves live on-chain balances via `kit.getTokenBalance`.
+ * Native SOL is prepended as a pseudo-row (is_native: true) unless excluded.
+ */
+export const getSolanaWalletTokens: MobileToolExecutor = (input, context) =>
+  safeExecute(async () => {
+    const kit = getSolanaKit();
+    const chain = getActiveSolanaChain();
+
+    const walletAddress = context.wallet?.address;
+    if (!walletAddress) {
+      throw new ExecutorError(
+        ExecutorErrorCode.WalletCannotExecute,
+        "no connected wallet",
+      );
+    }
+    if (context.wallet.namespace !== SOLANA_NAMESPACE) {
+      throw new ExecutorError(
+        ExecutorErrorCode.UnsupportedChain,
+        "wallet_not_solana",
+      );
+    }
+
+    // Match the Solana blockchain row the same way BalanceSection does:
+    // filter by !isEVM AND isTestnet matching the active cluster so devnet
+    // wallets don't accidentally query mainnet token mints (which would
+    // cause getTokenBalance to return 0 for every token).
+    const isTestnet = chain.cluster !== "mainnet-beta";
+    const solanaBlockchain = context.blockchains.find(
+      (b) => !b.isEVM && b.isActive && b.isTestnet === isTestnet,
+    );
+    if (!solanaBlockchain) {
+      throw new ExecutorError(
+        ExecutorErrorCode.UnsupportedChain,
+        "solana_blockchain_not_found_in_registry",
+      );
+    }
+
+    // Load SPL tokens for this blockchain using the same search path the
+    // send screen uses — tokenApi.searchTokens({ blockchainId }) — with a
+    // per-blockchain MMKV cache so repeated calls within 5 minutes are free.
+    const SPL_CACHE_KEY = `cached_spl_tokens_${solanaBlockchain.id}`;
+    const SPL_CACHE_TS_KEY = `cached_spl_tokens_ts_${solanaBlockchain.id}`;
+    const SPL_STALE_MS = 5 * 60 * 1000;
+
+    let allTokens: TToken[];
+    try {
+      const cachedRaw = storage.getString(SPL_CACHE_KEY);
+      const tsRaw = storage.getString(SPL_CACHE_TS_KEY);
+      const ts = tsRaw ? parseInt(tsRaw, 10) : 0;
+      if (cachedRaw && Date.now() - ts < SPL_STALE_MS) {
+        const parsed = JSON.parse(cachedRaw);
+        allTokens = Array.isArray(parsed) ? (parsed as TToken[]) : [];
+      } else {
+        allTokens = await tokenApi.searchTokens({
+          blockchainId: solanaBlockchain.id,
+          isActive: true,
+        });
+        storage.set(SPL_CACHE_KEY, JSON.stringify(allTokens));
+        storage.set(SPL_CACHE_TS_KEY, Date.now().toString());
+      }
+    } catch (err) {
+      // Offline fallback: serve stale cache if available.
+      const cachedRaw = storage.getString(SPL_CACHE_KEY);
+      if (cachedRaw) {
+        try {
+          const parsed = JSON.parse(cachedRaw);
+          allTokens = Array.isArray(parsed) ? (parsed as TToken[]) : [];
+        } catch {
+          throw new ExecutorError(
+            ExecutorErrorCode.NetworkError,
+            `failed to fetch SPL token list: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      } else {
+        throw new ExecutorError(
+          ExecutorErrorCode.NetworkError,
+          `failed to fetch SPL token list: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    const symFilter =
+      typeof input.symbol === "string" && input.symbol.length > 0
+        ? input.symbol.toLowerCase()
+        : null;
+
+    const splTokens = allTokens.filter((t) => {
+      if (t.isActive === false) return false;
+      if (t.isNativeCurrency) return false; // native handled separately
+      if (
+        typeof input.is_stable_coin === "boolean" &&
+        t.isStablecoin !== input.is_stable_coin
+      ) {
+        return false;
+      }
+      if (symFilter) {
+        const s = t.symbol.toLowerCase();
+        if (s !== symFilter && !s.startsWith(symFilter)) return false;
+      }
+      return true;
+    });
+
+    const includeNative = input.is_native_currency !== false;
+    const includeBalance = input.include_balance === true;
+
+    // Resolve live SOL balance if needed.
+    let solLamports: bigint | undefined;
+    if (includeBalance) {
+      try {
+        solLamports = await kit.getNativeBalance(walletAddress, chain);
+      } catch {
+        // balance unavailable — omit fields but keep going
+      }
+    }
+
+    // Build the token rows with optional live SPL balances.
+    const splRows = await Promise.all(
+      splTokens.map(async (t) => {
+        let balance_display: string | undefined;
+        let balance_lamports: string | undefined;
+
+        if (includeBalance && t.contractAddress) {
+          try {
+            const raw = await kit.getTokenBalance(
+              walletAddress,
+              chain,
+              t.contractAddress,
+            );
+            balance_lamports = raw.toString();
+            balance_display = formatUnits(raw, t.decimals);
+          } catch {
+            // per-token failure — omit balance fields
+          }
+        }
+
+        return {
+          symbol: t.symbol,
+          name: t.name,
+          address: t.contractAddress ?? "",
+          decimals: t.decimals,
+          is_native: false,
+          is_stable_coin: t.isStablecoin ?? false,
+          ...(t.logoUrl ? { logo_url: t.logoUrl } : {}),
+          ...(t.peggedCurrency ? { pegged_currency: t.peggedCurrency } : {}),
+          ...(balance_lamports !== undefined ? { balance_lamports } : {}),
+          ...(balance_display !== undefined ? { balance_display } : {}),
+        };
+      }),
+    );
+
+    // Prepend native SOL row.
+    const nativeSymbol = "SOL";
+    const nativePasses =
+      !symFilter ||
+      nativeSymbol.toLowerCase() === symFilter ||
+      nativeSymbol.toLowerCase().startsWith(symFilter);
+    const stablePasses = input.is_stable_coin !== true;
+
+    const nativeRow =
+      includeNative && nativePasses && stablePasses
+        ? {
+            symbol: "SOL",
+            name: "Solana",
+            address: "",
+            decimals: 9,
+            is_native: true,
+            is_stable_coin: false,
+            ...(solLamports !== undefined
+              ? {
+                  balance_lamports: solLamports.toString(),
+                  balance_display: formatUnits(solLamports, 9),
+                }
+              : {}),
+          }
+        : null;
+
+    const tokens = nativeRow ? [nativeRow, ...splRows] : splRows;
+
+    // Compact agent-facing slice (no logo_url to save context).
+    const agentSlice = tokens.map((t) => ({
+      symbol: t.symbol,
+      address: t.address,
+      decimals: t.decimals,
+      is_native: t.is_native,
+      ...(t.balance_display !== undefined
+        ? { balance_display: t.balance_display }
+        : {}),
+    }));
+
+    return {
+      status: "success",
+      data: {
+        cluster: chain.cluster,
+        tokens: agentSlice,
+      },
+      display: {
+        cluster: chain.cluster,
+        tokens,
+      },
+    };
+  });
+
 export const SOLANA_EXECUTORS: Record<string, MobileToolExecutor> = {
   get_wallet_sol_balance: getWalletSolBalance,
   get_sol_balance: getSolBalance,
   send_sol: sendSol,
+  get_wallet_spl_tokens: getSolanaWalletTokens,
 };
