@@ -255,6 +255,7 @@ export default function PayMerchant() {
     provider?: string;
     raw?: string;
     merchantName?: string;
+    walletAddress?: string;
   }>();
   const intentId =
     typeof params.intentId === "string" ? params.intentId : undefined;
@@ -265,6 +266,8 @@ export default function PayMerchant() {
   const kind = resolveKind(kindParam, providerParam);
   const merchantName =
     typeof params.merchantName === "string" ? params.merchantName : undefined;
+  const walletAddress =
+    typeof params.walletAddress === "string" ? params.walletAddress : undefined;
 
   const hasIntentId = Boolean(intentId && intentId.length > 0);
   const hasFallback = !hasIntentId && Boolean(kind) && Boolean(raw);
@@ -299,6 +302,7 @@ export default function PayMerchant() {
             <IntentFlow
               intentId={intentId as string}
               merchantName={merchantName}
+              walletAddress={walletAddress}
             />
           ) : hasFallback ? (
             <MintFallback
@@ -320,9 +324,11 @@ export default function PayMerchant() {
 function IntentFlow({
   intentId,
   merchantName: merchantNameParam,
+  walletAddress,
 }: {
   intentId: string;
   merchantName?: string;
+  walletAddress?: string;
 }) {
   const {
     activeWallet,
@@ -330,7 +336,7 @@ function IntentFlow({
     getActiveWalletKit,
     changeActiveChainToConfig,
   } = useWallet();
-  const intentQ = useIntentStatus(intentId);
+  const intentQ = useIntentStatus(intentId, walletAddress);
   const submit = useSubmitNanopay();
 
   const [phase, setPhase] = useState<LocalPhase>("idle");
@@ -528,6 +534,7 @@ function IntentFlow({
         intent={intent}
         intentId={intentId}
         merchantName={merchantNameParam}
+        walletAddress={walletAddress}
         onBack={() => router.back()}
       />
     );
@@ -543,6 +550,7 @@ function IntentFlow({
         intent={intent}
         intentId={intentId}
         merchantName={merchantNameParam}
+        walletAddress={walletAddress}
         onBack={() => router.back()}
       />
     );
@@ -772,19 +780,20 @@ function OnchainCard({
   intent,
   intentId,
   merchantName: merchantNameParam,
+  walletAddress: lockedWalletAddress,
   onBack,
 }: {
   intent: PaymentIntentResponse;
   intentId: string;
   merchantName?: string;
+  walletAddress?: string;
   onBack: () => void;
 }) {
-  const { wallets, activeWalletIndex, getKitForWallet } = useWallet();
+  const { wallets, getKitForWallet } = useWallet();
 
   const [phase, setPhase] = useState<LocalPhase>("idle");
   const [error, setError] = useState<LocalError | null>(null);
   const [isPinVisible, setIsPinVisible] = useState(false);
-  const [walletPickerVisible, setWalletPickerVisible] = useState(false);
 
   const sourceChainId = intent.nanopayUsdcSourceChainId;
   const { data: paymentContract, isLoading: isLoadingContract } =
@@ -815,11 +824,13 @@ function OnchainCard({
   }, [wallets, intentNamespace]);
 
   const [selectedWalletAddr, setSelectedWalletAddr] = useState<string | null>(
-    null,
+    lockedWalletAddress ?? null,
   );
 
-  // Auto-select the first eligible wallet; keep selection stable.
+  // Auto-select wallet: if a locked address was provided, keep it; otherwise
+  // fall back to the first eligible wallet and keep the selection stable.
   useEffect(() => {
+    if (lockedWalletAddress) return;
     if (!eligibleWallets.length) {
       setSelectedWalletAddr(null);
       return;
@@ -828,7 +839,7 @@ function OnchainCard({
       (w) => w.address === selectedWalletAddr,
     );
     if (!stillValid) setSelectedWalletAddr(eligibleWallets[0].address);
-  }, [eligibleWallets, selectedWalletAddr]);
+  }, [lockedWalletAddress, eligibleWallets, selectedWalletAddr]);
 
   const selectedWallet = useMemo(
     () => eligibleWallets.find((w) => w.address === selectedWalletAddr) ?? null,
@@ -1082,18 +1093,6 @@ function OnchainCard({
     paymentContract,
   ]);
 
-  // ── Wallet picker handler ─────────────────────────────────────────
-  const handleSelectWallet = useCallback(
-    (index: number) => {
-      const wallet = wallets[index];
-      if (wallet && wallet.namespace === intentNamespace) {
-        setSelectedWalletAddr(wallet.address);
-      }
-      setWalletPickerVisible(false);
-    },
-    [wallets, intentNamespace],
-  );
-
   // ── Error state ───────────────────────────────────────────────────
   if (phase === "error" && error) {
     const resetToIdle = () => {
@@ -1173,11 +1172,8 @@ function OnchainCard({
         </Text>
       </View>
 
-      {/* Wallet picker — shows only wallets matching the intent chain */}
-      <Pressable
-        onPress={() => setWalletPickerVisible(true)}
-        className="bg-light-main-container rounded-xl px-4 py-3 mb-4 flex-row items-center justify-between"
-      >
+      {/* Wallet display — locked to the wallet that created the intent */}
+      <View className="bg-light-main-container rounded-xl px-4 py-3 mb-4 flex-row items-center justify-between">
         <View className="flex-1">
           <Text className="text-light-matte-black/50 text-xs mb-1">
             Pay from
@@ -1225,9 +1221,8 @@ function OnchainCard({
               </>
             )
           ) : null}
-          <ChevronDown size={14} color="#c71c4b" />
         </View>
-      </Pressable>
+      </View>
 
       <View className="flex-row items-center justify-center mb-4">
         <Text
@@ -1268,19 +1263,6 @@ function OnchainCard({
           <Text className="text-light font-semibold">{ctaLabel}</Text>
         )}
       </TouchableOpacity>
-
-      <WalletSelectorModal
-        visible={walletPickerVisible}
-        onClose={() => setWalletPickerVisible(false)}
-        wallets={eligibleWallets}
-        activeWalletIndex={
-          selectedWallet
-            ? wallets.findIndex((w) => w.address === selectedWallet.address)
-            : -1
-        }
-        onSelectWallet={handleSelectWallet}
-        title={`Pay from (${networkLabel})`}
-      />
 
       <PinConfirmationModal
         visible={isPinVisible}
@@ -1688,7 +1670,11 @@ function MintFallback({
       // `/pay-merchant` isn't yet in the generated typed-routes union.
       router.replace({
         pathname: "/pay-merchant" as "/send",
-        params: { intentId: created.id, merchantName: resolvedMerchantName },
+        params: {
+          intentId: created.id,
+          merchantName: resolvedMerchantName,
+          walletAddress: selectedWallet?.address,
+        },
       });
     } catch (err) {
       setError(classifyError(err));
@@ -1699,6 +1685,7 @@ function MintFallback({
     raw,
     staticAmount,
     selectedToken,
+    selectedWallet,
     resolvedMerchantName,
   ]);
 

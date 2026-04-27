@@ -39,11 +39,17 @@ import {
 } from "./types";
 
 /** Shared query-key tuple for a single intent — callers can invalidate off the same key. */
-export const intentQueryKey = (intentId: string | undefined) =>
-  ["pay-intent", intentId] as const;
+export const intentQueryKey = (
+  intentId: string | undefined,
+  walletAddress?: string,
+) => ["pay-intent", intentId, walletAddress ?? null] as const;
 
-async function fetchIntent(intentId: string): Promise<PaymentIntentResponse> {
-  return api
+async function fetchIntent(
+  intentId: string,
+  walletAddress?: string,
+): Promise<PaymentIntentResponse> {
+  const kyInstance = walletAddress ? createApiForWallet(walletAddress) : api;
+  return kyInstance
     .get(`pay/intents/${encodeURIComponent(intentId)}`)
     .json<PaymentIntentResponse>();
 }
@@ -70,16 +76,17 @@ async function createIntent(
  */
 export function useIntentStatus(
   intentId: string | undefined,
+  walletAddress?: string,
 ): UseQueryResult<PaymentIntentResponse> {
   return useQuery<PaymentIntentResponse>({
-    queryKey: intentQueryKey(intentId),
+    queryKey: intentQueryKey(intentId, walletAddress),
     queryFn: () => {
       if (!intentId) {
         // The `enabled` gate prevents this path, but keep the runtime
         // invariant narrow so TS treats `intentId` as `string` below.
         throw new Error("useIntentStatus: intentId is required");
       }
-      return fetchIntent(intentId);
+      return fetchIntent(intentId, walletAddress);
     },
     enabled: !!intentId,
     staleTime: 5_000,
@@ -105,8 +112,11 @@ export function useCreateIntent() {
   >({
     mutationFn: ({ walletAddress, ...body }) =>
       createIntent(body, walletAddress),
-    onSuccess: (intent) => {
-      queryClient.setQueryData(intentQueryKey(intent.id), intent);
+    onSuccess: (intent, variables) => {
+      queryClient.setQueryData(
+        intentQueryKey(intent.id, variables.walletAddress),
+        intent,
+      );
     },
   });
 }
