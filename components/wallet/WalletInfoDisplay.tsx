@@ -2,6 +2,7 @@ import { Copy, Eye, EyeOff, Key, Mail, User } from "lucide-react-native";
 import React, { memo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { TWallet } from "@/constants/types/walletTypes";
+import { useScreenshotGuard } from "@/services/security/screenshotGuard";
 
 type WalletInfoDisplayProps = {
   wallet: TWallet;
@@ -54,6 +55,16 @@ export default memo(function WalletInfoDisplay({
   onToggleVisibility,
   onCopy,
 }: WalletInfoDisplayProps) {
+  // Engage screenshot prevention + iOS screenshot-detection alert ONLY
+  // while the seed phrase / private key is actually rendered in
+  // plaintext. The parent (`WalletDetails`) gates `showWalletInfo`
+  // behind a biometric prompt, so this guard turns on right after the
+  // user reveals the secret and turns off when they tap to hide it.
+  const isSecretRevealed =
+    showWalletInfo &&
+    (wallet?.type === "SeedPhrase" || wallet?.type === "PrivateKey");
+  useScreenshotGuard(isSecretRevealed, { alertOnScreenshot: true });
+
   if (!wallet || !wallet.type) return null;
 
   const renderSecretSection = (

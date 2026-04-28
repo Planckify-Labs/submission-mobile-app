@@ -9,7 +9,7 @@ interface SeedExportScreenProps {
 }
 
 export function SeedExportScreen({ words, onClose }: SeedExportScreenProps) {
-  useScreenshotGuard(true);
+  useScreenshotGuard(true, { alertOnScreenshot: true });
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAll, setShowAll] = useState(false);

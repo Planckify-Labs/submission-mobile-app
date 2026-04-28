@@ -124,7 +124,9 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
     // Screenshot guard — the paste textarea displays the mnemonic in
     // plaintext; engage the refcounted guard while the sheet is open so
     // recording / screenshotting during the flow is blocked.
-    useScreenshotGuard(visible);
+    // `alertOnScreenshot` is on because the user can paste their full
+    // mnemonic into the textarea.
+    useScreenshotGuard(visible, { alertOnScreenshot: true });
 
     const { addWallets } = useWallet();
     const { bottom } = useSafeAreaInsets();

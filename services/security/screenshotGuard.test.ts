@@ -24,34 +24,45 @@ describe("screenshotGuard — refcount semantics (TWV-2026-023)", () => {
     assert.match(src, /export function useScreenshotGuard/);
   });
 
-  it("maintains a module-level activeCount, not a per-call flag", () => {
-    assert.match(src, /let activeCount\s*=\s*0/);
+  it("maintains module-level prevent + alert refcounts, not per-call flags", () => {
+    assert.match(src, /let preventCount\s*=\s*0/);
+    assert.match(src, /let alertCount\s*=\s*0/);
   });
 
-  it("increments activeCount on mount and decrements on cleanup", () => {
-    assert.match(src, /activeCount\s*\+=\s*1/);
+  it("increments preventCount on mount and decrements on cleanup", () => {
+    assert.match(src, /preventCount\s*\+=\s*1/);
     assert.match(
       src,
-      /activeCount\s*=\s*Math\.max\(0,\s*activeCount\s*-\s*1\)/,
+      /preventCount\s*=\s*Math\.max\(0,\s*preventCount\s*-\s*1\)/,
     );
   });
 
   it("engages capture prevention only when count transitions 0 → 1", () => {
-    // `engage()` only calls preventScreenCaptureAsync when activeCount === 1.
     assert.match(
       src,
-      /function engage[\s\S]*?activeCount\s*===\s*1[\s\S]*?preventScreenCaptureAsync/,
+      /function engagePrevent[\s\S]*?preventCount\s*===\s*1[\s\S]*?preventScreenCaptureAsync/,
     );
   });
 
   it("releases only when count transitions back to 0", () => {
     assert.match(
       src,
-      /function release[\s\S]*?activeCount\s*===\s*0[\s\S]*?allowScreenCaptureAsync/,
+      /function releasePrevent[\s\S]*?preventCount\s*===\s*0[\s\S]*?allowScreenCaptureAsync/,
     );
   });
 
-  it("iOS installs a screenshot listener while guard is active", () => {
-    assert.match(src, /addScreenshotListener/);
+  it("iOS screenshot listener attaches only when alertCount transitions 0 → 1", () => {
+    // The listener must be gated on `alertOnScreenshot` callers, not
+    // every guarded screen — sign-message sheets engage prevention
+    // without summoning the iOS popup.
+    assert.match(
+      src,
+      /function engageAlert[\s\S]*?alertCount\s*===\s*1[\s\S]*?addScreenshotListener/,
+    );
+  });
+
+  it("alert refcount only bumps when alertOnScreenshot option is set", () => {
+    assert.match(src, /if \(alertOnScreenshot\) alertCount\s*\+=\s*1/);
+    assert.match(src, /if \(alertOnScreenshot\) alertCount\s*=\s*Math\.max/);
   });
 });

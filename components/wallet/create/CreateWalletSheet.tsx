@@ -150,7 +150,9 @@ const CreateWalletSheet: React.FC<Props> = memo(function CreateWalletSheet({
   // Screenshot guard — refcounted; engages when this component mounts
   // while `visible`, releases on unmount. Prevents recording of
   // mnemonic display AND verify step (both reveal partial seed info).
-  useScreenshotGuard(visible);
+  // `alertOnScreenshot` surfaces the iOS "Never screenshot this" popup
+  // because this flow renders the plaintext mnemonic.
+  useScreenshotGuard(visible, { alertOnScreenshot: true });
 
   const { addWallets } = useWallet();
   const { bottom } = useSafeAreaInsets();
