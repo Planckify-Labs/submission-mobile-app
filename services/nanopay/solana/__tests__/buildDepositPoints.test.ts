@@ -1,11 +1,14 @@
-import { PublicKey } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { describe, expect, it } from "vitest";
 import { TAKUMI_PAY_PROGRAM_ID } from "@/services/chains/solana/takumiPay";
 import { computeRefIdHash } from "@/services/chains/solana/takumiPay/refIdHash";
 import { buildDepositPointsInstruction } from "../buildDepositPoints";
 
 const programId = TAKUMI_PAY_PROGRAM_ID;
-const payer = PublicKey.unique();
+// `payer` must be on-curve because `getAssociatedTokenAddressSync` checks
+// it (the user's wallet is always an Ed25519 keypair). `PublicKey.unique()`
+// returns off-curve keys, so we generate a real keypair instead.
+const payer = Keypair.generate().publicKey;
 const tokenMint = PublicKey.unique();
 
 describe("buildDepositPointsInstruction", () => {

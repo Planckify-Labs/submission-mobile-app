@@ -58,7 +58,7 @@ describe("SolanaWalletKit — interface wiring", () => {
 
   it("advertises the solana namespace and capability flags", () => {
     assert.equal(kit.namespace, "solana");
-    assert.equal(kit.supportsTokenTransfer, false);
+    assert.equal(kit.supportsTokenTransfer, true);
     assert.equal(kit.supportsPrivateKeyImport, true);
     assert.equal(kit.displayName, "Solana");
   });

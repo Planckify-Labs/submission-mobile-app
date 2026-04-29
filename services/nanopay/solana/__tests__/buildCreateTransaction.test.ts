@@ -1,4 +1,4 @@
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { describe, expect, it } from "vitest";
 import {
   deriveConfigPda,
@@ -9,7 +9,10 @@ import { computeRefIdHash } from "@/services/chains/solana/takumiPay/refIdHash";
 import { buildCreateTransactionInstruction } from "../buildCreateTransaction";
 
 const programId = TAKUMI_PAY_PROGRAM_ID;
-const payer = PublicKey.unique();
+// `payer` must be on-curve because `getAssociatedTokenAddressSync` (used
+// in the Token variant path) checks it. The user's wallet is always an
+// Ed25519 keypair; `PublicKey.unique()` returns off-curve keys.
+const payer = Keypair.generate().publicKey;
 
 const baseParams = {
   bookingId: "booking-001",

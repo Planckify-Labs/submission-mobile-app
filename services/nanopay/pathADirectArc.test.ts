@@ -354,7 +354,7 @@ describe("onChainReceiptEndpoint", () => {
   it("percent-encodes the intent id", () => {
     assert.equal(
       onChainReceiptEndpoint("pi_01/abc"),
-      "v1/pay/intents/pi_01%2Fabc/on-chain-receipt",
+      "pay/intents/pi_01%2Fabc/on-chain-receipt",
     );
   });
 });

@@ -64,18 +64,30 @@ describe("WALLET_SECURE_STORE_OPTIONS — TWV-2026-004", () => {
   });
 });
 
-describe("SIGNING_SECURE_STORE_OPTIONS — TWV-2026-060", () => {
-  it("stacks requireAuthentication on top of device-only", () => {
+describe("SIGNING_SECURE_STORE_OPTIONS — TWV-2026-060 (revised)", () => {
+  // Revised: `requireAuthentication: true` was dropped because
+  // expo-secure-store v15 forces biometric-only on Android (no device-
+  // credential fallback), which locks users out when biometry is
+  // unavailable or unenrolled. The user gate now lives in the app-level
+  // `LockScreen` via `expo-local-authentication`. At-rest protection
+  // stays `WHEN_UNLOCKED_THIS_DEVICE_ONLY`.
+  it("keeps the device-only accessibility flag on signing options", () => {
     const sigBlock = src.match(
       /SIGNING_SECURE_STORE_OPTIONS:\s*SecureStore\.SecureStoreOptions\s*=\s*\{([\s\S]*?)\};/,
     );
     assert.ok(sigBlock);
-    assert.match(sigBlock[1] ?? "", /requireAuthentication:\s*true/);
     assert.match(
       sigBlock[1] ?? "",
       /keychainAccessible:\s*SecureStore\.WHEN_UNLOCKED_THIS_DEVICE_ONLY/,
     );
-    assert.match(sigBlock[1] ?? "", /authenticationPrompt:\s*"/);
+  });
+
+  it("does NOT set requireAuthentication on signing options (Android lockout fix)", () => {
+    const sigBlock = src.match(
+      /SIGNING_SECURE_STORE_OPTIONS:\s*SecureStore\.SecureStoreOptions\s*=\s*\{([\s\S]*?)\};/,
+    );
+    assert.ok(sigBlock);
+    assert.doesNotMatch(sigBlock[1] ?? "", /requireAuthentication/);
   });
 });
 
