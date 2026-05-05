@@ -25,13 +25,22 @@ if (!globalThis.crypto) {
   (globalThis as { crypto: typeof webcrypto }).crypto = webcrypto;
 }
 
+import { fromBase64, toBase64 } from "@mysten/bcs";
 import { bytesToBase58 } from "@/services/chains/solana/codec";
 import {
+  classifySuiRecipient,
   createSolanaWalletFromMnemonic,
   createSolanaWalletFromPrivateKey,
+  createSuiWalletFromMnemonic,
+  createSuiWalletFromPrivateKey,
+  createWalletFromParams,
+  isLegacySui20ByteAddress,
   isValidSolanaAddress,
   isValidSolanaPrivateKey,
+  isValidSuiAddress,
+  isValidSuiPrivateKey,
   parseSolanaPrivateKey,
+  SUI_LEGACY_ADDRESS_UX_MESSAGE,
 } from "@/utils/walletUtils";
 
 // Canonical Phantom-verified golden vector from
@@ -183,5 +192,310 @@ describe("createSolanaWalletFromPrivateKey (round-trip)", () => {
       await createSolanaWalletFromPrivateKey("not-a-valid-base58"),
       null,
     );
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────
+// Sui suite. Spec reference: docs/sui-chain-support-spec.md §1.4, §3.2.
+// Task reference:
+//   docs/sui-chain-support-task/06_walletutils_sui_validators_and_creators.md.
+// ───────────────────────────────────────────────────────────────────────
+
+// Same canonical BIP-39 zero-mnemonic the Solana suite + Task 03
+// derivation test use, so the wallet derived here can be cross-checked
+// against the SDK-verified golden Sui address.
+const SUI_GOLDEN_MNEMONIC =
+  "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+const SUI_GOLDEN_ADDRESS =
+  "0x5e93a736d04fbb25737aa40bee40171ef79f65fae833749e3c089fe7cc2161f1";
+
+describe("isValidSuiAddress", () => {
+  it("accepts the canonical golden 32-byte Sui address", () => {
+    assert.equal(isValidSuiAddress(SUI_GOLDEN_ADDRESS), true);
+  });
+
+  it("rejects an empty string", () => {
+    assert.equal(isValidSuiAddress(""), false);
+  });
+
+  it("rejects a legacy 20-byte hex address (`0x` + 40 hex chars)", () => {
+    assert.equal(
+      isValidSuiAddress("0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97"),
+      false,
+    );
+    assert.equal(
+      isValidSuiAddress("0x4838b106fce9647bdf1e7877bf73ce8b0bad5f97"),
+      false,
+    );
+  });
+
+  it("rejects mixed-case hex (canonical Sui addresses are lowercase)", () => {
+    assert.equal(
+      isValidSuiAddress(
+        "0x5E93A736D04FBB25737AA40BEE40171EF79F65FAE833749E3C089FE7CC2161F1",
+      ),
+      false,
+    );
+    assert.equal(
+      isValidSuiAddress(
+        "0x5E93a736d04fbb25737aa40bee40171ef79f65fae833749e3c089fe7cc2161f1",
+      ),
+      false,
+    );
+  });
+
+  it("rejects 64 hex chars without a `0x` prefix", () => {
+    assert.equal(
+      isValidSuiAddress(
+        "5e93a736d04fbb25737aa40bee40171ef79f65fae833749e3c089fe7cc2161f1",
+      ),
+      false,
+    );
+  });
+
+  it("rejects non-hex characters", () => {
+    assert.equal(
+      isValidSuiAddress(
+        "0x5e93a736d04fbb25737aa40bee40171ef79f65fae833749e3c089fe7cc2161fz",
+      ),
+      false,
+    );
+  });
+});
+
+describe("isValidSuiPrivateKey", () => {
+  it("accepts the canonical bech32 `suiprivkey1…` from Ed25519Keypair.getSecretKey", async () => {
+    const wallet = await createSuiWalletFromMnemonic(SUI_GOLDEN_MNEMONIC);
+    assert.ok(wallet);
+    assert.ok(wallet!.privateKey?.startsWith("suiprivkey1"));
+    assert.equal(isValidSuiPrivateKey(wallet!.privateKey!), true);
+  });
+
+  it("accepts a 32-byte hex seed (with `0x` prefix)", () => {
+    const seed = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) seed[i] = (i * 7 + 3) & 0xff;
+    let hex = "0x";
+    for (let i = 0; i < 32; i++) hex += seed[i].toString(16).padStart(2, "0");
+    assert.equal(isValidSuiPrivateKey(hex), true);
+  });
+
+  it("accepts a 32-byte hex seed (no prefix)", () => {
+    const seed = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) seed[i] = (i * 11 + 5) & 0xff;
+    let hex = "";
+    for (let i = 0; i < 32; i++) hex += seed[i].toString(16).padStart(2, "0");
+    assert.equal(isValidSuiPrivateKey(hex), true);
+  });
+
+  it("accepts a 32-byte base64 payload", () => {
+    const seed = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) seed[i] = (i * 13 + 7) & 0xff;
+    assert.equal(isValidSuiPrivateKey(toBase64(seed)), true);
+    // Round-trip sanity — decoding the same string yields 32 bytes.
+    assert.equal(fromBase64(toBase64(seed)).length, 32);
+  });
+
+  it("rejects an empty string", () => {
+    assert.equal(isValidSuiPrivateKey(""), false);
+  });
+
+  it("rejects a 31-byte hex payload (too short)", () => {
+    assert.equal(isValidSuiPrivateKey("ab".repeat(31)), false);
+  });
+
+  it("rejects a 33-byte hex payload (too long)", () => {
+    assert.equal(isValidSuiPrivateKey("ab".repeat(33)), false);
+  });
+
+  it("rejects non-base64 garbage without throwing", () => {
+    assert.doesNotThrow(() => isValidSuiPrivateKey("not-a-valid-key!!!"));
+    assert.equal(isValidSuiPrivateKey("not-a-valid-key!!!"), false);
+  });
+
+  it("rejects a malformed bech32 `suiprivkey1…` string", () => {
+    assert.equal(isValidSuiPrivateKey("suiprivkey1zzzzzzzz"), false);
+  });
+});
+
+describe("createSuiWalletFromMnemonic", () => {
+  it("derives the SDK-verified golden Sui address for the canonical mnemonic", async () => {
+    const wallet = await createSuiWalletFromMnemonic(SUI_GOLDEN_MNEMONIC);
+    assert.ok(wallet, "expected a TWallet, got null");
+    assert.equal(wallet!.address, SUI_GOLDEN_ADDRESS);
+    assert.equal(wallet!.namespace, "sui");
+    assert.equal(wallet!.type, "SeedPhrase");
+    assert.equal(wallet!.source, "Created");
+    assert.equal(wallet!.address, wallet!.sui?.suiAddress);
+    assert.equal(wallet!.sui?.scheme, "ed25519");
+    assert.equal(wallet!.sui?.derivationPath, "m/44'/784'/0'/0'/0'");
+    assert.equal(wallet!.seedPhrase, SUI_GOLDEN_MNEMONIC);
+    assert.ok(typeof wallet!.privateKey === "string");
+    assert.ok(wallet!.privateKey!.startsWith("suiprivkey1"));
+    // pubkeyHex is 32 bytes -> 64 lowercase hex chars (no 0x prefix).
+    assert.match(wallet!.sui!.pubkeyHex, /^[0-9a-f]{64}$/);
+  });
+
+  it("returns null for an invalid mnemonic (word-count check)", async () => {
+    const result = await createSuiWalletFromMnemonic("too few words");
+    assert.equal(result, null);
+  });
+
+  it("honors the optional wallet name", async () => {
+    const wallet = await createSuiWalletFromMnemonic(
+      SUI_GOLDEN_MNEMONIC,
+      "My SUI",
+    );
+    assert.equal(wallet?.name, "My SUI");
+  });
+});
+
+describe("createSuiWalletFromPrivateKey (round-trip)", () => {
+  it("round-trips bech32 -> reimport -> same address", async () => {
+    const first = await createSuiWalletFromMnemonic(SUI_GOLDEN_MNEMONIC);
+    assert.ok(first);
+    const reimported = await createSuiWalletFromPrivateKey(
+      first!.privateKey!,
+      "Reimported",
+    );
+    assert.ok(reimported);
+    assert.equal(reimported!.address, first!.address);
+    assert.equal(reimported!.namespace, "sui");
+    assert.equal(reimported!.type, "PrivateKey");
+    assert.equal(reimported!.source, "Imported");
+    assert.equal(reimported!.address, reimported!.sui?.suiAddress);
+    assert.equal(reimported!.sui?.scheme, "ed25519");
+    // §7.3-style — private-key imports don't carry a derivation path.
+    assert.equal(reimported!.sui?.derivationPath, undefined);
+    assert.equal(reimported!.seedPhrase, undefined);
+    assert.ok(reimported!.privateKey!.startsWith("suiprivkey1"));
+    assert.equal(reimported!.name, "Reimported");
+  });
+
+  it("returns null on malformed input instead of throwing", async () => {
+    assert.equal(await createSuiWalletFromPrivateKey(""), null);
+    assert.equal(await createSuiWalletFromPrivateKey("not-a-valid-key"), null);
+  });
+});
+
+describe("createWalletFromParams (Sui sources)", () => {
+  it("dispatches `SuiSeedPhrase` to createSuiWalletFromMnemonic", async () => {
+    const wallet = await createWalletFromParams({
+      source: "SuiSeedPhrase",
+      seedPhrase: SUI_GOLDEN_MNEMONIC,
+    });
+    assert.ok(wallet);
+    assert.equal(wallet!.namespace, "sui");
+    assert.equal(wallet!.type, "SeedPhrase");
+    assert.equal(wallet!.address, SUI_GOLDEN_ADDRESS);
+  });
+
+  it("dispatches `SuiPrivateKey` to createSuiWalletFromPrivateKey", async () => {
+    const seed = await createSuiWalletFromMnemonic(SUI_GOLDEN_MNEMONIC);
+    assert.ok(seed);
+    const wallet = await createWalletFromParams({
+      source: "SuiPrivateKey",
+      privateKey: seed!.privateKey!,
+    });
+    assert.ok(wallet);
+    assert.equal(wallet!.namespace, "sui");
+    assert.equal(wallet!.type, "PrivateKey");
+    assert.equal(wallet!.address, SUI_GOLDEN_ADDRESS);
+  });
+});
+
+// Spec reference: `docs/sui-chain-support-spec.md` §3.5.
+// Pre-mainnet Sui addresses were 20 bytes. The send sheet rejects them
+// with a migration-pointer message instead of a generic "invalid
+// address" error so users know to ask the recipient for the new form.
+describe("isLegacySui20ByteAddress", () => {
+  it("accepts canonical 20-byte hex (`0x` + 40 lowercase hex)", () => {
+    assert.equal(
+      isLegacySui20ByteAddress("0x4838b106fce9647bdf1e7877bf73ce8b0bad5f97"),
+      true,
+    );
+  });
+
+  it("rejects the canonical 32-byte Sui address", () => {
+    assert.equal(isLegacySui20ByteAddress(SUI_GOLDEN_ADDRESS), false);
+  });
+
+  it("rejects mixed-case 20-byte hex (lowercase only, matches isValidSuiAddress strictness)", () => {
+    assert.equal(
+      isLegacySui20ByteAddress("0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97"),
+      false,
+    );
+  });
+
+  it("rejects 40 hex chars without a `0x` prefix", () => {
+    assert.equal(
+      isLegacySui20ByteAddress("4838b106fce9647bdf1e7877bf73ce8b0bad5f97"),
+      false,
+    );
+  });
+
+  it("rejects non-hex characters in the 40-char body", () => {
+    assert.equal(
+      isLegacySui20ByteAddress("0x4838b106fce9647bdf1e7877bf73ce8b0bad5fzz"),
+      false,
+    );
+  });
+
+  it("rejects an empty string and never throws", () => {
+    assert.equal(isLegacySui20ByteAddress(""), false);
+    assert.equal(isLegacySui20ByteAddress("not an address"), false);
+  });
+});
+
+describe("classifySuiRecipient", () => {
+  it("returns ok for the canonical 32-byte address", () => {
+    const verdict = classifySuiRecipient(SUI_GOLDEN_ADDRESS);
+    assert.equal(verdict.ok, true);
+  });
+
+  it("returns kind=legacy20 with a typed error for 20-byte hex", () => {
+    const verdict = classifySuiRecipient(
+      "0x4838b106fce9647bdf1e7877bf73ce8b0bad5f97",
+    );
+    assert.equal(verdict.ok, false);
+    if (!verdict.ok) {
+      assert.equal(verdict.kind, "legacy20");
+      if (verdict.kind === "legacy20") {
+        assert.equal(verdict.error.name, "InvalidSuiAddressLegacyError");
+        assert.equal(
+          verdict.error.address,
+          "0x4838b106fce9647bdf1e7877bf73ce8b0bad5f97",
+        );
+        assert.equal(verdict.message, SUI_LEGACY_ADDRESS_UX_MESSAGE);
+      }
+    }
+  });
+
+  it("returns kind=invalid for unrelated junk", () => {
+    const verdict = classifySuiRecipient("definitely not a sui address");
+    assert.equal(verdict.ok, false);
+    if (!verdict.ok) {
+      assert.equal(verdict.kind, "invalid");
+    }
+  });
+
+  it("returns kind=invalid for an EVM-shaped 20-byte address with mixed case", () => {
+    // Same byte-shape as the legacy form but with checksum casing — we
+    // still surface generic invalid (the lowercase-only predicate
+    // matches isValidSuiAddress's strictness).
+    const verdict = classifySuiRecipient(
+      "0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97",
+    );
+    assert.equal(verdict.ok, false);
+    if (!verdict.ok) {
+      assert.equal(verdict.kind, "invalid");
+    }
+  });
+
+  it("returns kind=invalid for an empty string", () => {
+    const verdict = classifySuiRecipient("");
+    assert.equal(verdict.ok, false);
+    if (!verdict.ok) {
+      assert.equal(verdict.kind, "invalid");
+    }
   });
 });

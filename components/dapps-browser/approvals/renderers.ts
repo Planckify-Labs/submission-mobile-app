@@ -12,6 +12,10 @@ import { SolanaSignMessageSheet } from "./SolanaSignMessageSheet";
 import { SolanaSwitchClusterSheet } from "./SolanaSwitchClusterSheet";
 import { SolanaTransactionSheet } from "./SolanaTransactionSheet";
 import { SolanaWatchTokenSheet } from "./SolanaWatchTokenSheet";
+import { SuiSignInSheet } from "./SuiSignInSheet";
+import { SuiSignPersonalMessageSheet } from "./SuiSignPersonalMessageSheet";
+import { SuiSwitchNetworkSheet } from "./SuiSwitchNetworkSheet";
+import { SuiTransactionSheet } from "./SuiTransactionSheet";
 import { SwitchChainSheet } from "./SwitchChainSheet";
 import { WatchAssetSheet } from "./WatchAssetSheet";
 
@@ -86,5 +90,21 @@ export const evmRenderers: ApprovalRenderer[] = [
   {
     canHandle: (i) => i.namespace === "solana" && i.kind === "watchAsset",
     Component: SolanaWatchTokenSheet as ApprovalRenderer["Component"],
+  },
+  {
+    canHandle: (i) => i.namespace === "sui" && i.kind === "signIn",
+    Component: SuiSignInSheet as ApprovalRenderer["Component"],
+  },
+  {
+    canHandle: (i) => i.namespace === "sui" && i.kind === "signMessage",
+    Component: SuiSignPersonalMessageSheet as ApprovalRenderer["Component"],
+  },
+  {
+    canHandle: (i) => i.namespace === "sui" && i.kind === "signTransaction",
+    Component: SuiTransactionSheet as ApprovalRenderer["Component"],
+  },
+  {
+    canHandle: (i) => i.namespace === "sui" && i.kind === "switchNetwork",
+    Component: SuiSwitchNetworkSheet as ApprovalRenderer["Component"],
   },
 ];

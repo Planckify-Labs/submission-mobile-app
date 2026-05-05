@@ -37,6 +37,12 @@ export type TBlockchain = {
    * Narrow with `typeof chainId === "number"` at EVM-only call sites.
    */
   chainId: number | null;
+  /**
+   * Stable slug for non-EVM rows (e.g. `sui-mainnet`, `solana-devnet`).
+   * Used by `resolveNamespace` to disambiguate Solana vs Sui — `isEVM:
+   * false` alone collides on the same flag. Null on EVM rows.
+   */
+  chainSlug?: string | null;
   caip2Id?: string | null;
   rpcUrl: string;
   blockExplorer: string;

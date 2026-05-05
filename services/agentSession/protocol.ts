@@ -32,9 +32,13 @@ export interface WalletContext {
   address: string;
   /**
    * Chain namespace the wallet is active on. Omitted for legacy EVM
-   * clients; the server defaults to `"eip155"` when absent.
+   * clients; the server defaults to `"eip155"` when absent. The server
+   * treats unknown wallet_context keys as opaque metadata, so emitting
+   * a namespace value the server doesn't yet recognise (e.g. `"sui"`
+   * before the server protocol bumps) is type-safe — the field is
+   * forward-compatible per AGENT_PROTOCOL §13.
    */
-  namespace?: "eip155" | "solana";
+  namespace?: "eip155" | "solana" | "sui";
   /**
    * Numeric chain id for EVM chains. For non-EVM chains this is `0` —
    * the server only reads it to surface in the system prompt and to

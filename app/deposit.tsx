@@ -56,9 +56,18 @@ function DepositContent({ bottomOffset }: DepositContentProps) {
   const nativeCurrencySymbol = isEvm
     ? activeChain.chain.nativeCurrency.symbol
     : "";
-  const chainDisplayName = isEvm
-    ? activeChain.chain.name
-    : `Solana ${activeChain.cluster === "devnet" ? "Devnet" : "Mainnet"}`;
+  const chainDisplayName =
+    activeChain.namespace === "eip155"
+      ? activeChain.chain.name
+      : activeChain.namespace === "solana"
+        ? `Solana ${activeChain.cluster === "devnet" ? "Devnet" : "Mainnet"}`
+        : `Sui ${
+            activeChain.network === "mainnet"
+              ? "Mainnet"
+              : activeChain.network === "testnet"
+                ? "Testnet"
+                : "Devnet"
+          }`;
   const {
     selectedToken,
     amount,

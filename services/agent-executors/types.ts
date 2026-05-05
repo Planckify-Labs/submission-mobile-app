@@ -200,6 +200,29 @@ export function mapUnknownError(err: unknown): string {
     return ExecutorErrorCode.NetworkError;
   }
 
+  // Sui typed transfer / token-kind errors (spec §4.1). Match by `name`
+  // rather than `instanceof` so module-reload identity drift can't
+  // silently downgrade these to "unknown error" strings. Order is
+  // unspecified within this block — none of the names overlap.
+  if (name === "SuiUnsupportedTokenKindError") {
+    return ExecutorErrorCode.NotImplemented;
+  }
+  if (name === "SuiInsufficientCoinError") {
+    return ExecutorErrorCode.InsufficientFunds;
+  }
+  if (name === "SuiRegulatedCoinDeniedError") {
+    // Surface the descriptive message so the agent can explain *why*
+    // the deny list rejected the transfer (the user-visible coin type
+    // is embedded by the typed error's constructor).
+    return message || ExecutorErrorCode.InvalidInput;
+  }
+  if (name === "SuiClosedLoopPolicyDeniedError") {
+    return ExecutorErrorCode.InvalidInput;
+  }
+  if (name === "SuiClosedLoopPolicyUnresolvedError") {
+    return ExecutorErrorCode.NotImplemented;
+  }
+
   return String(err);
 }
 

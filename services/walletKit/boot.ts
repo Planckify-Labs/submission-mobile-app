@@ -17,6 +17,7 @@
 import { createEvmWalletKit } from "./evm/EvmWalletKit";
 import { walletKitRegistry } from "./registry";
 import { createSolanaWalletKit } from "./solana/SolanaWalletKit";
+import { createSuiWalletKit } from "./sui/SuiWalletKit";
 
 let booted = false;
 
@@ -25,6 +26,9 @@ export function bootWalletKits(): void {
   walletKitRegistry.register(createEvmWalletKit());
   // Solana registers here.
   walletKitRegistry.register(createSolanaWalletKit());
+  // Sui registers third — order is stable for the namespace picker
+  // (Task 21 / spec §3.3).
+  walletKitRegistry.register(createSuiWalletKit());
   booted = true;
 }
 

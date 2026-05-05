@@ -45,6 +45,7 @@
 // references at function exit and must call `clearAccountCache()` on
 // lock / logout / wallet removal.
 
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { entropyToMnemonic, validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import {
@@ -62,12 +63,18 @@ import { TWallet } from "@/constants/types/walletTypes";
 import { storage } from "@/lib/storage/mmkv";
 import { parseSolanaPrivateKey } from "@/services/chains/solana/codec";
 import { mnemonicToSolanaPrivateKey } from "@/services/chains/solana/derivation";
+import { decodeSuiPrivateKey as decodeSuiBech32 } from "@/services/chains/sui/codec";
+import {
+  DEFAULT_SUI_PATH,
+  mnemonicToSuiKeypair,
+} from "@/services/chains/sui/derivation";
 import {
   signingSecureGet,
   signingSecureSet,
   walletSecureGet,
   walletSecureSet,
 } from "./security/walletSecureStore";
+import { breadcrumb } from "./telemetry/sui";
 
 // TWV-2026-002 — fail loud if the CSPRNG polyfill is missing at the point
 // walletService is first imported. This is the single blessed call site
@@ -431,12 +438,108 @@ export async function getSolanaSignerForWallet(
   }
 }
 
+// Review gate — TWV-2026-080 (Ed25519 Sui signer dwell + intent helpers).
+// Design note: docs/sui-chain-support-spec.md §6.
+//
+// This function is the SINGLE blessed JS-heap dwell site for Sui
+// private-key material, analogous to getSolanaSignerForWallet for
+// Solana. Invariants:
+//   - 32-byte ed25519 secret reconstructed only here; immediately fed
+//     to Ed25519Keypair.fromSecretKey(seed) from @mysten/sui.
+//   - Cache by address in suiSignerCache; clearAccountCache wipes all
+//     three caches (EVM, Solana, Sui) on lock/logout/removal.
+//   - The local seed/intermediate Uint8Array binding never escapes
+//     function scope — no closure capture, no return of bytes.
+//   - Never log signer internals. No console.log of `seed` or `kp`.
+//   - All signing routes through the Mysten SDK's messageWithIntent +
+//     signTransaction / signPersonalMessage helpers — never hand-rolled
+//     intent bytes (the bug class TWV-2026-080 guards against).
+//   - No Secp256k1 / Secp256r1 fallback in v1; rows whose
+//     `sui.scheme !== "ed25519"` are rejected.
+// Any PR that:
+//   - adds a new Ed25519Keypair.fromSecretKey call outside here,
+//   - returns the raw Uint8Array seed from a public helper,
+//   - extends suiSignerCache dwell,
+// MUST cite TWV-2026-080.
+
+const suiSignerCache: Record<string, Ed25519Keypair> = {};
+
+export async function getSuiSignerForWallet(
+  wallet: TWallet,
+): Promise<Ed25519Keypair | null> {
+  if (wallet.namespace !== "sui") return null;
+  const cached = suiSignerCache[wallet.address];
+  if (cached) return cached;
+
+  // v1 rejects non-ed25519 schemes loudly. Future Secp variants need a
+  // new gate (spec §6).
+  if (wallet.sui && wallet.sui.scheme !== "ed25519") {
+    if (__DEV__) console.error("[TWV-2026-080] unsupported Sui scheme");
+    // Sentry breadcrumb mirrors the dev console.error. Privacy: NEVER
+    // attach `wallet.privateKey`, `wallet.seedPhrase`, signer refs, or
+    // raw seed bytes here.
+    breadcrumb({
+      category: "sui.getSignerForWallet",
+      message: "derivation failed: unsupported scheme",
+      level: "error",
+      data: { reason: "unsupported-scheme" },
+    });
+    return null;
+  }
+
+  try {
+    // Strict preference order:
+    //   1. wallet.privateKey — canonical bech32 `suiprivkey1…` form.
+    //      Both seed-phrase and private-key Sui wallets store this so
+    //      the dwell site doesn't re-run BIP-39 on every call.
+    //   2. wallet.seedPhrase — defensive fallback for hypothetical
+    //      future shared-mnemonic rows whose privateKey is empty.
+    let kp: Ed25519Keypair | null = null;
+    if (wallet.privateKey) {
+      try {
+        const seed = decodeSuiBech32(wallet.privateKey);
+        kp = Ed25519Keypair.fromSecretKey(seed);
+      } catch (_e) {
+        if (__DEV__)
+          console.error("[TWV-2026-080] Sui privateKey parse failed");
+        breadcrumb({
+          category: "sui.getSignerForWallet",
+          message: "derivation failed: privateKey parse",
+          level: "error",
+          data: { reason: "privateKey-parse" },
+        });
+        return null;
+      }
+    } else if (wallet.seedPhrase) {
+      const path = wallet.sui?.derivationPath ?? DEFAULT_SUI_PATH;
+      kp = mnemonicToSuiKeypair(wallet.seedPhrase, path);
+    }
+    if (!kp) return null;
+
+    suiSignerCache[wallet.address] = kp;
+    return kp;
+  } catch (_e) {
+    if (__DEV__)
+      console.error("[TWV-2026-080] Sui signer reconstruction failed");
+    breadcrumb({
+      category: "sui.getSignerForWallet",
+      message: "derivation failed: reconstruction",
+      level: "error",
+      data: { reason: "reconstruction" },
+    });
+    return null;
+  }
+}
+
 export function clearAccountCache(): void {
   Object.keys(accountCache).forEach((key) => {
     delete accountCache[key];
   });
   Object.keys(solanaSignerCache).forEach((key) => {
     delete solanaSignerCache[key];
+  });
+  Object.keys(suiSignerCache).forEach((key) => {
+    delete suiSignerCache[key];
   });
 }
 

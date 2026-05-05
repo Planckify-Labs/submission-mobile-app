@@ -29,6 +29,17 @@ export interface TSolanaFields {
   derivationPath?: string;
 }
 
+export interface TSuiFields {
+  /** 0x-prefixed 32-byte hex (canonical Sui address). */
+  suiAddress: string;
+  /** Raw 32-byte ed25519 public key, hex. */
+  pubkeyHex: string;
+  /** SLIP-0010 ed25519 path. Absent ⇒ default `m/44'/784'/0'/0'/0'`. */
+  derivationPath?: string;
+  /** Signing scheme; only `ed25519` in v1. Future Secp variants need a new gate. */
+  scheme: "ed25519";
+}
+
 export interface TWallet {
   name: string;
   address: string;
@@ -38,6 +49,12 @@ export interface TWallet {
   namespace: Namespace;
   chainId?: string | number;
   account: any;
+  /**
+   * For EVM rows: 0x-prefixed 32-byte hex.
+   * For Solana rows: base58-encoded 32-byte seed.
+   * For Sui rows: bech32 `suiprivkey1…` form so the dwell site re-decodes
+   *   without re-running BIP-39. `address` mirrors `sui.suiAddress`.
+   */
   privateKey?: string;
   seedPhrase?: string;
   socialAccount?: {
@@ -48,6 +65,7 @@ export interface TWallet {
   smart4337?: TSmart4337Fields;
   smart7702?: TSmart7702Fields;
   solana?: TSolanaFields;
+  sui?: TSuiFields;
 }
 
 export interface TWalletCreationParams {
@@ -56,7 +74,9 @@ export interface TWalletCreationParams {
     | "SeedPhrase"
     | "PrivateKey"
     | "SolanaSeedPhrase"
-    | "SolanaPrivateKey";
+    | "SolanaPrivateKey"
+    | "SuiSeedPhrase"
+    | "SuiPrivateKey";
   privateKey?: string;
   seedPhrase?: string;
   name?: string;

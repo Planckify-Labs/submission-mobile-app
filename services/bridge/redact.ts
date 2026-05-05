@@ -251,5 +251,83 @@ export function redactParams(method: string, params: unknown): unknown {
     // No secrets in these payloads; pass through intact.
     return params;
   }
+  // Sui — same property as the Solana branches: structural fields only,
+  // never the base64 BCS, signature, or signed-message bytes.
+  // Spec §11.5.3.
+  if (method === "sui:signPersonalMessage") {
+    const [input] = paramsArr;
+    if (input && typeof input === "object") {
+      const o = input as {
+        account?: { address?: string };
+        address?: string;
+        message?: string;
+        chain?: string;
+      };
+      const m = typeof o.message === "string" ? o.message : "";
+      return [
+        {
+          address: o.account?.address ?? o.address,
+          chain: o.chain,
+          messageLength: m.length,
+          // Same 16-char preview cap as Solana / agentContext — single
+          // privacy posture across all three.
+          messagePreview: m.length > 16 ? `${m.slice(0, 16)}…` : m,
+        },
+      ];
+    }
+    return [redactMessage(input)];
+  }
+  if (
+    method === "sui:signTransaction" ||
+    method === "sui:signAndExecuteTransaction" ||
+    method === "sui:signTransactionBlock" ||
+    method === "sui:signAndExecuteTransactionBlock"
+  ) {
+    const [input] = paramsArr;
+    if (input && typeof input === "object") {
+      const o = input as {
+        account?: { address?: string };
+        address?: string;
+        chain?: string;
+        transaction?: string;
+        options?: unknown;
+      };
+      return [
+        {
+          address: o.account?.address ?? o.address,
+          chain: o.chain,
+          txBytes: typeof o.transaction === "string" ? o.transaction.length : 0,
+          hasOptions: !!o.options,
+        },
+      ];
+    }
+    return [redactMessage(input)];
+  }
+  if (method === "sui:reportTransactionEffects") {
+    // Effects payload may be very large. Log shape only — never contents.
+    const [input] = paramsArr;
+    if (input && typeof input === "object") {
+      const o = input as {
+        account?: { address?: string };
+        address?: string;
+        chain?: string;
+        effects?: string;
+      };
+      return [
+        {
+          address: o.account?.address ?? o.address,
+          chain: o.chain,
+          effectsBytes: typeof o.effects === "string" ? o.effects.length : 0,
+        },
+      ];
+    }
+    return params;
+  }
+  if (method === "takumi:switchNetwork") {
+    // No secrets in this payload; pass through intact (parity with
+    // takumi:switchCluster). Test asserts no future-added field
+    // accidentally leaks.
+    return params;
+  }
   return params;
 }

@@ -16,24 +16,40 @@ import type { Namespace } from "@/services/chains/types";
 
 /**
  * `TBlockchain` may gain a `namespace` field in a future API revision.
- * Until then we infer the namespace from `isEVM` (backend authoritative
- * flag) and fall back to name heuristics only for the cluster field of
- * Solana chains.
+ * Until then we infer the namespace from `isEVM` + (when available) the
+ * unique `chainSlug` and a `name`/`rpcUrl` fallback heuristic — Solana
+ * was the only non-EVM chain in v2.3.0, but Sui rows now ride the same
+ * `isEVM: false` flag so we MUST disambiguate before they collide on
+ * the same chain-config key.
  */
 type BlockchainWithMaybeNamespace = TBlockchain & {
-  namespace?: "eip155" | "solana";
+  namespace?: "eip155" | "solana" | "sui";
+  chainSlug?: string | null;
 };
 
 function resolveNamespace(
   b: BlockchainWithMaybeNamespace,
-): "eip155" | "solana" {
+): "eip155" | "solana" | "sui" {
+  if (b.namespace === "sui") return "sui";
   if (b.namespace === "solana") return "solana";
   if (b.namespace === "eip155") return "eip155";
-  // `isEVM === false` is treated as Solana in v2.3.0 since Solana is
-  // the only non-EVM chain the backend lists. If a future chain family
-  // (e.g. Cosmos) lands before the backend adds `namespace`, this
-  // heuristic must be revisited.
-  if (b.isEVM === false) return "solana";
+
+  // Authoritative slug check (preferred path; backend exposes `chainSlug`
+  // for non-EVM rows).
+  if (typeof b.chainSlug === "string") {
+    if (b.chainSlug.startsWith("sui-")) return "sui";
+    if (b.chainSlug.startsWith("solana-")) return "solana";
+  }
+
+  // Heuristic fallback for backends that don't yet emit `chainSlug` —
+  // matches by name prefix or RPC host. This keeps the picker correct
+  // even before the API revision lands.
+  const name = (b.name ?? "").toLowerCase();
+  const rpc = (b.rpcUrl ?? "").toLowerCase();
+  if (b.isEVM === false) {
+    if (name.startsWith("sui") || rpc.includes("sui.io")) return "sui";
+    return "solana";
+  }
   return "eip155";
 }
 
@@ -159,7 +175,10 @@ export function chainCacheKey(chain: ChainConfig): string {
   if (chain.namespace === "eip155") {
     return `eip155:${chain.chain.id}`;
   }
-  return `solana:${chain.cluster}`;
+  if (chain.namespace === "solana") {
+    return `solana:${chain.cluster}`;
+  }
+  return `sui:${chain.network}`;
 }
 
 export function buildChainConfigFromBlockchain(
@@ -183,6 +202,25 @@ export function buildChainConfigFromBlockchain(
         (b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0])?.logoUrl ??
         undefined,
       isTestnet: b.isTestnet ?? isDevnet,
+    };
+  }
+
+  if (namespace === "sui") {
+    // Simple fallback: backend doesn't yet expose a `network` field, so
+    // mirror the Solana approach and infer testnet/mainnet from the
+    // `isTestnet` flag. Devnet rows would need an explicit signal from
+    // the backend feed (revisit when SuiWalletKit lands in task 08).
+    const network: "mainnet" | "testnet" | "devnet" = b.isTestnet
+      ? "testnet"
+      : "mainnet";
+    return {
+      namespace: "sui",
+      network,
+      rpcUrl: b.rpcUrl,
+      iconUrl:
+        (b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0])?.logoUrl ??
+        undefined,
+      isTestnet: b.isTestnet ?? false,
     };
   }
 

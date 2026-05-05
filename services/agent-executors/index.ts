@@ -16,6 +16,11 @@
  *   takumi-agent-api/src/tools/registry.ts @ 2026-04-12
  * (29 tools total — if you add more on the server, grep for
  * `executor: 'mobile'` there and update both sides together).
+ *
+ * Sui addition (Task 11): the five `*_sui*` tools below dispatch
+ * through `SuiWalletKit` via `walletKitRegistry`, mirroring the Solana
+ * surface tool-for-tool. See `./sui.ts` for the executor implementations
+ * and `docs/sui-chain-support-spec.md` §7 for the protocol contract.
  */
 
 export * from "./chainRouter";
@@ -27,6 +32,7 @@ import { READ_EXECUTORS } from "./reads";
 import { SIMULATE_EXECUTORS } from "./simulate";
 import { SOLANA_EXECUTORS } from "./solana";
 import { SOLANA_TAKUMI_PAY_EXECUTORS } from "./solanaTakumiPay";
+import { SUI_EXECUTORS } from "./sui";
 import type { MobileToolExecutor } from "./types";
 import { WRITE_EXECUTORS } from "./writes";
 
@@ -49,6 +55,7 @@ export const EXECUTORS: Record<string, MobileToolExecutor> = {
   ...ADDRESS_BOOK_EXECUTORS,
   ...SOLANA_EXECUTORS,
   ...SOLANA_TAKUMI_PAY_EXECUTORS,
+  ...SUI_EXECUTORS,
 };
 
 /**
@@ -106,6 +113,12 @@ export const EXPECTED_MOBILE_TOOLS: ReadonlyArray<string> = [
   // solana takumipay
   "execute_booking_sol",
   "deposit_points_sol",
+  // sui native
+  "get_wallet_sui_balance",
+  "get_sui_balance",
+  "send_sui",
+  "get_wallet_sui_coins",
+  "send_sui_coin",
 ];
 
 /**

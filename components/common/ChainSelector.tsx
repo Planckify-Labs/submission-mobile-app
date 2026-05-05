@@ -51,6 +51,7 @@ type ChainRowItem = {
   isTestnet: boolean;
   evmChainId?: number;
   solanaCluster?: "mainnet-beta" | "devnet";
+  suiNetwork?: "mainnet" | "testnet" | "devnet";
   config: ChainConfig;
 };
 
@@ -151,28 +152,41 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
           blockchain.tokens?.find((t) => t.isNativeCurrency) ??
           blockchain.tokens?.[0];
         const config = buildChainConfigFromBlockchain(blockchain);
-        const row: ChainRowItem =
-          config.namespace === "eip155"
-            ? {
-                key: `eip155:${blockchain.chainId ?? "unknown"}`,
-                namespace: "eip155",
-                label: blockchain.name,
-                symbol: token?.symbol ?? "",
-                iconUrl: token?.logoUrl ?? undefined,
-                isTestnet: Boolean(config.isTestnet),
-                evmChainId: blockchain.chainId ?? undefined,
-                config,
-              }
-            : {
-                key: `solana:${config.cluster}`,
-                namespace: "solana",
-                label: blockchain.name,
-                symbol: token?.symbol ?? "",
-                iconUrl: token?.logoUrl ?? config.iconUrl,
-                isTestnet: Boolean(config.isTestnet),
-                solanaCluster: config.cluster,
-                config,
-              };
+        let row: ChainRowItem;
+        if (config.namespace === "eip155") {
+          row = {
+            key: `eip155:${blockchain.chainId ?? "unknown"}`,
+            namespace: "eip155",
+            label: blockchain.name,
+            symbol: token?.symbol ?? "",
+            iconUrl: token?.logoUrl ?? undefined,
+            isTestnet: Boolean(config.isTestnet),
+            evmChainId: blockchain.chainId ?? undefined,
+            config,
+          };
+        } else if (config.namespace === "solana") {
+          row = {
+            key: `solana:${config.cluster}`,
+            namespace: "solana",
+            label: blockchain.name,
+            symbol: token?.symbol ?? "",
+            iconUrl: token?.logoUrl ?? config.iconUrl,
+            isTestnet: Boolean(config.isTestnet),
+            solanaCluster: config.cluster,
+            config,
+          };
+        } else {
+          row = {
+            key: `sui:${config.network}`,
+            namespace: "sui",
+            label: blockchain.name,
+            symbol: token?.symbol ?? "SUI",
+            iconUrl: token?.logoUrl ?? config.iconUrl,
+            isTestnet: Boolean(config.isTestnet),
+            suiNetwork: config.network,
+            config,
+          };
+        }
         const bucket = groups.get(row.namespace);
         if (bucket) bucket.push(row);
         else groups.set(row.namespace, [row]);
@@ -297,6 +311,9 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
       if (row.namespace === "solana" && activeChain.namespace === "solana") {
         return activeChain.cluster === row.solanaCluster;
       }
+      if (row.namespace === "sui" && activeChain.namespace === "sui") {
+        return activeChain.network === row.suiNetwork;
+      }
       return false;
     },
     [activeChain],
@@ -359,7 +376,15 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
   const activeLabel =
     activeChain.namespace === "eip155"
       ? activeChain.chain.name
-      : `Solana ${activeChain.cluster === "devnet" ? "Devnet" : "Mainnet"}`;
+      : activeChain.namespace === "solana"
+        ? `Solana ${activeChain.cluster === "devnet" ? "Devnet" : "Mainnet"}`
+        : `Sui ${
+            activeChain.network === "mainnet"
+              ? "Mainnet"
+              : activeChain.network === "testnet"
+                ? "Testnet"
+                : "Devnet"
+          }`;
 
   return (
     <>

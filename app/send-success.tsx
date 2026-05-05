@@ -103,9 +103,7 @@ export default function SendSuccessScreen() {
   const canPromptSave = useMemo(() => {
     if (!recipientAddress) return false;
     const recipientLower = recipientAddress.toLowerCase();
-    return !allContacts.some(
-      (c) => c.address.toLowerCase() === recipientLower,
-    );
+    return !allContacts.some((c) => c.address.toLowerCase() === recipientLower);
   }, [recipientAddress, allContacts]);
 
   const handleCopyHash = async () => {

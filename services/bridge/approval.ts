@@ -13,6 +13,7 @@ export type ApprovalKind =
   | "signAllTransactions"
   | "switchChain"
   | "switchCluster"
+  | "switchNetwork"
   | "addChain"
   | "watchAsset"
   | "sendCalls"

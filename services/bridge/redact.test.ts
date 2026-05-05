@@ -289,6 +289,106 @@ describe("redactParams — Solana methods (§10.4 inv 11)", () => {
   });
 });
 
+describe("redactParams — Sui methods (§11.5.3)", () => {
+  it("sui:signPersonalMessage keeps address + lengths only", () => {
+    const longMessage = "the secret message body that should never leak";
+    const out = redactParams("sui:signPersonalMessage", [
+      {
+        account: { address: "0xabc" },
+        chain: "sui:mainnet",
+        message: longMessage,
+      },
+    ]) as [
+      {
+        address: string;
+        chain: string;
+        messageLength: number;
+        messagePreview: string;
+      },
+    ];
+    assert.equal(out[0].address, "0xabc");
+    assert.equal(out[0].chain, "sui:mainnet");
+    assert.equal(out[0].messageLength, longMessage.length);
+    assert.ok(out[0].messagePreview.length <= 17, "16-char cap + ellipsis");
+    assert.ok(!JSON.stringify(out).includes(longMessage));
+  });
+
+  it("sui:signPersonalMessage falls back to top-level address", () => {
+    const out = redactParams("sui:signPersonalMessage", [
+      { address: "0xdef", message: "x" },
+    ]) as [{ address: string }];
+    assert.equal(out[0].address, "0xdef");
+  });
+
+  for (const method of [
+    "sui:signTransaction",
+    "sui:signAndExecuteTransaction",
+    "sui:signTransactionBlock",
+    "sui:signAndExecuteTransactionBlock",
+  ]) {
+    it(`${method} drops the base64 transaction body`, () => {
+      const fakeTx = "T".repeat(900);
+      const out = redactParams(method, [
+        {
+          account: { address: "0xabc" },
+          chain: "sui:mainnet",
+          transaction: fakeTx,
+          options: { showEffects: true },
+        },
+      ]) as [
+        {
+          address: string;
+          chain: string;
+          txBytes: number;
+          hasOptions: boolean;
+        },
+      ];
+      assert.equal(out[0].address, "0xabc");
+      assert.equal(out[0].chain, "sui:mainnet");
+      assert.equal(out[0].txBytes, 900);
+      assert.equal(out[0].hasOptions, true);
+      assert.ok(!JSON.stringify(out).includes(fakeTx));
+    });
+  }
+
+  it("sui:reportTransactionEffects logs only effects byte length", () => {
+    const fakeEffects = "E".repeat(10_000);
+    const out = redactParams("sui:reportTransactionEffects", [
+      {
+        account: { address: "0xabc" },
+        chain: "sui:mainnet",
+        effects: fakeEffects,
+      },
+    ]) as [
+      {
+        address: string;
+        chain: string;
+        effectsBytes: number;
+      },
+    ];
+    assert.equal(out[0].address, "0xabc");
+    assert.equal(out[0].effectsBytes, 10_000);
+    assert.ok(!JSON.stringify(out).includes(fakeEffects));
+  });
+
+  it("takumi:switchNetwork passes through (defensive shape snapshot)", () => {
+    const out = redactParams("takumi:switchNetwork", [
+      { from: "mainnet", to: "testnet" },
+    ]);
+    assert.deepEqual(out, [{ from: "mainnet", to: "testnet" }]);
+    // Snapshot guard: redactor must not invent fields. Any future-added
+    // field on this payload should fail this exact deep equal so the
+    // reviewer revisits the redaction posture.
+  });
+
+  it("standard:connect (universal) handles Sui without changes", () => {
+    const out = redactParams("standard:connect", [{ silent: true }]) as [
+      { silent: boolean },
+    ];
+    assert.equal(out[0].silent, true);
+  });
+});
+
 describe("scrubLoggerPayload — structural", () => {
   it("walks arrays and nested objects", () => {
     const m =

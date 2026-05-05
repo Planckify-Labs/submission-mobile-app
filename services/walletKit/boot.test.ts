@@ -35,6 +35,11 @@ describe("bootWalletKits", () => {
     assert.equal(walletKitRegistry.has("solana"), true);
   });
 
+  it("registers the Sui kit under the sui namespace", () => {
+    bootWalletKits();
+    assert.equal(walletKitRegistry.has("sui"), true);
+  });
+
   it("the registered EVM kit reports namespace === 'eip155'", () => {
     bootWalletKits();
     const kit = walletKitRegistry.get("eip155");
@@ -47,17 +52,24 @@ describe("bootWalletKits", () => {
     assert.equal(kit.namespace, "solana");
   });
 
-  it("registers exactly two kits with eip155 first (insertion order)", () => {
+  it("the registered Sui kit reports namespace === 'sui'", () => {
+    bootWalletKits();
+    const kit = walletKitRegistry.get("sui");
+    assert.equal(kit.namespace, "sui");
+  });
+
+  it("registers exactly three kits with insertion order [eip155, solana, sui]", () => {
     bootWalletKits();
     const kits = walletKitRegistry.getAll();
-    assert.equal(kits.length, 2);
+    assert.equal(kits.length, 3);
     assert.equal(kits[0].namespace, "eip155");
     assert.equal(kits[1].namespace, "solana");
+    assert.equal(kits[2].namespace, "sui");
   });
 
   it("is idempotent — calling twice does not double-register", () => {
     bootWalletKits();
     bootWalletKits();
-    assert.equal(walletKitRegistry.getAll().length, 2);
+    assert.equal(walletKitRegistry.getAll().length, 3);
   });
 });

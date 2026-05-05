@@ -32,7 +32,9 @@ export function SwitchChainSheet({
             {/* TODO(task-17): namespace-aware chain label. */}
             {activeChain.namespace === "eip155"
               ? (activeChain.chain.name ?? "current")
-              : activeChain.cluster}
+              : activeChain.namespace === "solana"
+                ? activeChain.cluster
+                : activeChain.network}
           </Text>
           <Text className="text-xs text-gray-500">To</Text>
           <Text className="text-base text-gray-900">

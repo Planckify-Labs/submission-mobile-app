@@ -30,13 +30,25 @@ import { walletKitRegistry } from "./registry";
 
 /**
  * Default name applied to each auto-minted wallet. Keeps the UI stable
- * across namespaces ("Main Wallet · ETH" / "Main Wallet · SOL"). Future
- * namespaces fall back to an uppercase namespace tag until they're
- * added explicitly.
+ * across namespaces ("Main Wallet · ETH" / "Main Wallet · SOL" /
+ * "Main Wallet · SUI"). Future namespaces fall back to an uppercase
+ * namespace tag until they're added explicitly.
+ *
+ * Note: the fallback `ns.toUpperCase()` would already produce
+ * `"Main Wallet · SUI"` for `ns === "sui"`, but the explicit branch
+ * makes the supported set obvious to reviewers and gives us a single
+ * place to tweak the Sui label if product copy ever diverges from the
+ * other chains.
  */
 export function defaultWalletNameFor(ns: Namespace): string {
   const label =
-    ns === "eip155" ? "ETH" : ns === "solana" ? "SOL" : ns.toUpperCase();
+    ns === "eip155"
+      ? "ETH"
+      : ns === "solana"
+        ? "SOL"
+        : ns === "sui"
+          ? "SUI"
+          : (ns as string).toUpperCase();
   return `Main Wallet · ${label}`;
 }
 

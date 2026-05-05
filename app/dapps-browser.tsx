@@ -287,7 +287,9 @@ export default function DappsBrowser() {
     // TODO(task-17): include non-EVM chain discriminants here too.
     activeChain.namespace === "eip155"
       ? activeChain.chain.id
-      : activeChain.cluster,
+      : activeChain.namespace === "solana"
+        ? activeChain.cluster
+        : activeChain.network,
     sessionNonce,
   ]);
 

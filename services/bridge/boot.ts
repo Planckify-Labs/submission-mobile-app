@@ -1,3 +1,4 @@
+import { SuiJsonRpcClient as SuiClient } from "@mysten/sui/jsonRpc";
 import { createSolanaRpc } from "@solana/kit";
 import type { WebView } from "react-native-webview";
 import { evmRenderers } from "@/components/dapps-browser/approvals/renderers";
@@ -5,6 +6,9 @@ import { createEvmAdapter } from "@/services/chains/evm/EvmAdapter";
 import { ChainAdapterRegistry } from "@/services/chains/registry";
 import { createSolanaAdapter } from "@/services/chains/solana/SolanaAdapter";
 import { installSolanaSigner } from "@/services/chains/solana/signer";
+import type { SuiNetwork } from "@/services/chains/sui/payloads";
+import { createSuiAdapter } from "@/services/chains/sui/SuiAdapter";
+import { installSuiSigner } from "@/services/chains/sui/signer";
 import type { AdapterContext } from "@/services/chains/types";
 import { PermissionStore } from "@/services/permissions/store";
 import { walletKitRegistry } from "@/services/walletKit/registry";
@@ -16,9 +20,13 @@ import { HttpsInspector } from "./inspectors/HttpsInspector";
 import { SolanaProgramDecoderInspector } from "./inspectors/SolanaProgramDecoderInspector";
 import { SolanaSimulationInspector } from "./inspectors/SolanaSimulationInspector";
 import { SolanaSiwsInspector } from "./inspectors/SolanaSiwsInspector";
+import { SuiPtbDecoderInspector } from "./inspectors/SuiPtbDecoderInspector";
+import { SuiSimulationInspector } from "./inspectors/SuiSimulationInspector";
+import { SuiSiwsInspector } from "./inspectors/SuiSiwsInspector";
 import { pendingIntentsStore } from "./pendingIntents";
 import { registerRenderer } from "./renderers";
 import { ConsoleSink } from "./sinks/ConsoleSink";
+import { TelemetrySink } from "./sinks/TelemetrySink";
 
 interface BootOpts {
   getContext: () => AdapterContext;
@@ -52,8 +60,12 @@ export function bootBridge(opts: BootOpts) {
   InspectorRegistry.register(SolanaProgramDecoderInspector);
   InspectorRegistry.register(SolanaSimulationInspector);
   InspectorRegistry.register(SolanaSiwsInspector);
+  InspectorRegistry.register(SuiPtbDecoderInspector);
+  InspectorRegistry.register(SuiSimulationInspector);
+  InspectorRegistry.register(SuiSiwsInspector);
 
   bridgeEventBus.subscribe(ConsoleSink);
+  bridgeEventBus.subscribe(TelemetrySink);
 
   for (const r of evmRenderers) registerRenderer(r);
 
@@ -118,6 +130,52 @@ export function bootBridge(opts: BootOpts) {
       );
     }
     booted = false;
+  }
+
+  // Sui dApp bridge — full Wallet Standard implementation per
+  // `docs/sui-dapp-bridge-spec.md`. Flipped ON in Task 20 once all
+  // upstream tasks (00–19) and the security gate (TWV-2026-YYY,
+  // `docs/wallet-security-task/66_sui_dapp_bridge_design_note.md`)
+  // landed.
+  //
+  // Boot-order precondition: the Sui WalletKit must be registered in
+  // `walletKitRegistry` before `installSuiSigner` lands a signer. When
+  // the kit is missing we leave the adapter registered (so dApp
+  // discovery sees the Wallet Standard announcement) but
+  // `executeApproval` will return `-32603 "no Sui signer registered"`
+  // — same loud-failure pattern Solana uses.
+  //
+  // `getRpcForNetwork` falls back to public Sui Foundation full nodes;
+  // private endpoints will ride here once the project provisions them.
+  // `dryRunTransactionBlock` rate-limits on public endpoints — the
+  // simulation inspector tolerates `null` from a rate-limited dry-run.
+  const FEATURE_SUI_DAPP_BRIDGE = true;
+  if (FEATURE_SUI_DAPP_BRIDGE) {
+    ChainAdapterRegistry.register(createSuiAdapter());
+    if (walletKitRegistry.has("sui")) {
+      installSuiSigner({
+        getWalletByAddress: (addr) =>
+          opts.getContext().wallets.find((w) => w.address === addr),
+        getRpcForNetwork: (network: SuiNetwork) => {
+          const url =
+            network === "testnet"
+              ? "https://fullnode.testnet.sui.io:443"
+              : network === "devnet"
+                ? "https://fullnode.devnet.sui.io:443"
+                : "https://fullnode.mainnet.sui.io:443";
+          return { client: new SuiClient({ url, network }) };
+        },
+      });
+    } else {
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.warn(
+          "[bridge] Sui kit not registered in walletKitRegistry; " +
+            "Sui dApp signing disabled until next bootBridge. " +
+            "Did `bootWalletKits()` run before `bootBridge()` and include Sui?",
+        );
+      }
+      booted = false;
+    }
   }
 
   void PermissionStore.hydrate();

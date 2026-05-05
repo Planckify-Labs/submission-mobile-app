@@ -21,10 +21,18 @@ export type ChainConfig =
       rpcSubscriptionsUrl?: string;
       iconUrl?: string;
       isTestnet?: boolean;
+    }
+  | {
+      namespace: "sui";
+      network: "mainnet" | "testnet" | "devnet";
+      rpcUrl: string;
+      iconUrl?: string;
+      isTestnet?: boolean;
     };
 
 export type EvmChainConfig = Extract<ChainConfig, { namespace: "eip155" }>;
 export type SolanaChainConfig = Extract<ChainConfig, { namespace: "solana" }>;
+export type SuiChainConfig = Extract<ChainConfig, { namespace: "sui" }>;
 
 /**
  * Narrowing helper used as a stopgap while tasks 04–16 relocate
@@ -54,6 +62,19 @@ export function getEvmSupportedChains(): EvmChainConfig[] {
 /** Lookup an EVM chain by viem `chainId`. Ignores Solana entries. */
 export function findEvmChainById(chainId: number): EvmChainConfig | undefined {
   return getEvmSupportedChains().find((c) => c.chain.id === chainId);
+}
+
+/**
+ * Mirror of {@link assertEvmChain} for Sui. Throws if `chain.namespace`
+ * is not `"sui"` so callers that haven't migrated still fail loud.
+ */
+export function assertSuiChain(chain: ChainConfig): SuiChainConfig {
+  if (chain.namespace !== "sui") {
+    throw new Error(
+      `assertSuiChain: expected Sui chain, got namespace=${chain.namespace}`,
+    );
+  }
+  return chain;
 }
 
 /**
@@ -94,5 +115,15 @@ export const supportedChains: ChainConfig[] = [
     chain: polygonMumbai,
     iconUrl: "https://polygon.technology/favicon.ico",
     isTestnet: true,
+  },
+  // Sui mainnet — public Mysten fullnode is the v1 endpoint. Swap for a
+  // paid provider via re-seed once mobile traffic warrants. Testnet /
+  // devnet rows arrive via the backend `/blockchains` feed.
+  {
+    namespace: "sui",
+    network: "mainnet",
+    rpcUrl: "https://fullnode.mainnet.sui.io:443",
+    iconUrl: "https://sui.io/favicon.ico",
+    isTestnet: false,
   },
 ];

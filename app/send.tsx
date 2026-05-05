@@ -46,6 +46,7 @@ import { useAddressBook } from "@/hooks/useAddressBook";
 import { useNavigationReady } from "@/hooks/useNavigationReady";
 import { useWallet } from "@/hooks/useWallet";
 import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
+import { classifySuiRecipient } from "@/utils/walletUtils";
 
 /**
  * Splits a `kit.formatNativeAmount` output into `[amount, symbol]`.
@@ -113,15 +114,22 @@ export default function SendScreen() {
         blockchains.find((b) => b.chainId === activeChain.chain.id) || null
       );
     }
-    const wantsDevnet = activeChain.cluster === "devnet";
-    const solanaRows = blockchains.filter((b) => b.isEVM === false);
-    const match =
-      solanaRows.find((b) =>
-        wantsDevnet
-          ? b.name.toLowerCase().includes("devnet")
-          : !b.name.toLowerCase().includes("devnet"),
-      ) ?? solanaRows[0];
-    return match ?? null;
+    if (activeChain.namespace === "solana") {
+      const wantsDevnet = activeChain.cluster === "devnet";
+      const solanaRows = blockchains.filter((b) => b.isEVM === false);
+      const match =
+        solanaRows.find((b) =>
+          wantsDevnet
+            ? b.name.toLowerCase().includes("devnet")
+            : !b.name.toLowerCase().includes("devnet"),
+        ) ?? solanaRows[0];
+      return match ?? null;
+    }
+    // TODO(task-08): Sui — once the backend feed exposes Sui rows /
+    // namespace metadata, mirror the Solana matcher above. For now,
+    // surface no backend row (token picker stays empty rather than
+    // showing irrelevant tokens).
+    return null;
   }, [blockchains, activeChain]);
   const { data: rawTokenList } = useTokens({
     blockchainId: activeBackendChain?.id,
@@ -398,6 +406,18 @@ export default function SendScreen() {
     }
 
     if (!kit.validateAddress(recipient)) {
+      // Sui §3.5: when the kit rejects, see if it's the pre-mainnet
+      // 20-byte form so we can surface a migration-pointer message
+      // instead of a generic "invalid address". Detection-only — we
+      // never auto-convert (the legacy → canonical mapping is not 1:1
+      // and silent conversion would lose funds).
+      if (activeChain.namespace === "sui") {
+        const verdict = classifySuiRecipient(recipient);
+        if (!verdict.ok && verdict.kind === "legacy20") {
+          console.error(`Error: ${verdict.message}`);
+          return false;
+        }
+      }
       console.error("Error: Invalid recipient address for the active chain");
       return false;
     }

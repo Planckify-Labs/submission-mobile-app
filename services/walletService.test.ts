@@ -204,6 +204,71 @@ describe("walletService — TWV-2026-070 source invariants", () => {
   });
 });
 
+/* --------------------------------------------------------------------
+ * TWV-2026-080 — Sui Ed25519 signer dwell + cache.
+ *
+ * Source-level invariants: same shape as TWV-2026-070 — single dwell
+ * site, namespace guard first, no logging of secret material, cache
+ * wiped by clearAccountCache.
+ * ------------------------------------------------------------------ */
+
+describe("walletService — TWV-2026-080 source invariants (Sui)", () => {
+  it("cites the TWV-2026-080 review gate in a header block", () => {
+    assert.match(src, /Review gate\s+—\s+TWV-2026-080/);
+  });
+
+  it("declares the suiSignerCache as module-local state", () => {
+    assert.match(
+      src,
+      /const\s+suiSignerCache:\s*Record<string,\s*Ed25519Keypair>\s*=\s*\{\}/,
+    );
+  });
+
+  it("exports getSuiSignerForWallet with the Namespace guard first", () => {
+    assert.match(
+      src,
+      /export async function getSuiSignerForWallet[\s\S]*?if \(wallet\.namespace !== "sui"\) return null/,
+    );
+  });
+
+  it("rejects non-ed25519 schemes loudly (no Secp fallback in v1)", () => {
+    const fn = src.match(
+      /export async function getSuiSignerForWallet[\s\S]*?^}/m,
+    );
+    assert.ok(fn);
+    assert.match(fn[0], /scheme !== "ed25519"/);
+  });
+
+  it("uses Ed25519Keypair.fromSecretKey via the SDK (no hand-rolled crypto)", () => {
+    assert.match(src, /Ed25519Keypair\.fromSecretKey\(seed\)/);
+  });
+
+  it("failure logs are gated on __DEV__ and do NOT log seed / kp / signer bytes", () => {
+    const fn = src.match(
+      /export async function getSuiSignerForWallet[\s\S]*?^}/m,
+    );
+    assert.ok(fn, "Sui dwell function source block must be present");
+    const body = fn[0];
+    assert.match(body, /if \(__DEV__\)\s*\n?\s*console\.error/);
+    const stripped = body
+      .replace(/"(?:\\.|[^"\\])*"/g, '""')
+      .replace(/'(?:\\.|[^'\\])*'/g, "''")
+      .replace(/`(?:\\.|[^`\\])*`/g, "``");
+    assert.doesNotMatch(
+      stripped,
+      /console\.(log|error|warn)\([^)]*\b(seed|kp|signer|mnemonic)\b[^)]*\)/,
+    );
+  });
+
+  it("clearAccountCache wipes ALL THREE caches (accountCache, solanaSignerCache, suiSignerCache)", () => {
+    const clear = src.match(/export function clearAccountCache[\s\S]*?^}/m);
+    assert.ok(clear);
+    assert.match(clear[0], /accountCache/);
+    assert.match(clear[0], /solanaSignerCache/);
+    assert.match(clear[0], /suiSignerCache/);
+  });
+});
+
 // BIP-39 canonical test mnemonic. The base58 address below is Phantom-
 // verified for SLIP-0010 derivation at the default Solana path
 // (`m/44'/501'/0'/0'`) — cross-checked by

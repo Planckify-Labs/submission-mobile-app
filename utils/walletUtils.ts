@@ -1,3 +1,4 @@
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import {
   createKeyPairFromPrivateKeyBytes,
   getAddressFromPublicKey,
@@ -16,6 +17,15 @@ import {
   DEFAULT_SOLANA_PATH,
   mnemonicToSolanaPrivateKey,
 } from "@/services/chains/solana/derivation";
+import {
+  decodeSuiPrivateKey,
+  encodeSuiPrivateKey,
+} from "@/services/chains/sui/codec";
+import {
+  DEFAULT_SUI_PATH,
+  mnemonicToSuiKeypair,
+} from "@/services/chains/sui/derivation";
+import { InvalidSuiAddressLegacyError } from "@/services/chains/sui/errorCodes";
 
 export function isValidPrivateKey(privateKey: string): boolean {
   const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
@@ -220,6 +230,227 @@ export async function createSolanaWalletFromMnemonic(
   }
 }
 
+/**
+ * Validate a canonical Sui address.
+ *
+ * Spec reference: `docs/sui-chain-support-spec.md` §1.4.
+ *
+ * Strict canonical form: `0x` + 64 lowercase hex chars (66 chars total).
+ * Rejects:
+ *   - legacy 20-byte hex addresses (`0x` + 40 hex chars),
+ *   - mixed-case hex (canonical Sui addresses are lowercase),
+ *   - non-hex characters,
+ *   - missing `0x` prefix,
+ *   - empty string.
+ *
+ * Pure regex check; never throws. Legacy 20-byte rejection at the send
+ * sheet (Task 14) relies on this validator returning `false` for the
+ * shorter form.
+ */
+export function isValidSuiAddress(address: string): boolean {
+  if (!address) return false;
+  return /^0x[0-9a-f]{64}$/.test(address);
+}
+
+/**
+ * Returns true iff `input` is `0x` + 40 lowercase hex chars (20 bytes) —
+ * the pre-mainnet Sui address shape. Distinct from the canonical 32-byte
+ * form. Used by the send sheet to surface a helpful migration message
+ * instead of a generic "invalid address" error.
+ *
+ * Spec reference: `docs/sui-chain-support-spec.md` §3.5.
+ *
+ * Lowercase only, matching `isValidSuiAddress` strictness. Pure regex,
+ * never throws.
+ */
+export function isLegacySui20ByteAddress(input: string): boolean {
+  if (!input) return false;
+  return /^0x[0-9a-f]{40}$/.test(input);
+}
+
+/**
+ * The user-facing message surfaced when a recipient input matches the
+ * pre-mainnet 20-byte Sui address shape. Kept beside the predicate so
+ * UI surfaces import one symbol and don't have to re-author the copy.
+ */
+export const SUI_LEGACY_ADDRESS_UX_MESSAGE =
+  "This looks like a pre-mainnet (20-byte) Sui address. The current Sui network uses 32-byte addresses; ask the recipient to send you their up-to-date address.";
+
+/**
+ * Classify a Sui recipient string into one of three outcomes for the
+ * send sheet:
+ *  1. Canonical 32-byte address → `{ ok: true }`.
+ *  2. Pre-mainnet 20-byte address → `{ ok: false, kind: "legacy20", error }`
+ *     where `error` is a constructed `InvalidSuiAddressLegacyError`
+ *     ready for UI surfacing or telemetry.
+ *  3. Anything else → `{ ok: false, kind: "invalid" }`.
+ *
+ * Spec reference: `docs/sui-chain-support-spec.md` §3.5. Detection-only —
+ * never re-derives or maps; the 20-byte → 32-byte mapping is not 1:1
+ * and auto-conversion would lose funds.
+ *
+ * Pure function; never throws.
+ */
+export type TSuiRecipientClassification =
+  | { ok: true }
+  | {
+      ok: false;
+      kind: "legacy20";
+      error: InvalidSuiAddressLegacyError;
+      message: string;
+    }
+  | { ok: false; kind: "invalid" };
+
+export function classifySuiRecipient(input: string): TSuiRecipientClassification {
+  if (isValidSuiAddress(input)) return { ok: true };
+  if (isLegacySui20ByteAddress(input)) {
+    return {
+      ok: false,
+      kind: "legacy20",
+      error: new InvalidSuiAddressLegacyError(input),
+      message: SUI_LEGACY_ADDRESS_UX_MESSAGE,
+    };
+  }
+  return { ok: false, kind: "invalid" };
+}
+
+/**
+ * Predicate-form of {@link decodeSuiPrivateKey}. Returns `true` for any
+ * input the codec accepts (canonical bech32 `suiprivkey1…`, raw 32-byte
+ * hex with or without `0x`, base64 32-byte payload). Catches the codec's
+ * `InvalidSuiPrivateKeyEncodingError` and returns `false`.
+ *
+ * Mirrors `isValidSolanaPrivateKey` — the loud / safe split: this is the
+ * loud surface for UI validation, and {@link createSuiWalletFromPrivateKey}
+ * is the safe surface that returns `null` on bad input.
+ */
+export function isValidSuiPrivateKey(input: string): boolean {
+  if (!input) return false;
+  try {
+    decodeSuiPrivateKey(input);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Create a Sui `TWallet` from a BIP-39 mnemonic via SLIP-0010 ed25519
+ * derivation at the default 5-level fully-hardened path
+ * (`m/44'/784'/0'/0'/0'`).
+ *
+ * Spec reference: `docs/sui-chain-support-spec.md` §1.4, §3.2, §6.
+ *
+ * Returns `null` if `isValidMnemonic` rejects the input or if the SDK
+ * throws during derivation. We store the secret as canonical bech32
+ * (`suiprivkey1…`) on `TWallet.privateKey` so the dwell site
+ * (`getSuiSignerForWallet`) can re-decode without re-running BIP-39.
+ *
+ * Security: never logs mnemonic or key bytes. Failures emit a bounded
+ * `__DEV__` breadcrumb only.
+ */
+export async function createSuiWalletFromMnemonic(
+  mnemonic: string,
+  name?: string,
+): Promise<TWallet | null> {
+  if (!isValidMnemonic(mnemonic)) {
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.warn(
+        "[createSuiWalletFromMnemonic] isValidMnemonic rejected input (word count / wordlist)",
+      );
+    }
+    return null;
+  }
+  try {
+    const kp = mnemonicToSuiKeypair(mnemonic);
+    const address = kp.toSuiAddress();
+    const bech32 = kp.getSecretKey();
+    const pubkeyHex = bytesToHex(kp.getPublicKey().toRawBytes());
+    return {
+      account: { address },
+      address,
+      privateKey: bech32,
+      seedPhrase: mnemonic,
+      name: name || "Sui Wallet",
+      balance: "0",
+      source: "Created",
+      type: "SeedPhrase",
+      namespace: "sui",
+      sui: {
+        suiAddress: address,
+        pubkeyHex,
+        derivationPath: DEFAULT_SUI_PATH,
+        scheme: "ed25519",
+      },
+    };
+  } catch (err) {
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.warn(
+        "[createSuiWalletFromMnemonic] derivation threw:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    return null;
+  }
+}
+
+/**
+ * Create a Sui `TWallet` from an exported private key.
+ *
+ * Spec reference: `docs/sui-chain-support-spec.md` §1.4.
+ *
+ * Accepts any encoding {@link decodeSuiPrivateKey} understands — bech32
+ * `suiprivkey1…`, raw 32-byte hex (with or without `0x`), or base64 —
+ * and re-encodes to canonical bech32 before storing on
+ * `TWallet.privateKey`. This way, regardless of the import form, every
+ * downstream consumer sees the same canonical secret.
+ *
+ * Returns `null` on any decoding / derivation failure so the UI can
+ * render a clean error state without a try/catch.
+ */
+export async function createSuiWalletFromPrivateKey(
+  privateKey: string,
+  name?: string,
+): Promise<TWallet | null> {
+  try {
+    const seed = decodeSuiPrivateKey(privateKey);
+    const kp = Ed25519Keypair.fromSecretKey(seed);
+    const address = kp.toSuiAddress();
+    // Canonicalize the secret form. Prefer the keypair's own
+    // `getSecretKey()` (matches the SDK encoder) but fall back to the
+    // codec helper if the SDK shape ever changes.
+    const bech32 =
+      typeof kp.getSecretKey === "function"
+        ? kp.getSecretKey()
+        : encodeSuiPrivateKey(seed);
+    const pubkeyHex = bytesToHex(kp.getPublicKey().toRawBytes());
+    return {
+      account: { address },
+      address,
+      privateKey: bech32,
+      name: name || "Sui Wallet",
+      balance: "0",
+      source: "Imported",
+      type: "PrivateKey",
+      namespace: "sui",
+      sui: {
+        suiAddress: address,
+        pubkeyHex,
+        derivationPath: undefined,
+        scheme: "ed25519",
+      },
+    };
+  } catch (err) {
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.warn(
+        "[createSuiWalletFromPrivateKey] decode/derivation threw:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    return null;
+  }
+}
+
 export async function createWalletFromParams(
   params: TWalletCreationParams,
 ): Promise<TWallet | null> {
@@ -237,6 +468,14 @@ export async function createWalletFromParams(
 
   if (params.source === "SolanaSeedPhrase" && params.seedPhrase) {
     return createSolanaWalletFromMnemonic(params.seedPhrase, params.name);
+  }
+
+  if (params.source === "SuiPrivateKey" && params.privateKey) {
+    return createSuiWalletFromPrivateKey(params.privateKey, params.name);
+  }
+
+  if (params.source === "SuiSeedPhrase" && params.seedPhrase) {
+    return createSuiWalletFromMnemonic(params.seedPhrase, params.name);
   }
 
   if (params.source === "social" && params.account) {
@@ -257,6 +496,20 @@ export async function createWalletFromParams(
   }
 
   return null;
+}
+
+/**
+ * Hex-encode a `Uint8Array` (lowercase, no `0x` prefix). Used to render
+ * the raw 32-byte Sui ed25519 public key onto `TWallet.sui.pubkeyHex`.
+ * Stays inline here to avoid pulling in `@noble/hashes/utils` just for
+ * one utility.
+ */
+function bytesToHex(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    out += bytes[i].toString(16).padStart(2, "0");
+  }
+  return out;
 }
 
 // Common address truncation presets
