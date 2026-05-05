@@ -21,6 +21,7 @@ import { formatUnits, parseUnits } from "viem";
 import { tokenApi } from "@/api/endpoints/tokens";
 import type { TToken } from "@/api/types/token";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
+import { resolveNamespace } from "@/hooks/useWallet.helpers";
 import { storage } from "@/lib/storage/mmkv";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import {
@@ -242,7 +243,10 @@ export const getSolanaWalletTokens: MobileToolExecutor = (input, context) =>
     // cause getTokenBalance to return 0 for every token).
     const isTestnet = chain.cluster !== "mainnet-beta";
     const solanaBlockchain = context.blockchains.find(
-      (b) => !b.isEVM && b.isActive && b.isTestnet === isTestnet,
+      (b) =>
+        resolveNamespace(b) === "solana" &&
+        b.isActive &&
+        b.isTestnet === isTestnet,
     );
     if (!solanaBlockchain) {
       throw new ExecutorError(

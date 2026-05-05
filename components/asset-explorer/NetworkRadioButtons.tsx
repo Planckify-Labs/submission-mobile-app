@@ -14,6 +14,7 @@ import { useActiveNetwork, useActiveTab } from "@/hooks/useAssetExplorerState";
 import { useNetworkModal } from "@/hooks/useNetworkModal";
 import { usePinnedNetworks } from "@/hooks/usePinnedNetworks";
 import { useWallet } from "@/hooks/useWallet";
+import { resolveNamespace } from "@/hooks/useWallet.helpers";
 import { getEvmChainId } from "@/services/walletKit/chainInfo";
 import OptimizedImage from "../common/OptimizedImage";
 import NetworkRadioButtonLoadingSkeletons from "./NetworkRadioButtonLoadingSkeletons";
@@ -84,7 +85,7 @@ const NetworkRadioButtons = () => {
     if (lastSyncedChainRef.current === signature) return;
 
     const matching = blockchains.find((b) => {
-      const bNamespace = b.isEVM === false ? "solana" : "eip155";
+      const bNamespace = resolveNamespace(b);
       if (bNamespace !== activeChain.namespace) return false;
       if (typeof activeChainId === "number") {
         return typeof b.chainId === "number" && b.chainId === activeChainId;

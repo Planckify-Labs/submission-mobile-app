@@ -97,7 +97,10 @@ import {
 } from "@/hooks/queries/usePaymentTokens";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { useWallet } from "@/hooks/useWallet";
-import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
+import {
+  buildChainConfigFromBlockchain,
+  resolveNamespace,
+} from "@/hooks/useWallet.helpers";
 import {
   classifyPaymentError,
   type PaymentErrorCode,
@@ -1379,7 +1382,10 @@ function MintFallback({
         return b.isEVM && b.chainId === activeChain.chain.id;
       }
       if (activeChain.namespace === "solana") {
-        return !b.isEVM && b.isTestnet === (activeChain.cluster === "devnet");
+        return (
+          resolveNamespace(b) === "solana" &&
+          b.isTestnet === (activeChain.cluster === "devnet")
+        );
       }
       return false;
     });

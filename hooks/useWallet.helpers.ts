@@ -27,7 +27,7 @@ type BlockchainWithMaybeNamespace = TBlockchain & {
   chainSlug?: string | null;
 };
 
-function resolveNamespace(
+export function resolveNamespace(
   b: BlockchainWithMaybeNamespace,
 ): "eip155" | "solana" | "sui" {
   if (b.namespace === "sui") return "sui";

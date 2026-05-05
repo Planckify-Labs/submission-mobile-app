@@ -32,6 +32,7 @@ import { useAssetSelection } from "@/hooks/useAssetSelection";
 import { useNavigationReady } from "@/hooks/useNavigationReady";
 import { useUserAssetsWithBalances } from "@/hooks/useUserAssetsWithBalances";
 import { useWallet } from "@/hooks/useWallet";
+import { resolveNamespace } from "@/hooks/useWallet.helpers";
 import {
   adaptAssetForNetwork,
   filterAssets,
@@ -62,7 +63,7 @@ export default function AssetExplorer() {
   // adding a Solana asset only surfaces Solana wallets, and vice versa.
   const activeNamespace = useMemo(() => {
     const blockchain = blockchains?.find((b) => b.id === activeBlockchainId);
-    if (blockchain) return blockchain.isEVM === false ? "solana" : "eip155";
+    if (blockchain) return resolveNamespace(blockchain);
     return activeChain.namespace;
   }, [blockchains, activeBlockchainId, activeChain.namespace]);
 

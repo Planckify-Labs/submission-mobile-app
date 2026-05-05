@@ -115,8 +115,19 @@ export default function SendScreen() {
       );
     }
     if (activeChain.namespace === "solana") {
+      // Disambiguate Solana rows from Sui (both `isEVM:false`) by
+      // `chainSlug` prefix; fall back to a name heuristic for backends
+      // that haven't shipped `chainSlug` yet.
       const wantsDevnet = activeChain.cluster === "devnet";
-      const solanaRows = blockchains.filter((b) => b.isEVM === false);
+      const solanaRows = blockchains.filter(
+        (b: typeof blockchains[number] & { chainSlug?: string | null }) => {
+          if (b.isEVM !== false) return false;
+          if (typeof b.chainSlug === "string")
+            return b.chainSlug.startsWith("solana-");
+          const name = (b.name ?? "").toLowerCase();
+          return !name.startsWith("sui");
+        },
+      );
       const match =
         solanaRows.find((b) =>
           wantsDevnet
@@ -125,10 +136,27 @@ export default function SendScreen() {
         ) ?? solanaRows[0];
       return match ?? null;
     }
-    // TODO(task-08): Sui — once the backend feed exposes Sui rows /
-    // namespace metadata, mirror the Solana matcher above. For now,
-    // surface no backend row (token picker stays empty rather than
-    // showing irrelevant tokens).
+    if (activeChain.namespace === "sui") {
+      // Mirror Solana's matcher: filter the non-EVM rows down to Sui
+      // by `chainSlug` (preferred) or name heuristic, then pick the
+      // testnet/mainnet row matching `activeChain.network`.
+      const wantsTestnet = activeChain.network !== "mainnet";
+      const suiRows = blockchains.filter(
+        (b: typeof blockchains[number] & { chainSlug?: string | null }) => {
+          if (b.isEVM !== false) return false;
+          if (typeof b.chainSlug === "string")
+            return b.chainSlug.startsWith("sui-");
+          const name = (b.name ?? "").toLowerCase();
+          const rpc = (b.rpcUrl ?? "").toLowerCase();
+          return name.startsWith("sui") || rpc.includes("sui.io");
+        },
+      );
+      const match =
+        suiRows.find((b) =>
+          wantsTestnet ? b.isTestnet : !b.isTestnet,
+        ) ?? suiRows[0];
+      return match ?? null;
+    }
     return null;
   }, [blockchains, activeChain]);
   const { data: rawTokenList } = useTokens({
@@ -208,11 +236,34 @@ export default function SendScreen() {
       didApplyScannedNamespaceRef.current = true;
       return;
     }
+    if (
+      activeChain.namespace === "sui" &&
+      scannedNamespace === "sui" &&
+      activeChain.network === "mainnet"
+    ) {
+      didApplyScannedNamespaceRef.current = true;
+      return;
+    }
+
+    const matchesNs = (
+      b: (typeof blockchains)[number] & { chainSlug?: string | null },
+      ns: "solana" | "sui",
+    ): boolean => {
+      if (b.isEVM !== false) return false;
+      if (typeof b.chainSlug === "string")
+        return b.chainSlug.startsWith(`${ns}-`);
+      const name = (b.name ?? "").toLowerCase();
+      const rpc = (b.rpcUrl ?? "").toLowerCase();
+      const looksSui = name.startsWith("sui") || rpc.includes("sui.io");
+      return ns === "sui" ? looksSui : !looksSui;
+    };
 
     const targetRow =
-      scannedNamespace === "solana"
-        ? blockchains.find((b) => b.isEVM === false && !b.isTestnet)
-        : blockchains.find((b) => b.isEVM !== false);
+      scannedNamespace === "sui"
+        ? blockchains.find((b) => matchesNs(b, "sui") && !b.isTestnet)
+        : scannedNamespace === "solana"
+          ? blockchains.find((b) => matchesNs(b, "solana") && !b.isTestnet)
+          : blockchains.find((b) => b.isEVM !== false);
 
     if (!targetRow) {
       didApplyScannedNamespaceRef.current = true;

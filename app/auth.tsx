@@ -15,6 +15,7 @@ import { useNonce, useVerifySignature } from "@/hooks/queries/useAuth";
 import { useLoadingSteps } from "@/hooks/useLoadingSteps";
 import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { useWallet } from "@/hooks/useWallet";
+import { publicApi } from "@/constants/configs/ky";
 import { bytesToBase58 } from "@/services/chains/solana/codec";
 import {
   formatChainLabel,
@@ -62,26 +63,37 @@ export default function AuthScreen() {
   // Branch the nonce fetch on wallet namespace.
   // EVM: pass numeric chainId (SIWE path).
   // Solana: pass chainSlug derived from cluster (SIWS path).
+  // Sui: pass chainSlug derived from network (SIWS-Sui path).
   //
   // Source of truth is the *wallet's* namespace, not `activeChain`.
   // `activeChain` briefly lags behind `activeWallet` on switch: the wallet
   // mutation commits first, then the chain mutation. Reading cluster from
-  // `activeChain` mid-transition hands us an EVM chain and `solanaChainSlug`
-  // becomes undefined — the nonce request then drops the query param,
-  // falls through to the SIWE path on the server, and dies with
+  // `activeChain` mid-transition hands us a wrong-namespace chain and the
+  // chainSlug becomes undefined — the nonce request then drops the query
+  // param, falls through to the SIWE path on the server, and dies with
   // "Invalid Ethereum wallet address format". Default to mainnet when
-  // the chain hasn't caught up; the user can still switch devnet via the
-  // chain selector and re-trigger auth.
+  // the chain hasn't caught up; the user can still switch testnet via
+  // the chain selector and re-trigger auth.
   const isSolana = activeWallet?.namespace === "solana";
+  const isSui = activeWallet?.namespace === "sui";
   const solanaChainSlug = isSolana
     ? activeChain?.namespace === "solana" && activeChain.cluster === "devnet"
       ? "solana-devnet"
       : "solana-mainnet"
     : undefined;
+  const suiChainSlug = isSui
+    ? activeChain?.namespace === "sui" && activeChain.network === "testnet"
+      ? "sui-testnet"
+      : activeChain?.namespace === "sui" && activeChain.network === "devnet"
+        ? "sui-devnet"
+        : "sui-mainnet"
+    : undefined;
 
-  const nonceOpts = isSolana
-    ? { chainSlug: solanaChainSlug }
-    : { chainId: activeChainId };
+  const nonceOpts = isSui
+    ? { chainSlug: suiChainSlug }
+    : isSolana
+      ? { chainSlug: solanaChainSlug }
+      : { chainId: activeChainId };
 
   const { data: fetchedNonce } = useNonce(activeWallet?.address, nonceOpts);
 
@@ -94,15 +106,19 @@ export default function AuthScreen() {
     if (!activeWallet?.address) return;
     if (activeWallet.namespace === "solana") {
       void walletKitRegistry.get("solana").getSignerForWallet(activeWallet);
+    } else if (activeWallet.namespace === "sui") {
+      void walletKitRegistry.get("sui").getSignerForWallet(activeWallet);
     } else if (activeWallet.namespace === "eip155") {
       // Sync derivation — caches into `accountCache` by address.
       walletService.getAccountForWallet(activeWallet);
     }
   }, [activeWallet]);
 
-  const nonceQueryKey = isSolana
-    ? ["auth", "nonce", activeWallet?.address, solanaChainSlug]
-    : ["auth", "nonce", activeWallet?.address, activeChainId];
+  const nonceQueryKey = isSui
+    ? ["auth", "nonce", activeWallet?.address, suiChainSlug]
+    : isSolana
+      ? ["auth", "nonce", activeWallet?.address, solanaChainSlug]
+      : ["auth", "nonce", activeWallet?.address, activeChainId];
 
   const { data: nonceData, setNewData: setNonceData } =
     useRQGlobalState<NonceData>({
@@ -120,8 +136,58 @@ export default function AuthScreen() {
   const { mutateAsync: verifySignature } = useVerifySignature();
 
   const handleSignMessage = useCallback(async () => {
-    if (!nonceData?.message) {
-      console.error("Error: Failed to get authentication message");
+    // Source-of-truth resolution: prefer the freshly-fetched nonce.
+    // The `useRQGlobalState` mirror's queryKey shifts when
+    // `activeWallet.namespace` / `activeChain.network` hydrate (Sui
+    // wallet on first mount races with the network info), and the
+    // brief window of empty initial data was firing this error.
+    //
+    // Fall back order:
+    //   1. nonceData (global state mirror)
+    //   2. fetchedNonce (useNonce result; same network round-trip)
+    //   3. Inline fetch — bypasses React Query entirely so timing/key
+    //      shifts can't strand the handler. Safe because the server
+    //      `auth/nonce` is idempotent within the TTL.
+    let message = nonceData?.message || fetchedNonce?.message;
+    if (!message && activeWallet?.address) {
+      try {
+        const ns = activeWallet.namespace;
+        const slug =
+          ns === "sui"
+            ? activeChain?.namespace === "sui" &&
+              activeChain.network === "testnet"
+              ? "sui-testnet"
+              : activeChain?.namespace === "sui" &&
+                  activeChain.network === "devnet"
+                ? "sui-devnet"
+                : "sui-mainnet"
+            : ns === "solana"
+              ? activeChain?.namespace === "solana" &&
+                activeChain.cluster === "devnet"
+                ? "solana-devnet"
+                : "solana-mainnet"
+              : null;
+        const query = slug
+          ? `?chainSlug=${encodeURIComponent(slug)}`
+          : activeChainId
+            ? `?chainId=${activeChainId}`
+            : "";
+        const fresh = await publicApi
+          .get(`auth/nonce/${activeWallet.address}${query}`)
+          .json<{ nonce: string; message: string }>();
+        message = fresh?.message;
+      } catch (err) {
+        console.error("Inline nonce fetch failed:", err);
+      }
+    }
+    if (!message) {
+      console.error(
+        "Error: Failed to get authentication message",
+        "namespace=",
+        activeWallet?.namespace,
+        "address=",
+        activeWallet?.address?.slice(0, 12),
+      );
       return;
     }
 
@@ -136,7 +202,20 @@ export default function AuthScreen() {
 
       let signature: string;
 
-      if (activeWallet?.namespace === "solana") {
+      if (activeWallet?.namespace === "sui") {
+        completeStep(1);
+        signature = await deferredTask(async () => {
+          const kit = walletKitRegistry.get("sui");
+          // `signAuthMessage` on the Sui kit wraps
+          // `Ed25519Keypair.signPersonalMessage` — applies the
+          // PersonalMessage intent prefix + BLAKE2b digest internally
+          // and returns the 97-byte serialized signature (flag + sig
+          // + pubkey) base64-encoded. The server's SIWS-Sui verifier
+          // round-trips this exactly via
+          // `Ed25519PublicKey.verifyPersonalMessage`.
+          return kit.signAuthMessage(activeWallet, message);
+        }, "Signing SIWS-Sui message");
+      } else if (activeWallet?.namespace === "solana") {
         if (!activeWallet) {
           throw new Error("No active Solana wallet");
         }
@@ -147,7 +226,7 @@ export default function AuthScreen() {
             activeWallet,
           )) as KeyPairSigner | null;
           if (!signer) throw new Error("No Solana signer available");
-          const messageBytes = new TextEncoder().encode(nonceData.message);
+          const messageBytes = new TextEncoder().encode(message);
           const [sigDict] = await signer.signMessages([
             { content: messageBytes, signatures: {} },
           ]);
@@ -179,7 +258,7 @@ export default function AuthScreen() {
         signature = await deferredTask(async () => {
           return await walletClient.signMessage({
             account,
-            message: nonceData.message,
+            message: message,
           });
         }, "Signing message");
       } else {
@@ -193,7 +272,7 @@ export default function AuthScreen() {
 
       await deferredTask(async () => {
         const authResponse = await verifySignature({
-          message: nonceData.message,
+          message: message,
           signature,
         });
         console.log("jwt token: ", authResponse.access_token);
@@ -216,6 +295,10 @@ export default function AuthScreen() {
     }
   }, [
     nonceData,
+    fetchedNonce,
+    activeWallet,
+    activeChain,
+    activeChainId,
     getClientForActiveWallet,
     getWalletAccount,
     activeWalletIndex,

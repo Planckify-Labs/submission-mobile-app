@@ -95,8 +95,31 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
         (b) => b.isEVM && b.chainId === activeChain.chain.id,
       )?.id;
     }
+    // Non-EVM rows share `isEVM:false`, so we MUST disambiguate by
+    // namespace before filtering on testnet — otherwise Sui rows pick
+    // up Solana tokens and vice versa. Prefer the API's `chainSlug`
+    // (authoritative); fall back to a name/rpc heuristic for backends
+    // that haven't shipped the field yet.
     const isTestnet = activeChain.isTestnet ?? false;
-    return blockchains.find((b) => !b.isEVM && b.isTestnet === isTestnet)?.id;
+    const wantSui = activeChain.namespace === "sui";
+    const wantSolana = activeChain.namespace === "solana";
+    const matchesNamespace = (
+      b: (typeof blockchains)[number] & { chainSlug?: string | null },
+    ): boolean => {
+      if (typeof b.chainSlug === "string") {
+        if (wantSui) return b.chainSlug.startsWith("sui-");
+        if (wantSolana) return b.chainSlug.startsWith("solana-");
+      }
+      const name = (b.name ?? "").toLowerCase();
+      const rpc = (b.rpcUrl ?? "").toLowerCase();
+      const looksSui = name.startsWith("sui") || rpc.includes("sui.io");
+      if (wantSui) return looksSui;
+      if (wantSolana) return !looksSui;
+      return false;
+    };
+    return blockchains.find(
+      (b) => !b.isEVM && b.isTestnet === isTestnet && matchesNamespace(b),
+    )?.id;
   }, [blockchains, activeChain]);
 
   const { data: chainTokens } = useTokens({

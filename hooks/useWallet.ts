@@ -69,6 +69,7 @@ export async function warmWalletSigner(w: TWallet): Promise<void> {
 import {
   buildChainConfigFromBlockchain,
   groupWalletsIntoAccounts,
+  resolveNamespace,
   type WalletAccount,
   walletForNamespace,
   walletIndexForAccountAndNamespace,
@@ -285,7 +286,7 @@ export function useWallet() {
       if (target.namespace === activeChain.namespace) return;
       if (!blockchains) return;
       const targetChainRow = blockchains.find(
-        (b) => (b.isEVM === false ? "solana" : "eip155") === target.namespace,
+        (b) => resolveNamespace(b) === target.namespace,
       );
       if (!targetChainRow) return;
       const targetChainConfig = buildChainConfigFromBlockchain(targetChainRow);
@@ -995,7 +996,7 @@ export function useWallet() {
     }
 
     const targetChainRow = blockchains.find((b) => {
-      const ns = b.isEVM === false ? "solana" : "eip155";
+      const ns = resolveNamespace(b);
       return ns === activeWallet.namespace;
     });
     if (targetChainRow) {
