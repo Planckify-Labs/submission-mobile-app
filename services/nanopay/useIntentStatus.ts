@@ -130,7 +130,11 @@ export function useSubmitNanopay() {
       // Signal the polling query that something changed upstream so the
       // next status read happens immediately (instead of waiting for
       // the 3 s interval).
-      queryClient.invalidateQueries({ queryKey: intentQueryKey(intentId) });
+      // Two-element prefix so this matches both the wallet-less and
+      // wallet-scoped variants of `intentQueryKey`. Building the full
+      // tuple via `intentQueryKey(intentId)` pins walletAddress to
+      // `null` and silently misses wallet-scoped observers.
+      queryClient.invalidateQueries({ queryKey: ["pay-intent", intentId] });
     },
   });
 }
@@ -155,7 +159,11 @@ export function useSubmitOnchain() {
         .json<OnchainSubmitResponse>();
     },
     onSuccess: (_, { intentId }) => {
-      queryClient.invalidateQueries({ queryKey: intentQueryKey(intentId) });
+      // Two-element prefix so this matches both the wallet-less and
+      // wallet-scoped variants of `intentQueryKey`. Building the full
+      // tuple via `intentQueryKey(intentId)` pins walletAddress to
+      // `null` and silently misses wallet-scoped observers.
+      queryClient.invalidateQueries({ queryKey: ["pay-intent", intentId] });
     },
   });
 }

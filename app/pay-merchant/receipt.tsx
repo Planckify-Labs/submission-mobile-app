@@ -73,6 +73,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatUnits } from "viem";
 import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
+import { useWallet } from "@/hooks/useWallet";
 import type { PaymentIntentResponse } from "@/services/nanopay";
 import { useIntentStatus } from "@/services/nanopay";
 import { copyToClipboard } from "@/utils/helperUtils";
@@ -195,6 +196,7 @@ export default function PayMerchantReceipt() {
   const params = useLocalSearchParams<{
     intentId?: string;
     merchantName?: string;
+    walletAddress?: string;
   }>();
   const intentId =
     typeof params.intentId === "string" && params.intentId.length > 0
@@ -203,7 +205,35 @@ export default function PayMerchantReceipt() {
   const merchantName =
     typeof params.merchantName === "string" ? params.merchantName : undefined;
 
-  const intentQ = useIntentStatus(intentId);
+  // Lock the receipt query to a specific wallet's JWT for the lifetime
+  // of this screen. The intent was created by *one* wallet on the
+  // backend; reading it through the global `api` (whose JWT tracks
+  // `active_wallet_index` at request time) means a wallet switch
+  // mid-poll, or a stale token on the active wallet, silently breaks
+  // the request and leaves the UI stuck on the loading skeleton.
+  //
+  // Source priority:
+  //   1. Nav param from `/pay-merchant` (the in-flow handoff already
+  //      knows the paying wallet).
+  //   2. Active wallet at mount (push deep-link path — we don't get
+  //      the wallet in the push payload, so the active wallet is the
+  //      best available proxy). `useWallet` hydrates from storage
+  //      asynchronously, so we capture the address the first frame it
+  //      becomes non-empty and never re-bind after that.
+  const { activeWallet } = useWallet();
+  const paramWallet =
+    typeof params.walletAddress === "string" && params.walletAddress.length > 0
+      ? params.walletAddress
+      : undefined;
+  const [walletAddress, setWalletAddress] = useState<string | undefined>(
+    paramWallet,
+  );
+  useEffect(() => {
+    if (walletAddress) return;
+    if (activeWallet?.address) setWalletAddress(activeWallet.address);
+  }, [activeWallet?.address, walletAddress]);
+
+  const intentQ = useIntentStatus(intentId, walletAddress);
   const intent = intentQ.data;
   const queryClient = useQueryClient();
 
@@ -247,10 +277,18 @@ export default function PayMerchantReceipt() {
         >
           {!intentId ? (
             <MissingIntentCard />
-          ) : !intent ? (
-            <ReceiptSkeleton intentId={intentId} />
-          ) : (
+          ) : intent ? (
             <ReceiptBody intent={intent} merchantName={merchantName} />
+          ) : intentQ.isError ? (
+            <ReceiptErrorCard
+              intentId={intentId}
+              error={intentQ.error}
+              onRetry={() => {
+                intentQ.refetch();
+              }}
+            />
+          ) : (
+            <ReceiptSkeleton intentId={intentId} />
           )}
         </ScrollView>
 
@@ -471,6 +509,68 @@ function ReceiptSkeleton({ intentId }: { intentId: string }) {
           Fetching payment
         </Text>
       </View>
+      {__DEV__ ? (
+        <Text
+          className="text-light-matte-black/30 font-mono text-xs mt-4"
+          selectable
+        >
+          {intentId}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Shown when the intent fetch errors out — most often because the
+ * authenticated wallet has no JWT for this session (e.g. token cleared
+ * by a 401 elsewhere, or the user is on a wallet that hasn't completed
+ * sign-in). Without this card the screen would loop forever on the
+ * loading skeleton, which is what the "stuck on Fetching payment" bug
+ * looked like.
+ */
+function ReceiptErrorCard({
+  intentId,
+  error,
+  onRetry,
+}: {
+  intentId: string;
+  error: unknown;
+  onRetry: () => void;
+}) {
+  const detail =
+    error instanceof Error && error.message
+      ? error.message
+      : "We couldn't load this receipt right now.";
+  return (
+    <View className="bg-light rounded-3xl p-6 shadow-md-">
+      <View className="flex-row items-center mb-3">
+        <AlertCircle color="#dc2626" size={20} />
+        <Text className="text-light-matte-black font-semibold text-base ml-2">
+          Couldn't load receipt
+        </Text>
+      </View>
+      <Text className="text-light-matte-black/70 text-sm mb-5">{detail}</Text>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        className="bg-light-primary-red py-4 px-5 rounded-xl items-center mb-3"
+        onPress={onRetry}
+        accessibilityRole="button"
+        accessibilityLabel="Retry loading receipt"
+      >
+        <Text className="text-light font-semibold">Retry</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        className="py-3 px-5 rounded-xl items-center"
+        onPress={() => router.replace("/")}
+        accessibilityRole="button"
+        accessibilityLabel="Back to home"
+      >
+        <Text className="text-light-matte-black/70 font-medium">
+          Back to home
+        </Text>
+      </TouchableOpacity>
       {__DEV__ ? (
         <Text
           className="text-light-matte-black/30 font-mono text-xs mt-4"

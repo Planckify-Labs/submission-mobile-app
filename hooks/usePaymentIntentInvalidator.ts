@@ -23,19 +23,26 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { intentQueryKey } from "@/services/nanopay";
 
 /**
- * Returns `(intentId: string) => void`. Calling it invalidates the
- * `["pay-intent", intentId]` query, prompting any mounted
- * `useIntentStatus(intentId)` observer to refetch immediately.
+ * Returns `(intentId: string) => void`. Calling it invalidates every
+ * cached `useIntentStatus(intentId, *)` observer regardless of which
+ * wallet the query was bound to, prompting an immediate refetch.
+ *
+ * Why a hand-built prefix instead of `intentQueryKey(intentId)` —
+ * the canonical key is `["pay-intent", intentId, walletAddress ?? null]`.
+ * Building it without a wallet pins the third element to `null`, which
+ * with TanStack's prefix matching only matches the wallet-less variant
+ * and silently misses the wallet-scoped queries that the receipt screen
+ * and `/pay-merchant` actually run. We pass the two-element prefix so
+ * any third element (null *or* a wallet address) matches.
  */
 export function usePaymentIntentInvalidator(): (intentId: string) => void {
   const queryClient = useQueryClient();
   return useCallback(
     (intentId: string) => {
       if (!intentId) return;
-      queryClient.invalidateQueries({ queryKey: intentQueryKey(intentId) });
+      queryClient.invalidateQueries({ queryKey: ["pay-intent", intentId] });
     },
     [queryClient],
   );

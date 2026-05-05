@@ -377,7 +377,13 @@ function IntentFlow({
       // union yet — cast narrowly per the same pattern used for
       // `/pay-merchant` above.
       pathname: "/pay-merchant/receipt" as "/send",
-      params: { intentId, merchantName: merchantNameParam },
+      // Forward the wallet that *created* the intent so the receipt
+      // query locks to that wallet's JWT via `createApiForWallet`.
+      // Without this the receipt fell back to the global `api`
+      // instance, whose JWT tracks `active_wallet_index` at request
+      // time — switching wallets (or having a stale token on the
+      // active wallet) would hang the poll on "Fetching payment".
+      params: { intentId, merchantName: merchantNameParam, walletAddress },
     });
   }, [intent, intentId]);
 
