@@ -34,6 +34,7 @@
 
 import { qrisDetector } from "./qris.ts";
 import { takumipayJwsDetector } from "./takumipayJws.ts";
+import { walletAddressSuiDetector } from "./walletAddress.sui.ts";
 import { walletAddressDetector } from "./walletAddress.ts";
 import { walletUriDetector } from "./walletUri.ts";
 import { x402Detector } from "./x402.ts";
@@ -47,6 +48,7 @@ const _bootDetectors = [
   qrisDetector,
   takumipayJwsDetector,
   walletAddressDetector,
+  walletAddressSuiDetector,
   walletUriDetector,
   x402Detector,
 ];
@@ -60,6 +62,7 @@ export {
   qrisDetector,
   takumipayJwsDetector,
   walletAddressDetector,
+  walletAddressSuiDetector,
   walletUriDetector,
   x402Detector,
 };

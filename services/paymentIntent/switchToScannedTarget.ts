@@ -64,13 +64,15 @@ export const switchToScannedTarget = (
         token: channel.token,
       };
       // Surface `target` so the send screen can pre-switch chain / cluster
-      // without re-parsing the raw URI. We flatten here to keep `params`
-      // a plain string map (see `NavParams` doc above).
+      // / network without re-parsing the raw URI. We flatten here to keep
+      // `params` a plain string map (see `NavParams` doc above).
       if (channel.target) {
         if (channel.target.namespace === "eip155") {
           params.chainId = channel.target.chainId.toString();
-        } else {
+        } else if (channel.target.namespace === "solana") {
           params.cluster = channel.target.cluster;
+        } else {
+          params.network = channel.target.network;
         }
       }
       return { kind: "navigate", route: "/send", params };

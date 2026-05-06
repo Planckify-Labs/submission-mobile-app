@@ -12,18 +12,24 @@
 export type PayChannel =
   | {
       kind: "wallet";
-      namespace: "eip155" | "solana";
+      namespace: "eip155" | "solana" | "sui";
       address: string;
       /**
        * Specific target chain when the payload carries one:
        *  - EIP-681 `ethereum:0x…@137` → `{ namespace: "eip155", chainId: 137 }`
        *  - `solana:<addr>` (no cluster) → `{ namespace: "solana", cluster: "mainnet-beta" }`
-       *  - raw `0x…` address (no chain info) → `undefined` (scanner keeps the current
-       *    EVM activeChain; only the namespace is guaranteed to switch).
+       *  - raw Sui address (no network info) → `undefined` (scanner keeps
+       *    the current Sui activeChain; only the namespace is guaranteed
+       *    to switch). A future `sui:` URI scheme would emit
+       *    `{ namespace: "sui", network }`.
+       *  - raw `0x…` 40-hex address (no chain info) → `undefined` (scanner
+       *    keeps the current EVM activeChain; only the namespace is
+       *    guaranteed to switch).
        */
       target?:
         | { namespace: "eip155"; chainId: number }
-        | { namespace: "solana"; cluster: "mainnet-beta" | "devnet" };
+        | { namespace: "solana"; cluster: "mainnet-beta" | "devnet" }
+        | { namespace: "sui"; network: "mainnet" | "testnet" | "devnet" };
       amount?: bigint;
       /** ERC-20 / SPL token address when the URI specifies one. */
       token?: string;

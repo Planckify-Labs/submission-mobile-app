@@ -38,7 +38,7 @@ const QR_OUTER_EYES = {
   topRight: { borderRadius: 15, color: "#c71c4b" },
   bottomLeft: { borderRadius: 15, color: "#c71c4b" },
 };
-const QR_INNER_EYES = { borderRadius: 10, color: "#20222c" };
+const QR_INNER_EYES = { borderRadius: 8, color: "#20222c" };
 const QR_LOGO_BASE = {
   href: takumipayLogoBase64,
   padding: 2,
@@ -48,10 +48,14 @@ const QR_LOGO_BASE = {
 // logo to an odd multiple of `pieceSize`. Solana addresses encode in byte
 // mode (vs EVM hex/alphanumeric), producing a denser matrix and a smaller
 // `pieceSize` that snaps the logo to a visibly larger bucket at the same
-// scale. Tune these to keep the visual size consistent across tabs.
+// scale. Sui addresses are 66-char lowercase hex, also byte-mode, so they
+// share Solana's smaller scale to keep the logo from overlapping enough
+// modules to break scanning. Tune these to keep the visual size
+// consistent across tabs.
 const QR_LOGO_SCALE_BY_NAMESPACE: Record<string, number> = {
   eip155: 1.2,
   solana: 1.0,
+  sui: 0.8,
 };
 const QR_LOGO_SCALE_DEFAULT = 1.2;
 
@@ -172,7 +176,12 @@ export default function RecievePaymentModal({
       ? "Ethereum"
       : ns === "solana"
         ? "Solana"
-        : ns.charAt(0).toUpperCase() + ns.slice(1);
+        : ns === "sui"
+          ? "Sui"
+          : ns.charAt(0).toUpperCase() + ns.slice(1);
+
+  const suiNetworkLabel = (n: "mainnet" | "testnet" | "devnet"): string =>
+    n === "mainnet" ? "Mainnet" : n === "testnet" ? "Testnet" : "Devnet";
 
   const chainPillLabel =
     displayWallet.namespace === "eip155"
@@ -183,7 +192,11 @@ export default function RecievePaymentModal({
         ? activeChain.namespace === "solana"
           ? `Solana ${activeChain.cluster === "devnet" ? "Devnet" : "Mainnet"}`
           : "Solana"
-        : tabLabelFor(displayWallet.namespace);
+        : displayWallet.namespace === "sui"
+          ? activeChain.namespace === "sui"
+            ? `Sui ${suiNetworkLabel(activeChain.network)}`
+            : "Sui"
+          : tabLabelFor(displayWallet.namespace);
   return (
     <Modal
       transparent
