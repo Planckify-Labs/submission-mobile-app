@@ -1,4 +1,3 @@
-import { router } from "expo-router";
 import type { NormalizedOptions } from "ky";
 import ky from "ky";
 import { ApiConflictError } from "@/api/types/errors";
@@ -39,8 +38,12 @@ class ApiHttpError extends Error {
   }
 }
 
-// Guard to prevent multiple concurrent 401 handlers from spamming redirects.
-// Once a 401 clears tokens and redirects, subsequent 401s are no-ops until reset.
+// Guard to prevent parallel 401s from each calling `clearTokens()` +
+// firing a notify storm. Once a 401 has wiped tokens, subsequent
+// in-flight 401s are no-ops until reset (after a successful sign-in
+// or refresh). Without the guard, a screen with N concurrent
+// authed queries would do N SecureStore wipes + N re-check cascades
+// in every `useIsAuthenticated()` consumer on the tree.
 let isHandling401 = false;
 const reset401Guard = () => {
   isHandling401 = false;
@@ -259,18 +262,29 @@ const handleApiResponse = async (
       if (!isHandling401) {
         isHandling401 = true;
 
-        // All other 401s mean the token itself is invalid/expired.
+        // No more global redirect to /auth — that produced a
+        // jarring screen swap (and a spurious "GO_BACK was not
+        // handled" warning when the dispatched replace landed on
+        // a stack with nothing behind it). Instead we wipe tokens
+        // and let `clearTokens()` -> `notifyAuthStateChanged()`
+        // poke every `useIsAuthenticated()` consumer to re-check;
+        // they then render their existing inline sign-in CTAs
+        // (ActivitySection on home, address-book, activities tab,
+        // etc.) without a navigation event.
+        //
+        // USER_NOT_FOUND is treated the same way as any other 401
+        // here even though the JWT was technically valid — the
+        // user row is gone, so the only path forward is re-sign,
+        // and clearing tokens is what flips `hadPreviousSession`
+        // off in every consumer's auth-state cache (the gate the
+        // inline CTAs key off).
         console.log(
           isUserDeleted
-            ? "401 USER_NOT_FOUND - user row deleted, redirecting to re-auth without clearing tokens"
-            : "401 Unauthorized - token invalid, redirecting to auth",
+            ? "401 USER_NOT_FOUND - clearing tokens; consumers will switch to inline sign-in CTAs"
+            : "401 Unauthorized - clearing tokens; consumers will switch to inline sign-in CTAs",
         );
 
-        if (!isUserDeleted) {
-          await clearTokens();
-        }
-
-        router.replace("/auth");
+        await clearTokens();
       }
 
       // Throw a structured error so agent executors can classify the

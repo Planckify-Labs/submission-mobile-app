@@ -1,17 +1,15 @@
+import { useFocusEffect } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { ArrowLeft, Sparkles, TrendingUp } from "lucide-react-native";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   FlatList,
+  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -41,6 +39,8 @@ import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { useRedemptionHistory } from "@/hooks/queries/useRedeem";
 import { useTransactionHistory } from "@/hooks/queries/useTransactions";
+import { useWallet } from "@/hooks/useWallet";
+import { getChainFamilyLabel } from "@/services/walletKit/chainInfo";
 
 type RedemptionListItem = TRedemptionHistoryItem | { id: string };
 type TransferListItem = TTransaction | { id: string };
@@ -132,23 +132,29 @@ const EmptyStateView = React.memo(
 
 export default function ActivitiesScreen() {
   const router = useRouter();
-  const {
-    isAuthenticated,
-    isLoading: isAuthLoading,
-    hadPreviousSession,
-  } = useIsAuthenticated();
+  const { isAuthenticated, isLoading: isAuthLoading } = useIsAuthenticated();
+  const { activeWallet } = useWallet();
+  const chainFamily = getChainFamilyLabel(activeWallet?.namespace);
   const [activeActivity, setActiveActivity] = useState<ActivityTab>("payments");
   const horizontalScrollRef = useRef<FlatList>(null);
 
-  useEffect(() => {
-    // Only auto-redirect if the user had a previous session that is now invalid
-    // (e.g. refresh token failed). New users (no tokens ever) stay on this screen
-    // and see the soft sign-in prompt. The 401 handler in ky.ts covers the
-    // "token expired mid-session" case independently.
-    if (isAuthenticated === false && !isAuthLoading && hadPreviousSession) {
-      router.replace("/auth");
-    }
-  }, [isAuthenticated, isAuthLoading, hadPreviousSession, router]);
+  // Inline sign-in CTA navigation. Yield 100 ms for the spinner state
+  // to commit + paint before mounting `/auth` (same trick the home
+  // ActivitySection + address-book CTAs use). Reset on focus so a
+  // cancelled sign-in doesn't leave the button stuck on "Opening
+  // sign-in…".
+  const [navigatingToAuth, setNavigatingToAuth] = useState(false);
+  const goToAuth = useCallback(async () => {
+    if (navigatingToAuth) return;
+    setNavigatingToAuth(true);
+    await new Promise((r) => setTimeout(r, 100));
+    router.push("/auth");
+  }, [navigatingToAuth, router]);
+  useFocusEffect(
+    useCallback(() => {
+      setNavigatingToAuth(false);
+    }, []),
+  );
 
   const {
     data: transfersData,
@@ -557,15 +563,100 @@ export default function ActivitiesScreen() {
     </View>
   );
 
+  // Three render branches:
+  //   1. Auth probe in flight (cold boot, no cached state) -> spinner.
+  //   2. Probe finished, no session -> inline sign-in CTA. Replaces the
+  //      old auto-redirect to `/auth` that fired whenever the JWT
+  //      expired mid-screen — that redirect was the source of the
+  //      "GO_BACK was not handled" warning and the jarring screen swap.
+  //   3. Authenticated -> real activity tabs.
   return (
     <>
       <StatusBar barStyle="dark-content" />
-      {!isAuthenticated ? (
+      {isAuthLoading || isAuthenticated === null ? (
         <LoadinngSpinnerPopup
           visible={true}
           title="Authentication"
           message="Checking authentication..."
         />
+      ) : !isAuthenticated ? (
+        <SafeAreaView
+          edges={["top"]}
+          className="flex-1 bg-light-main-container"
+        >
+          <View className="px-4 pt-2 pb-4">
+            <View className="flex-row items-center gap-3">
+              <Pressable
+                onPress={() => router.back()}
+                hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                className="w-9 h-9 rounded-xl bg-light items-center justify-center shadow-sm"
+              >
+                <ArrowLeft size={18} color="#c71c4b" />
+              </Pressable>
+              <Text className="text-light-matte-black text-2xl font-bold tracking-tight flex-1">
+                Activities
+              </Text>
+            </View>
+          </View>
+
+          <View className="flex-1 items-center justify-center px-10">
+            <View className="items-center max-w-[280px] mb-8">
+              <Text className="text-light-matte-black font-bold text-2xl mb-3 text-center">
+                Sign in to view your activity
+              </Text>
+              <Text className="text-light-matte-black/45 text-center text-sm leading-6">
+                Track all your on-chain transactions, payments, and redemptions.
+                Sign in with {chainFamily} to get started.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={goToAuth}
+              disabled={navigatingToAuth}
+              className={`py-4 px-8 rounded-2xl flex-row items-center gap-3 mb-6 ${
+                navigatingToAuth
+                  ? "bg-light-primary-red/80"
+                  : "bg-light-primary-red"
+              }`}
+              style={{
+                shadowColor: "#c71c4b",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 12,
+                elevation: 8,
+              }}
+            >
+              {navigatingToAuth && (
+                <ActivityIndicator size="small" color="#ffffff" />
+              )}
+              <Text className="text-white font-bold text-base">
+                {navigatingToAuth
+                  ? "Opening sign-in…"
+                  : `Sign In With ${chainFamily}`}
+              </Text>
+            </TouchableOpacity>
+
+            <View className="gap-2.5 w-full">
+              <View className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl bg-light">
+                <View className="bg-light-primary-red/10 p-1.5 rounded-lg">
+                  <Sparkles color="#c71c4b" size={14} strokeWidth={2.5} />
+                </View>
+                <Text className="text-light-matte-black/55 text-xs flex-1 font-medium">
+                  Secure & gasless authentication
+                </Text>
+              </View>
+              <View className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl bg-light">
+                <View className="bg-light-primary-red/10 p-1.5 rounded-lg">
+                  <TrendingUp color="#c71c4b" size={14} strokeWidth={2.5} />
+                </View>
+                <Text className="text-light-matte-black/55 text-xs flex-1 font-medium">
+                  Track all your on-chain activity
+                </Text>
+              </View>
+            </View>
+          </View>
+        </SafeAreaView>
       ) : (
         <SafeAreaView
           className="flex-1 bg-light-main-container relative"

@@ -41,6 +41,33 @@ const ACCESS_TOKEN_KEY = "takumipay_access_token";
 const REFRESH_TOKEN_KEY = "takumipay_refresh_token";
 const AUTH_WALLET_ADDRESS_KEY = "takumipay_auth_wallet_address";
 
+// Cross-component auth-state pub/sub. `clearTokens()` and
+// `storeTokens()` fire `notifyAuthStateChanged()`; every mounted
+// `useIsAuthenticated()` consumer subscribes and re-runs its
+// SecureStore check on the signal. This is what lets a 401 in
+// `ky.ts` flip the home screen's ActivitySection / the address-book
+// screen / the activities tab from "authenticated" to their inline
+// sign-in CTAs without a navigation event — the previous global
+// `router.replace("/auth")` redirect happened precisely because
+// there was no other way to broadcast the state change.
+type AuthChangeListener = () => void;
+const authChangeListeners = new Set<AuthChangeListener>();
+function notifyAuthStateChanged(): void {
+  authChangeListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (e) {
+      console.warn("auth-state listener threw:", e);
+    }
+  });
+}
+function subscribeAuthStateChanged(listener: AuthChangeListener): () => void {
+  authChangeListeners.add(listener);
+  return () => {
+    authChangeListeners.delete(listener);
+  };
+}
+
 const accessKeyFor = (address: string) =>
   `${ACCESS_TOKEN_KEY}_${address.toLowerCase()}`;
 const refreshKeyFor = (address: string) =>
@@ -62,6 +89,7 @@ export const storeTokens = async (
       await walletSecureSet(accessKeyFor(walletAddress), accessToken);
       await walletSecureSet(refreshKeyFor(walletAddress), refreshToken);
     }
+    notifyAuthStateChanged();
   } catch (error) {
     console.error("Failed to store tokens:", error);
     throw new Error("Failed to store authentication tokens");
@@ -126,6 +154,10 @@ export const clearTokens = async (): Promise<void> => {
     // hint, show authed UI for a moment, then flip to false when the
     // SecureStore check completes.
     clearAuthHints();
+    // Poke every mounted consumer of `useIsAuthenticated()` so the
+    // 401 -> inline sign-in CTA transition happens immediately
+    // instead of waiting for a wallet switch / screen remount.
+    notifyAuthStateChanged();
   } catch (error) {
     console.error("Failed to clear tokens:", error);
   }
@@ -458,6 +490,17 @@ export const useIsAuthenticated = () => {
   const [hadPreviousSession, setHadPreviousSession] = useState(
     cached?.hadPreviousSession ?? false,
   );
+  // Bumped by `notifyAuthStateChanged()` (fired from `clearTokens` /
+  // `storeTokens`). Listed as a dep on the auth-check effect below so
+  // a 401 in `ky.ts` -> `clearTokens()` re-runs the SecureStore probe
+  // and commits the new {false, false} state to this consumer
+  // immediately, without waiting for a wallet switch / unmount cycle.
+  const [authChangeVersion, setAuthChangeVersion] = useState(0);
+  useEffect(() => {
+    return subscribeAuthStateChanged(() => {
+      setAuthChangeVersion((v) => v + 1);
+    });
+  }, []);
   const { refreshAccessTokenOrThrow } = useRefreshToken();
   const refreshAccessTokenRef = useRef(refreshAccessTokenOrThrow);
 
@@ -638,9 +681,11 @@ export const useIsAuthenticated = () => {
         (task as { cancel: () => void }).cancel();
       }
     };
-    // `cached` intentionally excluded — we only want re-check on wallet change.
+    // `cached` intentionally excluded — we only want re-check on wallet
+    // change OR an explicit `notifyAuthStateChanged()` (the
+    // `authChangeVersion` bump fires the same effect path).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletKey, isLocked]);
+  }, [walletKey, isLocked, authChangeVersion]);
 
   const queryClient = useQueryClient();
   const logout = useCallback(async () => {
