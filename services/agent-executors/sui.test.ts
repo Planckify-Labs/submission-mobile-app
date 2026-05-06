@@ -152,11 +152,27 @@ describe("get_wallet_sui_balance", () => {
       expect.objectContaining({ namespace: "sui", network: "mainnet" }),
     );
     expect(result.status).toBe("success");
+    // Unified `WalletBalancesPayload` — single group, single native row.
+    // Mirror of Solana's single-balance shape so `BalancesCard` renders it
+    // through the same path.
     expect(result.data).toMatchObject({
-      address: SUI_ADDR,
-      network: "mainnet",
-      balance_mist: "1500000000",
-      symbol: "SUI",
+      groups: [
+        {
+          namespace: "sui",
+          chain_id: "mainnet",
+          chain_label: "Sui Mainnet",
+          chain_symbol: "SUI",
+          tokens: [
+            {
+              symbol: "SUI",
+              address: "",
+              decimals: 9,
+              is_native: true,
+              balance_display: "1.5",
+            },
+          ],
+        },
+      ],
     });
     // Wire-schema invariant: NO tx_hash on a read.
     expect(result.tx_hash).toBeUndefined();

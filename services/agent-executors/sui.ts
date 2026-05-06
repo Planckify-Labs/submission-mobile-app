@@ -24,8 +24,15 @@ import { formatUnits, parseUnits } from "viem";
 import { tokenApi } from "@/api/endpoints/tokens";
 import type { TToken } from "@/api/types/token";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
+import { resolveNamespace } from "@/hooks/useWallet.helpers";
 import { storage } from "@/lib/storage/mmkv";
 import { walletKitRegistry } from "@/services/walletKit/registry";
+import {
+  type BalanceGroup,
+  type BalanceTokenRow,
+  toAgentSlice,
+  type WalletBalancesPayload,
+} from "./balancePayload";
 import {
   ExecutorError,
   ExecutorErrorCode,
@@ -85,10 +92,77 @@ function requireSuiAddress(value: string, key: string): string {
   return value;
 }
 
+function networkLabel(network: string): string {
+  if (network === "testnet") return "Sui Testnet";
+  if (network === "devnet") return "Sui Devnet";
+  return "Sui Mainnet";
+}
+
+/**
+ * Resolve the active Sui blockchain row from context — used to pull
+ * the native token's logo / name / decimals so single-balance cards
+ * render the SUI icon instead of the generic Coins fallback. Mirror
+ * of Solana's `resolveSolanaNativeMeta`.
+ */
+function resolveSuiNativeMeta(
+  chain: Extract<ChainConfig, { namespace: "sui" }>,
+  context: Parameters<MobileToolExecutor>[1],
+): { symbol: string; name: string; decimals: number; logoUrl?: string } {
+  const isTestnet = chain.network !== "mainnet";
+  const blockchain = context.blockchains.find(
+    (b) =>
+      resolveNamespace(b) === SUI_NAMESPACE &&
+      b.isActive &&
+      b.isTestnet === isTestnet,
+  );
+  const nativeRow = blockchain?.tokens?.find((t) => t.isNativeCurrency);
+  return {
+    symbol: nativeRow?.symbol ?? "SUI",
+    name: nativeRow?.name ?? "Sui",
+    decimals: nativeRow?.decimals ?? SUI_DECIMALS,
+    ...(nativeRow?.logoUrl ? { logoUrl: nativeRow.logoUrl } : {}),
+  };
+}
+
+/**
+ * Wrap a single native SUI balance in the shared `WalletBalancesPayload`
+ * shape so `BalancesCard` (one card per namespace) can render it without
+ * a SUI-specific branch. Mirrors Solana's `singleSolanaNativePayload`.
+ */
+function singleSuiNativePayload(
+  chain: Extract<ChainConfig, { namespace: "sui" }>,
+  native: ReturnType<typeof resolveSuiNativeMeta>,
+  mist: bigint,
+): WalletBalancesPayload {
+  const tokenRow: BalanceTokenRow = {
+    symbol: native.symbol,
+    name: native.name,
+    address: "",
+    decimals: native.decimals,
+    is_native: true,
+    is_stable_coin: false,
+    ...(native.logoUrl ? { logo_url: native.logoUrl } : {}),
+    balance_raw: mist.toString(),
+    balance_display: formatUnits(mist, native.decimals),
+  };
+  return {
+    groups: [
+      {
+        namespace: "sui",
+        chain_id: chain.network,
+        chain_label: networkLabel(chain.network),
+        chain_symbol: native.symbol,
+        ...(native.logoUrl ? { chain_logo_url: native.logoUrl } : {}),
+        tokens: [tokenRow],
+      },
+    ],
+  };
+}
+
 /**
  * `get_wallet_sui_balance` — connected wallet's SUI balance on the
- * active Sui network. Returns raw MIST alongside a pre-formatted
- * human string so the LLM never has to divide by 1e9.
+ * active Sui network. Emits the shared `WalletBalancesPayload` so
+ * `BalancesCard` renders it through the same path EVM and Solana use.
  */
 export const getWalletSuiBalance: MobileToolExecutor = (_input, context) =>
   safeExecute(async () => {
@@ -108,15 +182,12 @@ export const getWalletSuiBalance: MobileToolExecutor = (_input, context) =>
     const chain = getActiveSuiChain();
     const kit = getSuiKit();
     const mist = await kit.getNativeBalance(address, chain);
+    const native = resolveSuiNativeMeta(chain, context);
+    const display = singleSuiNativePayload(chain, native, mist);
     return {
       status: "success",
-      data: {
-        address,
-        network: chain.network,
-        balance_mist: mist.toString(),
-        balance_display: kit.formatNativeAmount(mist, chain),
-        symbol: "SUI",
-      },
+      data: toAgentSlice(display),
+      display,
     };
   });
 
@@ -142,15 +213,12 @@ export const getSuiBalance: MobileToolExecutor = (input, context) =>
     requireSuiAddress(address, "address");
 
     const mist = await kit.getNativeBalance(address, chain);
+    const native = resolveSuiNativeMeta(chain, context);
+    const display = singleSuiNativePayload(chain, native, mist);
     return {
       status: "success",
-      data: {
-        address,
-        network: chain.network,
-        balance_mist: mist.toString(),
-        balance_display: kit.formatNativeAmount(mist, chain),
-        symbol: "SUI",
-      },
+      data: toAgentSlice(display),
+      display,
     };
   });
 
@@ -245,12 +313,18 @@ export const getSuiWalletTokens: MobileToolExecutor = (input, context) =>
 
     // Match the Sui blockchain row from the registry, gated on namespace
     // and the active network's testnet flag so devnet/testnet wallets
-    // don't accidentally query mainnet coin types.
+    // don't accidentally query mainnet coin types. Uses the shared
+    // `resolveNamespace` seam so backends that haven't yet shipped the
+    // `namespace` column on `TBlockchain` (falling back to `chainSlug` /
+    // `isEVM` heuristics) still resolve correctly. Same pattern as
+    // `solana.ts::getSolanaWalletTokens`.
     const isTestnet = chain.network !== "mainnet";
-    const suiBlockchain = context.blockchains.find((b) => {
-      const ns = (b as { namespace?: string }).namespace;
-      return ns === SUI_NAMESPACE && b.isActive && b.isTestnet === isTestnet;
-    });
+    const suiBlockchain = context.blockchains.find(
+      (b) =>
+        resolveNamespace(b) === SUI_NAMESPACE &&
+        b.isActive &&
+        b.isTestnet === isTestnet,
+    );
     if (!suiBlockchain) {
       throw new ExecutorError(
         ExecutorErrorCode.UnsupportedChain,
@@ -348,14 +422,18 @@ export const getSuiWalletTokens: MobileToolExecutor = (input, context) =>
     const SUI_NATIVE_COIN_TYPE = "0x2::sui::SUI";
     const suiMist = balanceByCoinType.get(SUI_NATIVE_COIN_TYPE);
 
-    const coinRows = coins.map((t) => {
-      let balance_mist: string | undefined;
+    // Build the Coin<T> rows in the unified BalanceTokenRow shape. The
+    // Move struct path (CoinType) goes in `address` since the unified
+    // shape is namespace-agnostic — agents on Sui receive it as the coin
+    // identifier the same way EVM agents receive a contract address.
+    const coinRows: BalanceTokenRow[] = coins.map((t) => {
+      let balance_raw: string | undefined;
       let balance_display: string | undefined;
 
       if (includeBalance && t.contractAddress) {
         const raw = balanceByCoinType.get(t.contractAddress);
         if (raw !== undefined) {
-          balance_mist = raw.toString();
+          balance_raw = raw.toString();
           balance_display = formatUnits(raw, t.decimals);
         }
       }
@@ -363,66 +441,73 @@ export const getSuiWalletTokens: MobileToolExecutor = (input, context) =>
       return {
         symbol: t.symbol,
         name: t.name,
-        coin_type: t.contractAddress ?? "",
+        address: t.contractAddress ?? "",
         decimals: t.decimals,
         is_native: false,
         is_stable_coin: t.isStablecoin ?? false,
         ...(t.logoUrl ? { logo_url: t.logoUrl } : {}),
         ...(t.peggedCurrency ? { pegged_currency: t.peggedCurrency } : {}),
-        ...(balance_mist !== undefined ? { balance_mist } : {}),
+        ...(balance_raw !== undefined ? { balance_raw } : {}),
         ...(balance_display !== undefined ? { balance_display } : {}),
       };
     });
 
-    // Prepend native SUI row.
-    const nativeSymbol = "SUI";
+    // Prepend native SUI row. Pull symbol/name/decimals/logoUrl from the
+    // resolved blockchain row's native token so the card renders the
+    // proper SUI icon (mirrors Solana's `resolveSolanaNativeMeta` path).
+    const nativeMeta = resolveSuiNativeMeta(chain, context);
     const nativePasses =
       !symFilter ||
-      nativeSymbol.toLowerCase() === symFilter ||
-      nativeSymbol.toLowerCase().startsWith(symFilter);
+      nativeMeta.symbol.toLowerCase() === symFilter ||
+      nativeMeta.symbol.toLowerCase().startsWith(symFilter);
     const stablePasses = input.is_stable_coin !== true;
 
-    const nativeRow =
+    // `address: ""` for the native row matches `singleSuiNativePayload`
+    // (and Solana's convention) so the content-addressed dedupe in
+    // `MessageContent.computeSuppressedToolParts` recognises a back-to-
+    // back `get_wallet_sui_balance` + `get_wallet_sui_coins` turn as a
+    // subset and suppresses the smaller card. The Move struct path
+    // identifier (`0x2::sui::SUI`) for the native coin is not lost — it
+    // is implied by `is_native: true`, the same way EVM/Solana imply
+    // their native identifiers.
+    const nativeRow: BalanceTokenRow | null =
       includeNative && nativePasses && stablePasses
         ? {
-            symbol: "SUI",
-            name: "Sui",
-            coin_type: SUI_NATIVE_COIN_TYPE,
-            decimals: SUI_DECIMALS,
+            symbol: nativeMeta.symbol,
+            name: nativeMeta.name,
+            address: "",
+            decimals: nativeMeta.decimals,
             is_native: true,
             is_stable_coin: false,
+            ...(nativeMeta.logoUrl ? { logo_url: nativeMeta.logoUrl } : {}),
             ...(suiMist !== undefined
               ? {
-                  balance_mist: suiMist.toString(),
-                  balance_display: formatUnits(suiMist, SUI_DECIMALS),
+                  balance_raw: suiMist.toString(),
+                  balance_display: formatUnits(suiMist, nativeMeta.decimals),
                 }
               : {}),
           }
         : null;
 
-    const tokens = nativeRow ? [nativeRow, ...coinRows] : coinRows;
+    const tokens: BalanceTokenRow[] = nativeRow
+      ? [nativeRow, ...coinRows]
+      : coinRows;
 
-    // Compact agent-facing slice (no logo_url to save context).
-    const agentSlice = tokens.map((t) => ({
-      symbol: t.symbol,
-      coin_type: t.coin_type,
-      decimals: t.decimals,
-      is_native: t.is_native,
-      ...(t.balance_display !== undefined
-        ? { balance_display: t.balance_display }
-        : {}),
-    }));
+    const group: BalanceGroup = {
+      namespace: "sui",
+      chain_id: chain.network,
+      chain_label: networkLabel(chain.network),
+      chain_symbol: nativeMeta.symbol,
+      ...(nativeMeta.logoUrl ? { chain_logo_url: nativeMeta.logoUrl } : {}),
+      tokens,
+    };
+
+    const display: WalletBalancesPayload = { groups: [group] };
 
     return {
       status: "success",
-      data: {
-        network: chain.network,
-        tokens: agentSlice,
-      },
-      display: {
-        network: chain.network,
-        tokens,
-      },
+      data: toAgentSlice(display),
+      display,
     };
   });
 

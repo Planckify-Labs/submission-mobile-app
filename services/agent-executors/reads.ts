@@ -21,6 +21,7 @@ import { blockchainApi } from "@/api/endpoints/blockchains";
 import { tokenApi } from "@/api/endpoints/tokens";
 import type { TBlockchain } from "@/api/types/blockchain";
 import type { TToken } from "@/api/types/token";
+import { resolveNamespace } from "@/hooks/useWallet.helpers";
 import { storage } from "@/lib/storage/mmkv";
 import { pendingTxStore } from "../pendingTxStore";
 import {
@@ -330,29 +331,27 @@ export const getSupportedChains: MobileToolExecutor = (_input, context) =>
     const rows: TBlockchain[] = context.blockchains.filter((b) => b.isActive);
 
     const chains = rows.map((row) => {
-      const native = row.tokens?.find((t) => t.isNativeCurrency);
-      const namespace = row.isEVM ? "eip155" : "solana";
+      // The chain-level `nativeCurrency` field is the authoritative
+      // source; the legacy path is the token row flagged `isNativeCurrency`.
+      // Active chains are always seeded with their native token, so we
+      // trust the invariant and read whichever source is present.
+      const native =
+        row.nativeCurrency ?? row.tokens?.find((t) => t.isNativeCurrency);
+
+      const namespace = resolveNamespace(row);
       const base = {
         name: row.name,
         namespace,
         is_testnet: row.isTestnet,
         rpc_url: row.rpcUrl,
         block_explorer: row.blockExplorer || null,
+        native_symbol: native?.symbol,
+        native_decimals: native?.decimals,
       };
-      if (row.isEVM && typeof row.chainId === "number") {
-        return {
-          ...base,
-          chain_id: row.chainId,
-          native_symbol: native?.symbol ?? "ETH",
-          native_decimals: native?.decimals ?? 18,
-        };
+      if (namespace === "eip155" && typeof row.chainId === "number") {
+        return { ...base, chain_id: row.chainId };
       }
-      return {
-        ...base,
-        caip2_id: row.caip2Id ?? null,
-        native_symbol: native?.symbol ?? "SOL",
-        native_decimals: native?.decimals ?? 9,
-      };
+      return { ...base, caip2_id: row.caip2Id ?? null };
     });
 
     return {

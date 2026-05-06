@@ -1,0 +1,243 @@
+/**
+ * SuiPendingTxCard — registry component for Sui write tools
+ * (`send_sui`, `send_sui_coin`).
+ *
+ * Sui counterpart to SolanaPendingTxCard. Diverges in the same two ways
+ * Solana does:
+ *
+ *   1. The transaction identifier is `data.digest` (base58) — Sui executors
+ *      deliberately do NOT populate `tx_hash` because the server schema
+ *      validates that field as 0x-hex (see the comment in
+ *      services/agent-executors/sui.ts::sendSui).
+ *   2. There is no live subscription. `pendingTxStore` is keyed on
+ *      `tx_hash`, so Sui writes are never inserted there. The card
+ *      renders a static result the moment the executor returns.
+ *
+ * Lifecycle:
+ *   state             | live                              | historical
+ *   ------------------|-----------------------------------|---------------------------
+ *   input-available   | <PreviewCard> (countdown+actions) | "Pending" / "Interrupted" frozen
+ *   output-available  | static "Confirmed" receipt        | identical
+ *   output-error      | static "Failed" receipt           | identical
+ */
+
+import * as Linking from "expo-linking";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ExternalLink,
+  XCircle,
+} from "lucide-react-native";
+import type React from "react";
+import { Pressable, Text, View } from "react-native";
+import PreviewCard from "../../PreviewCard/PreviewCard";
+import type { ToolComponentProps } from "../types";
+
+type SuiWriteData = {
+  digest?: string;
+  network?: "mainnet" | "testnet" | "devnet" | string;
+  to?: string;
+  coin_type?: string;
+  amount_sui?: string;
+  token_amount?: string;
+  [k: string]: unknown;
+};
+
+type SuiWriteOutput = {
+  status?: "success" | "failed" | string;
+  tx_confirmed?: boolean;
+  data?: SuiWriteData;
+  error?: string;
+  user_decision?: "approved" | "rejected";
+};
+
+type SuiWriteInput = {
+  human_summary?: string;
+  description?: string;
+  to?: string;
+  amount_sui?: string;
+  token_amount?: string;
+  coin_type?: string;
+  [k: string]: unknown;
+};
+
+const SUCCESS_GREEN = "#10b981";
+const BRAND_RED = "#c71c4b";
+const MUTED_GRAY = "#6b7280";
+
+function truncateDigest(digest: string): string {
+  if (digest.length <= 14) return digest;
+  return `${digest.slice(0, 8)}…${digest.slice(-6)}`;
+}
+
+function describe(input: SuiWriteInput): string {
+  if (typeof input.human_summary === "string") return input.human_summary;
+  if (typeof input.description === "string") return input.description;
+  return "Sui transaction";
+}
+
+/**
+ * SuiVision explorer URL with subdomain-prefixed hosts for non-mainnet
+ * networks. Mirrors `SuiWalletKit.buildTxExplorerUrl` (the kit owns the
+ * canonical mapping; we duplicate it here only because the agent card
+ * doesn't have access to a `ChainConfig` at render time).
+ */
+function buildSuiExplorerUrl(
+  digest: string,
+  network: string | undefined,
+): string | undefined {
+  if (!digest) return undefined;
+  if (network === "testnet") {
+    return `https://testnet.suivision.xyz/txblock/${digest}`;
+  }
+  if (network === "devnet") {
+    return `https://devnet.suivision.xyz/txblock/${digest}`;
+  }
+  return `https://suivision.xyz/txblock/${digest}`;
+}
+
+function networkLabel(network: string | undefined): string {
+  if (network === "devnet") return "Devnet";
+  if (network === "testnet") return "Testnet";
+  return "Mainnet";
+}
+
+function ResultCard({
+  input,
+  output,
+  state,
+}: {
+  input: SuiWriteInput;
+  output: SuiWriteOutput | undefined;
+  state: ToolComponentProps<SuiWriteInput, SuiWriteOutput>["state"];
+}) {
+  const description = describe(input);
+
+  if (state === "input-streaming" || state === "input-available" || !output) {
+    return (
+      <View className="my-1.5 rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+        <View className="flex-row items-center gap-2">
+          <AlertTriangle size={16} color={MUTED_GRAY} />
+          <Text className="text-xs font-bold uppercase tracking-wide text-gray-500">
+            Interrupted
+          </Text>
+        </View>
+        <Text className="text-sm text-gray-700 mt-1.5">{description}</Text>
+      </View>
+    );
+  }
+
+  const data: SuiWriteData = output.data ?? {};
+  const digest = typeof data.digest === "string" ? data.digest : undefined;
+  const network = typeof data.network === "string" ? data.network : undefined;
+  const explorerUrl = digest ? buildSuiExplorerUrl(digest, network) : undefined;
+  const canOpen = typeof explorerUrl === "string";
+
+  const onPress = () => {
+    if (!canOpen || !explorerUrl) return;
+    Linking.openURL(explorerUrl).catch(() => {});
+  };
+
+  const isFailed = state === "output-error" || output.status === "failed";
+
+  if (isFailed) {
+    return (
+      <Pressable
+        accessible
+        accessibilityRole={canOpen ? "button" : "text"}
+        disabled={!canOpen}
+        onPress={onPress}
+        className="my-1.5 rounded-2xl border border-light-primary-red/30 bg-light-primary-red/5 px-3.5 py-3"
+      >
+        <View className="flex-row items-center gap-2">
+          <XCircle size={16} color={BRAND_RED} />
+          <Text className="text-xs font-bold uppercase tracking-wide text-light-primary-red">
+            Failed
+          </Text>
+          <Text className="ml-auto text-[11px] text-gray-500">
+            {networkLabel(network)}
+          </Text>
+        </View>
+        <Text className="text-sm text-light-matte-black/80 mt-1.5">
+          {description}
+        </Text>
+        {output.error ? (
+          <Text className="text-[11px] text-gray-500 mt-1" numberOfLines={2}>
+            {output.error}
+          </Text>
+        ) : null}
+        {digest ? (
+          <View className="flex-row items-center gap-2 mt-2">
+            <Text
+              className="text-[11px] text-gray-500 flex-1"
+              numberOfLines={1}
+            >
+              {truncateDigest(digest)}
+            </Text>
+            {canOpen ? <ExternalLink size={12} color={MUTED_GRAY} /> : null}
+          </View>
+        ) : null}
+      </Pressable>
+    );
+  }
+
+  return (
+    <Pressable
+      accessible
+      accessibilityRole={canOpen ? "button" : "text"}
+      disabled={!canOpen}
+      onPress={onPress}
+      className="my-1.5 rounded-2xl border border-green-200 bg-green-50/60 px-3.5 py-3"
+    >
+      <View className="flex-row items-center gap-2">
+        <CheckCircle2 size={16} color={SUCCESS_GREEN} />
+        <Text className="text-xs font-bold uppercase tracking-wide text-green-700">
+          Confirmed
+        </Text>
+        <Text className="ml-auto text-[11px] text-gray-500">
+          {networkLabel(network)}
+        </Text>
+      </View>
+      <Text className="text-sm text-light-matte-black/80 mt-1.5">
+        {description}
+      </Text>
+      {digest ? (
+        <View className="flex-row items-center gap-2 mt-2">
+          <Text className="text-[11px] text-gray-500 flex-1" numberOfLines={1}>
+            {truncateDigest(digest)}
+          </Text>
+          {canOpen ? <ExternalLink size={12} color={MUTED_GRAY} /> : null}
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+const SuiPendingTxCard: React.FC<
+  ToolComponentProps<SuiWriteInput, SuiWriteOutput>
+> = ({ state, input, output, mode, addToolResult }) => {
+  if (mode === "historical") {
+    return <ResultCard input={input} output={output} state={state} />;
+  }
+
+  if (state === "input-streaming" || state === "input-available") {
+    if (!addToolResult) {
+      return <ResultCard input={input} output={output} state={state} />;
+    }
+    return (
+      <PreviewCard
+        summary={describe(input)}
+        onConfirm={() =>
+          addToolResult({ status: "success", user_decision: "approved" })
+        }
+        onDismiss={() =>
+          addToolResult({ status: "failed", user_decision: "rejected" })
+        }
+      />
+    );
+  }
+
+  return <ResultCard input={input} output={output} state={state} />;
+};
+
+export default SuiPendingTxCard;
