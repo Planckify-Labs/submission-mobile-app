@@ -23,6 +23,13 @@ import type { TBlockchain } from "@/api/types/blockchain";
 import type { TToken } from "@/api/types/token";
 import { storage } from "@/lib/storage/mmkv";
 import { pendingTxStore } from "../pendingTxStore";
+import {
+  type BalanceGroup,
+  type BalanceTokenRow,
+  type GroupError,
+  toAgentSlice,
+  type WalletBalancesPayload,
+} from "./balancePayload";
 import { resolveChainClients } from "./chainRouter";
 import {
   ExecutorError,
@@ -50,7 +57,13 @@ import {
 function resolveNativeCurrency(
   chainId: number,
   context: Parameters<MobileToolExecutor>[1],
-): { symbol: string; name: string; decimals: number } {
+): {
+  symbol: string;
+  name: string;
+  decimals: number;
+  logoUrl?: string;
+  chainLabel: string;
+} {
   const chain = context.blockchains.find(
     (b) => b.chainId === chainId && b.isEVM,
   );
@@ -59,6 +72,44 @@ function resolveNativeCurrency(
     symbol: nativeRow?.symbol ?? "ETH",
     name: nativeRow?.name ?? chain?.name ?? "Ether",
     decimals: nativeRow?.decimals ?? 18,
+    ...(nativeRow?.logoUrl ? { logoUrl: nativeRow.logoUrl } : {}),
+    chainLabel: chain?.name ?? `Chain ${chainId}`,
+  };
+}
+
+/**
+ * Build a one-group / one-native-row `WalletBalancesPayload` for the
+ * single-balance read tools (`get_balance`, `get_wallet_balance`).
+ * Extracted so both executors emit the byte-identical shape the
+ * `BalancesCard` consumes.
+ */
+function singleEvmNativePayload(
+  chainId: number,
+  native: ReturnType<typeof resolveNativeCurrency>,
+  balance: bigint,
+): WalletBalancesPayload {
+  const tokenRow: BalanceTokenRow = {
+    symbol: native.symbol,
+    name: native.name,
+    address: "0x0000000000000000000000000000000000000000",
+    decimals: native.decimals,
+    is_native: true,
+    is_stable_coin: false,
+    ...(native.logoUrl ? { logo_url: native.logoUrl } : {}),
+    balance_raw: balance.toString(),
+    balance_display: formatUnits(balance, native.decimals),
+  };
+  return {
+    groups: [
+      {
+        namespace: "evm",
+        chain_id: chainId,
+        chain_label: native.chainLabel,
+        chain_symbol: native.symbol,
+        ...(native.logoUrl ? { chain_logo_url: native.logoUrl } : {}),
+        tokens: [tokenRow],
+      },
+    ],
   };
 }
 
@@ -78,17 +129,11 @@ export const getBalance: MobileToolExecutor = (input, context) =>
     const { publicClient } = resolveChainClients(chainId, context);
     const balance = await publicClient.getBalance({ address });
     const native = resolveNativeCurrency(chainId, context);
+    const display = singleEvmNativePayload(chainId, native, balance);
     return {
       status: "success",
-      data: {
-        address,
-        chain_id: chainId,
-        balance_wei: balance.toString(),
-        balance_display: formatUnits(balance, native.decimals),
-        decimals: native.decimals,
-        symbol: native.symbol,
-        name: native.name,
-      },
+      data: toAgentSlice(display),
+      display,
     };
   });
 
@@ -120,17 +165,11 @@ export const getWalletBalance: MobileToolExecutor = (input, context) =>
     const { publicClient } = resolveChainClients(chainId, context);
     const balance = await publicClient.getBalance({ address });
     const native = resolveNativeCurrency(chainId, context);
+    const display = singleEvmNativePayload(chainId, native, balance);
     return {
       status: "success",
-      data: {
-        address,
-        chain_id: chainId,
-        balance_wei: balance.toString(),
-        balance_display: formatUnits(balance, native.decimals),
-        decimals: native.decimals,
-        symbol: native.symbol,
-        name: native.name,
-      },
+      data: toAgentSlice(display),
+      display,
     };
   });
 
@@ -389,12 +428,16 @@ async function resolveBlockchain(
   }
 }
 
-// ---- MMKV-cached token list loader ---------------------------------
-// Mirrors `hooks/queries/useTokens.ts` cache semantics exactly: same
-// MMKV keys, same 5-minute stale time, same 24-hour offline fallback.
-// This lets the agent executor share the same cache the wallet's Send
-// screen populates, so the first tool call after the user opens the
-// app is usually a pure cache hit with zero network cost.
+// ---- MMKV-cached token list loaders --------------------------------
+// `loadCachedTokens` (bare list, all chains) is kept for callers that
+// genuinely want the full catalogue (e.g. `points.ts` redemption tool).
+// For per-chain reads, prefer `loadCachedTokensForChain(blockchainId)`
+// which fans out via the server-filtered search endpoint — the bare
+// `/tokens` list is paginated and silently drops tokens past its
+// cutoff, so client-side `blockchainId` filtering on it can return an
+// incomplete view (Arbitrum USDT was the symptom that exposed this).
+// The Solana executor (`solana.ts::getSolanaWalletTokens`) follows the
+// same per-chain caching pattern.
 const TOKEN_STORAGE_KEY = "cached_tokens";
 const TOKEN_TIMESTAMP_KEY = "cached_tokens_timestamp";
 const TOKEN_STALE_TIME = 5 * 60 * 1000; // 5 min — mirrors useTokens
@@ -436,6 +479,39 @@ export async function loadCachedTokens(): Promise<TToken[]> {
   }
 }
 
+async function loadCachedTokensForChain(
+  blockchainId: string,
+): Promise<TToken[]> {
+  const KEY = `cached_tokens_${blockchainId}`;
+  const TS_KEY = `cached_tokens_${blockchainId}_ts`;
+  const cachedRaw = storage.getString(KEY);
+  const tsRaw = storage.getString(TS_KEY);
+  const now = Date.now();
+  const ts = tsRaw ? parseInt(tsRaw, 10) : 0;
+
+  if (cachedRaw && now - ts < TOKEN_STALE_TIME) {
+    try {
+      const parsed = JSON.parse(cachedRaw);
+      if (Array.isArray(parsed)) return parsed as TToken[];
+    } catch {}
+  }
+
+  try {
+    const fresh = await tokenApi.searchTokens({ blockchainId, isActive: true });
+    storage.set(KEY, JSON.stringify(fresh));
+    storage.set(TS_KEY, Date.now().toString());
+    return fresh;
+  } catch (err) {
+    if (cachedRaw) {
+      try {
+        const parsed = JSON.parse(cachedRaw);
+        if (Array.isArray(parsed)) return parsed as TToken[];
+      } catch {}
+    }
+    throw err;
+  }
+}
+
 /**
  * Run the full single-chain token scan for one chainId and return the
  * wire-format `{ chain_id, tokens }` pair. Extracted so multi-chain
@@ -445,12 +521,7 @@ async function scanChainTokens(
   chainId: number,
   input: Parameters<MobileToolExecutor>[0],
   context: Parameters<MobileToolExecutor>[1],
-): Promise<{
-  chain_id: number;
-  chain_name?: string;
-  chain_symbol?: string;
-  tokens: Array<Record<string, unknown>>;
-}> {
+): Promise<BalanceGroup> {
   // Resolve chainId → backend blockchain row. We need this for two
   // reasons: (a) to grab the native currency row (the /blockchains
   // endpoint eagerly includes only isNativeCurrency=true rows), and
@@ -470,16 +541,18 @@ async function scanChainTokens(
   // ---- Native row comes from /blockchains eager include ------------
   const nativeRow = (blockchain.tokens ?? []).find((t) => t.isNativeCurrency);
 
-  // ---- ERC20 rows come from the MMKV-cached token list, same cache
-  //      `useTokens` writes to (`cached_tokens` in mmkv id
-  //      `takumipay-app`). Cache-first: a fresh entry (< 5 min old) is
-  //      returned without any network I/O. Stale entries trigger a
-  //      refetch via `tokenApi.getTokenList()` and write-back. Offline
-  //      falls back to any cached data regardless of age — identical
-  //      to `hooks/queries/useTokens.ts` semantics.
-  let allTokens: TToken[] = [];
+  // ---- ERC20 rows come from the per-chain server-filtered search
+  //      (`tokens/search?blockchainId=…&isActive=true`). The unfiltered
+  //      `/tokens` endpoint is paginated server-side and silently drops
+  //      tokens past its cutoff, so chains whose tokens fall outside
+  //      the first page (Arbitrum was the symptom — USDT was cut)
+  //      ended up missing entries. Per-chain search returns the full
+  //      list for the requested blockchain. Cache key is per-chain so
+  //      switching wallets/chains doesn't invalidate every chain's
+  //      cache at once.
+  let chainTokens: TToken[] = [];
   try {
-    allTokens = await loadCachedTokens();
+    chainTokens = await loadCachedTokensForChain(blockchain.id);
   } catch (err) {
     throw new ExecutorError(
       ExecutorErrorCode.NetworkError,
@@ -489,21 +562,15 @@ async function scanChainTokens(
     );
   }
 
-  // Client-side filter by blockchainId + isActive (mirrors
-  // `filterTokens` in `hooks/queries/useTokens.ts`). Optionally filter
-  // by symbol (case-insensitive prefix-or-exact match, same rule as
-  // our previous implementation) and by isStablecoin. Always drop any
-  // isNativeCurrency rows here — native is handled via the
-  // `includeNative` pathway below so there is exactly one canonical
-  // native row.
+  // The server already filtered by `blockchainId` + `isActive: true`.
+  // Local pass only handles native exclusion + symbol / stablecoin
+  // filters from the tool input.
   const symFilter =
     typeof input.symbol === "string" && input.symbol.length > 0
       ? input.symbol.toLowerCase()
       : null;
 
-  const erc20Rows: TToken[] = allTokens.filter((t) => {
-    if (t.blockchainId !== blockchain.id) return false;
-    if (t.isActive === false) return false;
+  const erc20Rows: TToken[] = chainTokens.filter((t) => {
     if (t.isNativeCurrency) return false;
     if (
       typeof input.is_stable_coin === "boolean" &&
@@ -577,9 +644,9 @@ async function scanChainTokens(
     ? resolveChainClients(chainId, context).publicClient
     : null;
 
-  const rows = await Promise.all(
-    tokens.map(async (token) => {
-      let balance_wei: string | undefined;
+  const rows: BalanceTokenRow[] = await Promise.all(
+    tokens.map(async (token): Promise<BalanceTokenRow> => {
+      let balance_raw: string | undefined;
       let balance_display: string | undefined;
 
       if (publicClient && walletAddress) {
@@ -588,7 +655,7 @@ async function scanChainTokens(
             const raw = await publicClient.getBalance({
               address: walletAddress,
             });
-            balance_wei = raw.toString(10);
+            balance_raw = raw.toString(10);
             balance_display = formatUnits(raw, token.decimals);
           } else if (token.address && token.address !== ZERO_ADDRESS) {
             const raw = (await publicClient.readContract({
@@ -597,7 +664,7 @@ async function scanChainTokens(
               functionName: "balanceOf",
               args: [walletAddress],
             })) as bigint;
-            balance_wei = raw.toString(10);
+            balance_raw = raw.toString(10);
             balance_display = formatUnits(raw, token.decimals);
           }
         } catch {
@@ -607,7 +674,6 @@ async function scanChainTokens(
       }
 
       return {
-        ...(token.token_id !== undefined ? { token_id: token.token_id } : {}),
         symbol: token.symbol,
         name: token.name,
         address: token.address,
@@ -618,16 +684,18 @@ async function scanChainTokens(
         ...(token.pegged_currency !== undefined
           ? { pegged_currency: token.pegged_currency }
           : {}),
-        ...(balance_wei !== undefined ? { balance_wei } : {}),
+        ...(balance_raw !== undefined ? { balance_raw } : {}),
         ...(balance_display !== undefined ? { balance_display } : {}),
       };
     }),
   );
 
   return {
+    namespace: "evm",
     chain_id: chainId,
-    chain_name: blockchain.name,
+    chain_label: blockchain.name,
     chain_symbol: nativeRow?.symbol,
+    ...(nativeRow?.logoUrl ? { chain_logo_url: nativeRow.logoUrl } : {}),
     tokens: rows,
   };
 }
@@ -660,21 +728,23 @@ export const getWalletTokens: MobileToolExecutor = (input, context) =>
     }
 
     // Fan out across chains in parallel. Per-chain failures (unsupported
-    // chain, API error, etc.) are captured and surfaced as `chain_errors`
-    // so a single bad chain can't poison a multi-chain query.
+    // chain, API error, etc.) are captured into `group_errors` so a
+    // single bad chain can't poison a multi-chain query.
     const settled = await Promise.allSettled(
       chainIds.map((id) => scanChainTokens(id, input, context)),
     );
 
-    const chains: Array<Awaited<ReturnType<typeof scanChainTokens>>> = [];
-    const chain_errors: Array<{ chain_id: number; error: string }> = [];
+    const groups: BalanceGroup[] = [];
+    const group_errors: GroupError[] = [];
 
     settled.forEach((res, i) => {
       if (res.status === "fulfilled") {
-        chains.push(res.value);
+        groups.push(res.value);
       } else {
-        chain_errors.push({
+        group_errors.push({
+          namespace: "evm",
           chain_id: chainIds[i],
+          chain_label: `Chain ${chainIds[i]}`,
           error:
             res.reason instanceof Error
               ? res.reason.message
@@ -683,55 +753,21 @@ export const getWalletTokens: MobileToolExecutor = (input, context) =>
       }
     });
 
-    // Single-chain path keeps the v1.1 §4 wire shape (`chain_id`,
-    // `tokens`) for backwards compatibility with any agent reasoning
-    // already keyed on the flat shape. Multi-chain emits the `chains[]`
-    // wrapper per the schema extension.
-    //
     // `data` is the compact agent-facing slice — just enough for the
     // model to reason ("does the user hold USDC on polygon?"). The
     // rich per-token rows go in `display`, which the server strips
     // before feeding the result to the LLM. See `protocol.ts::ToolResult`.
-    // Include `address` and `decimals` so the agent can construct
-    // ERC20 transfers / approvals / contract calls without a second
-    // round-trip. Without these, `transfer_erc20` and `approve_erc20`
-    // calls fail with "I don't know the contract address".
-    const toAgentSlice = (group: (typeof chains)[number]) => ({
-      chain_id: group.chain_id,
-      chain_name: group.chain_name,
-      tokens: group.tokens.map((t) => ({
-        symbol: t.symbol,
-        address: t.address,
-        decimals: t.decimals,
-        is_native: t.is_native,
-        ...(t.balance_display !== undefined
-          ? { balance_display: t.balance_display }
-          : {}),
-      })),
-    });
-
-    if (chainIds.length === 1 && chain_errors.length === 0) {
-      const only = chains[0];
-      return {
-        status: "success",
-        data: toAgentSlice(only),
-        display: {
-          chain_id: only.chain_id,
-          tokens: only.tokens,
-        },
-      };
-    }
+    // `address` and `decimals` stay so the agent can construct ERC20
+    // transfers / approvals without a second round-trip.
+    const display: WalletBalancesPayload = {
+      groups,
+      ...(group_errors.length > 0 ? { group_errors } : {}),
+    };
 
     return {
       status: "success",
-      data: {
-        chains: chains.map(toAgentSlice),
-        ...(chain_errors.length > 0 ? { chain_errors } : {}),
-      },
-      display: {
-        chains,
-        ...(chain_errors.length > 0 ? { chain_errors } : {}),
-      },
+      data: toAgentSlice(display),
+      display,
     };
   });
 

@@ -1,11 +1,29 @@
+import BalancesCard from "./cards/BalancesCard";
 import PendingTxCard from "./cards/PendingTxCard";
 import RedemptionCatalogCard from "./cards/RedemptionCatalogCard";
 import SolanaPendingTxCard from "./cards/SolanaPendingTxCard";
-import SolanaTokensCard from "./cards/SolanaTokensCard";
 import SpendingApprovalCard from "./cards/SpendingApprovalCard";
 import SwapQuoteCard from "./cards/SwapQuoteCard";
-import WalletTokensCard from "./cards/WalletTokensCard";
 import type { ToolComponent } from "./types";
+
+/**
+ * Tool names whose results render through `BalancesCard`. Exported so
+ * `MessageContent` can dedupe back-to-back balance reads in the same
+ * assistant turn — the LLM will sometimes call both a list-balances
+ * tool and a single-native-balance tool to "double-check" itself, and
+ * since both now feed the same card, the user sees two identical
+ * cards. Dedupe is content-addressed (see `MessageContent.tsx`), not
+ * tool-name based, so legitimately distinct calls (different chain,
+ * different address) still render separately.
+ */
+export const BALANCE_TOOL_NAMES = new Set([
+  "get_wallet_tokens",
+  "get_wallet_spl_tokens",
+  "get_balance",
+  "get_wallet_balance",
+  "get_sol_balance",
+  "get_wallet_sol_balance",
+]);
 
 // biome-ignore lint/suspicious/noExplicitAny: registry is intentionally open-typed
 export const toolComponents: Record<string, ToolComponent<any, any>> = {
@@ -15,8 +33,16 @@ export const toolComponents: Record<string, ToolComponent<any, any>> = {
   approve_spending: SpendingApprovalCard,
   approveSpending: SpendingApprovalCard,
   swap_quote: SwapQuoteCard,
-  get_wallet_tokens: WalletTokensCard,
-  get_wallet_spl_tokens: SolanaTokensCard,
+  // Single card for every namespace's balance read — list-tokens AND
+  // single-native-balance lookups. New per-namespace executors plug in
+  // by emitting `WalletBalancesPayload` and being added to this map —
+  // no UI work needed.
+  get_wallet_tokens: BalancesCard,
+  get_wallet_spl_tokens: BalancesCard,
+  get_balance: BalancesCard,
+  get_wallet_balance: BalancesCard,
+  get_sol_balance: BalancesCard,
+  get_wallet_sol_balance: BalancesCard,
   get_redemption_catalog: RedemptionCatalogCard,
   search_redemption_catalog: RedemptionCatalogCard,
   send_sol: SolanaPendingTxCard,

@@ -25,6 +25,12 @@ import { resolveNamespace } from "@/hooks/useWallet.helpers";
 import { storage } from "@/lib/storage/mmkv";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import {
+  type BalanceGroup,
+  type BalanceTokenRow,
+  toAgentSlice,
+  type WalletBalancesPayload,
+} from "./balancePayload";
+import {
   ExecutorError,
   ExecutorErrorCode,
   type MobileToolExecutor,
@@ -81,6 +87,63 @@ function requireSolanaAddress(value: string, key: string): string {
 }
 
 /**
+ * Resolve the active Solana blockchain row from context — used to
+ * pull the native token's logo / name / decimals so single-balance
+ * cards render the SOL icon instead of the generic Coins fallback.
+ */
+function resolveSolanaNativeMeta(
+  chain: Extract<ChainConfig, { namespace: "solana" }>,
+  context: Parameters<MobileToolExecutor>[1],
+): { symbol: string; name: string; decimals: number; logoUrl?: string } {
+  const isTestnet = chain.cluster !== "mainnet-beta";
+  const blockchain = context.blockchains.find(
+    (b) =>
+      resolveNamespace(b) === "solana" &&
+      b.isActive &&
+      b.isTestnet === isTestnet,
+  );
+  const nativeRow = blockchain?.tokens?.find((t) => t.isNativeCurrency);
+  return {
+    symbol: nativeRow?.symbol ?? "SOL",
+    name: nativeRow?.name ?? "Solana",
+    decimals: nativeRow?.decimals ?? 9,
+    ...(nativeRow?.logoUrl ? { logoUrl: nativeRow.logoUrl } : {}),
+  };
+}
+
+function singleSolanaNativePayload(
+  chain: Extract<ChainConfig, { namespace: "solana" }>,
+  native: ReturnType<typeof resolveSolanaNativeMeta>,
+  lamports: bigint,
+): WalletBalancesPayload {
+  const tokenRow: BalanceTokenRow = {
+    symbol: native.symbol,
+    name: native.name,
+    address: "",
+    decimals: native.decimals,
+    is_native: true,
+    is_stable_coin: false,
+    ...(native.logoUrl ? { logo_url: native.logoUrl } : {}),
+    balance_raw: lamports.toString(),
+    balance_display: formatUnits(lamports, native.decimals),
+  };
+  const clusterName =
+    chain.cluster === "devnet" ? "Solana Devnet" : "Solana Mainnet";
+  return {
+    groups: [
+      {
+        namespace: "solana",
+        chain_id: chain.cluster,
+        chain_label: clusterName,
+        chain_symbol: native.symbol,
+        ...(native.logoUrl ? { chain_logo_url: native.logoUrl } : {}),
+        tokens: [tokenRow],
+      },
+    ],
+  };
+}
+
+/**
  * `get_wallet_sol_balance` — connected wallet's SOL balance on the
  * active Solana cluster. Returns raw lamports alongside a pre-
  * formatted human string so the LLM never has to divide by 1e9.
@@ -103,15 +166,12 @@ export const getWalletSolBalance: MobileToolExecutor = (_input, context) =>
     const chain = getActiveSolanaChain();
     const kit = getSolanaKit();
     const lamports = await kit.getNativeBalance(address, chain);
+    const native = resolveSolanaNativeMeta(chain, context);
+    const display = singleSolanaNativePayload(chain, native, lamports);
     return {
       status: "success",
-      data: {
-        address,
-        cluster: chain.cluster,
-        balance_lamports: lamports.toString(),
-        balance_display: kit.formatNativeAmount(lamports, chain),
-        symbol: "SOL",
-      },
+      data: toAgentSlice(display),
+      display,
     };
   });
 
@@ -136,15 +196,12 @@ export const getSolBalance: MobileToolExecutor = (input, context) =>
     requireSolanaAddress(address, "address");
 
     const lamports = await kit.getNativeBalance(address, chain);
+    const native = resolveSolanaNativeMeta(chain, context);
+    const display = singleSolanaNativePayload(chain, native, lamports);
     return {
       status: "success",
-      data: {
-        address,
-        cluster: chain.cluster,
-        balance_lamports: lamports.toString(),
-        balance_display: kit.formatNativeAmount(lamports, chain),
-        symbol: "SOL",
-      },
+      data: toAgentSlice(display),
+      display,
     };
   });
 
@@ -304,6 +361,10 @@ export const getSolanaWalletTokens: MobileToolExecutor = (input, context) =>
         ? input.symbol.toLowerCase()
         : null;
 
+    const nativeToken = allTokens.find(
+      (t) => t.isNativeCurrency && t.isActive !== false,
+    );
+
     const splTokens = allTokens.filter((t) => {
       if (t.isActive === false) return false;
       if (t.isNativeCurrency) return false; // native handled separately
@@ -334,10 +395,10 @@ export const getSolanaWalletTokens: MobileToolExecutor = (input, context) =>
     }
 
     // Build the token rows with optional live SPL balances.
-    const splRows = await Promise.all(
-      splTokens.map(async (t) => {
+    const splRows: BalanceTokenRow[] = await Promise.all(
+      splTokens.map(async (t): Promise<BalanceTokenRow> => {
         let balance_display: string | undefined;
-        let balance_lamports: string | undefined;
+        let balance_raw: string | undefined;
 
         if (includeBalance && t.contractAddress) {
           try {
@@ -346,7 +407,7 @@ export const getSolanaWalletTokens: MobileToolExecutor = (input, context) =>
               chain,
               t.contractAddress,
             );
-            balance_lamports = raw.toString();
+            balance_raw = raw.toString();
             balance_display = formatUnits(raw, t.decimals);
           } catch {
             // per-token failure — omit balance fields
@@ -362,61 +423,63 @@ export const getSolanaWalletTokens: MobileToolExecutor = (input, context) =>
           is_stable_coin: t.isStablecoin ?? false,
           ...(t.logoUrl ? { logo_url: t.logoUrl } : {}),
           ...(t.peggedCurrency ? { pegged_currency: t.peggedCurrency } : {}),
-          ...(balance_lamports !== undefined ? { balance_lamports } : {}),
+          ...(balance_raw !== undefined ? { balance_raw } : {}),
           ...(balance_display !== undefined ? { balance_display } : {}),
         };
       }),
     );
 
     // Prepend native SOL row.
-    const nativeSymbol = "SOL";
+    const nativeSymbol = nativeToken?.symbol ?? "SOL";
+    const nativeName = nativeToken?.name ?? "Solana";
+    const nativeDecimals = nativeToken?.decimals ?? 9;
     const nativePasses =
       !symFilter ||
       nativeSymbol.toLowerCase() === symFilter ||
       nativeSymbol.toLowerCase().startsWith(symFilter);
     const stablePasses = input.is_stable_coin !== true;
 
-    const nativeRow =
+    const nativeRow: BalanceTokenRow | null =
       includeNative && nativePasses && stablePasses
         ? {
-            symbol: "SOL",
-            name: "Solana",
+            symbol: nativeSymbol,
+            name: nativeName,
             address: "",
-            decimals: 9,
+            decimals: nativeDecimals,
             is_native: true,
             is_stable_coin: false,
+            ...(nativeToken?.logoUrl ? { logo_url: nativeToken.logoUrl } : {}),
             ...(solLamports !== undefined
               ? {
-                  balance_lamports: solLamports.toString(),
-                  balance_display: formatUnits(solLamports, 9),
+                  balance_raw: solLamports.toString(),
+                  balance_display: formatUnits(solLamports, nativeDecimals),
                 }
               : {}),
           }
         : null;
 
-    const tokens = nativeRow ? [nativeRow, ...splRows] : splRows;
+    const tokens: BalanceTokenRow[] = nativeRow
+      ? [nativeRow, ...splRows]
+      : splRows;
 
-    // Compact agent-facing slice (no logo_url to save context).
-    const agentSlice = tokens.map((t) => ({
-      symbol: t.symbol,
-      address: t.address,
-      decimals: t.decimals,
-      is_native: t.is_native,
-      ...(t.balance_display !== undefined
-        ? { balance_display: t.balance_display }
-        : {}),
-    }));
+    const clusterName =
+      chain.cluster === "devnet" ? "Solana Devnet" : "Solana Mainnet";
+
+    const group: BalanceGroup = {
+      namespace: "solana",
+      chain_id: chain.cluster,
+      chain_label: clusterName,
+      chain_symbol: nativeSymbol,
+      ...(nativeToken?.logoUrl ? { chain_logo_url: nativeToken.logoUrl } : {}),
+      tokens,
+    };
+
+    const display: WalletBalancesPayload = { groups: [group] };
 
     return {
       status: "success",
-      data: {
-        cluster: chain.cluster,
-        tokens: agentSlice,
-      },
-      display: {
-        cluster: chain.cluster,
-        tokens,
-      },
+      data: toAgentSlice(display),
+      display,
     };
   });
 
