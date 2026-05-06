@@ -144,9 +144,7 @@ export default function ChatInput({
                 }}
               >
                 {voice.status === "recording" ? (
-                  <View
-                    className="flex-1 flex-row items-center py-2.5"
-                  >
+                  <View className="flex-1 flex-row items-center py-2.5">
                     <GHTouchableOpacity
                       className="pl-1 pr-2 justify-center items-center"
                       onPress={() => {
@@ -268,83 +266,81 @@ export default function ChatInput({
             className="flex-1 bg-light"
             style={{ paddingTop: topInset }}
           >
-          <View className="flex-1 pl-4 flex-row">
-            {voice.status === "recording" ? (
-              <View
-                className="flex-1 flex-row items-center"
-              >
-                <GHTouchableOpacity
-                  className="pr-2 justify-center items-center"
-                  onPress={() => {
-                    void voice.cancel();
-                  }}
-                  accessibilityLabel="Cancel voice input"
-                >
-                  <X size={20} color="#1a1a1a" />
-                </GHTouchableOpacity>
-                <AudioWaveBars recorder={voice.recorder} />
-              </View>
-            ) : (
-              <TextInput
-                className="flex-1 text-base text-light-matte-black"
-                placeholder={placeholder}
-                placeholderTextColor="#999"
-                value={value}
-                onChangeText={onChangeText}
-                multiline
-                maxLength={500}
-                editable={!isLoading}
-                textAlignVertical="top"
-              />
-            )}
-
-            <TouchableOpacity
-              onPress={() => setIsExpanded(false)}
-              className="p-2 mt-2"
-            >
-              <Minimize2 size={20} color="#c71c4b" />
-            </TouchableOpacity>
-          </View>
-
-          <View className="flex-row items-center justify-between px-4 py-4">
-            <GHTouchableOpacity
-              className="p-2 justify-center items-center"
-              disabled={micDisabled}
-              onPress={() => {
-                void handleMicPress();
-              }}
-              accessibilityLabel={
-                voice.status === "recording"
-                  ? "Stop recording"
-                  : "Start voice input"
-              }
-            >
-              {renderMicIcon()}
-            </GHTouchableOpacity>
-
-            <GHTouchableOpacity
-              className={`w-11 h-11 rounded-full justify-center items-center ${
-                isSendDisabled
-                  ? "bg-gray-300 opacity-60"
-                  : "bg-light-primary-red"
-              }`}
-              onPress={() => {
-                void handleSend().then(() => setIsExpanded(false));
-              }}
-              disabled={isSendDisabled}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+            <View className="flex-1 pl-4 flex-row">
+              {voice.status === "recording" ? (
+                <View className="flex-1 flex-row items-center">
+                  <GHTouchableOpacity
+                    className="pr-2 justify-center items-center"
+                    onPress={() => {
+                      void voice.cancel();
+                    }}
+                    accessibilityLabel="Cancel voice input"
+                  >
+                    <X size={20} color="#1a1a1a" />
+                  </GHTouchableOpacity>
+                  <AudioWaveBars recorder={voice.recorder} />
+                </View>
               ) : (
-                <ArrowUp
-                  size={23}
-                  stroke="#ffffff"
-                  strokeWidth={3}
-                  color="#ffffff"
+                <TextInput
+                  className="flex-1 text-base text-light-matte-black"
+                  placeholder={placeholder}
+                  placeholderTextColor="#999"
+                  value={value}
+                  onChangeText={onChangeText}
+                  multiline
+                  maxLength={500}
+                  editable={!isLoading}
+                  textAlignVertical="top"
                 />
               )}
-            </GHTouchableOpacity>
-          </View>
+
+              <TouchableOpacity
+                onPress={() => setIsExpanded(false)}
+                className="p-2 mt-2"
+              >
+                <Minimize2 size={20} color="#c71c4b" />
+              </TouchableOpacity>
+            </View>
+
+            <View className="flex-row items-center justify-between px-4 py-4">
+              <GHTouchableOpacity
+                className="p-2 justify-center items-center"
+                disabled={micDisabled}
+                onPress={() => {
+                  void handleMicPress();
+                }}
+                accessibilityLabel={
+                  voice.status === "recording"
+                    ? "Stop recording"
+                    : "Start voice input"
+                }
+              >
+                {renderMicIcon()}
+              </GHTouchableOpacity>
+
+              <GHTouchableOpacity
+                className={`w-11 h-11 rounded-full justify-center items-center ${
+                  isSendDisabled
+                    ? "bg-gray-300 opacity-60"
+                    : "bg-light-primary-red"
+                }`}
+                onPress={() => {
+                  void handleSend().then(() => setIsExpanded(false));
+                }}
+                disabled={isSendDisabled}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <ArrowUp
+                    size={23}
+                    stroke="#ffffff"
+                    strokeWidth={3}
+                    color="#ffffff"
+                  />
+                )}
+              </GHTouchableOpacity>
+            </View>
           </KeyboardAvoidingView>
         </GestureHandlerRootView>
       </Modal>
