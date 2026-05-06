@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Keyboard,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -455,6 +457,31 @@ export default function AgentMode() {
   }, [activeWallet, activeChain, pointsAuthenticated]);
 
   const chatListRef = useRef<any>(null);
+
+  // ── Keyboard-aware list padding ─────────────────────────────────
+  // The ChatInput is absolute-positioned and floats up with the
+  // keyboard via its own KeyboardAvoidingView. The FlashList beneath
+  // it doesn't resize, so without extra padding the latest messages
+  // get hidden behind the keyboard. Track keyboard height and add it
+  // to the list's bottom padding so the user can still scroll to the
+  // tail while typing.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // ── Auto-scroll state ───────────────────────────────────────────
   const autoScrollEnabledRef = useRef(true);
@@ -1192,12 +1219,12 @@ export default function AgentMode() {
 
   const chatContentContainerStyle = useMemo(
     () => ({
-      paddingBottom: 50,
+      paddingBottom: 50 + keyboardHeight,
       paddingTop: 45,
       flexGrow: 1,
       justifyContent: chatMessages.length === 0 ? "center" : "flex-start",
     }),
-    [chatMessages.length],
+    [chatMessages.length, keyboardHeight],
   );
 
   const handleAddToolResult = useCallback(
@@ -1475,6 +1502,7 @@ export default function AgentMode() {
                   contentContainerStyle={chatContentContainerStyle as ViewStyle}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="none"
                   onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     { useNativeDriver: false },
