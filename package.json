@@ -13,7 +13,11 @@
     "check:chains": "bash scripts/check-chain-agnostic.sh",
     "build:cleanup": "bash scripts/eas-build-cleanup.sh",
     "biome:check:unsafeFix": "biome check --write --unsafe",
-    "biome:check": "biome check --write"
+    "biome:check": "biome check --write",
+    "test": "pnpm test:vitest && pnpm test:node",
+    "test:vitest": "vitest run",
+    "test:node": "bash scripts/run-node-tests.sh",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.40",

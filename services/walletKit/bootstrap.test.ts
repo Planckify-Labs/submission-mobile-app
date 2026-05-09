@@ -47,9 +47,9 @@ describe("bootstrapFirstLoginWallets (zero-wallet first login)", () => {
   it("returns exactly one wallet per registered kit", async () => {
     const wallets = await bootstrapFirstLoginWallets();
     assert.equal(wallets.length, walletKitRegistry.getAll().length);
-    // v2.3 ships EVM + Solana — assert the current registry size
+    // v2.4 ships EVM + Solana + Sui — assert the current registry size
     // to catch accidental kit un-registration in future diffs.
-    assert.equal(wallets.length, 2);
+    assert.equal(wallets.length, 3);
   });
 
   it("each wallet has a non-empty address, a non-empty seedPhrase, and a registered namespace", async () => {

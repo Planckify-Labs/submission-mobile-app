@@ -22,19 +22,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // storage references resolve to the stubs below.
 // ---------------------------------------------------------------------------
 
-const kitMock = {
-  validateAddress: vi.fn((s: string) => typeof s === "string" && s.length > 0),
-  getNativeBalance: vi.fn(),
-  formatNativeAmount: vi.fn((raw: bigint) => `${Number(raw) / 1e9} SUI`),
-  parseNativeAmount: vi.fn((human: string) =>
-    BigInt(Math.round(parseFloat(human) * 1e9)),
-  ),
-  sendNativeTransfer: vi.fn(),
-  sendTokenTransfer: vi.fn(),
-};
-
-const registryHas = vi.fn(() => true);
-const registryGet = vi.fn(() => kitMock);
+const { kitMock, registryHas, registryGet, storageMock } = vi.hoisted(() => {
+  const kitMock = {
+    validateAddress: vi.fn(
+      (s: string) => typeof s === "string" && s.length > 0,
+    ),
+    getNativeBalance: vi.fn(),
+    formatNativeAmount: vi.fn((raw: bigint) => `${Number(raw) / 1e9} SUI`),
+    parseNativeAmount: vi.fn((human: string) =>
+      BigInt(Math.round(parseFloat(human) * 1e9)),
+    ),
+    sendNativeTransfer: vi.fn(),
+    sendTokenTransfer: vi.fn(),
+  };
+  return {
+    kitMock,
+    registryHas: vi.fn(() => true),
+    registryGet: vi.fn(() => kitMock),
+    storageMock: {
+      getString: vi.fn<(key: string) => string | undefined>(),
+      set: vi.fn(),
+    },
+  };
+});
 
 vi.mock("@/services/walletKit/registry", () => ({
   walletKitRegistry: {
@@ -42,11 +52,6 @@ vi.mock("@/services/walletKit/registry", () => ({
     get: (ns: string) => registryGet(ns),
   },
 }));
-
-const storageMock = {
-  getString: vi.fn<(key: string) => string | undefined>(),
-  set: vi.fn(),
-};
 
 vi.mock("@/lib/storage/mmkv", () => ({
   storage: storageMock,
