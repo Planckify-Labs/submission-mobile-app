@@ -55,7 +55,7 @@ const QR_LOGO_BASE = {
 const QR_LOGO_SCALE_BY_NAMESPACE: Record<string, number> = {
   eip155: 1.2,
   solana: 1.0,
-  sui: 0.8,
+  sui: 1.0,
 };
 const QR_LOGO_SCALE_DEFAULT = 1.2;
 
