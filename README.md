@@ -7,12 +7,8 @@ published. If you found a "Takumi" installer somewhere that is not
 listed here — a paid search ad, a sideloaded `.apk`, a desktop app, a
 browser extension — it is not ours. Do not install it.
 
-- **Apple App Store:** https://apps.apple.com/app/takumi-wallet/id000000000
 - **Google Play Store:** https://play.google.com/store/apps/details?id=com.planckify.takumiwallet
-- **Website:** https://takumi.ai
-- **X:** https://x.com/takumi_ai
-- **GitHub:** https://github.com/cstralpt
-- **Discord:** https://discord.gg/takumi
+- **Website:** https://takumipay.xyz
 
 App identifiers:
 
