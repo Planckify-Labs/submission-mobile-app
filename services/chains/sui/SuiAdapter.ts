@@ -174,11 +174,22 @@ function pickSuiWalletForOrigin(
   const sui = ctx.wallets.filter((w) => w.namespace === "sui");
   if (sui.length === 0) return null;
   const targetChain = network ? networkToChain(network) : null;
-  const grants = PermissionStore.listByOrigin(origin).filter((g) => {
-    if (typeof g.chainId !== "string") return false;
-    if (!g.chainId.startsWith("sui:")) return false;
-    return targetChain === null || g.chainId === targetChain;
-  });
+  // Sort grants by `grantedAt` descending so the MOST RECENT connect
+  // wins the fallback. Grant storage appends new entries at the end,
+  // so without this sort an older grant for the same origin (carried
+  // over from a previous re-connect that picked a different wallet)
+  // would mask a fresher pick — observed in the wild on pivy.me when
+  // the user re-connected with a non-first Sui wallet: the older
+  // grant kept routing sign requests back to the original wallet
+  // even after dApp+UI showed the new pick.
+  const grants = PermissionStore.listByOrigin(origin)
+    .filter((g) => {
+      if (typeof g.chainId !== "string") return false;
+      if (!g.chainId.startsWith("sui:")) return false;
+      return targetChain === null || g.chainId === targetChain;
+    })
+    .slice()
+    .sort((a, b) => (b.grantedAt ?? 0) - (a.grantedAt ?? 0));
   for (const g of grants) {
     const m = sui.find(
       (w) => w.address.toLowerCase() === g.walletAddress.toLowerCase(),
@@ -236,15 +247,22 @@ class SuiAdapter implements ChainAdapter {
     });
   }
 
-  onStateChange(ctx: AdapterContext): { injectedJs: string } | null {
-    const active =
-      ctx.activeWallet && ctx.activeWallet.namespace === "sui"
-        ? ctx.activeWallet
-        : ctx.wallets.find((w) => w.namespace === "sui");
-    const addr = active?.address ?? null;
-    return {
-      injectedJs: `try{window._updateSuiWallet&&window._updateSuiWallet({accounts:${addr ? `[{address:${JSON.stringify(addr)}}]` : "[]"}});}catch(e){}`,
-    };
+  onStateChange(_ctx: AdapterContext): { injectedJs: string } | null {
+    // Intentionally a no-op. Pre-fix this method pushed a Wallet
+    // Standard `change` event built from `ctx.activeWallet` (or the
+    // first Sui wallet as a fallback), which propagated home-screen
+    // active-wallet changes into every Sui dApp session and could
+    // overwrite the user-picked wallet bound at connect time with a
+    // different one. dApp connections must be isolated from global
+    // UI state — see `feedback_dapp_bridge_isolation` memory.
+    //
+    // Per-decision state pushes are handled by
+    // `DappBridge.pushPostDecisionUpdate` (connect fast path threads
+    // the resolved wallet straight from the response value). Any
+    // future per-origin state-sync work must look up the granted
+    // wallet via `PermissionStore` keyed by origin — not `ctx`.
+    void _ctx;
+    return null;
   }
 
   async handleRequest(
@@ -361,26 +379,49 @@ class SuiAdapter implements ChainAdapter {
     req: ChainRequest,
     ctx: AdapterContext,
   ): ChainResult {
-    const suiWallet = pickSuiWalletForOrigin(ctx, req.origin.url);
-    if (!suiWallet) return rpcError(4100, "no Sui wallet available");
     const params = (req.params as unknown[]) ?? [];
     const first = (params[0] ?? {}) as {
       account?: { address?: string };
       address?: string;
       message?: string;
     };
+    const requested = asString(first.account?.address ?? first.address);
+    // Resolve the wallet to display in the approval UI from the address
+    // the dApp passed. Falling back to `pickSuiWalletForOrigin` only
+    // when the dApp didn't pass one keeps `intent.wallet`,
+    // `intent.payload.address`, and the eventual signing keypair in
+    // lockstep — without this, an older grant could route to one
+    // wallet while the dApp-requested address pointed at another, and
+    // the signer (which uses `payload.address`) would silently sign
+    // with the right key but display the wrong wallet in the sheet.
+    let suiWallet: AdapterContext["activeWallet"] | null = null;
+    if (requested) {
+      suiWallet =
+        ctx.wallets.find(
+          (w) =>
+            w.namespace === "sui" &&
+            w.address.toLowerCase() === requested.toLowerCase(),
+        ) ?? null;
+    }
+    if (!suiWallet) {
+      suiWallet = pickSuiWalletForOrigin(ctx, req.origin.url);
+    }
+    if (!suiWallet) return rpcError(4100, "no Sui wallet available");
     const message = asString(first.message);
     const display: "utf8" | "base64" = isUtf8Displayable(message)
       ? "utf8"
       : "base64";
-    const address =
-      asString(first.account?.address ?? first.address) || suiWallet.address;
+    // Always emit the wallet's canonical address into the payload, not
+    // whatever case/form the dApp passed. The signer looks up by exact
+    // string match; passing the canonical form keeps the signer's
+    // `getWalletByAddress` lookup deterministic across dApps with
+    // different address-casing conventions.
     return {
       status: "needs-approval",
       intent: makeIntent<SuiSignPersonalMessagePayload>(
         req,
         "signMessage",
-        { address, message, display },
+        { address: suiWallet.address, message, display },
         suiWallet,
       ),
     };
@@ -423,9 +464,6 @@ class SuiAdapter implements ChainAdapter {
     ctx: AdapterContext,
     mode: "sign-only" | "sign-and-execute",
   ): ChainResult {
-    const suiWallet = pickSuiWalletForOrigin(ctx, req.origin.url);
-    if (!suiWallet) return rpcError(4100, "no Sui wallet available");
-
     const params = (req.params as unknown[]) ?? [];
     const first = (params[0] ?? {}) as {
       account?: { address?: string };
@@ -434,6 +472,22 @@ class SuiAdapter implements ChainAdapter {
       transaction?: string;
       options?: SuiSignTxPayload["options"];
     };
+    const requested = asString(first.account?.address ?? first.address);
+    // Same intent.wallet/payload.address alignment as handleSignMessage.
+    let suiWallet: AdapterContext["activeWallet"] | null = null;
+    if (requested) {
+      suiWallet =
+        ctx.wallets.find(
+          (w) =>
+            w.namespace === "sui" &&
+            w.address.toLowerCase() === requested.toLowerCase(),
+        ) ?? null;
+    }
+    if (!suiWallet) {
+      suiWallet = pickSuiWalletForOrigin(ctx, req.origin.url);
+    }
+    if (!suiWallet) return rpcError(4100, "no Sui wallet available");
+
     const tx = asString(first.transaction);
     if (!tx) return rpcError(-32602, "missing transaction");
 
@@ -512,6 +566,27 @@ class SuiAdapter implements ChainAdapter {
             wallet = picked;
           }
         }
+        // Diagnostic — dev only. Surface what the picker actually sent
+        // and how `ctx.wallets` looks at decision time so the wrong-
+        // wallet bug pattern ("connect returns first sui wallet despite
+        // user pick") is greppable from the bridge log. Cite a specific
+        // address in a bug report and we can compare to the indices
+        // here.
+        if (typeof __DEV__ !== "undefined" && __DEV__) {
+          const summary = ctx.wallets.map((w, i) => ({
+            i,
+            ns: w.namespace,
+            addr: w.address,
+            name: w.name,
+          }));
+          console.log("[SuiAdapter.connect] decision", {
+            pickedIndex,
+            decisionData: decision.data,
+            intentWalletAddress: intent.wallet?.address ?? null,
+            resolvedWalletAddress: wallet?.address ?? null,
+            ctxWallets: summary,
+          });
+        }
         if (wallet) {
           await PermissionStore.grant({
             origin: intent.origin.url,
@@ -524,6 +599,14 @@ class SuiAdapter implements ChainAdapter {
             ? [
                 {
                   address: wallet.address,
+                  // 32-byte ed25519 public key (hex). MUST be the real
+                  // pubkey, not the address bytes — for Sui,
+                  // address = BLAKE2b(0x00 || pubkey) so the two are not
+                  // interchangeable (unlike Solana where address ==
+                  // base58(pubkey)). dApps that read `account.publicKey`
+                  // to derive/verify the expected address will
+                  // mismatch and report "wrong wallet" otherwise.
+                  publicKey: wallet.sui?.pubkeyHex ?? null,
                   chains: [networkToChain(payload.network)],
                   features: [
                     "standard:connect",
@@ -560,9 +643,17 @@ class SuiAdapter implements ChainAdapter {
           new TextEncoder().encode(canonicalMessage),
         );
         const r = await signerImpl.signPersonalMessage(p.address, messageB64);
+        // Resolve the wallet so we can return the real ed25519 pubkey on
+        // the SIWS-style account echo. dApps that verify the signIn
+        // response by deriving address from `account.publicKey` reject
+        // as "wrong wallet" otherwise (Sui address != pubkey).
+        const signInWallet = ctx.wallets.find(
+          (w) => w.namespace === "sui" && w.address === p.address,
+        );
         return {
           account: {
             address: p.address,
+            publicKey: signInWallet?.sui?.pubkeyHex ?? null,
             chains: p.chainId ? [networkToChain(p.chainId)] : ["sui:mainnet"],
             features: [
               "standard:connect",

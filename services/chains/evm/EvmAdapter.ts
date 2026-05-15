@@ -166,25 +166,27 @@ export class EvmAdapter implements ChainAdapter {
     });
   }
 
-  onStateChange(ctx: AdapterContext): { injectedJs: string } | null {
-    const config = this.opts.resolveChainConfig(ctx);
-    const chainId = config ? toHex(config.chain.id) : "0x1";
-    const addr = ctx.activeWallet?.address ?? null;
-    const update = JSON.stringify({
-      namespace: "eip155",
-      selectedAddress: addr,
-      chainId,
-      networkVersion: String(config?.chain.id ?? 1),
-    });
-    return {
-      injectedJs: `
-        (function() {
-          try {
-            window._updateEthereumProvider && window._updateEthereumProvider(${update});
-          } catch (e) {}
-        })();
-      `,
-    };
+  onStateChange(_ctx: AdapterContext): { injectedJs: string } | null {
+    // Intentionally a no-op. The post-decision slow path used to push
+    // `_updateEthereumProvider({selectedAddress, chainId})` built from
+    // `ctx.activeWallet` and the global active chain — both of which
+    // are home-screen state, not the per-origin state the dApp
+    // connected with. After a sign or watch-asset decision this
+    // fired an unsolicited `accountsChanged` (and sometimes
+    // `chainChanged`) event with whichever wallet/chain the home
+    // screen happened to be on at that instant, which could silently
+    // flip a dApp away from the wallet it was actually granted
+    // permission for.
+    //
+    // Connect state is pushed by `DappBridge.pushPostDecisionUpdate`'s
+    // fast path (built from the response value, origin-correct by
+    // construction). Sign* intents don't change provider state. For
+    // `wallet_switchEthereumChain`, the dApp reads the new chain off
+    // the response promise — no event push needed.
+    //
+    // See `feedback_dapp_bridge_isolation` memory for the principle.
+    void _ctx;
+    return null;
   }
 
   async handleRequest(

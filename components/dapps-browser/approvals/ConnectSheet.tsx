@@ -67,7 +67,14 @@ export function ConnectSheet({
   intent,
   onDecision,
 }: Props): React.ReactElement {
-  const { wallets, activeWalletIndex } = useWallet();
+  // Only `wallets` — never `activeWalletIndex`. The dApp picker is
+  // per-origin and must be isolated from the home-screen active row.
+  // Using `activeWalletIndex` as the default selection meant the user
+  // saw a wallet pre-highlighted from the home-screen state rather
+  // than the dApp picking neutrally; a "just tap Approve" reflex
+  // committed that pre-highlight as the dApp-bound wallet, even
+  // though the user expected to explicitly pick.
+  const { wallets } = useWallet();
 
   const namespace = intent.namespace as TWallet["namespace"];
 
@@ -103,9 +110,12 @@ export function ConnectSheet({
     [wallets, namespace],
   );
 
-  const defaultIndex = chainWallets.find((w) => w.index === activeWalletIndex)
-    ? activeWalletIndex
-    : (chainWallets[0]?.index ?? activeWalletIndex);
+  // Default to the first wallet of the requested namespace. NO
+  // dependency on the home-screen active wallet — that would carry
+  // global UI state into the dApp connection (and is exactly what the
+  // wrong-wallet bug class on multi-wallet sign-in flows was caused
+  // by). User MUST explicitly tap to confirm or pick another.
+  const defaultIndex = chainWallets[0]?.index ?? -1;
 
   const [selected, setSelected] = useState<number>(defaultIndex);
   const [searchQuery, setSearchQuery] = useState("");
@@ -141,12 +151,31 @@ export function ConnectSheet({
   }, [intent.id, onDecision]);
 
   const approve = useCallback(() => {
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      // Diagnostic — match against `[SuiAdapter.connect] decision`
+      // (and the Solana / EVM equivalents) to verify the picker is
+      // sending the index the user actually tapped. Reported wallet
+      // mismatch ("always uses first sui wallet") had no reproducer
+      // until we could see this side-by-side with the adapter log.
+      const picked = wallets[selected];
+      console.log("[ConnectSheet] approve", {
+        namespace,
+        selected,
+        pickedAddress: picked?.address ?? null,
+        pickedName: picked?.name ?? null,
+        chainWallets: chainWallets.map(({ wallet, index }) => ({
+          index,
+          address: wallet.address,
+          name: wallet.name,
+        })),
+      });
+    }
     onDecision({
       id: intent.id,
       outcome: "approve",
       data: { walletIndex: selected },
     });
-  }, [intent.id, onDecision, selected]);
+  }, [intent.id, onDecision, selected, wallets, chainWallets, namespace]);
 
   // Biometric gating is kit-controlled; EVM kits ship without it, Solana
   // with it. The hook's return values are inert when the kit opts out, so

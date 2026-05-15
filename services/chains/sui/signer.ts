@@ -60,6 +60,42 @@ export interface InstallSuiSignerDeps {
  * is not registered — the bridge boot path warns + auto-retries on the
  * next mount, mirroring the Solana pattern.
  */
+/**
+ * Last-mile sanity check. Resolves the wallet row for the requested
+ * address, fetches its keypair via the kit's `getSignerForWallet`, then
+ * verifies the keypair actually derives to the requested address before
+ * returning it. Any divergence (wallet row whose `address` field is
+ * inconsistent with its `privateKey`, stale cache surviving Fast
+ * Refresh, etc.) throws here rather than silently producing a
+ * wrong-wallet signature — the symptom dApps surface as "Wallet
+ * address mismatch! Connected X, Expected Y".
+ */
+async function resolveCheckedSigner(
+  deps: InstallSuiSignerDeps,
+  kit: ReturnType<typeof walletKitRegistry.get>,
+  requestedAddress: string,
+): Promise<Ed25519Keypair> {
+  const wallet = deps.getWalletByAddress(requestedAddress);
+  if (!wallet) throw new Error("Unknown wallet");
+  const signer = (await kit.getSignerForWallet(
+    wallet,
+  )) as Ed25519Keypair | null;
+  if (!signer) throw new Error("No Sui signer");
+
+  const signerAddress = signer.toSuiAddress();
+  if (signerAddress.toLowerCase() !== requestedAddress.toLowerCase()) {
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.error(
+        `[Sui bridge signer] address/keypair mismatch — requested=${requestedAddress}, signer derives to=${signerAddress}`,
+      );
+    }
+    throw new Error(
+      `Sui signer/address mismatch: requested ${requestedAddress}, signer derives to ${signerAddress}`,
+    );
+  }
+  return signer;
+}
+
 export function installSuiSigner(deps?: InstallSuiSignerDeps): void {
   if (!deps) return;
   if (!walletKitRegistry.has("sui")) return;
@@ -71,12 +107,7 @@ export function installSuiSigner(deps?: InstallSuiSignerDeps): void {
       messageB64: string,
     ): Promise<{ bytes: string; signature: string }> => {
       try {
-        const wallet = deps.getWalletByAddress(address);
-        if (!wallet) throw new Error("Unknown wallet");
-        const signer = (await kit.getSignerForWallet(
-          wallet,
-        )) as Ed25519Keypair | null;
-        if (!signer) throw new Error("No Sui signer");
+        const signer = await resolveCheckedSigner(deps, kit, address);
 
         const bytes = base64ToBytes(messageB64);
         // `signPersonalMessage` on `Ed25519Keypair` applies the
@@ -99,12 +130,7 @@ export function installSuiSigner(deps?: InstallSuiSignerDeps): void {
     ): Promise<{ bytes: string; signature: string }> => {
       void _network;
       try {
-        const wallet = deps.getWalletByAddress(address);
-        if (!wallet) throw new Error("Unknown wallet");
-        const signer = (await kit.getSignerForWallet(
-          wallet,
-        )) as Ed25519Keypair | null;
-        if (!signer) throw new Error("No Sui signer");
+        const signer = await resolveCheckedSigner(deps, kit, address);
 
         const bytes = base64ToBytes(txBase64);
         // `Ed25519Keypair.signTransaction` applies the `TransactionData`
@@ -132,12 +158,7 @@ export function installSuiSigner(deps?: InstallSuiSignerDeps): void {
       [k: string]: unknown;
     }> => {
       try {
-        const wallet = deps.getWalletByAddress(address);
-        if (!wallet) throw new Error("Unknown wallet");
-        const signer = (await kit.getSignerForWallet(
-          wallet,
-        )) as Ed25519Keypair | null;
-        if (!signer) throw new Error("No Sui signer");
+        const signer = await resolveCheckedSigner(deps, kit, address);
 
         const { client } = deps.getRpcForNetwork(network);
 

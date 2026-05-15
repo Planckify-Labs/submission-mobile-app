@@ -198,19 +198,18 @@ class SolanaAdapter implements ChainAdapter {
     });
   }
 
-  onStateChange(ctx: AdapterContext): { injectedJs: string } | null {
-    // Prefer the actually-active Solana wallet if there is one; fall back
-    // to the first Solana wallet only when the active slot is non-Solana.
-    // Change Wallet picks must win: if user just swapped via the sheet,
-    // `ctx.activeWallet` points at the newly-selected entry.
-    const active =
-      ctx.activeWallet && ctx.activeWallet.namespace === "solana"
-        ? ctx.activeWallet
-        : ctx.wallets.find((w) => w.namespace === "solana");
-    const addr = active?.address ?? null;
-    return {
-      injectedJs: `try{window._updateSolanaWallet&&window._updateSolanaWallet({accounts:${addr ? `[{address:${JSON.stringify(addr)}}]` : "[]"}});}catch(e){}`,
-    };
+  onStateChange(_ctx: AdapterContext): { injectedJs: string } | null {
+    // Intentionally a no-op. Same isolation rule as Sui — dApp
+    // connections must not propagate home-screen active-wallet
+    // changes into the dApp's Wallet Standard `change` event, or a
+    // home-screen wallet swap silently flips a dApp's signing wallet
+    // out from under it. Per-decision state pushes happen via
+    // `DappBridge.pushPostDecisionUpdate` (connect fast path threads
+    // the resolved wallet from the response value); any per-origin
+    // state-sync must read `PermissionStore` keyed by origin, not
+    // `ctx.activeWallet`. See `feedback_dapp_bridge_isolation`.
+    void _ctx;
+    return null;
   }
 
   async handleRequest(

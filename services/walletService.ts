@@ -469,7 +469,23 @@ export async function getSuiSignerForWallet(
 ): Promise<Ed25519Keypair | null> {
   if (wallet.namespace !== "sui") return null;
   const cached = suiSignerCache[wallet.address];
-  if (cached) return cached;
+  if (cached) {
+    // Defense in depth — re-verify the cached keypair still derives
+    // to the wallet's address. A pre-fix build (or a Fast Refresh that
+    // preserved module state across reloads) could have left a stale
+    // mismatched entry. Purge and fall through to fresh derivation if
+    // the cached pair doesn't match.
+    const cachedAddr = cached.toSuiAddress();
+    if (cachedAddr.toLowerCase() === wallet.address.toLowerCase()) {
+      return cached;
+    }
+    if (__DEV__) {
+      console.error(
+        `[TWV-2026-080] Purged stale Sui signer cache: wallet.address=${wallet.address}, cached derives to=${cachedAddr}`,
+      );
+    }
+    delete suiSignerCache[wallet.address];
+  }
 
   // v1 rejects non-ed25519 schemes loudly. Future Secp variants need a
   // new gate (spec §6).
@@ -515,6 +531,32 @@ export async function getSuiSignerForWallet(
       kp = mnemonicToSuiKeypair(wallet.seedPhrase, path);
     }
     if (!kp) return null;
+
+    // Defensive — TWV-2026-080. Verify the derived keypair's address
+    // matches the wallet row's stored address before we cache and
+    // return it. A divergence here means `wallet.privateKey`/
+    // `seedPhrase` doesn't correspond to `wallet.address` (data
+    // corruption, an aborted multi-chain derivation, or a bad import),
+    // and signing with this keypair would produce a signature that
+    // verifies against a DIFFERENT address than the dApp expects —
+    // reported in production as "Wallet address mismatch! Connected
+    // X, Expected Y" on pivy.me-style stealth-address flows. Refusing
+    // here is louder than silently signing with the wrong key.
+    const kpAddress = kp.toSuiAddress();
+    if (kpAddress.toLowerCase() !== wallet.address.toLowerCase()) {
+      if (__DEV__) {
+        console.error(
+          `[TWV-2026-080] Sui wallet/key mismatch: wallet.address=${wallet.address}, derived=${kpAddress}`,
+        );
+      }
+      breadcrumb({
+        category: "sui.getSignerForWallet",
+        message: "derivation failed: address mismatch",
+        level: "error",
+        data: { reason: "address-mismatch" },
+      });
+      return null;
+    }
 
     suiSignerCache[wallet.address] = kp;
     return kp;

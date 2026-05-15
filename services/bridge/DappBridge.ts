@@ -401,6 +401,102 @@ export class DappBridge {
       return;
     }
 
+    // Fast path — Sui / Solana connect intents carry the user-picked
+    // wallet's address inside the response `value.accounts[0].address`
+    // (the picker writes `decision.data.walletIndex` and the adapter's
+    // `executeApproval` resolves the wallet from that index). The
+    // `AdapterContext` intentionally has no `setActiveWallet`, so the
+    // slow path's `freshCtx.activeWallet` does NOT reflect the user's
+    // pick — re-reading ctx would inject the first-Sui-wallet address
+    // and the dApp would receive an `accountsChanged` event for the
+    // wrong wallet (reproduces "connected to the wrong wallet" reports
+    // on pivy.me et al when picking a non-first Sui wallet).
+    //
+    // The injected `C1()` helper in each chain's script already calls
+    // `setAccounts(accs, chain)` from the response on the connect
+    // promise resolution, so this push is redundant for the happy path
+    // — but we still want to fire `_updateSuiWallet` / `_updateSolanaWallet`
+    // so the Wallet Standard `change` listeners catch a consistent
+    // accounts list, mirroring the EVM fast path.
+    // Fast path — EVM `wallet_switchEthereumChain`. After the user
+    // approves, the bridge has changed the active chain via
+    // `onSwitchChain` (changeActiveChain), and EIP-3326 requires the
+    // wallet to emit `chainChanged` so the dApp knows to refresh.
+    // Previously this rode on the `onStateChange` slow path, which
+    // built the update from the global active chain — coincidentally
+    // correct here, but the same slow path also fired `accountsChanged`
+    // events with the global active wallet on every other intent
+    // (sign, watchAsset, etc.), silently flipping dApps onto the
+    // wrong wallet. With `onStateChange` neutered, this fast path is
+    // the origin-correct replacement: emit `chainChanged` keyed off
+    // `intent.payload.chainId` (the chain the dApp asked to switch
+    // to), no `ctx` read.
+    if (intent.kind === "switchChain" && intent.namespace === "eip155") {
+      const chainId = (intent.payload as { chainId?: number }).chainId;
+      if (typeof chainId === "number") {
+        const chainIdHex = `0x${chainId.toString(16)}`;
+        wv.injectJavaScript(`
+          (function(){
+            try {
+              window._updateEthereumProvider && window._updateEthereumProvider({
+                chainId: ${JSON.stringify(chainIdHex)},
+                networkVersion: ${JSON.stringify(String(chainId))}
+              });
+            } catch (e) {}
+          })();
+          true;
+        `);
+      }
+      return;
+    }
+
+    if (
+      intent.kind === "connect" &&
+      (intent.namespace === "sui" || intent.namespace === "solana") &&
+      typeof value === "object" &&
+      value !== null
+    ) {
+      const v = value as {
+        accounts?: { address?: unknown; publicKey?: unknown }[];
+        chain?: unknown;
+      };
+      const first = v.accounts?.[0];
+      const addr =
+        first && typeof first.address === "string" ? first.address : null;
+      if (addr) {
+        if (intent.namespace === "sui") {
+          // Sui: thread the real ed25519 publicKey alongside the address
+          // so the injected `MA()` helper builds an account with the
+          // correct 32-byte pubkey (the address is NOT the pubkey on
+          // Sui — see `SuiAdapter.executeApproval` comment). Without
+          // this, dApps that read `account.publicKey` to derive the
+          // expected address mismatch and reject as "wrong wallet".
+          const pk =
+            first && typeof first.publicKey === "string"
+              ? first.publicKey
+              : null;
+          const accountsLiteral = `[{address:${JSON.stringify(addr)}${
+            pk ? `,publicKey:${JSON.stringify(pk)}` : ""
+          }}]`;
+          const chain = typeof v.chain === "string" ? v.chain : null;
+          const chainArg = chain ? `,chain:${JSON.stringify(chain)}` : "";
+          wv.injectJavaScript(`
+            try{window._updateSuiWallet&&window._updateSuiWallet({accounts:${accountsLiteral}${chainArg}});}catch(e){}
+            true;
+          `);
+        } else {
+          // Solana: address == base58(pubkey), so the injected `MA()`
+          // can derive publicKey from address — no extra field needed.
+          const accountsLiteral = `[{address:${JSON.stringify(addr)}}]`;
+          wv.injectJavaScript(`
+            try{window._updateSolanaWallet&&window._updateSolanaWallet({accounts:${accountsLiteral}});}catch(e){}
+            true;
+          `);
+        }
+        return;
+      }
+    }
+
     // Slow path — delay one tick so setActiveWallet / setActiveChain
     // mutations have a chance to settle before we re-read ctx.
     setTimeout(() => {

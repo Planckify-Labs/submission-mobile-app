@@ -1,11 +1,9 @@
 import { Globe, ShieldCheck, Sparkles } from "lucide-react-native";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { useWallet } from "@/hooks/useWallet";
 import type { ApprovalIntent } from "@/services/bridge/approval";
 import { getDappBridge } from "@/services/bridge/DappBridge";
 import { InspectorRegistry } from "@/services/bridge/inspector";
-import { formatChainLabel } from "@/services/walletKit/chainInfo";
 import { truncateAddress } from "@/utils/walletUtils";
 import { RiskBanner } from "./RiskBanner";
 
@@ -20,7 +18,21 @@ export function ApprovalShell({
   title,
   children,
 }: Props): React.ReactElement {
-  const { activeWallet, activeChain } = useWallet();
+  // Render strictly from the intent. The dApp surface MUST NOT
+  // depend on the home-screen `useWallet().activeWallet` /
+  // `activeChain` — each dApp connection is per-origin and per-wallet
+  // (same isolation rule as the payment flow). Leaking the global
+  // active row into the sign sheet header was the bug that made
+  // signatures look like they were produced by the wrong wallet: the
+  // bridge was signing with `intent.wallet` (correct), but the header
+  // was showing whatever was active on the home screen (often a
+  // different wallet), which read as "wrong wallet" to both the user
+  // and the dApp's mismatch error.
+  //
+  // No fallback. If `intent.wallet` is null, the sheet renders without
+  // a wallet line — that case is a genuine bug in the dispatch path
+  // and should be visible, not papered over by the global active row.
+  const signingWallet = intent.wallet;
   const isSecure = intent.origin.url.startsWith("https://");
   let host = intent.origin.url;
   try {
@@ -49,12 +61,11 @@ export function ApprovalShell({
             <Text className="text-xs text-orange-600">insecure</Text>
           )}
         </View>
-        {activeWallet?.address && (
+        {signingWallet?.address && (
           <View className="flex-row items-center mt-2">
             <Text className="text-xs text-gray-500">
-              {activeWallet.name ?? "Wallet"} ·{" "}
-              {truncateAddress({ address: activeWallet.address })}
-              {` · ${formatChainLabel(activeChain)}`}
+              {signingWallet.name ?? "Wallet"} ·{" "}
+              {truncateAddress({ address: signingWallet.address })}
             </Text>
           </View>
         )}

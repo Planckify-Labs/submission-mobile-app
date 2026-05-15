@@ -128,16 +128,25 @@ function S(m,p){return new Promise(function(ok,ng){var id=R();P.set(id,{r:ok,j:n
 }catch(e){P.delete(id);ng(new Error("bridge transport failed"));}});}
 var H=window._handleEthereumResponse;
 window._handleEthereumResponse=function(x){try{if(x&&x.type==="bridge_response"&&P.has(x.id)){var p=P.get(x.id);P.delete(x.id);if(x.error){var e=new Error(x.error.message||"rejected");e.code=x.error.code;p.j(e);}else p.r(x.result);return;}}catch(e){}if(H)try{H(x);}catch(e){}};
-function MA(addr){
+// For Sui, address = BLAKE2b(0x00 || pubkey) — NOT pubkey itself. The
+// account.publicKey field is the 32-byte ed25519 public key (hex,
+// supplied by the bridge from wallet.sui.pubkeyHex). Falling back to
+// the address bytes when no pubkey is threaded keeps backwards
+// compatibility, but real dApps that derive an expected address from
+// account.publicKey require the actual pubkey or they reject with
+// "wrong wallet".
+function MA(a){
+  var addr=typeof a==="string"?a:(a&&a.address);
+  var pkHex=(a&&typeof a==="object"&&a.publicKey)?a.publicKey:addr;
   return{
     address:addr,
-    publicKey:hexToBytes(addr),
+    publicKey:hexToBytes(pkHex),
     chains:C,
     features:F,
     label:"TakumiPay"
   };
 }
-function NA(r){var a=(r&&r.accounts)||[],o=[],i;for(i=0;i<a.length;i++)o.push(MA(a[i].address));return o;}
+function NA(r){var a=(r&&r.accounts)||[],o=[],i;for(i=0;i<a.length;i++)o.push(MA(a[i]));return o;}
 var lsn={change:new Set()};
 function EV(e,cb){var s=lsn[e]||(lsn[e]=new Set());s.add(cb);return function(){s.delete(cb);};}
 function setAccounts(next,chain){
@@ -226,7 +235,7 @@ var W={version:"1.0.0",name:"TakumiPay",icon:${I},chains:C,features:feats,accoun
 window.__takumi_sui_wallet=W;
 window._updateSuiWallet=function(st){
   try{
-    var n=st&&st.accounts?st.accounts.map(function(a){return MA(a.address);}):[];
+    var n=st&&st.accounts?st.accounts.map(function(a){return MA(a);}):[];
     setAccounts(n,st&&st.chain);
   }catch(e){}
 };
