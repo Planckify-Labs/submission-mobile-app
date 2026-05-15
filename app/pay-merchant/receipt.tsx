@@ -538,10 +538,13 @@ function ReceiptErrorCard({
   error: unknown;
   onRetry: () => void;
 }) {
-  const detail =
-    error instanceof Error && error.message
-      ? error.message
-      : "We couldn't load this receipt right now.";
+  // Receipt fetches can fail with raw 4xx/5xx bodies, gateway HTML, or
+  // viem RPC noise. None of that is safe to surface — show a friendly
+  // line and keep the underlying error in __DEV__ logs only.
+  if (__DEV__ && error) {
+    console.warn("[receipt] load failed", error);
+  }
+  const detail = "We couldn't load this receipt right now.";
   return (
     <View className="bg-light rounded-3xl p-6 shadow-md-">
       <View className="flex-row items-center mb-3">

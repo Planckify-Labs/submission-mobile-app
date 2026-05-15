@@ -42,9 +42,10 @@ export function useBiometricApproval(
       }
       onAuthenticated();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Authentication unavailable.",
-      );
+      if (__DEV__) {
+        console.warn("[useBiometricApproval] authenticate threw", err);
+      }
+      setError("Authentication unavailable. Please try again.");
     } finally {
       setPending(false);
     }

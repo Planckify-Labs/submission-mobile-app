@@ -479,17 +479,20 @@ export function useDepositState() {
       } catch (error: any) {
         console.error("Deposit error:", error);
 
+        // Default to a generic message. We only surface curated copy for
+        // server states we explicitly recognise — raw `body.message` or
+        // `error.message` can be JSON blobs, RPC traces, or API config
+        // errors (e.g. "STT_AI_API_KEY is not set on the server") which
+        // must never reach the end user.
         let errorMessage = "Deposit failed. Please try again.";
         try {
           const body = await error?.response?.json?.();
           const msg: string = body?.message ?? "";
           if (msg.toLowerCase().includes("no pegged currency")) {
             errorMessage = `${selectedToken?.symbol ?? "This token"} is not supported for point deposits. Please select a different token.`;
-          } else if (msg) {
-            errorMessage = msg;
           }
         } catch {
-          if (error?.message) errorMessage = error.message;
+          // swallow — generic message already set
         }
 
         updateState({

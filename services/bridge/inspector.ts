@@ -165,13 +165,23 @@ export async function runPipeline(
           },
         ]);
       } else if (err.message !== "inspector.aborted") {
+        // `detail` is rendered verbatim in RiskBanner. Never put raw
+        // error messages (RPC hex, JSON, stack traces) in front of the
+        // user — keep the technical reason in __DEV__ logs only.
+        if (__DEV__) {
+          console.warn(
+            `[inspector] ${inspector.name} threw`,
+            err.message,
+            err,
+          );
+        }
         annotations = dedupeAnnotations([
           ...annotations,
           {
             code: `inspector.error.${inspector.name}`,
             severity: "warn",
             title: "Inspection failed",
-            detail: err.message,
+            detail: `${inspector.name} couldn't complete its check.`,
             source: inspector.name,
           },
         ]);

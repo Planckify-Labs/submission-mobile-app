@@ -85,9 +85,12 @@ export function useVoiceTranscription(): UseVoiceTranscriptionResult {
       });
       return text.trim() || null;
     } catch (err) {
+      if (__DEV__) {
+        console.warn("[voiceTranscription] transcribe failed", err);
+      }
       Alert.alert(
-        "Transcription failed",
-        err instanceof Error ? err.message : "Please try again.",
+        "Couldn't transcribe",
+        "We couldn't transcribe your voice right now. Please try again.",
       );
       return null;
     } finally {

@@ -376,9 +376,10 @@ const CreateWalletSheet: React.FC<Props> = memo(function CreateWalletSheet({
         onClose();
       });
     } catch (e) {
-      setErrorMsg(
-        e instanceof Error ? e.message : "Unexpected error creating wallet",
-      );
+      if (__DEV__) {
+        console.warn("[CreateWalletSheet] confirm threw", e);
+      }
+      setErrorMsg("We couldn't create your wallet. Please try again.");
     } finally {
       setIsSaving(false);
     }

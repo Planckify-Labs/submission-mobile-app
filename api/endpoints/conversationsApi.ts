@@ -25,8 +25,18 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
+    // Keep raw status/body out of the Error message — it bubbles up
+    // through React Query and could land in `error.message` UI.
     const text = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    if (__DEV__) {
+      console.warn(
+        "[conversationsApi] request failed",
+        res.status,
+        res.statusText,
+        text,
+      );
+    }
+    throw new Error("Conversations request failed");
   }
 
   return res.json() as Promise<T>;
@@ -64,7 +74,15 @@ export const conversationsApi = {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`${res.status} ${res.statusText}: ${text}`);
+      if (__DEV__) {
+        console.warn(
+          "[conversationsApi] delete failed",
+          res.status,
+          res.statusText,
+          text,
+        );
+      }
+      throw new Error("Conversation delete failed");
     }
   },
 

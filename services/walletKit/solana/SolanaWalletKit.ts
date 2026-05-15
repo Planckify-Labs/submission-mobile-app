@@ -391,7 +391,14 @@ export function createSolanaWalletKit(): WalletKitAdapter {
         const { value } = await connection.getSignatureStatuses([signature]);
         const status = value?.[0];
         if (status?.err) {
-          throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+          if (__DEV__) {
+            console.warn(
+              "[SolanaWalletKit] tx failed",
+              signature,
+              status.err,
+            );
+          }
+          throw new Error("Transaction failed");
         }
         if (
           status?.confirmationStatus === "confirmed" ||

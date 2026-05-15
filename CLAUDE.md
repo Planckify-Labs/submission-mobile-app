@@ -7,13 +7,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Development
 pnpm start                    # Start Expo dev server
-pnpm android                  # Run on Android emulator
-pnpm ios                      # Run on iOS simulator
+pnpm android                  # expo run:android
+pnpm ios                      # expo run:ios
 
 # Code Quality
-pnpm lint                     # Run Expo lint
-pnpm check:syntax             # TypeScript type checking
-pnpm biome:check              # Run Biome formatter with auto-fix
+pnpm lint                     # expo lint (ESLint)
+pnpm check:syntax             # tsc --noEmit --skipLibCheck
+pnpm check:chains             # Guardrail: fails if shared code branches on chain namespace (see below)
+pnpm biome:check              # Biome format + lint with --write
+pnpm biome:check:unsafeFix    # Same + unsafe autofixes
+
+# Tests
+pnpm test                     # Runs test:vitest then test:node
+pnpm test:vitest              # Vitest (see vitest.config.ts for the explicit include list)
+pnpm test:node                # node --test for files importing "node:test" (uses custom resolver)
+pnpm test:watch               # Vitest in watch mode
 
 # Building (EAS)
 eas build --platform android --profile development
@@ -21,77 +29,185 @@ eas build --platform ios --profile development
 eas build --platform android --profile production
 ```
 
+`test:node` runs through `scripts/run-node-tests.sh`, which loads
+`services/walletKit/evm/_test-resolver.mjs` to stub RN-only modules
+(`expo-secure-store`, `@/lib/storage/mmkv`) and rewrite `@/*` aliases +
+extensionless TS imports. New `node:test` files should fit that harness —
+if a test needs a module the resolver doesn't stub, extend the resolver
+rather than reaching for a different runner. Vitest's `include` list is
+explicit; new vitest files must be added there to run.
+
 ## Architecture Overview
 
 ### Tech Stack
-- **Framework:** React Native with Expo 54 (Hermes engine, New Architecture enabled)
-- **Routing:** Expo Router (file-based routing in `/app`)
-- **State Management:** TanStack React Query v5 for server state
-- **Styling:** NativeWind (Tailwind CSS for React Native)
-- **Blockchain:** Viem for Ethereum/EVM chain interactions
-- **AI Agent:** Vercel AI SDK with Anthropic integration
-- **Package Manager:** pnpm
+- **Framework:** React Native + Expo 54 (Hermes, New Architecture)
+- **Routing:** Expo Router (file-based, `/app`)
+- **State:** TanStack Query v5 for server state; custom `useRQGlobalState` for shared client state
+- **Styling:** NativeWind (Tailwind for RN)
+- **Chains:** Viem (EVM), `@solana/kit` + `@solana/web3.js` (Solana), `@mysten/sui` (Sui)
+- **AI Agent:** Vercel AI SDK (`@ai-sdk/react`, `@ai-sdk/anthropic`)
+- **Forms:** react-hook-form + zod
+- **Package manager:** pnpm (workspace)
 
-### Key Directories
-- `app/` - File-based routing screens (Expo Router)
-- `components/` - Reusable UI components organized by feature
-- `hooks/` - Custom React hooks, including `hooks/queries/` for data fetching
-- `services/` - Business logic (walletService.ts, ethereumProvider.ts)
-- `api/` - API endpoints and types
-- `constants/` - Chain configs, query keys, app constants
+### Multi-chain architecture (important)
 
-### State Management Pattern
+The app supports EVM, Solana, and Sui. Chain-specific knowledge lives
+behind a registry; shared code dispatches through it instead of
+branching on namespace strings.
 
-**TanStack Query** handles server state with these defaults:
+- `services/walletKit/` — `WalletKitAdapter` registry. `bootstrap.ts`
+  wires per-namespace adapters; `registry.ts` exposes lookup; `chainInfo.ts`
+  has the helpers shared code should use.
+- `services/chains/{evm,solana,sui}/` — per-namespace implementations
+  (derivation, codecs, transfer services, error mapping).
+- `services/bridge/` — EIP-1193-style **dApp bridge**: `DappBridge`,
+  `ApprovalHost`, `inspector`, `redact`, `pendingIntents`, `renderers`.
+  This replaces the older `services/ethereumProvider.ts` approach.
+- `services/agent-executors/`, `services/nanopay/`, `services/staking/`,
+  `services/swap/`, `services/tokens/` — feature services that already
+  dispatch via the registry.
+
+**Hard rule, enforced by CI/local hook (`pnpm check:chains`):** files
+under `components/`, `hooks/`, `app/` must not contain
+`namespace === "eip155" | "solana" | "sui"`. Allowlist + reasons live in
+`scripts/check-chain-agnostic.sh`. If you're tempted to branch on
+namespace in shared code, add the capability to the adapter instead.
+
+### DApp bridge isolation (memory feedback)
+
+Every dApp-approval surface — sheets, signing flows, anything launched
+from a `DappBridge` intent — must render and sign **using
+`intent.wallet`** (and `intent.chain` where applicable). Do not read
+`activeWallet` / `activeChain` from `useWallet` as a fallback. The
+home-screen wallet and the wallet the dApp is talking to can be
+different; mixing them is the exact bug class fixed in commit
+`4828e91 fix(dapp-bridge): isolate dApp signing from home-screen wallet/chain state`.
+
+Related rule: payment intent reads must use the **paying wallet's JWT**,
+not the active wallet's — see `services/paymentIntent/` and
+`hooks/usePaymentIntentInvalidator.ts`.
+
+### State management defaults
+
+TanStack Query global defaults:
 - `staleTime: 60 * 1000`
 - `retry: 1`
 - `refetchOnWindowFocus: false`
 
-**Global state** uses custom `useRQGlobalState` hook backed by React Query.
+Shared client state goes through `hooks/useRQGlobalState.ts` (React-Query-backed)
+rather than ad-hoc context, so updates fan out through the same cache
+the data hooks use.
 
-### Core Hooks
+### Core hooks
 
-**useWallet** (`hooks/useWallet.ts`) - Central wallet state management:
-- Multi-wallet support with active wallet tracking
-- Chain switching across EVM networks
-- Secure storage via `expo-secure-store`
-- Viem client creation for blockchain interactions
+- `hooks/useWallet.ts` — multi-wallet + multi-chain wallet state.
+  Persistence via `expo-secure-store`; viem clients created on demand.
+  `useWallet.helpers.ts` is allowlisted to do per-namespace derivation
+  (one mnemonic → one EVM + one Solana + one Sui wallet) — that's the
+  one place namespace-awareness is the contract.
+- `hooks/queries/` — feature-scoped query hooks (auth, blockchains,
+  dapps, products, tokens, transactions).
 
-**Query hooks** (`hooks/queries/`) - Data fetching for auth, blockchains, dapps, products, tokens, transactions.
+### AI Agent
 
-### DApps Browser
+`components/home/TakumiAgent/` uses `@ai-sdk/react` `useChat`. Endpoint
+is `EXPO_PUBLIC_AI_API_URL`. Tool calls, markdown, conversation history
+supported. Agent-side executors live in `services/agent-executors/` and
+must go through the wallet-kit registry like any other chain caller.
 
-The DApps browser (`components/dapps-browser/`) implements an EIP-1193 compatible Ethereum provider (`services/ethereumProvider.ts`) for MetaMask-like wallet injection.
+## Code Style & Conventions
 
-### AI Agent Mode
+- **Formatter:** Biome — spaces, double quotes (`biome.json`)
+- **Lint:** ESLint (`eslint-config-expo`) + Biome rule set (recommended is OFF; explicit rules in `biome.json`)
+- **TypeScript:** strict, path alias `@/*` → repo root, `allowImportingTsExtensions: true`
+- **Tests excluded** from production tsconfig include
 
-Located in `components/home/TakumiAgent/`:
-- Uses `@ai-sdk/react` useChat hook
-- API endpoint configured via `EXPO_PUBLIC_AI_API_URL`
-- Supports tool calls, markdown rendering, conversation history
+### User-facing errors (memory feedback)
 
-## Code Style
+**Hard rule:** end users must never see raw error text. That includes
+`err.message`, `String(err)`, `JSON.stringify(err)`, server response
+bodies, HTTP status codes/lines, RPC payloads, stack traces, and any
+other machine-shaped string — regardless of whether the source is a
+remote API or a local API (biometric, contacts, clipboard, OS, etc.).
 
-- **Formatter:** Biome (spaces, double quotes)
-- **Linting:** ESLint with expo config + Biome rules
-- **TypeScript:** Strict mode, path alias `@/*` maps to root
+This is enforced by past incident: the Takumi Agent voice transcription
+alert leaked `Transcription failed: 500 {"code":"stt_not_configured","message":"STT_AI_API_KEY is not set on the server."}`
+into a user-facing `Alert.alert` because `services/transcribeAudio.ts`
+embedded the raw server body in the thrown `Error.message` and the
+caller piped `err.message` straight into the dialog.
+
+Apply the pattern uniformly:
+
+- **UI strings are hand-written.** `Alert.alert`, `setError`,
+  `setErrorMsg`, `setPaymentError`, on-screen error cards, banners,
+  toasts, dApp `RiskBanner` annotation `detail`, biometric error
+  labels — all use fixed friendly copy ("We couldn't … Please try
+  again.").
+- **Raw detail goes to logs only**, guarded by `if (__DEV__) console.warn(...)`
+  / `console.error(...)`. Never to production users.
+- **Curated server signals are OK**, passthrough is not. Detecting a
+  known substring (e.g. `body.message.includes("no pegged currency")`)
+  and swapping in *your own* friendly copy is fine; assigning
+  `errorMessage = body.message` is not.
+- **Don't embed external data in thrown `Error.message`.** API
+  wrappers (e.g. `api/endpoints/*.ts`, `services/transcribeAudio.ts`)
+  must `throw new Error("<short fixed label>")` and log the raw
+  status/body separately — otherwise the message bubbles through
+  React Query into UI that renders `error.message`.
+- **`services/errors/paymentErrors.ts`** is the shared classifier for
+  payment flows: `classifyPaymentError(err)` → `PaymentErrorCode`,
+  paired with the `PaymentError` component which gates `devMessage`
+  behind `__DEV__`. Reach for it before writing inline branches.
+
+Already-sanitised surfaces to mirror when adding new ones:
+`services/transcribeAudio.ts`, `hooks/useVoiceTranscription.ts`,
+`hooks/deposit/useDepositState.ts`, `app/pay-merchant/receipt.tsx`,
+`app/payment.tsx`, `components/wallet/create/{CreateWalletSheet,ImportSeedPhraseSheet}.tsx`,
+`components/dapps-browser/approvals/useBiometricApproval.ts`,
+`services/bridge/inspector.ts`, `services/walletKit/solana/SolanaWalletKit.ts`,
+`api/endpoints/conversationsApi.ts`.
+
+Internal RPC bridge/injected scripts under `services/chains/*/injectedScript.ts`,
+`bundler.ts`, `paymaster.ts` are protocol wiring (EIP-1193) — those
+`err.message` fields are part of the contract with the dApp, not user
+UI, and are exempt.
 
 ## Environment Variables
 
-Key variables (see `.env.example`):
-- `EXPO_PUBLIC_API_URL` - Backend API
-- `EXPO_PUBLIC_AI_API_URL` - AI agent endpoint
-- `EXPO_PUBLIC_SECRET_AI_KEY` - AI API key
-- Provider IDs for mobile data purchase
+See `.env.example`. Key ones:
+- `EXPO_PUBLIC_API_URL` — backend API
+- `EXPO_PUBLIC_AI_API_URL` — AI agent endpoint
+- `EXPO_PUBLIC_SECRET_AI_KEY` — AI API key
+- Provider IDs for mobile data / pulsa purchase flows
 
 ## Git Workflow
 
-- **Main branch:** main
-- **Development:** dev
-- **Commit format:** `type(scope): description` (e.g., `feat(wallet): add multi-sig`)
+- **Branches:** `main` (release), `dev` (integration)
+- **Commit format:** `type(scope): description`
+  (e.g. `feat(wallet): add multi-sig`, `fix(dapp-bridge): …`)
 - **Types:** feat, fix, refactor, chore, docs
+
+## Distribution security (README, TWV-2026-065)
+
+Official binaries ship only via Play Store
+(`com.planckify.takumiwallet`) and takumipay.xyz. The signing-cert
+SHA-256 shown in the in-app **About** screen comes from
+`constants/about.ts` — treat that file as security-reviewed; updates
+require security-team sign-off. The "About" runbook context lives in
+`docs/distribution-discipline.md`.
+
+## Specs and runbooks
+
+`docs/` carries the long-form specs the code is implementing
+(dApp-bridge, multisig, EIP-7702 allowlist, ERC-7562, paymaster, social
+recovery, Sui/Solana chain support, UMKM USDC payout, generative UI,
+etc.) plus operational runbooks (`docs/runbooks/`, `jwk_rotation_runbook.md`,
+`mainnet_migration_runbook.md`, `refund_runbook.md`). When implementing
+or changing one of these subsystems, the spec file is the source of truth
+for intent — read it before refactoring.
 
 ## Known Technical Debt
 
 From `docs/todolist/technical-deb.md`:
-1. `activeChain` chainId fetching is inefficient - should store chainIdFromDb directly in state instead of re-fetching all blockchains
+1. `activeChain` chainId fetching is inefficient — should store `chainIdFromDb`
+   directly in state instead of re-fetching all blockchains.

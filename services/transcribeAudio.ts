@@ -43,8 +43,14 @@ export async function transcribeAudio({
   });
 
   if (!res.ok) {
+    // The server body may contain raw JSON / stack traces / API
+    // configuration messages (e.g. `STT_AI_API_KEY is not set`). Keep
+    // it out of the thrown message — callers surface this to end users.
     const detail = await res.text().catch(() => "");
-    throw new Error(`Transcription failed: ${res.status} ${detail}`);
+    if (__DEV__) {
+      console.warn("[transcribeAudio] failed", res.status, detail);
+    }
+    throw new Error("Transcription failed");
   }
 
   return (await res.json()) as TranscribeResult;

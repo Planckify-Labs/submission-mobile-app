@@ -345,9 +345,10 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
           onClose();
         });
       } catch (e) {
-        setErrorMsg(
-          e instanceof Error ? e.message : "Unexpected error importing wallet",
-        );
+        if (__DEV__) {
+          console.warn("[ImportSeedPhraseSheet] confirm threw", e);
+        }
+        setErrorMsg("We couldn't import this wallet. Please try again.");
       } finally {
         setIsSaving(false);
       }

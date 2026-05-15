@@ -130,13 +130,18 @@ export default function PaymentScreen() {
       const status = error?.response?.status;
       if (status === 400) {
         const body = await error?.response?.json?.().catch(() => null);
-        const message = body?.message ?? "";
+        const message: string = body?.message ?? "";
+        if (__DEV__ && message) {
+          console.warn("[payment] 400 body.message", message);
+        }
         if (message.toLowerCase().includes("insufficient")) {
           setPaymentError(
             "You don't have enough points to complete this redemption. Please deposit more points.",
           );
         } else {
-          setPaymentError(message || "Invalid request. Please try again.");
+          // Never forward raw server `body.message` — it can carry API
+          // configuration / RPC noise the user shouldn't see.
+          setPaymentError("Invalid request. Please try again.");
         }
       } else {
         setPaymentError("Redemption failed. Please try again.");
