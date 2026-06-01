@@ -40,13 +40,17 @@ import {
   getAccountForWallet,
 } from "../../walletService.ts";
 import type {
+  CreateDelegationArgs,
   CreateWalletFromMnemonicParams,
   CreateWalletFromPrivateKeyParams,
+  DelegationStruct,
+  EncodeDelegationsArgs,
   EstimateMaxTransferableArgs,
   NativeTransferArgs,
   SendContractTransactionArgs,
   SendUserOpResult,
   SendUserOpWithUsdcPaymasterArgs,
+  SignDelegationArgs,
   SignTransferWithAuthorizationArgs,
   TokenTransferArgs,
   TruncateAddressOptions,
@@ -54,6 +58,12 @@ import type {
   UpgradeToSmartAccountResult,
   WalletKitAdapter,
 } from "../types.ts";
+import {
+  buildUnsignedDelegation,
+  DELEGATION_ZERO_SALT,
+  encodeSignedDelegations,
+  signUnsignedDelegation,
+} from "./delegations.ts";
 import { sendUserOpWithUsdcPaymaster as sendUserOpWithUsdcPaymasterPure } from "./sendUserOpWithUsdcPaymaster.ts";
 import { signTransferWithAuthorization as signTransferWithAuthorizationPure } from "./signTransferWithAuthorization.ts";
 
@@ -382,6 +392,54 @@ export function createEvmWalletKit(): WalletKitAdapter {
 
       // EIP-7702 upgraded code starts with 0xef0100 (delegation designator prefix)
       return code.startsWith("0xef0100");
+    },
+
+    // ── ERC-7710 onchain delegation (spec Phase 2 §5.3) ──────────────
+    //
+    // Translation + SDK wiring lives in the pure `./delegations.ts`
+    // module so the scope/caveat mapping is Node-testable. The kit's
+    // job is to narrow the chain and resolve clients/signers.
+    async createDelegation({
+      wallet,
+      chain,
+      delegate,
+      scope,
+      caveats = [],
+      salt = DELEGATION_ZERO_SALT,
+    }: CreateDelegationArgs): Promise<Omit<DelegationStruct, "signature">> {
+      assertEvm(chain);
+      return buildUnsignedDelegation({
+        chainId: chain.chain.id,
+        delegator: wallet.address as `0x${string}`,
+        delegate: delegate as `0x${string}`,
+        scope,
+        caveats,
+        salt: salt as `0x${string}`,
+      });
+    },
+
+    async signDelegation({
+      wallet,
+      chain,
+      delegation,
+    }: SignDelegationArgs): Promise<`0x${string}`> {
+      assertEvm(chain);
+      const account = getAccountForWallet(wallet);
+      if (!account) {
+        throw new Error(
+          "EvmWalletKit.signDelegation: unable to reconstruct signer",
+        );
+      }
+      const publicClient = getPublicClient(chain.chain);
+      return signUnsignedDelegation(account, publicClient, delegation);
+    },
+
+    async encodeDelegations({
+      chain,
+      delegations,
+    }: EncodeDelegationsArgs): Promise<string> {
+      assertEvm(chain);
+      return encodeSignedDelegations(delegations);
     },
   };
 }

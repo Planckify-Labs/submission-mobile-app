@@ -47,6 +47,49 @@ const STUB_SOURCES = {
         }
       };
     }
+    // ── ERC-7710 delegation surface (Phase 2). Real string values so the
+    //    scope-mapping test is meaningful; createDelegation echoes a
+    //    realistic struct so the builder/serializer paths are exercisable
+    //    without pulling the full SDK into the Node harness.
+    export const ScopeType = {
+      Erc20TransferAmount: "erc20TransferAmount",
+      NativeTokenTransferAmount: "nativeTokenTransferAmount",
+      FunctionCall: "functionCall",
+      Erc20PeriodTransfer: "erc20PeriodTransfer",
+      NativeTokenPeriodTransfer: "nativeTokenPeriodTransfer",
+    };
+    export const Implementation = {
+      Stateless7702: "Stateless7702",
+      Hybrid: "Hybrid",
+      MultiSig: "MultiSig",
+    };
+    export const CaveatType = {
+      Timestamp: "timestamp",
+      LimitedCalls: "limitedCalls",
+      AllowedTargets: "allowedTargets",
+      AllowedMethods: "allowedMethods",
+    };
+    export function createDelegation({ from, to, caveats = [], salt = "0x00" }) {
+      return {
+        delegate: to,
+        delegator: from,
+        authority: "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        caveats: caveats.map((_c, i) => ({
+          enforcer: "0x" + String(i + 1).padStart(40, "0"),
+          terms: "0x00",
+          args: "0x",
+        })),
+        salt,
+      };
+    }
+    export async function toMetaMaskSmartAccount() {
+      return { signDelegation: async () => "0x" + "ab".repeat(65) };
+    }
+  `,
+  "@metamask/smart-accounts-kit/utils": `
+    export function encodeDelegations() {
+      return "0x" + "00".repeat(32);
+    }
   `,
 };
 
@@ -85,11 +128,18 @@ export async function resolve(specifier, context, nextResolve) {
       format: "module",
     };
   }
-  // Stub @metamask/smart-accounts-kit.
+  // Stub @metamask/smart-accounts-kit (+ its /utils subpath).
   if (specifier === "@metamask/smart-accounts-kit") {
     return {
       shortCircuit: true,
       url: stubUrl(STUB_SOURCES["@metamask/smart-accounts-kit"]),
+      format: "module",
+    };
+  }
+  if (specifier === "@metamask/smart-accounts-kit/utils") {
+    return {
+      shortCircuit: true,
+      url: stubUrl(STUB_SOURCES["@metamask/smart-accounts-kit/utils"]),
       format: "module",
     };
   }

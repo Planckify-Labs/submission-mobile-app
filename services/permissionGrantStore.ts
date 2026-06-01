@@ -14,6 +14,8 @@
  * if they need to observe persistence state.
  */
 
+import type { DelegationStruct } from "./walletKit/types.ts";
+
 // --- Types ------------------------------------------------------------------
 
 /**
@@ -37,13 +39,54 @@ export type GrantLifetime =
 export type GrantScope =
   | { kind: "tool"; key: string }
   | { kind: "capability"; key: ToolCapability }
-  | { kind: "global" };
+  | { kind: "global" }
+  // ERC-7710 onchain delegation grant (spec Phase 2 §6.2). `key` is the
+  // lowercased token address the allowance is scoped to so re-granting
+  // the same asset upserts. Deliberately NOT queried by `resolveGrant`
+  // (it only checks tool > capability > global), so a delegation grant
+  // never widens the agent's auto-approval — it only records the signed
+  // onchain authorization for display + revocation.
+  | { kind: "delegation"; key: string };
+
+/**
+ * Human-readable summary of a stored ERC-7710 delegation, kept alongside
+ * the (opaque, hex-encoded) `delegation` struct so the settings screen
+ * can render "spend up to $X USDC, expires …" without decoding caveats.
+ * All numeric fields are JSON-safe (amounts are decimal strings) so the
+ * grant blob survives `JSON.stringify` in SecureStore.
+ */
+export interface DelegationMeta {
+  delegate: `0x${string}`;
+  chainId: number;
+  /**
+   * Human-readable chain label captured at signing time (e.g. "Base").
+   * Lets the settings screen group allowances by chain without a
+   * registry lookup. Optional so blobs written before this field
+   * existed still deserialize — the UI falls back to `Chain <id>`.
+   */
+  chainName?: string;
+  tokenAddress: `0x${string}`;
+  tokenSymbol: string;
+  tokenDecimals: number;
+  /** Raw token-unit cap, as a decimal string (bigint is not JSON-safe). */
+  maxAmount: string;
+  /** Optional call cap mirrored from a `limitedCalls` caveat. */
+  callLimit?: number;
+}
 
 export interface PermissionGrant {
   scope: GrantScope;
   lifetime: GrantLifetime;
   wallet_address: `0x${string}`;
   granted_at: number; // Unix ms
+  /**
+   * Signed ERC-7710 delegation (spec Phase 2 §6.2). Present only on
+   * `scope.kind === "delegation"` grants. Optional + additive so every
+   * existing grant blob deserializes unchanged.
+   */
+  delegation?: DelegationStruct;
+  /** Display summary for the delegation above. */
+  delegationMeta?: DelegationMeta;
 }
 
 // --- Storage adapter --------------------------------------------------------

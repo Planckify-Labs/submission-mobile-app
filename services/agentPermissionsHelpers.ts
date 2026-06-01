@@ -124,7 +124,82 @@ export function formatScopeLabel(scope: GrantScope): string {
       return `blockchain_${(scope as { key: string }).key}`;
     case "global":
       return "All actions";
+    case "delegation":
+      return "Onchain allowance";
   }
+}
+
+// --- Onchain delegation grants ---------------------------------------------
+
+/** True for grants that carry a signed ERC-7710 onchain delegation. */
+export function isDelegationGrant(grant: PermissionGrant): boolean {
+  return grant.scope.kind === "delegation";
+}
+
+/**
+ * Split grants into the local-policy grants the existing UI manages
+ * (mode, auto-approve toggles, per-tool overrides) and the onchain
+ * delegation grants rendered in their own section. Keeping delegations
+ * out of the generic "Active grants" list avoids confusing the
+ * local-only mental model with the onchain one.
+ */
+export function partitionGrants(grants: PermissionGrant[]): {
+  local: PermissionGrant[];
+  delegations: PermissionGrant[];
+} {
+  const local: PermissionGrant[] = [];
+  const delegations: PermissionGrant[] = [];
+  for (const g of grants) {
+    if (isDelegationGrant(g)) delegations.push(g);
+    else local.push(g);
+  }
+  return { local, delegations };
+}
+
+/** A chain's worth of onchain allowance grants, for sectioned rendering. */
+export interface DelegationChainGroup {
+  chainId: number;
+  chainName: string;
+  grants: PermissionGrant[];
+}
+
+/**
+ * Group onchain delegation grants by the chain they were signed on
+ * (`delegationMeta.chainId`). The settings screen renders one section
+ * per chain — and because the grants are the source of truth, only the
+ * chains the user has actually executed an allowance on appear, and a
+ * chain disappears automatically once its last allowance is revoked.
+ * Grants missing `delegationMeta` are skipped (defensive).
+ *
+ * Chain label priority (never show a bare chain id to the user):
+ *   1. `delegationMeta.chainName` captured at signing time.
+ *   2. `resolveChainName(chainId)` — a live registry lookup the caller
+ *      supplies, so grants written before `chainName` existed still get
+ *      a friendly name.
+ *   3. `Chain <id>` — last-resort only when the chain is unknown.
+ */
+export function groupDelegationGrantsByChain(
+  grants: PermissionGrant[],
+  resolveChainName?: (chainId: number) => string | undefined,
+): DelegationChainGroup[] {
+  const byChain = new Map<number, DelegationChainGroup>();
+  for (const g of grants) {
+    const meta = g.delegationMeta;
+    if (!meta) continue;
+    let group = byChain.get(meta.chainId);
+    if (!group) {
+      const name =
+        (meta.chainName && meta.chainName.trim()) ||
+        resolveChainName?.(meta.chainId) ||
+        `Chain ${meta.chainId}`;
+      group = { chainId: meta.chainId, chainName: name, grants: [] };
+      byChain.set(meta.chainId, group);
+    }
+    group.grants.push(g);
+  }
+  return [...byChain.values()].sort((a, b) =>
+    a.chainName.localeCompare(b.chainName),
+  );
 }
 
 // --- Lifetime label --------------------------------------------------------

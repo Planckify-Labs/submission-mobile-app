@@ -317,6 +317,100 @@ export interface SendAnchorInstructionArgs {
   feePayer?: { publicKey: PublicKey; mode: "user" | "sponsored" };
 }
 
+/**
+ * Serialized, plain-object ERC-7710 delegation configurations (spec
+ * Phase 2 §5.1). Deliberately SDK-free so UI screens and the local
+ * `PermissionGrantStore` can model delegations without importing
+ * `@metamask/smart-accounts-kit` classes. `EvmWalletKit` translates
+ * these into the SDK's `ScopeType` / `CaveatType` shapes at the port
+ * boundary; Solana / Sui never see them.
+ */
+export interface DelegationScope {
+  type:
+    | "erc20TransferAmount"
+    | "nativeTokenTransferAmount"
+    | "functionCall"
+    | "erc20PeriodTransfer"
+    | "nativeTokenPeriodTransfer";
+  /** ERC-20 token / asset address for the transfer-amount scopes. */
+  tokenAddress?: string;
+  /** Hard cap in raw token units (6-decimal micros for USDC). */
+  maxAmount?: bigint;
+  /** Recurring-allowance amount per `periodDuration`. */
+  periodAmount?: bigint;
+  /** Period length in seconds (e.g. 604_800 for weekly). */
+  periodDuration?: number;
+  /** Target contract addresses for `functionCall`. */
+  targets?: string[];
+  /** Allowed function selectors / signatures for `functionCall`. */
+  methods?: string[];
+}
+
+/**
+ * A single onchain caveat (boundary enforced during redemption). Maps
+ * 1:1 onto the SDK `CaveatType` enum inside `EvmWalletKit`.
+ */
+export interface CaveatConfig {
+  type: "timestamp" | "limitedCalls" | "allowedTargets" | "allowedMethods";
+  /** Expiry — Unix epoch in **seconds** — for the `timestamp` caveat. */
+  expiresAt?: number;
+  /** Max number of execution calls for the `limitedCalls` caveat. */
+  limit?: number;
+  /** Allowlist of target addresses for the `allowedTargets` caveat. */
+  targets?: string[];
+  /** Allowlist of selectors / signatures for the `allowedMethods` caveat. */
+  methods?: string[];
+}
+
+/**
+ * Encoded caveat struct as produced by the SDK — `enforcer`/`terms`/`args`
+ * hex tuples. Plain-object so it round-trips through `JSON.stringify`
+ * when persisted alongside a `PermissionGrant`.
+ */
+export interface CaveatStruct {
+  enforcer: `0x${string}`;
+  terms: `0x${string}`;
+  args: `0x${string}`;
+}
+
+/**
+ * A (optionally signed) ERC-7710 delegation. `signature` is the only
+ * field that is absent on the unsigned struct returned by
+ * `createDelegation`; `signDelegation` fills it in.
+ */
+export interface DelegationStruct {
+  delegate: `0x${string}`;
+  delegator: `0x${string}`;
+  authority: `0x${string}`;
+  caveats: CaveatStruct[];
+  salt: `0x${string}`;
+  signature: `0x${string}`;
+}
+
+export interface CreateDelegationArgs {
+  wallet: TWallet;
+  chain: ChainConfig;
+  /** Delegate (redeemer) address — e.g. the AI agent / relayer. */
+  delegate: string;
+  scope: DelegationScope;
+  caveats?: CaveatConfig[];
+  /** 32-byte hex replay-protection salt. Defaults to zero in the kit. */
+  salt?: string;
+  /** Parent-delegation authority. Defaults to the root authority. */
+  authority?: string;
+}
+
+export interface SignDelegationArgs {
+  wallet: TWallet;
+  chain: ChainConfig;
+  delegation: Omit<DelegationStruct, "signature">;
+}
+
+export interface EncodeDelegationsArgs {
+  chain: ChainConfig;
+  delegations: DelegationStruct[];
+}
+
 export interface WalletKitAdapter {
   readonly namespace: Namespace;
 
@@ -429,6 +523,31 @@ export interface WalletKitAdapter {
    * Optional check to verify if a wallet is already upgraded/active as a smart account.
    */
   isSmartAccountActive?(wallet: TWallet, chain: ChainConfig): Promise<boolean>;
+
+  // ── ERC-7710 onchain delegation (spec Phase 2 §5.2) ─────────────────
+  /**
+   * Builds an unsigned ERC-7710 delegation from a serialized scope +
+   * caveats, mapping them onto the SDK's `ScopeType` / `CaveatType`.
+   * EVM-only; Solana / Sui leave this `undefined`. Consumers presence-
+   * check rather than branching on namespace.
+   */
+  createDelegation?(
+    args: CreateDelegationArgs,
+  ): Promise<Omit<DelegationStruct, "signature">>;
+
+  /**
+   * Signs an unsigned ERC-7710 delegation with the wallet's smart-account
+   * keys (EIP-712 over the delegation struct). Returns the raw signature.
+   * Biometric gating is the caller's responsibility (SI-1). EVM-only.
+   */
+  signDelegation?(args: SignDelegationArgs): Promise<`0x${string}`>;
+
+  /**
+   * Encodes one or more signed delegations into the single hex
+   * `delegationContext` that a Phase 3 relayer / redeemer consumes.
+   * EVM-only; Solana / Sui leave this `undefined`.
+   */
+  encodeDelegations?(args: EncodeDelegationsArgs): Promise<string>;
 
   /**
    * Signs an x402 SVM-scheme versioned Solana transaction pre-built by

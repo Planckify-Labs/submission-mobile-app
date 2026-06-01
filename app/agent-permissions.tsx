@@ -14,6 +14,7 @@
  * top of those helpers and the `PermissionGrantStore` public API.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import {
   AlertTriangle,
@@ -23,8 +24,10 @@ import {
   Eye,
   PlayCircle,
   Shield,
+  ShieldCheck,
   ShieldOff,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -42,19 +45,39 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import AgentAllowanceSheet, {
+  type SelectedAllowanceToken,
+} from "@/components/agent/AgentAllowanceSheet";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import PinConfirmationModal from "@/components/common/PinConfirmationModal";
+import { AGENT_DELEGATE_ADDRESS } from "@/constants/agentDelegate";
+import { findEvmChainById } from "@/constants/configs/chainConfig";
 import { useWallet } from "@/hooks/useWallet";
+import {
+  type AllowanceLifetime,
+  buildErc20AllowanceConfig,
+  formatTokenAmountDisplay,
+  parseTokenAmount,
+  randomDelegationSalt,
+} from "@/services/agentDelegationMapping";
 import {
   computeCurrentMode,
   type DefaultPermissionMode,
   formatLifetimeLabel,
   formatScopeLabel,
+  groupDelegationGrantsByChain,
   isCapabilityAutoApproved,
   listRenderableGrants,
+  partitionGrants,
 } from "@/services/agentPermissionsHelpers";
 import {
+  type DelegationMeta,
+  type GrantLifetime,
   type PermissionGrant,
   PermissionGrantStore,
 } from "@/services/permissionGrantStore";
+import { formatChainLabel } from "@/services/walletKit/chainInfo";
+import type { DelegationStruct } from "@/services/walletKit/types";
 
 // --- Mode metadata ---------------------------------------------------------
 
@@ -166,14 +189,31 @@ function shortAddress(address: string): string {
 // --- Screen ----------------------------------------------------------------
 
 export default function AgentPermissionsScreen() {
-  const { wallets, activeWallet, activeWalletIndex, setActiveWallet } =
-    useWallet();
+  const {
+    wallets,
+    activeWallet,
+    activeWalletIndex,
+    setActiveWallet,
+    activeChain,
+    getKitForWallet,
+  } = useWallet();
   const { bottom } = useSafeAreaInsets();
 
   const [selectedWalletIndex, setSelectedWalletIndex] =
     useState<number>(activeWalletIndex);
   const [showWalletPicker, setShowWalletPicker] = useState(false);
   const [renderKey, forceRender] = useState(0);
+  const [showAllowanceSheet, setShowAllowanceSheet] = useState(false);
+  const [signingAllowance, setSigningAllowance] = useState(false);
+  const [allowanceError, setAllowanceError] = useState("");
+  // Allowance params captured from the sheet, held while the PIN modal
+  // gates the onchain signature (mirrors the EIP-7702 upgrade flow).
+  const [pendingAllowance, setPendingAllowance] = useState<{
+    token: SelectedAllowanceToken;
+    amountText: string;
+    lifetime: AllowanceLifetime;
+  } | null>(null);
+  const [showAllowancePin, setShowAllowancePin] = useState(false);
 
   // If the tab-level active wallet changes, follow it.
   useEffect(() => {
@@ -210,9 +250,198 @@ export default function AgentPermissionsScreen() {
 
   const currentMode = useMemo(() => computeCurrentMode(grants), [grants]);
 
+  // Split local-policy grants (rendered in "Active grants") from onchain
+  // ERC-7710 delegation grants (rendered in the dedicated allowance
+  // section below).
+  const { local: localGrants, delegations: delegationGrants } = useMemo(
+    () => partitionGrants(grants),
+    [grants],
+  );
+
   const refresh = useCallback(() => {
     forceRender((n) => n + 1);
   }, []);
+
+  // --- Onchain delegation (ERC-7710) --------------------------------------
+  //
+  // Space-docking: the allowance section only appears when the selected
+  // wallet's kit implements the delegation capability AND the active
+  // chain belongs to the same namespace as the wallet. Non-EVM wallets
+  // (Solana / Sui) leave these methods undefined, so the whole section
+  // self-hides without any namespace branch.
+  const kit = useMemo(
+    () => (selectedWallet ? getKitForWallet(selectedWallet) : null),
+    [selectedWallet, getKitForWallet],
+  );
+
+  const delegationSupported =
+    typeof kit?.createDelegation === "function" &&
+    typeof kit?.signDelegation === "function";
+
+  // The delegation needs a chain that matches the wallet's namespace.
+  const chainForWallet =
+    selectedWallet?.namespace &&
+    activeChain.namespace === selectedWallet.namespace
+      ? activeChain
+      : null;
+
+  const chainId = useMemo(() => {
+    if (!kit || !chainForWallet || !kit.getChainId) return null;
+    const id = kit.getChainId(chainForWallet);
+    return typeof id === "number" ? id : null;
+  }, [kit, chainForWallet]);
+
+  const { data: smartAccountActive } = useQuery({
+    queryKey: ["agent-permissions-smart-account-active", address, chainId],
+    queryFn: async () => {
+      if (!kit?.isSmartAccountActive || !selectedWallet || !chainForWallet) {
+        return false;
+      }
+      return kit.isSmartAccountActive(selectedWallet, chainForWallet);
+    },
+    enabled:
+      delegationSupported &&
+      typeof kit?.isSmartAccountActive === "function" &&
+      !!chainForWallet &&
+      chainId !== null,
+  });
+
+  // The "Authorize" affordance targets the *active* chain, so it's only
+  // available when the kit supports delegation and the active chain is an
+  // EVM chain (chainId resolves to a number).
+  const canAuthorizeOnActiveChain = delegationSupported && chainId !== null;
+
+  // Existing allowances grouped by the chain they were signed on. Sourced
+  // from the grants themselves, so only chains the user has executed an
+  // allowance on appear (and a chain drops off when its last allowance is
+  // revoked) — no separate per-chain store to keep in sync.
+  const delegationGroups = useMemo(
+    () =>
+      groupDelegationGrantsByChain(delegationGrants, (id) => {
+        const cfg = findEvmChainById(id);
+        return cfg ? formatChainLabel(cfg) : undefined;
+      }),
+    [delegationGrants],
+  );
+
+  // Whole section shows if there's something to authorize on this chain
+  // OR there are existing allowances from any chain to display/revoke.
+  const showAllowanceCard =
+    canAuthorizeOnActiveChain || delegationGroups.length > 0;
+
+  // Step 1: the sheet collected token + amount + duration. Stash it and
+  // hand off to the PIN modal — signing an onchain delegation is a write,
+  // so it's gated by the same PIN confirmation the EIP-7702 upgrade uses
+  // (not a silent biometric).
+  const handleAuthorizeAllowance = useCallback(
+    (args: {
+      token: SelectedAllowanceToken;
+      amountText: string;
+      lifetime: AllowanceLifetime;
+    }) => {
+      if (parseTokenAmount(args.amountText, args.token.decimals) <= 0n) return;
+      setAllowanceError("");
+      setPendingAllowance(args);
+      setShowAllowanceSheet(false);
+      setShowAllowancePin(true);
+    },
+    [],
+  );
+
+  // Step 2: PIN verified → build, sign, and persist the delegation.
+  const handleAllowancePinConfirm = useCallback(async () => {
+    setShowAllowancePin(false);
+    const args = pendingAllowance;
+    setPendingAllowance(null);
+    if (!args || !store || !address || !kit || !chainForWallet) return;
+    if (chainId === null) return;
+    if (
+      typeof kit.createDelegation !== "function" ||
+      typeof kit.signDelegation !== "function"
+    ) {
+      return;
+    }
+    const { token, amountText, lifetime } = args;
+    const maxAmount = parseTokenAmount(amountText, token.decimals);
+    if (maxAmount <= 0n) return;
+
+    setSigningAllowance(true);
+    try {
+      const tokenAddress = token.contractAddress;
+
+      const { scope, caveats } = buildErc20AllowanceConfig({
+        tokenAddress,
+        maxAmount,
+        lifetime,
+      });
+
+      const unsigned = await kit.createDelegation({
+        wallet: selectedWallet,
+        chain: chainForWallet,
+        delegate: AGENT_DELEGATE_ADDRESS,
+        scope,
+        caveats,
+        salt: randomDelegationSalt(),
+      });
+
+      const signature = await kit.signDelegation({
+        wallet: selectedWallet,
+        chain: chainForWallet,
+        delegation: unsigned,
+      });
+
+      const signed: DelegationStruct = { ...unsigned, signature };
+
+      const grantLifetime: GrantLifetime =
+        lifetime.type === "timed"
+          ? { type: "timed", expires_at: lifetime.expiresAtMs }
+          : { type: "permanent" };
+
+      const meta: DelegationMeta = {
+        delegate: AGENT_DELEGATE_ADDRESS,
+        chainId,
+        chainName: formatChainLabel(chainForWallet),
+        tokenAddress,
+        tokenSymbol: token.symbol,
+        tokenDecimals: token.decimals,
+        maxAmount: maxAmount.toString(),
+      };
+
+      store.add({
+        // Key is chain + token so allowances for the same token on
+        // different chains coexist instead of overwriting each other.
+        scope: {
+          kind: "delegation",
+          key: `${chainId}:${tokenAddress.toLowerCase()}`,
+        },
+        lifetime: grantLifetime,
+        wallet_address: address,
+        granted_at: Date.now(),
+        delegation: signed,
+        delegationMeta: meta,
+      });
+
+      refresh();
+    } catch (err) {
+      if (__DEV__) {
+        console.warn("agent-permissions: allowance signing failed", err);
+      }
+      setAllowanceError(
+        "We couldn't authorize the onchain allowance. Please try again.",
+      );
+    } finally {
+      setSigningAllowance(false);
+    }
+  }, [
+    pendingAllowance,
+    store,
+    address,
+    kit,
+    chainForWallet,
+    selectedWallet,
+    chainId,
+    refresh,
+  ]);
 
   // --- Mutations ----------------------------------------------------------
 
@@ -505,7 +734,7 @@ export default function AgentPermissionsScreen() {
                 elevation: 1,
               }}
             >
-              {grants.length === 0 ? (
+              {localGrants.length === 0 ? (
                 <View className="px-4 py-8 items-center">
                   <Shield size={28} color="#c71c4b" />
                   <Text className="text-light-matte-black font-semibold mt-3">
@@ -517,7 +746,7 @@ export default function AgentPermissionsScreen() {
                   </Text>
                 </View>
               ) : (
-                grants.map((grant, index) => {
+                localGrants.map((grant, index) => {
                   const scopeLabel = formatScopeLabel(grant.scope);
                   const lifetime = formatLifetimeLabel(
                     grant.lifetime,
@@ -561,6 +790,156 @@ export default function AgentPermissionsScreen() {
               )}
             </View>
           </View>
+
+          {/* Onchain agent allowance (ERC-7710) — space-docking gated.
+              Allowances are grouped by the chain they were signed on. */}
+          {showAllowanceCard && (
+            <View className="mx-4 mb-6">
+              <Text className="text-light-matte-black/50 text-xs uppercase tracking-wide mb-2 ml-1">
+                Onchain allowance
+              </Text>
+
+              {delegationGroups.map((group) => (
+                <View key={group.chainId} className="mb-3">
+                  <View className="flex-row items-center mb-1.5 ml-1">
+                    <View className="w-1.5 h-1.5 rounded-full bg-light-primary-red mr-2" />
+                    <Text className="text-light-matte-black/70 text-xs font-semibold">
+                      {group.chainName}
+                    </Text>
+                  </View>
+                  <View
+                    className="bg-light rounded-2xl overflow-hidden"
+                    style={{
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.04,
+                      shadowRadius: 6,
+                      elevation: 1,
+                    }}
+                  >
+                    {group.grants.map((grant, index) => {
+                      const meta = grant.delegationMeta;
+                      const amountLabel = meta
+                        ? `${formatTokenAmountDisplay(
+                            BigInt(meta.maxAmount),
+                            meta.tokenDecimals,
+                          )} ${meta.tokenSymbol}`
+                        : "Allowance";
+                      const lifetime = formatLifetimeLabel(
+                        grant.lifetime,
+                        nowMs,
+                        grant.granted_at,
+                      );
+                      return (
+                        <View
+                          key={grantKey(grant)}
+                          accessible
+                          accessibilityLabel={`Onchain allowance on ${group.chainName}, up to ${amountLabel}, ${lifetime.primary}`}
+                          className={`px-4 py-3 flex-row items-center justify-between ${index > 0 ? "border-t border-light-matte-black/5" : ""}`}
+                        >
+                          <View className="w-9 h-9 rounded-xl bg-light-primary-red/10 items-center justify-center mr-3">
+                            <ShieldCheck size={18} color="#c71c4b" />
+                          </View>
+                          <View className="flex-1 pr-3">
+                            <Text
+                              className="text-light-matte-black font-semibold"
+                              numberOfLines={1}
+                            >
+                              Spend up to {amountLabel}
+                            </Text>
+                            <Text className="text-light-matte-black/60 text-xs mt-0.5">
+                              {lifetime.primary}
+                              {lifetime.secondary
+                                ? ` • ${lifetime.secondary}`
+                                : ""}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => handleRevoke(grant)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Revoke onchain allowance for ${amountLabel} on ${group.chainName}`}
+                            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                            className="bg-light-primary-red/10 px-3 py-1.5 rounded-xl"
+                          >
+                            <Text className="text-light-primary-red text-xs font-semibold">
+                              Revoke
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+
+              {/* Authorize / upgrade row — always targets the ACTIVE chain. */}
+              {canAuthorizeOnActiveChain && (
+                <View
+                  className="bg-light rounded-2xl overflow-hidden"
+                  style={{
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 6,
+                    elevation: 1,
+                  }}
+                >
+                  {smartAccountActive ? (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setAllowanceError("");
+                        setShowAllowanceSheet(true);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Authorize a new onchain allowance"
+                      className="px-4 py-3 flex-row items-center"
+                    >
+                      <View className="w-9 h-9 rounded-xl bg-light-primary-red/10 items-center justify-center mr-3">
+                        <Sparkles size={18} color="#c71c4b" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-light-matte-black font-semibold">
+                          Authorize allowance
+                        </Text>
+                        <Text className="text-light-matte-black/60 text-xs mt-0.5">
+                          Pick a token and sign a capped delegation the agent
+                          can spend within — enforced onchain.
+                        </Text>
+                      </View>
+                      <ChevronRight size={18} color="#c71c4b" />
+                    </TouchableOpacity>
+                  ) : (
+                    <View className="px-4 py-3 flex-row items-center">
+                      <View className="w-9 h-9 rounded-xl bg-light-matte-black/5 items-center justify-center mr-3">
+                        <Sparkles size={18} color="#9aa0ab" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-light-matte-black font-semibold">
+                          Upgrade required
+                        </Text>
+                        <Text className="text-light-matte-black/60 text-xs mt-0.5">
+                          Upgrade this wallet to a smart account (in Wallet
+                          Details) to enable onchain allowances.
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {allowanceError ? (
+                <Text className="text-light-primary-red text-xs mt-2 ml-1 leading-4">
+                  {allowanceError}
+                </Text>
+              ) : (
+                <Text className="text-light-matte-black/50 text-xs mt-2 ml-1 leading-4">
+                  Allowances are cryptographic ERC-7710 delegations. The cap is
+                  enforced onchain — revoke any time.
+                </Text>
+              )}
+            </View>
+          )}
 
           {/* Auto-approve by category */}
           <View className="mx-4 mb-6">
@@ -750,6 +1129,31 @@ export default function AgentPermissionsScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      {showAllowanceSheet && chainId !== null && (
+        <AgentAllowanceSheet
+          chainId={chainId}
+          busy={signingAllowance}
+          onClose={() => setShowAllowanceSheet(false)}
+          onConfirm={handleAuthorizeAllowance}
+        />
+      )}
+
+      <PinConfirmationModal
+        visible={showAllowancePin}
+        title="Confirm allowance"
+        onClose={() => {
+          setShowAllowancePin(false);
+          setPendingAllowance(null);
+        }}
+        onConfirm={handleAllowancePinConfirm}
+      />
+
+      <LoadinngSpinnerPopup
+        visible={signingAllowance}
+        title="Authorizing allowance"
+        message="Signing your onchain delegation. Please wait…"
+      />
     </>
   );
 }

@@ -18,7 +18,9 @@ import {
   computeCurrentMode,
   formatLifetimeLabel,
   formatScopeLabel,
+  groupDelegationGrantsByChain,
   listRenderableGrants,
+  partitionGrants,
 } from "./agentPermissionsHelpers.ts";
 import {
   type GrantStorageAdapter,
@@ -471,5 +473,77 @@ describe("default-mode round trip through resolveUXTreatment", () => {
       computeCurrentMode(wallet.grantStore.list(WALLET_A)),
       "agent_decides",
     );
+  });
+});
+
+describe("partitionGrants / groupDelegationGrantsByChain", () => {
+  function delegationGrant(
+    chainId: number,
+    chainName: string | undefined,
+    token: string,
+  ): PermissionGrant {
+    return {
+      scope: { kind: "delegation", key: `${chainId}:${token}` },
+      lifetime: { type: "permanent" },
+      wallet_address: WALLET_A,
+      granted_at: Date.now(),
+      delegationMeta: {
+        delegate: WALLET_B,
+        chainId,
+        chainName,
+        tokenAddress: token as `0x${string}`,
+        tokenSymbol: "TKN",
+        tokenDecimals: 6,
+        maxAmount: "1000000",
+      },
+    };
+  }
+
+  it("separates delegation grants from local-policy grants", () => {
+    const grants: PermissionGrant[] = [
+      {
+        scope: { kind: "capability", key: "read" },
+        lifetime: { type: "permanent" },
+        wallet_address: WALLET_A,
+        granted_at: Date.now(),
+      },
+      delegationGrant(8453, "Base", "0xtokenbase"),
+    ];
+    const { local, delegations } = partitionGrants(grants);
+    assert.equal(local.length, 1);
+    assert.equal(local[0].scope.kind, "capability");
+    assert.equal(delegations.length, 1);
+    assert.equal(delegations[0].scope.kind, "delegation");
+  });
+
+  it("groups by chain and only surfaces chains with grants", () => {
+    const groups = groupDelegationGrantsByChain([
+      delegationGrant(8453, "Base", "0xa"),
+      delegationGrant(137, "Polygon", "0xb"),
+      delegationGrant(8453, "Base", "0xc"),
+    ]);
+    assert.equal(groups.length, 2);
+    // Sorted by chain name: Base before Polygon.
+    assert.equal(groups[0].chainName, "Base");
+    assert.equal(groups[0].grants.length, 2);
+    assert.equal(groups[1].chainName, "Polygon");
+    assert.equal(groups[1].grants.length, 1);
+  });
+
+  it("resolves a name for grants missing chainName, before any id fallback", () => {
+    const resolver = (id: number) =>
+      id === 42161 ? "Arbitrum One" : undefined;
+    const groups = groupDelegationGrantsByChain(
+      [delegationGrant(42161, undefined, "0xd")],
+      resolver,
+    );
+    assert.equal(groups[0].chainName, "Arbitrum One");
+  });
+
+  it("falls back to `Chain <id>` only when name and resolver both miss", () => {
+    const groups = groupDelegationGrantsByChain([
+      delegationGrant(42161, undefined, "0xd"),
+    ]);
+    assert.equal(groups[0].chainName, "Chain 42161");
   });
 });
