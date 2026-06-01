@@ -19,7 +19,15 @@
 import { type Abi, erc20Abi, parseUnits } from "viem";
 import { tokenApi } from "@/api/endpoints/tokens";
 import { transactionApi } from "@/api/endpoints/transactions";
-import { requireWalletClient, resolveChainClients } from "../chainRouter";
+import type { ChainConfig } from "@/constants/configs/chainConfig";
+import { getPreferredGasToken } from "@/hooks/usePreferredGasToken";
+import { pollRelayerTaskHash } from "@/services/gasAbstraction/pollTaskStatus";
+import { resolveGasPayment } from "@/services/gasAbstraction/resolveGasPayment";
+import {
+  requireWalletClient,
+  resolveChainClients,
+  resolveChainDef,
+} from "../chainRouter";
 import {
   ExecutorError,
   ExecutorErrorCode,
@@ -140,24 +148,65 @@ export const transferErc20: MobileToolExecutor = (input, context) =>
     const tokenAddress = requireAddress(input, "contract_address");
     const to = requireAddress(input, "to");
     const amount = resolveTokenAmount(input);
+    const decimals =
+      typeof input.token_decimals === "number" ? input.token_decimals : 18;
 
-    const walletClient = requireWalletClient(chainId, context);
-    const account = walletClient.account;
-    if (!account) {
-      throw new ExecutorError(
-        ExecutorErrorCode.WalletCannotExecute,
-        "wallet client has no account",
-      );
+    // Decide how gas is paid (USDC abstraction vs native) via the same
+    // single policy `app/send.tsx` uses. `getPreferredGasToken()` reads
+    // the persisted setting (this runs off the React tree).
+    const chain: ChainConfig = {
+      namespace: "eip155",
+      chain: resolveChainDef(chainId, context.blockchains),
+    };
+    const gasPlan = await resolveGasPayment({
+      wallet: context.wallet,
+      chain,
+      intent: { to, tokenAddress, amount, decimals, memo: "takumi-agent" },
+      preferredGasToken: getPreferredGasToken(),
+    });
+
+    // Prefer USDC, else block — don't silently fall back to native gas.
+    if (gasPlan.mode === "blocked") {
+      return { status: "failed", error: "insufficient_usdc_for_gas" };
     }
 
-    const hash = await walletClient.writeContract({
-      account,
-      chain: walletClient.chain,
-      address: tokenAddress,
-      abi: erc20Abi,
-      functionName: "transfer",
-      args: [to, amount],
-    });
+    let hash: `0x${string}`;
+    if (gasPlan.mode === "abstracted") {
+      try {
+        const { taskId } = await gasPlan.provider.execute({
+          wallet: context.wallet,
+          chain,
+          intent: { to, tokenAddress, amount, decimals, memo: "takumi-agent" },
+        });
+        hash = (await pollRelayerTaskHash(
+          gasPlan.provider,
+          chain,
+          taskId,
+        )) as `0x${string}`;
+      } catch (relayErr) {
+        if (__DEV__)
+          console.warn("[transferErc20] abstracted failed:", relayErr);
+        return { status: "failed", error: "gasless_transfer_failed" };
+      }
+    } else {
+      // Native gas path — unchanged viem writeContract.
+      const walletClient = requireWalletClient(chainId, context);
+      const account = walletClient.account;
+      if (!account) {
+        throw new ExecutorError(
+          ExecutorErrorCode.WalletCannotExecute,
+          "wallet client has no account",
+        );
+      }
+      hash = await walletClient.writeContract({
+        account,
+        chain: walletClient.chain,
+        address: tokenAddress,
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [to, amount],
+      });
+    }
 
     // Record transfer history — mirrors send.tsx ERC20 path.
     // Uses tokenApi.searchTokens to resolve tokenId from contractAddress +
@@ -200,6 +249,9 @@ export const transferErc20: MobileToolExecutor = (input, context) =>
         contract_address: tokenAddress,
         to,
         amount_wei: amount.toString(),
+        // So the agent can truthfully answer "did you pay gas in USDC?".
+        gas_paid_in: gasPlan.mode === "abstracted" ? "USDC" : "native",
+        relayed: gasPlan.mode === "abstracted",
       },
     };
   });

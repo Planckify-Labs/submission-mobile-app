@@ -50,6 +50,15 @@ export default function SendSuccessScreen() {
   const txHash = pickParam(params.txHash);
   const explorerUrl = pickParam(params.explorerUrl);
   const chainBackendName = pickParam(params.chainBackendName);
+  const gasFeeSymbol = pickParam(params.gasFeeSymbol);
+  const gasFeeAmount = pickParam(params.gasFeeAmount);
+  // The exact fee is known only on the abstracted (USDC) path; on the
+  // native path we still tell the user which token paid for gas.
+  const networkFeeText = gasFeeSymbol
+    ? gasFeeAmount
+      ? `${gasFeeAmount} ${gasFeeSymbol}`
+      : `Paid in ${gasFeeSymbol}`
+    : "";
 
   const { allContacts, add: addContact, isAdding, addError } = useAddressBook();
 
@@ -254,6 +263,19 @@ export default function SendSuccessScreen() {
                 )}
               </TouchableOpacity>
             </View>
+            {networkFeeText ? (
+              <>
+                <View className="h-px bg-light-matte-black/10" />
+                <View className="flex-row items-center justify-between py-2">
+                  <Text className="text-light-matte-black/60 text-sm">
+                    Network fee
+                  </Text>
+                  <Text className="text-light-matte-black text-sm font-semibold">
+                    {networkFeeText}
+                  </Text>
+                </View>
+              </>
+            ) : null}
           </View>
 
           {explorerUrl ? (

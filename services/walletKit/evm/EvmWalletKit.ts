@@ -45,12 +45,23 @@ import type {
   CreateWalletFromPrivateKeyParams,
   DelegationStruct,
   EncodeDelegationsArgs,
+  Estimate7710TransactionArgs,
+  Estimate7710TransactionResult,
   EstimateMaxTransferableArgs,
+  GetRelayerFeeDataArgs,
+  GetRelayerStatusArgs,
   NativeTransferArgs,
+  RelayerAuthorizationEntry,
+  RelayerCapabilities,
+  RelayerFeeData,
+  RelayerStatus,
+  Send7710TransactionArgs,
+  Send7710TransactionResult,
   SendContractTransactionArgs,
   SendUserOpResult,
   SendUserOpWithUsdcPaymasterArgs,
   SignDelegationArgs,
+  SignEip7702AuthorizationArgs,
   SignTransferWithAuthorizationArgs,
   TokenTransferArgs,
   TruncateAddressOptions,
@@ -64,10 +75,21 @@ import {
   encodeSignedDelegations,
   signUnsignedDelegation,
 } from "./delegations.ts";
+import {
+  relayerEstimate7710Transaction,
+  relayerGetCapabilities,
+  relayerGetFeeData,
+  relayerGetStatus,
+  relayerSend7710Transaction,
+} from "./relayer.ts";
 import { sendUserOpWithUsdcPaymaster as sendUserOpWithUsdcPaymasterPure } from "./sendUserOpWithUsdcPaymaster.ts";
 import { signTransferWithAuthorization as signTransferWithAuthorizationPure } from "./signTransferWithAuthorization.ts";
 
 const EVM_NAMESPACE = "eip155" as const;
+
+/** Canonical MetaMask stateless-7702 delegator (fallback if env lookup fails). */
+const FALLBACK_STATELESS_DELEGATOR =
+  "0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B" as `0x${string}`;
 
 function assertEvm(
   chain: ChainConfig,
@@ -75,6 +97,23 @@ function assertEvm(
   if (chain.namespace !== EVM_NAMESPACE) {
     throw new Error("EvmWalletKit: expected eip155 chain");
   }
+}
+
+/**
+ * Resolves the EIP-7702 stateless-delegator implementation address for
+ * `chainId` from the MetaMask smart-accounts environment, falling back to
+ * the canonical address when the env lookup is unavailable. Shared by the
+ * standalone upgrade flow and the relayer `authorizationList` builder.
+ */
+function resolveStatelessDelegatorAddress(chainId: number): `0x${string}` {
+  try {
+    const environment = getSmartAccountsEnvironment(chainId);
+    const impl = environment?.implementations?.EIP7702StatelessDeleGatorImpl;
+    if (impl) return impl as `0x${string}`;
+  } catch {
+    // Fall through to the canonical fallback below.
+  }
+  return FALLBACK_STATELESS_DELEGATOR;
 }
 
 export function createEvmWalletKit(): WalletKitAdapter {
@@ -440,6 +479,131 @@ export function createEvmWalletKit(): WalletKitAdapter {
     }: EncodeDelegationsArgs): Promise<string> {
       assertEvm(chain);
       return encodeSignedDelegations(delegations);
+    },
+
+    // ── 1Shot Relayer gas abstraction (spec Phase 3 §5.3) ────────────
+    //
+    // All JSON-RPC wiring lives in the pure `./relayer.ts` module so the
+    // request builders / decoders are Node-testable with a mocked fetch.
+    // The kit's job is to narrow the chain (SI-2: the relayer `chainId`
+    // can only ever be the active EVM chain's id) and forward.
+    async getRelayerCapabilities({
+      chain,
+    }: {
+      chain: ChainConfig;
+    }): Promise<RelayerCapabilities> {
+      assertEvm(chain);
+      return relayerGetCapabilities({ chainId: chain.chain.id });
+    },
+
+    async getRelayerFeeData({
+      chain,
+      token,
+    }: GetRelayerFeeDataArgs): Promise<RelayerFeeData> {
+      assertEvm(chain);
+      return relayerGetFeeData({ chainId: chain.chain.id, token });
+    },
+
+    async estimate7710Transaction({
+      chain,
+      transactions,
+      authorizationList,
+    }: Estimate7710TransactionArgs): Promise<Estimate7710TransactionResult> {
+      assertEvm(chain);
+      return relayerEstimate7710Transaction({
+        chainId: chain.chain.id,
+        transactions,
+        authorizationList,
+      });
+    },
+
+    async send7710Transaction({
+      chain,
+      transactions,
+      context,
+      authorizationList,
+      destinationUrl,
+      memo,
+    }: Send7710TransactionArgs): Promise<Send7710TransactionResult> {
+      assertEvm(chain);
+      return relayerSend7710Transaction({
+        chainId: chain.chain.id,
+        transactions,
+        context,
+        authorizationList,
+        destinationUrl,
+        memo,
+      });
+    },
+
+    async getRelayerTransactionStatus({
+      chain,
+      taskId,
+    }: GetRelayerStatusArgs): Promise<RelayerStatus> {
+      assertEvm(chain);
+      return relayerGetStatus({ chainId: chain.chain.id, taskId });
+    },
+
+    // ── EIP-7702 authorization for in-flight relayer upgrade ─────────
+    //
+    // Produces a single `authorizationList` entry so an un-upgraded EOA
+    // can be upgraded to the stateless-7702 delegator in the same relayer
+    // request as its first sponsored send. Reuses the same allowlist /
+    // bytecode guards as `upgradeToSmartAccount` (SI-1 / SI-2). Unlike
+    // that path (`executor: "self"`), here the relayer is the executor,
+    // so the authorization is signed against the EOA's pending nonce.
+    async signEip7702Authorization({
+      wallet,
+      chain,
+    }: SignEip7702AuthorizationArgs): Promise<RelayerAuthorizationEntry> {
+      assertEvm(chain);
+      const account = getAccountForWallet(wallet);
+      if (!account) {
+        throw new Error(
+          "EvmWalletKit.signEip7702Authorization: unable to reconstruct signer",
+        );
+      }
+
+      const delegatorAddress = resolveStatelessDelegatorAddress(chain.chain.id);
+
+      const addressDecision = decideAuthorizationByAddress(delegatorAddress);
+      if (!addressDecision.ok) {
+        throw new Error(addressDecision.message);
+      }
+
+      const publicClient = getPublicClient(chain.chain);
+      const bytecode = await publicClient.getCode({
+        address: delegatorAddress,
+      });
+      const bytecodeDecision = decideAuthorizationByBytecode(bytecode);
+      if (!bytecodeDecision.ok) {
+        throw new Error(bytecodeDecision.message);
+      }
+
+      const nonce = await publicClient.getTransactionCount({
+        address: account.address,
+        blockTag: "pending",
+      });
+
+      if (!account.signAuthorization) {
+        throw new Error(
+          "EvmWalletKit.signEip7702Authorization: signer cannot sign authorizations",
+        );
+      }
+      const auth = await account.signAuthorization({
+        chainId: chain.chain.id,
+        address: delegatorAddress,
+        nonce,
+      });
+
+      return {
+        address: delegatorAddress,
+        chainId: chain.chain.id,
+        nonce,
+        r: auth.r,
+        s: auth.s,
+        yParity: auth.yParity ?? 0,
+      };
     },
   };
 }

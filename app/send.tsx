@@ -19,6 +19,7 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   ScrollView,
@@ -44,8 +45,11 @@ import { useTokens } from "@/hooks/queries/useTokens";
 import { useCreateTransaction } from "@/hooks/queries/useTransactions";
 import { useAddressBook } from "@/hooks/useAddressBook";
 import { useNavigationReady } from "@/hooks/useNavigationReady";
+import { usePreferredGasToken } from "@/hooks/usePreferredGasToken";
 import { useWallet } from "@/hooks/useWallet";
 import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
+import { pollRelayerTaskHash } from "@/services/gasAbstraction/pollTaskStatus";
+import { resolveGasPayment } from "@/services/gasAbstraction/resolveGasPayment";
 import { classifySuiRecipient } from "@/utils/walletUtils";
 
 /**
@@ -70,6 +74,22 @@ function splitFormattedNative(formatted: string): {
     amount: trimmed.slice(0, lastSpace),
     symbol: trimmed.slice(lastSpace + 1),
   };
+}
+
+/**
+ * Formats a raw token amount (smallest units) into a trimmed decimal
+ * string — used to show the abstracted (USDC) gas fee on the success
+ * screen. Mirrors the manual token-balance formatting below; kept here so
+ * the screen stays namespace-agnostic (no viem `formatUnits` import path
+ * difference between native and token).
+ */
+function formatTokenAtoms(raw: bigint, decimals: number): string {
+  if (decimals <= 0) return raw.toString();
+  const divisor = 10n ** BigInt(decimals);
+  const whole = raw / divisor;
+  const frac = raw % divisor;
+  const fracStr = frac.toString().padStart(decimals, "0");
+  return `${whole.toString()}.${fracStr}`.replace(/\.?0+$/, "") || "0";
 }
 
 export default function SendScreen() {
@@ -99,6 +119,7 @@ export default function SendScreen() {
   const kitMatchesChain = kit.namespace === activeChain.namespace;
 
   const { isAuthenticated } = useIsAuthenticated();
+  const { preferredGasToken } = usePreferredGasToken();
   const { mutateAsync: createTransaction } = useCreateTransaction();
   const { data: blockchains } = useBlockchains();
   const activeBackendChain = React.useMemo(() => {
@@ -518,21 +539,86 @@ export default function SendScreen() {
       setTransactionStatus("Initializing wallet...");
 
       let hash: string;
+      // What the user paid network gas in — surfaced on the success
+      // screen. Symbol is always known; the amount is exact only on the
+      // abstracted (USDC) path, where the relayer locks the fee.
+      let gasFeeSymbol = nativeSymbol;
+      let gasFeeAmount = "";
       if (selectedToken && selectedToken.isNativeCurrency === false) {
         setTransactionStatus("Building transaction...");
         const decimals = selectedToken.decimals ?? 18;
         const tokenAmount = parseUnits(amount, decimals);
-        setTransactionStatus(
-          `Sending ${amount} ${selectedToken.symbol} to the network...`,
-        );
-        hash = await kit.sendTokenTransfer({
-          wallet: activeWallet,
+        const contractAddress = selectedToken.contractAddress!;
+
+        // Decide how gas is paid (USDC abstraction vs native) via the
+        // single gas-payment policy — the same seam the agent uses. No
+        // chain/provider branching here.
+        const intent = {
           to: recipient,
+          tokenAddress: contractAddress,
           amount: tokenAmount,
-          chain: activeChain,
-          contractAddress: selectedToken.contractAddress!,
           decimals,
+          memo: "takumipay-send",
+        };
+        const plan = await resolveGasPayment({
+          wallet: activeWallet,
+          chain: activeChain,
+          intent,
+          preferredGasToken,
         });
+
+        if (plan.mode === "blocked") {
+          // Prefer USDC, else block — never silently spend native gas.
+          setIsLoading(false);
+          Alert.alert(
+            "Not enough USDC",
+            "You don't have enough USDC to cover this transfer plus the network fee. Add USDC, or switch your gas token to native in Gas Settings.",
+          );
+          return;
+        }
+
+        if (plan.mode === "abstracted") {
+          try {
+            setTransactionStatus("Paying gas in USDC…");
+            const execResult = await plan.provider.execute({
+              wallet: activeWallet,
+              chain: activeChain,
+              intent,
+            });
+            // Show the exact, price-locked gas fee in its token (USDC).
+            const feeTokenInfo = execResult.feeToken ?? plan.quote.feeToken;
+            gasFeeSymbol = feeTokenInfo.symbol;
+            const feeAtoms = execResult.feeAmount ?? plan.quote.feeAmount;
+            gasFeeAmount = formatTokenAtoms(feeAtoms, feeTokenInfo.decimals);
+            setTransactionStatus("Relaying transaction…");
+            hash = await pollRelayerTaskHash(
+              plan.provider,
+              activeChain,
+              execResult.taskId,
+            );
+          } catch (relayErr) {
+            if (__DEV__) console.warn("Abstracted transfer failed:", relayErr);
+            setIsLoading(false);
+            Alert.alert(
+              "Transfer failed",
+              "We couldn't complete your gasless transfer. Please try again.",
+            );
+            return;
+          }
+        } else {
+          // Native gas path — unchanged.
+          setTransactionStatus(
+            `Sending ${amount} ${selectedToken.symbol} to the network...`,
+          );
+          hash = await kit.sendTokenTransfer({
+            wallet: activeWallet,
+            to: recipient,
+            amount: tokenAmount,
+            chain: activeChain,
+            contractAddress,
+            decimals,
+          });
+        }
       } else {
         // Native transfer — single path for every namespace.
         setTransactionStatus("Building transaction...");
@@ -616,6 +702,8 @@ export default function SendScreen() {
           txHash: hash,
           explorerUrl: kit.buildTxExplorerUrl?.(hash, activeChain) ?? "",
           chainBackendName: activeBackendChain?.name ?? "",
+          gasFeeSymbol,
+          gasFeeAmount,
         },
       });
     } catch (error: any) {

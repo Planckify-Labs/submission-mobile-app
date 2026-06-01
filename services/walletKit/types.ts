@@ -411,6 +411,168 @@ export interface EncodeDelegationsArgs {
   delegations: DelegationStruct[];
 }
 
+// ── 1Shot Relayer gas abstraction (spec Phase 3 §5.1) ──────────────────
+//
+// Namespace-agnostic shapes for the 1Shot public relayer. Deliberately
+// SDK-free and viem-free (this module runs under the Node test harness):
+// the EVM kit translates these into JSON-RPC payloads at the port
+// boundary in `services/walletKit/evm/relayer.ts`. Solana / Sui never see
+// them — the matching methods stay `undefined` on those kits.
+
+/** An ERC-20 token the relayer accepts as gas payment on a given chain. */
+export interface RelayerToken {
+  address: string;
+  symbol: string;
+  decimals: number;
+}
+
+/** Per-chain relayer capabilities resolved via `relayer_getCapabilities`. */
+export interface RelayerChainCapabilities {
+  /**
+   * The address the delegation must be granted **to** (the relayer's
+   * redemption account). SI-4: the delegation `delegate` MUST equal this.
+   */
+  targetAddress: string;
+  /** The address gas fees must be transferred to. */
+  feeCollector: string;
+  tokens: RelayerToken[];
+}
+
+/** Map of viem `chainId` → capabilities. */
+export interface RelayerCapabilities {
+  [chainId: number]: RelayerChainCapabilities;
+}
+
+export interface GetRelayerFeeDataArgs {
+  chain: ChainConfig;
+  /** Contract address of the stablecoin used to pay gas. */
+  token: string;
+}
+
+export interface RelayerFeeData {
+  /** Native gas price in wei. */
+  gasPrice: bigint;
+  /**
+   * Native-token price expressed in the payment token's whole units
+   * (e.g. `2000` ≈ 2000 USDC per 1 ETH). Combine with `gasPrice`,
+   * `tokenDecimals`, and `1e18` to derive a payment-token-atoms fee — see
+   * `computeRoughFee`. NOT a direct wei→atoms multiplier.
+   */
+  rate: number;
+  /** Floor fee in payment-token **atoms** (≈ 0.01 in the token). */
+  minFee: bigint;
+  /** Payment token decimals — needed to scale `rate` into atoms. */
+  tokenDecimals: number;
+  /** Quote validity — UNIX seconds; treat anything past as stale. */
+  expiry: number;
+  /** Signed price-lock quote. */
+  context: string;
+}
+
+/**
+ * A single execution leg the relayer redeems on the user's behalf.
+ *
+ * Wire field is `target` (not `to`) per the live 1Shot API
+ * (`schemas.md#Execution7710`). `value` is native wei; the kit serializes
+ * it to a `0x`-hex quantity at the JSON-RPC boundary.
+ */
+export interface RelayerExecution {
+  target: string;
+  value: bigint;
+  data: string;
+}
+
+/**
+ * One bundle entry: a signed delegation chain plus the executions the
+ * relayer runs under it. `permissionContext` is length-1 for a direct
+ * delegation; sponsor + delegator flows pass two bundle entries. Each
+ * entry's `permissionContext` carries the *structured* signed
+ * `DelegationStruct[]` — NOT the single `encodeDelegations` hex (that
+ * encoding is for a different, on-chain redeemer, not this relayer API).
+ */
+export interface RelayerBundleEntry {
+  permissionContext: DelegationStruct[];
+  executions: RelayerExecution[];
+}
+
+/**
+ * One EIP-7702 authorization-list entry (`schemas.md#AuthorizationListEntry`).
+ * At most one is allowed per relayer request. Produced by
+ * `WalletKitAdapter.signEip7702Authorization`.
+ */
+export interface RelayerAuthorizationEntry {
+  address: string;
+  chainId: number;
+  nonce: number;
+  r: string;
+  s: string;
+  yParity: number;
+}
+
+export interface Estimate7710TransactionArgs {
+  chain: ChainConfig;
+  transactions: RelayerBundleEntry[];
+  /** ≤1 entry; for an in-flight EIP-7702 upgrade combined with the send. */
+  authorizationList?: RelayerAuthorizationEntry[];
+}
+
+export interface Estimate7710TransactionResult {
+  success: boolean;
+  /** Fee to pay in the payment token's atoms, floored at `minFee`. */
+  requiredPaymentAmount?: bigint;
+  /** First parsed payment token (the mock-fee execution's token). */
+  paymentTokenAddress?: string;
+  /** Map of chainId (string) → summed gas units (decimal strings). */
+  gasUsed?: Record<string, string>;
+  /** Signed price-lock context to pass as `send7710Transaction.context`. */
+  context?: string;
+  /** Populated when `success === false`. Friendly to the caller, never raw. */
+  error?: string;
+}
+
+export interface Send7710TransactionArgs {
+  chain: ChainConfig;
+  transactions: RelayerBundleEntry[];
+  /** Signed price-lock `context` returned from `estimate7710Transaction`. */
+  context: string;
+  /** ≤1 entry; for an in-flight EIP-7702 upgrade combined with the send. */
+  authorizationList?: RelayerAuthorizationEntry[];
+  /** Optional webhook destination for signed status events (≤256 chars). */
+  destinationUrl?: string;
+  /** Optional opaque client correlation label (≤256 chars). */
+  memo?: string;
+}
+
+export interface Send7710TransactionResult {
+  /** 0x + 64 hex chars. */
+  taskId: string;
+}
+
+export interface GetRelayerStatusArgs {
+  chain: ChainConfig;
+  taskId: string;
+}
+
+/**
+ * Normalised task status. `status` is the friendly label; `statusCode`
+ * is the raw relayer code (`100` Pending, `110` Submitted, `200`
+ * Confirmed, `400` Rejected, `500` Reverted) so callers can distinguish
+ * terminal failure modes without re-deriving them.
+ */
+export interface RelayerStatus {
+  status: "pending" | "submitted" | "success" | "failed";
+  statusCode: number;
+  /** Present once the task lands on-chain (Submitted / Confirmed). */
+  transactionHash?: string;
+  /** Echoed back when `memo` was set on submit. */
+  memo?: string;
+}
+
+export interface SignEip7702AuthorizationArgs {
+  wallet: TWallet;
+  chain: ChainConfig;
+}
+
 export interface WalletKitAdapter {
   readonly namespace: Namespace;
 
@@ -548,6 +710,63 @@ export interface WalletKitAdapter {
    * EVM-only; Solana / Sui leave this `undefined`.
    */
   encodeDelegations?(args: EncodeDelegationsArgs): Promise<string>;
+
+  // ── 1Shot Relayer gas abstraction (spec Phase 3 §5.2) ───────────────
+  //
+  // Gasless execution rail. The relayer redeems a signed ERC-7710
+  // delegation on-chain and charges gas in a stablecoin (USDC) instead
+  // of native ETH. EVM-only; Solana / Sui leave every method `undefined`
+  // so shared UI / agent loops dispatch via presence-of-method rather
+  // than branching on namespace (G6 / G7, chain-extension discipline).
+
+  /**
+   * Discovers supported chains, accepted payment tokens, the relayer's
+   * redemption `targetAddress` (the delegation `delegate`, SI-4) and the
+   * `feeCollector` for the active chain. Cache per session.
+   */
+  getRelayerCapabilities?(args: {
+    chain: ChainConfig;
+  }): Promise<RelayerCapabilities>;
+
+  /**
+   * Rough gas-fee quote + price-lock context **before** the bundle is
+   * built — for pre-sign UI fee display. Prefer `estimate7710Transaction`
+   * once the signed bundle exists.
+   */
+  getRelayerFeeData?(args: GetRelayerFeeDataArgs): Promise<RelayerFeeData>;
+
+  /**
+   * Validates the delegation, runs a gas simulation, and locks a price
+   * quote for a signed bundle. Returns `{ success: false, error }` on
+   * validation / simulation failure rather than throwing (G5 loop).
+   */
+  estimate7710Transaction?(
+    args: Estimate7710TransactionArgs,
+  ): Promise<Estimate7710TransactionResult>;
+
+  /**
+   * Submits the delegation-authorized execution bundle to the relayer
+   * with the price-lock `feeContext` from estimate. Returns a `taskId`
+   * for async status tracking.
+   */
+  send7710Transaction?(
+    args: Send7710TransactionArgs,
+  ): Promise<Send7710TransactionResult>;
+
+  /** Queries the execution status of a submitted relayer task. */
+  getRelayerTransactionStatus?(
+    args: GetRelayerStatusArgs,
+  ): Promise<RelayerStatus>;
+
+  /**
+   * Signs a single EIP-7702 `authorizationList` entry so an un-upgraded
+   * EOA can be upgraded to the stateless-7702 delegator *in the same*
+   * relayer request as its first sponsored send. Reuses the allowlist /
+   * bytecode guards from the standalone upgrade path. EVM-only.
+   */
+  signEip7702Authorization?(
+    args: SignEip7702AuthorizationArgs,
+  ): Promise<RelayerAuthorizationEntry>;
 
   /**
    * Signs an x402 SVM-scheme versioned Solana transaction pre-built by
