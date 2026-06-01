@@ -250,9 +250,7 @@ export default function OpportunityDetail() {
               />
               <MetricRow
                 label="Risk score (0–100, higher is safer)"
-                value={
-                  opportunity ? `${Math.round(opportunity.score)}` : "—"
-                }
+                value={opportunity ? `${Math.round(opportunity.score)}` : "—"}
                 showDivider
               />
             </View>

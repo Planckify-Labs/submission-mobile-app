@@ -13,7 +13,14 @@
  * entry and throws on mismatch.
  */
 
-import { erc20Abi, formatUnits, isAddress, parseUnits } from "viem";
+import { getSmartAccountsEnvironment } from "@metamask/smart-accounts-kit";
+import {
+  erc20Abi,
+  formatUnits,
+  isAddress,
+  parseUnits,
+  zeroAddress,
+} from "viem";
 import type { ChainConfig } from "../../../constants/configs/chainConfig.ts";
 import type { TWallet } from "../../../constants/types/walletTypes.ts";
 import { getPublicClient, getWalletClient } from "../../../utils/clients.ts";
@@ -24,6 +31,10 @@ import {
   isValidPrivateKey,
   truncateAddress as truncateAddressUtil,
 } from "../../../utils/walletUtils.ts";
+import {
+  decideAuthorizationByAddress,
+  decideAuthorizationByBytecode,
+} from "../../chains/evm/eip7702Guard.ts";
 import {
   generateWalletMnemonic,
   getAccountForWallet,
@@ -39,6 +50,8 @@ import type {
   SignTransferWithAuthorizationArgs,
   TokenTransferArgs,
   TruncateAddressOptions,
+  UpgradeToSmartAccountArgs,
+  UpgradeToSmartAccountResult,
   WalletKitAdapter,
 } from "../types.ts";
 import { sendUserOpWithUsdcPaymaster as sendUserOpWithUsdcPaymasterPure } from "./sendUserOpWithUsdcPaymaster.ts";
@@ -295,6 +308,80 @@ export function createEvmWalletKit(): WalletKitAdapter {
         startLength: opts?.start,
         endLength: opts?.end,
       });
+    },
+
+    async upgradeToSmartAccount({
+      wallet,
+      chain,
+    }: UpgradeToSmartAccountArgs): Promise<UpgradeToSmartAccountResult> {
+      assertEvm(chain);
+      const account = getAccountForWallet(wallet);
+      if (!account) {
+        throw new Error("EvmWalletKit: unable to reconstruct signer");
+      }
+
+      const publicClient = getPublicClient(chain.chain);
+      const walletClient = getWalletClient(account, chain.chain);
+
+      // 1. Resolve MetaMask delegator contract address
+      let delegatorAddress =
+        "0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B" as `0x${string}`;
+      try {
+        const environment = getSmartAccountsEnvironment(chain.chain.id);
+        if (environment?.implementations?.EIP7702StatelessDeleGatorImpl) {
+          delegatorAddress = environment.implementations
+            .EIP7702StatelessDeleGatorImpl as `0x${string}`;
+        }
+      } catch {
+        // Fallback to the canonical address if environment is not found or throws
+      }
+      // 2. Security Invariants checks (SI-1 & SI-2)
+      const addressDecision = decideAuthorizationByAddress(delegatorAddress);
+      if (!addressDecision.ok) {
+        throw new Error(addressDecision.message);
+      }
+
+      const bytecode = await publicClient.getCode({
+        address: delegatorAddress,
+      });
+      const bytecodeDecision = decideAuthorizationByBytecode(bytecode);
+      if (!bytecodeDecision.ok) {
+        throw new Error(bytecodeDecision.message);
+      }
+
+      // 3. Sign Authorization tuple for self-execution (nonce automatically resolved by viem with executor: 'self')
+      const authorization = await walletClient.signAuthorization({
+        account,
+        contractAddress: delegatorAddress,
+        executor: "self",
+      });
+
+      // 4. Submit EIP-7702 Transaction targeting the EOA itself to activate delegation
+      const hash = await walletClient.sendTransaction({
+        authorizationList: [authorization],
+        data: "0x",
+        to: account.address,
+      });
+
+      return {
+        transactionHash: hash,
+        smartAccountAddress: wallet.address,
+      };
+    },
+
+    async isSmartAccountActive(
+      wallet: TWallet,
+      chain: ChainConfig,
+    ): Promise<boolean> {
+      assertEvm(chain);
+      const pc = getPublicClient(chain.chain);
+      const code = await pc.getCode({
+        address: wallet.address as `0x${string}`,
+      });
+      if (!code || code === "0x") return false;
+
+      // EIP-7702 upgraded code starts with 0xef0100 (delegation designator prefix)
+      return code.startsWith("0xef0100");
     },
   };
 }

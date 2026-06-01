@@ -24,12 +24,17 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import * as smartAccountsKit from "@metamask/smart-accounts-kit";
 import { formatUnits, isAddress, parseUnits } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
-
 import type { ChainConfig } from "../../../constants/configs/chainConfig.ts";
+import * as clients from "../../../utils/clients.ts";
 import { truncateAddress as truncateAddressUtil } from "../../../utils/walletUtils.ts";
 import { createEvmWalletKit } from "./EvmWalletKit.ts";
+
+const setGlobalMockPublicClient = (clients as any).setGlobalMockPublicClient;
+const setGlobalMockWalletClient = (clients as any).setGlobalMockWalletClient;
 
 const ethereumChain: ChainConfig = {
   namespace: "eip155",
@@ -204,11 +209,133 @@ describe("EvmWalletKit network methods — namespace guard", () => {
       /EvmWalletKit: expected eip155 chain/,
     );
   });
+});
 
-  // TODO(Task 05): live-wire a mocked public/wallet client to exercise
-  // the EVM happy paths for getNativeBalance / sendNativeTransfer /
-  // estimateMaxTransferable without hitting mainnet. Left as a TODO
-  // because the real viem clients are instantiated inside
-  // `utils/clients.ts` (no DI seam), and Task 05 is explicitly
-  // *relocation only* — no refactor of that seam permitted here.
+describe("EvmWalletKit.upgradeToSmartAccount & isSmartAccountActive", () => {
+  const kit = createEvmWalletKit();
+  const key = generatePrivateKey();
+  const mockAccount = privateKeyToAccount(key);
+  const wallet = {
+    address: mockAccount.address,
+    namespace: "eip155",
+    type: "PrivateKey",
+    privateKey: key,
+  } as any;
+
+  it("upgradeToSmartAccount rejects non-eip155 chains", async () => {
+    await assert.rejects(
+      () => kit.upgradeToSmartAccount!({ wallet, chain: solanaChain }),
+      /EvmWalletKit: expected eip155 chain/,
+    );
+  });
+
+  it("isSmartAccountActive returns false for EOA and true for active smart account", async () => {
+    // 1. Mock public client to return empty bytecode (EOA)
+    const mockPublicClient = {
+      getCode: async () => "0x",
+    };
+    setGlobalMockPublicClient(mockPublicClient);
+
+    const activeBefore = await kit.isSmartAccountActive!(wallet, ethereumChain);
+    assert.equal(activeBefore, false);
+
+    // 2. Mock public client to return upgraded contract bytecode (prefix 0xef0100)
+    const mockPublicClientActive = {
+      getCode: async () => "0xef0100abcdef",
+    };
+    setGlobalMockPublicClient(mockPublicClientActive);
+
+    const activeAfter = await kit.isSmartAccountActive!(wallet, ethereumChain);
+    assert.equal(activeAfter, true);
+
+    setGlobalMockPublicClient(null);
+  });
+
+  it("upgradeToSmartAccount executes EIP-7702 upgrade flow adhering to security allowlist and bytecode sniffing", async () => {
+    const mockPublicClient = {
+      getCode: async () => "0x",
+      waitForTransactionReceipt: async () => ({ status: "success" }),
+      getTransactionCount: async () => 0,
+    };
+
+    let signedAuthorizationArgs: any = null;
+    let sentTransactionArgs: any = null;
+
+    const mockWalletClient = {
+      signAuthorization: async (args: any) => {
+        signedAuthorizationArgs = args;
+        return {
+          contractAddress: args.contractAddress,
+          chainId: 1,
+          nonce: 0,
+          yParity: 0,
+          r: "0x",
+          s: "0x",
+        };
+      },
+      sendTransaction: async (args: any) => {
+        sentTransactionArgs = args;
+        return "0xmocktxhash";
+      },
+    };
+
+    setGlobalMockPublicClient(mockPublicClient);
+    setGlobalMockWalletClient(mockWalletClient);
+
+    const res = await kit.upgradeToSmartAccount!({
+      wallet,
+      chain: ethereumChain,
+    });
+
+    assert.equal(res.transactionHash, "0xmocktxhash");
+    assert.equal(res.smartAccountAddress, wallet.address);
+
+    // Assert correct delegator address and self executor used
+    assert.equal(
+      signedAuthorizationArgs.contractAddress,
+      "0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B",
+    );
+    assert.equal(signedAuthorizationArgs.executor, "self");
+
+    // Assert transaction submission format
+    assert.equal(sentTransactionArgs.authorizationList.length, 1);
+    assert.equal(sentTransactionArgs.to, wallet.address);
+
+    // Clean up
+    setGlobalMockPublicClient(null);
+    setGlobalMockWalletClient(null);
+  });
+
+  it("upgradeToSmartAccount rejects delegator address not on allowlist (SI-1)", async () => {
+    // Mock getSmartAccountsEnvironment to return a non-allowlisted delegator address
+    (smartAccountsKit as any).setMockEnvironment({
+      implementations: {
+        EIP7702StatelessDeleGatorImpl:
+          "0x1234567890abcdef1234567890abcdef12345678",
+      },
+    });
+
+    await assert.rejects(
+      () => kit.upgradeToSmartAccount!({ wallet, chain: ethereumChain }),
+      /delegator not on EIP-7702 allowlist/,
+    );
+
+    (smartAccountsKit as any).setMockEnvironment(null);
+  });
+
+  it("upgradeToSmartAccount rejects delegator bytecode containing SELFDESTRUCT (SI-2)", async () => {
+    // Mock public client to return bytecode containing SELFDESTRUCT
+    const mockPublicClient = {
+      getCode: async () => "0x6080604052ff5b",
+      waitForTransactionReceipt: async () => ({ status: "success" }),
+    };
+    setGlobalMockPublicClient(mockPublicClient);
+
+    await assert.rejects(
+      () => kit.upgradeToSmartAccount!({ wallet, chain: ethereumChain }),
+      /delegator bytecode contains SELFDESTRUCT in prologue/,
+    );
+
+    setGlobalMockPublicClient(null);
+  });
 });

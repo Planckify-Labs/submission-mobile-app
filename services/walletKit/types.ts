@@ -217,6 +217,16 @@ export interface SendUserOpResult {
   userOpHash: `0x${string}`;
 }
 
+export interface UpgradeToSmartAccountArgs {
+  wallet: TWallet;
+  chain: ChainConfig;
+}
+
+export interface UpgradeToSmartAccountResult {
+  transactionHash: string;
+  smartAccountAddress: string;
+}
+
 /**
  * Arguments for `WalletKitAdapter.sendNativeTransfer`.
  *
@@ -406,6 +416,19 @@ export interface WalletKitAdapter {
   sendUserOpWithUsdcPaymaster?(
     args: SendUserOpWithUsdcPaymasterArgs,
   ): Promise<SendUserOpResult>;
+
+  /**
+   * Optional EIP-7702 upgrade capability. Upgrades an EOA to a smart contract account.
+   * EVM-only; Solana/Sui kits leave this undefined.
+   */
+  upgradeToSmartAccount?(
+    args: UpgradeToSmartAccountArgs,
+  ): Promise<UpgradeToSmartAccountResult>;
+
+  /**
+   * Optional check to verify if a wallet is already upgraded/active as a smart account.
+   */
+  isSmartAccountActive?(wallet: TWallet, chain: ChainConfig): Promise<boolean>;
 
   /**
    * Signs an x402 SVM-scheme versioned Solana transaction pre-built by

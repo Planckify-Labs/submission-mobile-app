@@ -34,6 +34,20 @@ const STUB_SOURCES = {
       delete: () => {},
     };
   `,
+  "@metamask/smart-accounts-kit": `
+    let mockEnvironment = null;
+    export function setMockEnvironment(env) {
+      mockEnvironment = env;
+    }
+    export function getSmartAccountsEnvironment(chainId) {
+      if (mockEnvironment) return mockEnvironment;
+      return {
+        implementations: {
+          EIP7702StatelessDeleGatorImpl: "0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B"
+        }
+      };
+    }
+  `,
 };
 
 function stubUrl(src) {
@@ -68,6 +82,14 @@ export async function resolve(specifier, context, nextResolve) {
     return {
       shortCircuit: true,
       url: stubUrl(STUB_SOURCES["mmkv-storage"]),
+      format: "module",
+    };
+  }
+  // Stub @metamask/smart-accounts-kit.
+  if (specifier === "@metamask/smart-accounts-kit") {
+    return {
+      shortCircuit: true,
+      url: stubUrl(STUB_SOURCES["@metamask/smart-accounts-kit"]),
       format: "module",
     };
   }
@@ -115,8 +137,8 @@ const SOURCE_REWRITES = {
       /^import\s*\{\s*TWallet\s*,\s*TWalletCreationParams\s*\}\s*from\s*"@\/constants\/types\/walletTypes";/m,
       `import type { TWallet, TWalletCreationParams } from "@/constants/types/walletTypes";`,
     ),
-  "utils/clients.ts": (src) =>
-    src.replace(
+  "utils/clients.ts": (src) => {
+    let rewritten = src.replace(
       /^import\s*\{\s*([\s\S]*?)\s*\}\s*from\s*"viem";/m,
       (_match, inner) => {
         // viem's `Account` / `Chain` are types; the rest (createPublicClient,
@@ -137,7 +159,33 @@ const SOURCE_REWRITES = {
         }
         return lines.join("\n");
       },
-    ),
+    );
+
+    // Inject mock variables and setters dynamically in memory for testing
+    rewritten =
+      `
+      let globalMockPublicClient = null;
+      let globalMockWalletClient = null;
+      export const setGlobalMockPublicClient = (client) => {
+        globalMockPublicClient = client;
+      };
+      export const setGlobalMockWalletClient = (client) => {
+        globalMockWalletClient = client;
+      };
+    ` + rewritten;
+
+    // Inject override checks at the start of getPublicClient and getWalletClient
+    rewritten = rewritten.replace(
+      /export const getPublicClient = \(chain: TChainConfig\) => \{/,
+      "export const getPublicClient = (chain: TChainConfig) => { if (globalMockPublicClient) return globalMockPublicClient;",
+    );
+    rewritten = rewritten.replace(
+      /export const getWalletClient = \(account: Account, chain: TChainConfig\) => \{/,
+      "export const getWalletClient = (account: Account, chain: TChainConfig) => { if (globalMockWalletClient) return globalMockWalletClient;",
+    );
+
+    return rewritten;
+  },
   "services/walletService.ts": (src) =>
     src.replace(
       /^import\s*\{\s*TWallet\s*\}\s*from\s*"@\/constants\/types\/walletTypes";/m,

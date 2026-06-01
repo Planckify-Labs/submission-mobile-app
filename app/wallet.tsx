@@ -127,6 +127,9 @@ export default function Wallet() {
       queryClient.invalidateQueries({
         queryKey: ["wallet-card-native-balance"],
       }),
+      queryClient.invalidateQueries({
+        queryKey: ["wallet-smart-account-active"],
+      }),
     ]);
     setRefreshing(false);
   }, [loadWallets, queryClient]);

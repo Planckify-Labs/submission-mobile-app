@@ -1,16 +1,26 @@
-import { useQuery } from "@tanstack/react-query";
-import { Coins, KeyRound, Shield } from "lucide-react-native";
-import React, { lazy, Suspense, useCallback, useMemo } from "react";
-import { ActivityIndicator, Animated, Text, View } from "react-native";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Coins, KeyRound, Shield, Sparkles } from "lucide-react-native";
+import React, { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import Chip from "@/components/common/Chip";
+import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
+import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import { usePerformance } from "@/components/providers/PerformanceProvider";
 import AddressDisplay from "@/components/wallet/AddressDisplay";
+import UpgradeConfirmationSheet from "@/components/wallet/UpgradeConfirmationSheet";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import { chainCacheKey } from "@/hooks/useWallet.helpers";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import { authenticateUser } from "@/utils/authUtils";
 import { copyToClipboard } from "@/utils/helperUtils";
+import { storage } from "@/lib/storage/mmkv";
 
 const LazyWalletInfoDisplay = lazy(
   () => import("@/components/wallet/WalletInfoDisplay"),
@@ -80,6 +90,85 @@ export default function WalletDetails({
       ? activeChain
       : null;
 
+  const queryClient = useQueryClient();
+  const [showUpgradeSheet, setShowUpgradeSheet] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState("");
+
+  const pendingKey = useMemo(() => {
+    return chainForWallet && chainForWallet.namespace === "eip155"
+      ? `eip7702-upgrade-pending:${wallet.address}:${chainForWallet.chain.id}`
+      : "";
+  }, [wallet.address, chainForWallet]);
+
+  const [isUpgradePendingConfirmation, setIsUpgradePendingConfirmation] =
+    useState(() => {
+      return pendingKey ? storage.getBoolean(pendingKey) || false : false;
+    });
+
+  const { data: isSmartAccountActive } = useQuery({
+    queryKey: [
+      "wallet-smart-account-active",
+      wallet?.address,
+      wallet?.namespace,
+      chainCacheKey(activeChain),
+    ],
+    queryFn: async () => {
+      if (!kit || !kit.isSmartAccountActive || !wallet || !chainForWallet)
+        return false;
+      const isActive = await kit.isSmartAccountActive(wallet, chainForWallet);
+      if (isActive && pendingKey) {
+        storage.remove(pendingKey);
+        setIsUpgradePendingConfirmation(false);
+      }
+      return isActive;
+    },
+    enabled:
+      !!kit &&
+      !!wallet &&
+      !!chainForWallet &&
+      typeof kit.isSmartAccountActive === "function",
+  });
+
+  const handleUpgradeConfirm = () => {
+    setShowUpgradeSheet(false);
+    setShowPinModal(true);
+  };
+
+  const handlePinConfirm = async (pin: string) => {
+    setShowPinModal(false);
+    setIsUpgrading(true);
+    setUpgradeError("");
+
+    try {
+      if (!kit || !kit.upgradeToSmartAccount || !chainForWallet) {
+        throw new Error("Smart account upgrade not supported on this chain.");
+      }
+
+      await kit.upgradeToSmartAccount({
+        wallet,
+        chain: chainForWallet,
+      });
+
+      // 1. Mark as pending confirmation in MMKV and update state
+      if (pendingKey) {
+        storage.set(pendingKey, true);
+        setIsUpgradePendingConfirmation(true);
+      }
+
+      // 2. Refetch the query to update badge status in background
+      await queryClient.invalidateQueries({
+        queryKey: ["wallet-smart-account-active"],
+      });
+    } catch (err: any) {
+      console.error("Smart Account Upgrade error:", err);
+      setUpgradeError(err.message || "Failed to upgrade wallet.");
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
+
   const { data: balance } = useQuery({
     queryKey: [
       "wallet-details-native-balance",
@@ -148,7 +237,17 @@ export default function WalletDetails({
               </Text>
             </View>
           </View>
-          <Chip label={wallet.source} size="small" />
+          <View className="flex-row items-center gap-2">
+            {isSmartAccountActive && (
+              <Chip
+                label="Smart Account"
+                size="small"
+                color="#0f9f6e"
+                backgroundColor="rgba(15, 159, 110, 0.1)"
+              />
+            )}
+            <Chip label={wallet.source} size="small" />
+          </View>
         </View>
       </View>
 
@@ -191,6 +290,55 @@ export default function WalletDetails({
             onCopy={copyToClipboard}
           />
         </Suspense>
+
+        {upgradeError ? (
+          <View className="bg-light-primary-red/10 p-3 rounded-2xl mb-4">
+            <Text className="text-light-primary-red text-xs font-semibold">
+              Upgrade Failed: {upgradeError}
+            </Text>
+          </View>
+        ) : null}
+
+        {typeof kit?.upgradeToSmartAccount === "function" &&
+          isSmartAccountActive === false && (
+            isUpgradePendingConfirmation ? (
+              <View className="bg-light-matte-black/[0.03] border border-light-matte-black/10 rounded-2xl p-4 mb-4 flex-row items-center justify-between">
+                <View className="flex-1">
+                  <View className="flex-row items-center mb-1">
+                    <ActivityIndicator size="small" color="#c71c4b" />
+                    <Text className="text-light-matte-black font-semibold text-sm ml-2">
+                      Upgrade Pending Confirmation
+                    </Text>
+                  </View>
+                  <Text className="text-light-matte-black/50 text-xs leading-4 mt-1">
+                    Your smart account upgrade is processing. Waiting for block confirmation... Pull to refresh to check status.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View className="bg-light-primary-red/5 border border-light-primary-red/10 rounded-2xl p-4 mb-4 flex-row items-center justify-between">
+                <View className="flex-1 mr-3">
+                  <View className="flex-row items-center mb-1">
+                    <Sparkles size={14} color="#c71c4b" />
+                    <Text className="text-light-matte-black font-semibold text-sm ml-1">
+                      Smart Account Upgrade Available
+                    </Text>
+                  </View>
+                  <Text className="text-light-matte-black/50 text-xs leading-4">
+                    Unlock gasless payments, atomic batching, and secure AI agent
+                    micropayments.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  className="bg-light-primary-red py-2 px-4 rounded-full"
+                  onPress={() => setShowUpgradeSheet(true)}
+                >
+                  <Text className="text-white font-bold text-xs">Upgrade</Text>
+                </TouchableOpacity>
+              </View>
+            )
+          )}
       </View>
 
       {wallet.type !== "Social" && (
@@ -206,6 +354,25 @@ export default function WalletDetails({
           </View>
         </View>
       )}
+
+      <UpgradeConfirmationSheet
+        visible={showUpgradeSheet}
+        onClose={() => setShowUpgradeSheet(false)}
+        onConfirm={handleUpgradeConfirm}
+      />
+
+      <PinConfirmationModal
+        visible={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onConfirm={handlePinConfirm}
+        title="Upgrade Confirmation"
+      />
+
+      <LoadinngSpinnerPopup
+        visible={isUpgrading}
+        title="Upgrading Account"
+        message="Executing secure EIP-7702 upgrade transaction. Please wait for on-chain block confirmation (this may take up to a minute)..."
+      />
     </Animated.View>
   );
 }

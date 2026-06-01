@@ -26,6 +26,7 @@ export const ZERO_ADDRESS =
 // All addresses are normalized to lowercase.
 const COMPILED_IN_DELEGATORS: ReadonlyArray<string> = [
   ZERO_ADDRESS, // revoke is always allowed
+  "0x63c0c19a282a1b52b07dd5a65b58948a07dae32b", // MetaMask deterministic Smart Account delegator
 ];
 
 function parseAllowlistEnv(raw: string | undefined): string[] {
@@ -85,17 +86,29 @@ export function decideAuthorizationByBytecode(
   bytecode: `0x${string}` | null | undefined,
 ): Eip7702Decision {
   if (!bytecode || bytecode === "0x") return { ok: true };
-  // Strip 0x, take first 1024 hex chars (512 bytes).
-  const hex = bytecode.slice(2, 2 + 1024).toLowerCase();
-  // Scan for opcode 0xff = SELFDESTRUCT.
-  for (let i = 0; i + 1 < hex.length; i += 2) {
-    const byte = hex.slice(i, i + 2);
-    if (byte === "ff") {
+
+  const hex = bytecode.slice(2);
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+
+  const scanLimit = Math.min(bytes.length, 512);
+  let pc = 0;
+  while (pc < scanLimit) {
+    const opcode = bytes[pc];
+    if (opcode === 0xff) {
       return {
         ok: false,
         code: "selfdestruct",
         message: "delegator bytecode contains SELFDESTRUCT in prologue",
       };
+    }
+    if (opcode >= 0x60 && opcode <= 0x7f) {
+      const pushSize = opcode - 0x60 + 1;
+      pc += 1 + pushSize;
+    } else {
+      pc += 1;
     }
   }
   return { ok: true };
