@@ -37,6 +37,7 @@ import {
   SOLANA_TAKUMI_PAY_EXECUTORS,
   SUI_EXECUTORS,
   WRITE_EXECUTORS,
+  X402_EXECUTORS,
 } from "./wallet";
 
 const WALLET_EXECUTORS = composeAgentExecutors("wallet", {
@@ -48,6 +49,7 @@ const WALLET_EXECUTORS = composeAgentExecutors("wallet", {
   ...SOLANA_EXECUTORS,
   ...SOLANA_TAKUMI_PAY_EXECUTORS,
   ...SUI_EXECUTORS,
+  ...X402_EXECUTORS,
 });
 
 const DEFI_EXECUTORS = composeAgentExecutors("defi", {
@@ -139,6 +141,8 @@ export const EXPECTED_MOBILE_TOOLS: ReadonlyArray<string> = [
   "defi_rebalance",
   "defi_cross_chain_deposit",
   "defi_compound",
+  // agent-initiated x402 micropayments (spec Phase 5 §5.5)
+  "x402_fetch",
 ];
 
 /**

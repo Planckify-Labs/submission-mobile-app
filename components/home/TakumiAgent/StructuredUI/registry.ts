@@ -8,6 +8,7 @@ import SolanaPendingTxCard from "./cards/SolanaPendingTxCard";
 import SpendingApprovalCard from "./cards/SpendingApprovalCard";
 import SuiPendingTxCard from "./cards/SuiPendingTxCard";
 import SwapQuoteCard from "./cards/SwapQuoteCard";
+import X402FetchCard from "./cards/X402FetchCard";
 import type { ToolComponent } from "./types";
 
 /**
@@ -65,4 +66,5 @@ export const toolComponents: Record<string, ToolComponent<any, any>> = {
   defi_withdraw: PendingTxCard,
   defi_claim: PendingTxCard,
   defi_rebalance: RebalancePreviewCard,
+  x402_fetch: X402FetchCard,
 };

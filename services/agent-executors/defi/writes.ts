@@ -26,9 +26,11 @@ import {
   classifyDefiError,
   DefiError,
 } from "@/services/defi/errors/defiErrors";
+import { readPosition } from "@/services/defi/positions/reader";
 import { getDefiAdapter, listDefiAdapters } from "@/services/defi/registry";
 import { getDefaultTokens } from "@/services/tokens/tokenList";
 import { resolveChainClients } from "../chainRouter";
+import { submitEvmCall } from "./submitTx";
 import {
   ExecutorError,
   ExecutorErrorCode,
@@ -413,40 +415,63 @@ export const deposit: MobileToolExecutor = (input, context) =>
         }
       }
 
-      // 2. Submit the protocol call.
-      let hash: `0x${string}`;
-      try {
-        if (__DEV__) {
-          console.warn("[defi/deposit] submitting protocol tx", {
-            to: unsignedCall.to,
-            dataLen: unsignedCall.data?.length,
-            value: (unsignedCall.value ?? 0n).toString(),
-            account: walletClient.account.address,
-            chainId: walletClient.chain?.id,
-          });
-        }
-        hash = await walletClient.sendTransaction({
+      // 2. Submit the protocol call (phantom-failure-safe — see
+      //    submitTx.ts). A broadcast error is never silently treated as
+      //    "didn't happen": funds could have moved.
+      if (__DEV__) {
+        console.warn("[defi/deposit] submitting protocol tx", {
           to: unsignedCall.to,
-          data: unsignedCall.data,
-          value: unsignedCall.value ?? 0n,
-          account: walletClient.account,
-          chain: walletClient.chain,
+          dataLen: unsignedCall.data?.length,
+          value: (unsignedCall.value ?? 0n).toString(),
+          account: walletClient.account.address,
+          chainId: walletClient.chain?.id,
         });
+      }
+      const submit = await submitEvmCall(walletClient, publicClient, {
+        to: unsignedCall.to,
+        data: unsignedCall.data,
+        value: unsignedCall.value ?? 0n,
+      });
+
+      if (submit.kind === "not_broadcast") {
         if (__DEV__) {
-          console.warn("[defi/deposit] protocol tx submitted", { hash });
-        }
-      } catch (err) {
-        const classified = classifyDefiError(err);
-        if (__DEV__) {
-          console.error("[defi/deposit] sendTransaction failed", {
-            classified,
+          console.warn("[defi/deposit] not broadcast — no deposit made", {
             to: unsignedCall.to,
-            error: err,
           });
         }
-        throw new DefiError(
-          classified === "unknown" ? "deposit_failed" : classified,
-        );
+        throw new DefiError("deposit_failed");
+      }
+      if (submit.kind === "mined" && !submit.success) {
+        if (__DEV__) {
+          console.warn("[defi/deposit] reverted on-chain", {
+            hash: submit.hash,
+          });
+        }
+        throw new DefiError("deposit_failed");
+      }
+      if (submit.kind === "unconfirmed") {
+        // May have landed — don't record a position we can't verify, and
+        // don't claim success. Surface the hash for reconciliation.
+        if (__DEV__) {
+          console.warn("[defi/deposit] submission_unconfirmed", {
+            hash: submit.hash,
+          });
+        }
+        return {
+          status: "failed" as const,
+          tx_hash: submit.hash,
+          error: "submission_unconfirmed",
+          data: {
+            protocol_slug: protocolSlug,
+            chain_id: chainId,
+            amount_raw: amountRaw.toString(),
+          },
+        };
+      }
+
+      const hash = submit.hash;
+      if (__DEV__) {
+        console.warn("[defi/deposit] protocol tx submitted", { hash });
       }
 
       // 3. USD value snapshot for `StrategyPosition.amountAtDepositUsd`.
@@ -676,6 +701,41 @@ export const withdraw: MobileToolExecutor = (input, context) =>
         throw new DefiError("wallet_cannot_execute");
       }
 
+      // Pre-flight the on-chain balance. A MAX withdraw against a
+      // position with no live balance (stale DB row, deposit that never
+      // settled on-chain, wrong address) reverts with an opaque error.
+      // Read the live position first so we can fail with a clear,
+      // typed reason instead of submitting a doomed transaction. Only a
+      // positively-confirmed zero balance blocks — a read failure is
+      // non-fatal and falls through to the normal path.
+      try {
+        const live = await readPosition({
+          protocolSlug,
+          chainId,
+          walletAddress: walletClient.account.address,
+          assetSymbol,
+          assetContract: assetContract ?? undefined,
+        });
+        if (live && live.currentAmount <= 0n) {
+          if (__DEV__) {
+            console.warn("[defi/withdraw] no_onchain_balance — preflight", {
+              positionId,
+              protocolSlug,
+              chainId,
+            });
+          }
+          throw new DefiError("no_onchain_balance", positionId);
+        }
+      } catch (preflightErr) {
+        if (preflightErr instanceof DefiError) throw preflightErr;
+        if (__DEV__) {
+          console.warn(
+            "[defi/withdraw] balance preflight read failed (non-fatal)",
+            { positionId, error: preflightErr },
+          );
+        }
+      }
+
       // Some withdrawals (Lido, Ethena cooldown) require an approval
       // to the queue/redemption manager — handle the preamble the
       // same as deposit.
@@ -739,42 +799,72 @@ export const withdraw: MobileToolExecutor = (input, context) =>
         }
       }
 
-      let hash: `0x${string}`;
-      try {
-        if (__DEV__) {
-          console.warn("[defi/withdraw] submitting protocol tx", {
-            to: unsignedCall.to,
-            dataLen: unsignedCall.data?.length,
-            account: walletClient.account.address,
-            chainId: walletClient.chain?.id,
-          });
-        }
-        hash = await walletClient.sendTransaction({
+      if (__DEV__) {
+        console.warn("[defi/withdraw] submitting protocol tx", {
           to: unsignedCall.to,
-          data: unsignedCall.data,
-          value: unsignedCall.value ?? 0n,
-          account: walletClient.account,
-          chain: walletClient.chain,
+          dataLen: unsignedCall.data?.length,
+          account: walletClient.account.address,
+          chainId: walletClient.chain?.id,
         });
+      }
+      // Phantom-failure-safe submission: sign locally, then broadcast,
+      // so a broadcast-RPC error never gets mislabelled as "nothing
+      // happened" while the tx actually moved funds (the reported bug).
+      const submit = await submitEvmCall(walletClient, publicClient, {
+        to: unsignedCall.to,
+        data: unsignedCall.data,
+        value: unsignedCall.value ?? 0n,
+      });
+
+      if (submit.kind === "not_broadcast") {
+        // Pre-broadcast failure (gas estimate revert, bad nonce, …):
+        // chain state is genuinely unchanged.
         if (__DEV__) {
-          console.warn("[defi/withdraw] protocol tx submitted", { hash });
-        }
-      } catch (err) {
-        const c = classifyDefiError(err);
-        if (__DEV__) {
-          console.error("[defi/withdraw] sendTransaction failed", {
-            classified: c,
+          console.warn("[defi/withdraw] not broadcast — position unchanged", {
             to: unsignedCall.to,
-            error: err,
           });
         }
-        throw new DefiError(c === "unknown" ? "withdraw_failed" : c);
+        throw new DefiError("withdraw_failed");
+      }
+      if (submit.kind === "mined" && !submit.success) {
+        // Broadcast then reverted on-chain — funds unchanged.
+        if (__DEV__) {
+          console.warn("[defi/withdraw] reverted on-chain", {
+            hash: submit.hash,
+          });
+        }
+        throw new DefiError("withdraw_failed");
+      }
+      if (submit.kind === "unconfirmed") {
+        // The signed tx may have landed — DO NOT claim unchanged, DO NOT
+        // retry. Surface the hash so the activity feed can reconcile it.
+        if (__DEV__) {
+          console.warn("[defi/withdraw] submission_unconfirmed", {
+            hash: submit.hash,
+          });
+        }
+        return {
+          status: "failed" as const,
+          tx_hash: submit.hash,
+          error: "submission_unconfirmed",
+          data: {
+            position_id: positionId,
+            protocol_slug: protocolSlug,
+            chain_id: chainId,
+          },
+        };
+      }
+
+      // "submitted" or "mined" + success.
+      const hash = submit.hash;
+      if (__DEV__) {
+        console.warn("[defi/withdraw] protocol tx submitted", { hash });
       }
 
       return {
         status: "success" as const,
         tx_hash: hash,
-        tx_confirmed: false,
+        tx_confirmed: submit.kind === "mined",
         data: {
           position_id: positionId,
           protocol_slug: protocolSlug,

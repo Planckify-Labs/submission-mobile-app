@@ -110,6 +110,20 @@ describe("resolveUXTreatment — policy-only paths (no grants)", () => {
     );
     assert.equal(treatment, "confirm");
   });
+
+  it("hot wallet + x402_fetch → silent (agent micropayment, no prompt)", async () => {
+    // Spec Phase 5 §6.2 / acceptance #1: settles silently within the
+    // pre-signed allowance — must NOT fall through to the write→confirm
+    // default. The executor self-escalates over-budget calls.
+    const wallet = await freshWallet(HOT_WALLET_POLICY);
+    const treatment = resolveUXTreatment(
+      "write",
+      "x402_fetch",
+      wallet,
+      SESSION_ID,
+    );
+    assert.equal(treatment, "silent");
+  });
 });
 
 describe("resolveUXTreatment — grant-driven paths", () => {

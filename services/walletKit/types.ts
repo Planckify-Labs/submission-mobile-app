@@ -573,6 +573,68 @@ export interface SignEip7702AuthorizationArgs {
   chain: ChainConfig;
 }
 
+// ── Agent-initiated x402 micropayments (spec Phase 5 §5.1) ─────────────
+//
+// Plain, serializable shapes (no `@metamask/x402` / `@x402/*` SDK classes
+// leak across the port). The EVM kit translates them into the relayer /
+// facilitator settlement at the port boundary in
+// `services/walletKit/evm/x402Settle.ts`; Solana / Sui leave
+// `settleX402Payment` `undefined` and never see them.
+
+/**
+ * Normalised x402 "exact" challenge for the ERC-7710 settlement path.
+ * Superset-compatible with the EIP-3009 `X402Challenge` in nanopay so the
+ * shared parsing conventions can emit either; `assetTransferMethod`
+ * discriminates the delegation rail (spec §5.1).
+ */
+export interface X402Erc7710Challenge {
+  scheme: "exact";
+  /** CAIP-2, e.g. `"eip155:84532"`. */
+  network: string;
+  /** USDC atoms, decimal string (bigint-safe over JSON). */
+  maxAmountRequired: string;
+  payTo: `0x${string}`;
+  /** USDC asset address on `network`. */
+  asset: `0x${string}`;
+  resource: string;
+  /** Facilitator URL named by the seller (Rail A). */
+  facilitator?: string | null;
+  /** Gates the delegation rail. */
+  assetTransferMethod: "erc7710";
+  maxTimeoutSeconds?: number;
+}
+
+export interface SettleX402PaymentArgs {
+  /** Paying wallet bound to the agent session (SI-4). */
+  wallet: TWallet;
+  chain: ChainConfig;
+  challenge: X402Erc7710Challenge;
+  /** Persisted, already-signed user→agent allowance (the budget). */
+  delegation: DelegationStruct;
+  /** Remaining spendable atoms for this allowance (budget gate, §6.2). */
+  remainingBudgetAtoms: bigint;
+}
+
+/**
+ * Result of an x402 settlement attempt. `reason` (on `failed`) is always
+ * hand-written friendly copy — never a raw relayer / facilitator body
+ * (CLAUDE.md user-facing-errors rule, SI-6).
+ */
+export type SettleX402PaymentResult =
+  | {
+      status: "settled";
+      proof: string;
+      rail: "facilitator" | "relayer";
+      txHash?: string;
+      spentAtoms: bigint;
+    }
+  | {
+      status: "over_budget";
+      requestedAtoms: bigint;
+      remainingBudgetAtoms: bigint;
+    }
+  | { status: "failed"; reason: string };
+
 export interface WalletKitAdapter {
   readonly namespace: Namespace;
 
@@ -767,6 +829,19 @@ export interface WalletKitAdapter {
   signEip7702Authorization?(
     args: SignEip7702AuthorizationArgs,
   ): Promise<RelayerAuthorizationEntry>;
+
+  /**
+   * Settle a single x402 "exact" challenge using a pre-signed ERC-7710
+   * allowance delegation (spec Phase 5 §5.2). Selects the facilitator or
+   * 1Shot-relayer rail from the challenge, enforces the budget + fee
+   * safety bounds, and returns an `X-PAYMENT` proof. Composes the Phase 2
+   * delegation + Phase 3 relayer methods — no new on-chain primitive.
+   * EVM-only; Solana / Sui leave this `undefined`. Consumers presence-
+   * check rather than branching on namespace.
+   */
+  settleX402Payment?(
+    args: SettleX402PaymentArgs,
+  ): Promise<SettleX402PaymentResult>;
 
   /**
    * Signs an x402 SVM-scheme versioned Solana transaction pre-built by

@@ -50,18 +50,30 @@ export async function readPosition(
 
   // Aave needs the asset contract + chain to derive the aToken via
   // the Pool Data Provider. Use the specialized reader.
-  if (input.protocolSlug.startsWith("aave-v3-") && input.assetContract) {
+  if (input.protocolSlug.startsWith("aave-v3-")) {
     const deploymentKey = aaveDeploymentKeyForSlug(input.protocolSlug);
     if (!deploymentKey) return null;
     const deployment = AaveV3Deployments[deploymentKey];
     const viemChain = aaveViemChainFor(deployment.chainId);
     if (!viemChain) return null;
+    // The backend position row frequently omits `asset_contract`. The
+    // underlying is deterministic per (deployment, symbol), so fall
+    // back to the adapter's address-book — otherwise the live read
+    // silently returns null and the position reports a null
+    // `current_amount_raw`, masking the real on-chain balance (and
+    // letting a doomed MAX withdraw get submitted downstream).
+    const assetSymbol = input.assetSymbol ?? "USDC";
+    const underlyings = (
+      deployment as { underlyings?: Partial<Record<string, string>> }
+    ).underlyings;
+    const assetContract = input.assetContract ?? underlyings?.[assetSymbol];
+    if (!assetContract) return null;
     return readAaveV3Position({
       deployment,
       viemChain,
       walletAddress: input.walletAddress as Address,
-      assetSymbol: input.assetSymbol ?? "USDC",
-      assetContract: input.assetContract as Address,
+      assetSymbol,
+      assetContract: assetContract as Address,
       assetDecimals: input.assetDecimals ?? 6,
     });
   }

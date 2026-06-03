@@ -50,7 +50,6 @@ import AgentAllowanceSheet, {
 } from "@/components/agent/AgentAllowanceSheet";
 import LoadinngSpinnerPopup from "@/components/common/LoadinngSpinnerPopup";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
-import { AGENT_DELEGATE_ADDRESS } from "@/constants/agentDelegate";
 import { findEvmChainById } from "@/constants/configs/chainConfig";
 import { useWallet } from "@/hooks/useWallet";
 import {
@@ -375,10 +374,40 @@ export default function AgentPermissionsScreen() {
         lifetime,
       });
 
+      // SI-4: the delegation `delegate` MUST equal the relayer's
+      // redemption `targetAddress` — the address that actually redeems the
+      // delegation at settle time. We resolve it LIVE from
+      // `relayer_getCapabilities` and there is NO hardcoded fallback: a
+      // wrong/guessed delegate produces a grant the relayer rejects later
+      // ("delegate must be the relayer Target wallet"), so we fail loudly
+      // here instead of signing a dead allowance.
+      let delegate: `0x${string}`;
+      try {
+        const caps = await kit.getRelayerCapabilities?.({
+          chain: chainForWallet,
+        });
+        const target = caps?.[chainId]?.targetAddress;
+        if (!target || !/^0x[0-9a-fA-F]{40}$/.test(target)) {
+          throw new Error("relayer returned no targetAddress");
+        }
+        delegate = target.toLowerCase() as `0x${string}`;
+      } catch (capErr) {
+        if (__DEV__) {
+          console.error(
+            "[agent-permissions] could not resolve relayer delegate — refusing to sign a hardcoded one",
+            capErr,
+          );
+        }
+        setAllowanceError(
+          "We couldn't reach the relayer to set up the allowance. Please try again.",
+        );
+        return;
+      }
+
       const unsigned = await kit.createDelegation({
         wallet: selectedWallet,
         chain: chainForWallet,
-        delegate: AGENT_DELEGATE_ADDRESS,
+        delegate,
         scope,
         caveats,
         salt: randomDelegationSalt(),
@@ -398,7 +427,7 @@ export default function AgentPermissionsScreen() {
           : { type: "permanent" };
 
       const meta: DelegationMeta = {
-        delegate: AGENT_DELEGATE_ADDRESS,
+        delegate,
         chainId,
         chainName: formatChainLabel(chainForWallet),
         tokenAddress,

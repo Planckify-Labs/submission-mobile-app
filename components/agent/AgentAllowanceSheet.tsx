@@ -161,7 +161,6 @@ export default function AgentAllowanceSheet({
 
   // API-driven token catalogue + the chainId↔blockchainId map (the
   // registry keys tokens by UUID, not chain id).
-  const { data: allTokens = [], isLoading: tokensLoading } = useTokens();
   const { data: blockchains } = useBlockchainsWithStorage();
 
   const blockchainId = useMemo(
@@ -169,17 +168,27 @@ export default function AgentAllowanceSheet({
     [blockchains, chainId],
   );
 
+  // Scope the catalogue to the active backend chain — same pattern as the
+  // send.tsx token picker. Passing `blockchainId` (instead of an unscoped
+  // `useTokens()` + a loose `blockchainId ? … : true` filter) prevents the
+  // cross-chain bleed that hid the chain's real USDC behind aUSDC/IDRX.
+  const { data: rawTokenList = [], isLoading: tokensLoading } = useTokens(
+    blockchainId ? { blockchainId } : undefined,
+  );
+
   // ERC-7710 transfer-amount scopes need a real ERC-20 contract — drop
-  // native + inactive entries, scope to the active chain, then search.
+  // native + inactive entries, strictly scope to the active chain
+  // (never fall back to "all chains"), then search.
   const tokens = useMemo<SelectedAllowanceToken[]>(() => {
+    if (!blockchainId) return [];
     const q = search.trim().toLowerCase();
-    return allTokens
+    return rawTokenList
       .filter(
         (t) =>
+          t.blockchainId === blockchainId &&
           !t.isNativeCurrency &&
           t.isActive !== false &&
-          (t.contractAddress?.length ?? 0) > 0 &&
-          (blockchainId ? t.blockchainId === blockchainId : true),
+          (t.contractAddress?.length ?? 0) > 0,
       )
       .filter(
         (t) =>
@@ -197,7 +206,7 @@ export default function AgentAllowanceSheet({
         logoUrl: t.logoUrl || undefined,
       }))
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
-  }, [allTokens, blockchainId, search]);
+  }, [rawTokenList, blockchainId, search]);
 
   // Slide-in on mount.
   useEffect(() => {

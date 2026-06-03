@@ -122,7 +122,14 @@ export const HOT_WALLET_POLICY: ApprovalPolicy = {
   write: "confirm",
   defi_read: "silent",
   defi_write: "confirm",
-  tool_overrides: { approve_erc20: "confirm" },
+  // `approve_erc20` → confirm: approvals are the top attack vector.
+  // `x402_fetch` → silent: agent-initiated x402 micropayments settle
+  // silently WITHIN the user's pre-signed allowance (spec Phase 5 §6.2,
+  // acceptance #1 "no user prompt"). The on-chain caveat is the hard
+  // ceiling and the executor self-escalates over-budget calls
+  // (`paid:false, over_budget`) instead of spending — so no ad-hoc
+  // approval sheet is needed here.
+  tool_overrides: { approve_erc20: "confirm", x402_fetch: "silent" },
 };
 
 /**
@@ -135,6 +142,7 @@ export const HARDWARE_WALLET_POLICY: ApprovalPolicy = {
   write: "confirm",
   defi_read: "silent",
   defi_write: "confirm",
+  tool_overrides: { x402_fetch: "silent" },
 };
 
 /**
@@ -159,6 +167,7 @@ export const MULTISIG_POLICY: ApprovalPolicy = {
   write: "confirm",
   defi_read: "silent",
   defi_write: "confirm",
+  tool_overrides: { x402_fetch: "silent" },
 };
 
 // --- Resolver ---------------------------------------------------------------

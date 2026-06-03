@@ -36,6 +36,8 @@ export type DefiErrorCode =
   | "cooldown_in_progress"
   | "cooldown_not_started"
   | "no_claimable_balance"
+  | "no_onchain_balance"
+  | "submission_unconfirmed"
   | "wallet_cannot_execute"
   | "network_error"
   | "user_cancelled"
@@ -64,6 +66,8 @@ const PASSTHROUGH_CODES = new Set<DefiErrorCode>([
   "cooldown_in_progress",
   "cooldown_not_started",
   "no_claimable_balance",
+  "no_onchain_balance",
+  "submission_unconfirmed",
   "wallet_cannot_execute",
   "network_error",
   "user_cancelled",
@@ -270,6 +274,16 @@ export const defiErrorCopy: Record<DefiErrorCode, DefiErrorCopy> = {
     title: "Nothing to claim yet",
     body: "There are no rewards ready to claim right now. Check back later.",
     cta: "wait",
+  },
+  no_onchain_balance: {
+    title: "Nothing to move",
+    body: "This position has no on-chain balance to withdraw right now. Refresh your positions and try again.",
+    cta: "retry",
+  },
+  submission_unconfirmed: {
+    title: "Couldn't confirm",
+    body: "We sent the transaction but couldn't confirm it in time. Check your activity feed before trying again — it may have gone through.",
+    cta: "review",
   },
   wallet_cannot_execute: {
     title: "Wallet can't sign",

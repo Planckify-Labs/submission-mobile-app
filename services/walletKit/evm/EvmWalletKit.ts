@@ -60,6 +60,8 @@ import type {
   SendContractTransactionArgs,
   SendUserOpResult,
   SendUserOpWithUsdcPaymasterArgs,
+  SettleX402PaymentArgs,
+  SettleX402PaymentResult,
   SignDelegationArgs,
   SignEip7702AuthorizationArgs,
   SignTransferWithAuthorizationArgs,
@@ -84,6 +86,7 @@ import {
 } from "./relayer.ts";
 import { sendUserOpWithUsdcPaymaster as sendUserOpWithUsdcPaymasterPure } from "./sendUserOpWithUsdcPaymaster.ts";
 import { signTransferWithAuthorization as signTransferWithAuthorizationPure } from "./signTransferWithAuthorization.ts";
+import { settleX402PaymentEvm } from "./x402Settle.ts";
 
 const EVM_NAMESPACE = "eip155" as const;
 
@@ -542,6 +545,18 @@ export function createEvmWalletKit(): WalletKitAdapter {
     }: GetRelayerStatusArgs): Promise<RelayerStatus> {
       assertEvm(chain);
       return relayerGetStatus({ chainId: chain.chain.id, taskId });
+    },
+
+    // ── Agent-initiated x402 micropayments (spec Phase 5 §5.3) ───────
+    //
+    // Rail selection + budget/fee enforcement live in the pure
+    // `./x402Settle.ts` module (Node-testable with a mocked relayer).
+    // The kit only narrows the chain to EVM and forwards.
+    async settleX402Payment(
+      args: SettleX402PaymentArgs,
+    ): Promise<SettleX402PaymentResult> {
+      assertEvm(args.chain);
+      return settleX402PaymentEvm(args);
     },
 
     // ── EIP-7702 authorization for in-flight relayer upgrade ─────────

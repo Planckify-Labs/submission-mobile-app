@@ -6,3 +6,4 @@ export { SOLANA_EXECUTORS } from "./solana";
 export { SOLANA_TAKUMI_PAY_EXECUTORS } from "./solanaTakumiPay";
 export { SUI_EXECUTORS } from "./sui";
 export { WRITE_EXECUTORS } from "./writes";
+export { X402_EXECUTORS } from "./x402";

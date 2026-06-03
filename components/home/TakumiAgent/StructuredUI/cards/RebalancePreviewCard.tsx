@@ -16,6 +16,7 @@
 import { ArrowRight, CheckCircle2, XCircle } from "lucide-react-native";
 import { Text, TouchableOpacity, View } from "react-native";
 import type { ToolComponentProps } from "../types";
+import { resolveRebalanceCardStatus } from "./rebalanceCardStatus";
 
 const BRAND_RED = "#c71c4b";
 
@@ -42,13 +43,29 @@ export type RebalancePreviewInput = {
     total_fee_usd?: number;
     route_steps?: number;
   };
+  // Flat fields as actually emitted by the `defi_rebalance` tool call
+  // (the server sends these; the nested `from`/`to`/`estimated` above is
+  // the richer proposal shape that isn't wired yet). Read as a fallback
+  // so the card isn't blank.
+  from_position_id?: string;
+  to_protocol_slug?: string;
+  to_asset_symbol?: string;
+  to_asset_contract?: string;
+  to_amount_raw?: string;
+  expected_apy?: number;
 };
 
 export type RebalancePreviewOutput = {
-  status?: "ok" | "rejected" | "error" | string;
+  status?: "ok" | "rejected" | "error" | "success" | "failed" | string;
   user_decision?: "approved" | "rejected";
   error?: string;
 };
+
+/** Shorten an id/address for display: `cmpc4g1k…jf82d`. */
+function shortenId(id: string): string {
+  if (id.length <= 12) return id;
+  return `${id.slice(0, 6)}…${id.slice(-4)}`;
+}
 
 function fmtApy(value: number | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "—";
@@ -89,6 +106,8 @@ function reasonLabel(reason?: string): string {
 export function RebalancePreviewCard({
   input,
   output,
+  state,
+  error,
   mode,
   addToolResult,
 }: ToolComponentProps<RebalancePreviewInput, RebalancePreviewOutput>) {
@@ -96,21 +115,45 @@ export function RebalancePreviewCard({
   const to = input.to;
   const delta = fmtDeltaBps(input.estimated?.apy_delta_bps);
 
-  // Historical render — frozen decision.
-  if (mode === "historical" || output?.user_decision) {
-    const approved = output?.user_decision === "approved";
+  // Labels derived from the nested proposal shape OR the flat
+  // `defi_rebalance` tool input (whichever is present), so the card
+  // shows real content instead of "—".
+  const fromLabel =
+    from?.display_name ??
+    from?.protocol_slug ??
+    (input.from_position_id
+      ? `Position ${shortenId(input.from_position_id)}`
+      : undefined);
+  const toLabel =
+    to?.display_name ?? to?.protocol_slug ?? input.to_protocol_slug;
+  const toAsset = to?.asset_symbol ?? input.to_asset_symbol;
+  const fromApy = from?.apy;
+  const toApy = to?.apy ?? input.expected_apy;
+
+  // A finished card is "declined" ONLY when the user actually rejected
+  // it — never just because the executor result lacks `user_decision`
+  // (see rebalanceCardStatus.ts for the bug this guards).
+  const terminalStatus = resolveRebalanceCardStatus({ state, error, output });
+
+  // Historical / frozen render — once a terminal signal exists.
+  if (mode === "historical" || terminalStatus !== null) {
+    const headline =
+      terminalStatus === "declined"
+        ? "You declined this rebalance"
+        : terminalStatus === "failed"
+          ? "Rebalance didn't complete"
+          : "Rebalance submitted";
+    const good = terminalStatus === "executed";
     return (
       <View className="bg-light-main-container rounded-2xl p-4 border border-light-matte-black/10 mb-3">
         <View className="flex-row items-center mb-2">
-          {approved ? (
+          {good ? (
             <CheckCircle2 color="#16a34a" size={20} />
           ) : (
             <XCircle color={BRAND_RED} size={20} />
           )}
           <Text className="ml-2 font-semibold text-light-matte-black">
-            {approved
-              ? "You approved this rebalance"
-              : "You declined this rebalance"}
+            {headline}
           </Text>
         </View>
         <View className="flex-row items-center mt-1">
@@ -118,14 +161,14 @@ export function RebalancePreviewCard({
             className="text-light-matte-black/60 text-sm flex-1"
             numberOfLines={1}
           >
-            {from?.display_name ?? from?.protocol_slug ?? "From"}
+            {fromLabel ?? "From"}
           </Text>
           <ArrowRight color="#64748b" size={16} />
           <Text
             className="text-light-matte-black/80 text-sm flex-1 ml-2"
             numberOfLines={1}
           >
-            {to?.display_name ?? to?.protocol_slug ?? "To"}
+            {toLabel ?? "To"}
           </Text>
         </View>
       </View>
@@ -151,10 +194,10 @@ export function RebalancePreviewCard({
             className="text-light-matte-black font-semibold mt-1"
             numberOfLines={1}
           >
-            {from?.display_name ?? from?.protocol_slug ?? "—"}
+            {fromLabel ?? "—"}
           </Text>
           <Text className="text-light-matte-black/60 text-xs mt-1">
-            {fmtApy(from?.apy)} APY
+            {fmtApy(fromApy)} APY
           </Text>
         </View>
         <View className="px-2">
@@ -166,10 +209,11 @@ export function RebalancePreviewCard({
             className="text-emerald-950 font-semibold mt-1"
             numberOfLines={1}
           >
-            {to?.display_name ?? to?.protocol_slug ?? "—"}
+            {toLabel ?? "—"}
+            {toAsset ? ` · ${toAsset}` : ""}
           </Text>
           <Text className="text-emerald-800 text-xs mt-1">
-            {fmtApy(to?.apy)} APY
+            {fmtApy(toApy)} APY
           </Text>
         </View>
       </View>
