@@ -204,7 +204,7 @@ const X402FetchCard: React.FC<
         <View className="flex-row items-center gap-2">
           <XCircle size={16} color={BRAND_RED} />
           <Text className="text-xs font-bold uppercase tracking-wide text-light-primary-red">
-            Couldn't fetch {label}
+            Couldn&apos;t fetch {label}
           </Text>
         </View>
         <Text className="text-sm text-light-matte-black/80 mt-1.5">
