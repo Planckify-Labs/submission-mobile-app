@@ -366,7 +366,7 @@ function sleep(ms: number): Promise<void> {
  *     (`baseDelayMs * (attempt + 1)`), then fall through to a
  *     `tool_rejected{reason: "network_error"}` so the server pairs the
  *     assistant tool_call with a typed result instead of timing out.
- *   - Write / simulate tools never auto-retry — anything that moved (or
+ *   - Write tools never auto-retry — anything that moved (or
  *     could have moved) value gets a single delivery attempt. If that
  *     fails the slot is left in `pending_approvals` and a reconnect /
  *     manual recovery is required. This matches the anti-double-spend
@@ -383,7 +383,7 @@ async function postRespondWithPolicy(
   const capability = payload.meta.capability;
 
   if (capability !== "read") {
-    // Write / simulate: single attempt, no retry. Per the design,
+    // Write: single attempt, no retry. Per the design,
     // anything that touched chain state must not double-deliver.
     await postRespond(session.session_id, payload.tool_call_id, result);
     return;

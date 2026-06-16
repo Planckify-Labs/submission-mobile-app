@@ -86,7 +86,6 @@ describe("resolveUXTreatment — policy-only paths (no grants)", () => {
     // not the capability base.
     const policy: ApprovalPolicy = {
       read: "silent",
-      simulate: "preview",
       write: "preview",
       tool_overrides: { approve_erc20: "confirm" },
     };
@@ -201,7 +200,6 @@ describe("resolveUXTreatment — grant-driven paths", () => {
 describe("resolveUXTreatment — auto_approve_below_usd downgrade", () => {
   const POLICY_WITH_THRESHOLD: ApprovalPolicy = {
     read: "silent",
-    simulate: "preview",
     write: "confirm",
     auto_approve_below_usd: 50,
   };
@@ -280,7 +278,6 @@ describe("resolveFromPolicy — unit coverage of the pure helper", () => {
   it("tool override wins over the capability base", () => {
     const policy: ApprovalPolicy = {
       read: "silent",
-      simulate: "preview",
       write: "confirm",
       tool_overrides: { magic_tool: "silent" },
     };
@@ -290,14 +287,10 @@ describe("resolveFromPolicy — unit coverage of the pure helper", () => {
   it("returns the capability base when no override matches", () => {
     const policy: ApprovalPolicy = {
       read: "silent",
-      simulate: "preview",
       write: "confirm",
       tool_overrides: { other_tool: "silent" },
     };
-    assert.equal(
-      resolveFromPolicy(policy, "simulate", "magic_tool"),
-      "preview",
-    );
+    assert.equal(resolveFromPolicy(policy, "write", "magic_tool"), "confirm");
   });
 
   it("does NOT downgrade non-confirm bases via auto_approve_below_usd", () => {
@@ -306,7 +299,6 @@ describe("resolveFromPolicy — unit coverage of the pure helper", () => {
     // needlessly shuffled to `preview` which has no effect.
     const policy: ApprovalPolicy = {
       read: "silent",
-      simulate: "preview",
       write: "preview",
       auto_approve_below_usd: 50,
     };
@@ -322,7 +314,6 @@ describe("resolveFromPolicy — unit coverage of the pure helper", () => {
 describe("resolveFromPolicy with transfer thresholds", () => {
   const baseHot: ApprovalPolicy = {
     read: "silent",
-    simulate: "preview",
     write: "confirm",
   };
 

@@ -87,10 +87,6 @@ describe("formatScopeLabel", () => {
       formatScopeLabel({ kind: "capability", key: "read" }),
       "Read actions",
     );
-    assert.equal(
-      formatScopeLabel({ kind: "capability", key: "simulate" }),
-      "Simulate actions",
-    );
   });
 
   it("global scope renders as 'All actions'", () => {

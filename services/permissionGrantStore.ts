@@ -22,12 +22,7 @@ import type { DelegationStruct } from "./walletKit/types.ts";
  * Mirrors the server-side `TOOL_REGISTRY` capability type. Defined locally
  * because the agent-api registry is not importable from the mobile app.
  */
-export type ToolCapability =
-  | "read"
-  | "simulate"
-  | "write"
-  | "defi_read"
-  | "defi_write";
+export type ToolCapability = "read" | "write" | "defi_read" | "defi_write";
 
 export type GrantLifetime =
   | { type: "always_ask" }
@@ -147,6 +142,22 @@ function isExpired(grant: PermissionGrant, now: number): boolean {
   return grant.lifetime.type === "timed" && grant.lifetime.expires_at <= now;
 }
 
+/**
+ * Detects grants left behind by the removed `capability: "simulate"`
+ * auto-approve toggle. That capability no longer exists, so such a grant can
+ * never match a tool call — it's dead weight in storage and would render as a
+ * stray "blockchain_simulate" row in the settings list. We drop these on load.
+ *
+ * The `key` is read through a `{ key: string }` cast because `ToolCapability`
+ * no longer contains `"simulate"`, so a direct comparison wouldn't type-check.
+ */
+function isRemovedSimulateGrant(grant: PermissionGrant): boolean {
+  return (
+    grant.scope.kind === "capability" &&
+    (grant.scope as { key: string }).key === "simulate"
+  );
+}
+
 // --- Store ------------------------------------------------------------------
 
 export class PermissionGrantStore {
@@ -163,25 +174,40 @@ export class PermissionGrantStore {
   ) {
     this.wallet = wallet;
     this.adapter = adapter ?? getSecureStoreAdapter();
-    this.loadPromise = this.hydrate(seed);
+    this.loadPromise = this.loadGrantsFromStorage(seed);
   }
 
-  private async hydrate(seed?: PermissionGrant[]): Promise<void> {
+  /**
+   * Load this wallet's grants from persistent storage into memory.
+   *
+   * Runs once at construction. Beyond filtering to the active wallet, it
+   * migrates away grants left by the removed `capability: "simulate"` toggle
+   * (see `isRemovedSimulateGrant`) and, if any were dropped, re-persists the
+   * cleaned set so the stale entries disappear from storage for good. Falls
+   * back to the provided `seed` when storage holds nothing usable.
+   */
+  private async loadGrantsFromStorage(seed?: PermissionGrant[]): Promise<void> {
+    let droppedStaleGrants = false;
     try {
       const raw = await this.adapter.getItem(storageKeyFor(this.wallet));
       if (raw) {
         const parsed = JSON.parse(raw) as PermissionGrant[];
         if (Array.isArray(parsed)) {
-          this.grants = parsed.filter(
+          const forThisWallet = parsed.filter(
             (g): g is PermissionGrant =>
               !!g &&
               typeof g === "object" &&
               walletsEqual(g.wallet_address, this.wallet),
           );
+          this.grants = forThisWallet.filter((g) => !isRemovedSimulateGrant(g));
+          droppedStaleGrants = this.grants.length !== forThisWallet.length;
         }
       }
     } catch (error) {
-      console.error("PermissionGrantStore: failed to hydrate", error);
+      console.error(
+        "PermissionGrantStore: failed to load grants from storage",
+        error,
+      );
       this.grants = [];
     }
 
@@ -189,6 +215,9 @@ export class PermissionGrantStore {
       this.grants = seed.filter((g) =>
         walletsEqual(g.wallet_address, this.wallet),
       );
+      this.schedulePersist();
+    } else if (droppedStaleGrants) {
+      // Rewrite the on-disk blob without the dead simulate grants.
       this.schedulePersist();
     }
   }
@@ -204,7 +233,7 @@ export class PermissionGrantStore {
     });
   }
 
-  /** Resolves when the initial hydrate from storage has completed. */
+  /** Resolves when the initial load from storage has completed. */
   whenLoaded(): Promise<void> {
     return this.loadPromise;
   }

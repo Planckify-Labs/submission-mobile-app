@@ -142,7 +142,7 @@ export function resolveChainClients(
 
 /**
  * Obtain a signing wallet client or fail with `wallet_type_cannot_execute`.
- * Used by write/simulate executors that cannot proceed without a signer.
+ * Used by write executors that cannot proceed without a signer.
  */
 export function requireWalletClient(
   chainId: number,

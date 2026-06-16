@@ -70,7 +70,6 @@ export type UXTreatment = "silent" | "preview" | "confirm" | "blocked";
  */
 export interface ApprovalPolicy {
   read: UXTreatment;
-  simulate: UXTreatment;
   write: UXTreatment;
   defi_read: UXTreatment;
   defi_write: UXTreatment;
@@ -111,14 +110,13 @@ export interface ConnectedWallet {
 // --- Built-in policies ------------------------------------------------------
 
 /**
- * Default for software hot wallets: reads are free, simulations show a
- * preview, writes require explicit confirmation. `approve_erc20` is
- * pinned to `confirm` because approvals are the most common attack
- * vector — we never want to silently raise an allowance.
+ * Default for software hot wallets: reads are free, writes require
+ * explicit confirmation. `approve_erc20` is pinned to `confirm` because
+ * approvals are the most common attack vector — we never want to silently
+ * raise an allowance.
  */
 export const HOT_WALLET_POLICY: ApprovalPolicy = {
   read: "silent",
-  simulate: "preview",
   write: "confirm",
   defi_read: "silent",
   defi_write: "confirm",
@@ -138,7 +136,6 @@ export const HOT_WALLET_POLICY: ApprovalPolicy = {
  */
 export const HARDWARE_WALLET_POLICY: ApprovalPolicy = {
   read: "silent",
-  simulate: "preview",
   write: "confirm",
   defi_read: "silent",
   defi_write: "confirm",
@@ -151,7 +148,6 @@ export const HARDWARE_WALLET_POLICY: ApprovalPolicy = {
  */
 export const WATCH_ONLY_POLICY: ApprovalPolicy = {
   read: "silent",
-  simulate: "silent",
   write: "blocked",
   defi_read: "silent",
   defi_write: "blocked",
@@ -163,7 +159,6 @@ export const WATCH_ONLY_POLICY: ApprovalPolicy = {
  */
 export const MULTISIG_POLICY: ApprovalPolicy = {
   read: "silent",
-  simulate: "preview",
   write: "confirm",
   defi_read: "silent",
   defi_write: "confirm",

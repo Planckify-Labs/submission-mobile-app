@@ -84,7 +84,7 @@ export function computeCurrentMode(
  */
 export function isCapabilityAutoApproved(
   grants: PermissionGrant[],
-  capability: "read" | "simulate" | "write",
+  capability: "read" | "write",
 ): boolean {
   return grants.some(
     (g) =>
@@ -116,8 +116,6 @@ export function formatScopeLabel(scope: GrantScope): string {
       switch (scope.key) {
         case "read":
           return "Read actions";
-        case "simulate":
-          return "Simulate actions";
         case "write":
           return "Write actions";
       }

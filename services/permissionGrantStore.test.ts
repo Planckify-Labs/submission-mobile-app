@@ -408,6 +408,64 @@ describe("PermissionGrantStore — persistence", () => {
   });
 });
 
+describe("PermissionGrantStore — simulate-capability migration", () => {
+  it("drops legacy `simulate` capability grants on load and re-persists clean", async () => {
+    const adapter = makeMemoryAdapter();
+
+    // Discover the storage key the store uses for this wallet by letting a
+    // throwaway instance persist once — avoids coupling the test to the
+    // (private) key-prefix format.
+    const seeder = new PermissionGrantStore(WALLET_A, adapter);
+    await seeder.whenLoaded();
+    seeder.add({
+      scope: { kind: "capability", key: "read" },
+      lifetime: { type: "permanent" },
+      wallet_address: WALLET_A,
+      granted_at: 2,
+    });
+    await seeder.flushed();
+    const [storageKey] = [...adapter.store.keys()];
+    assert.ok(storageKey, "store should have written under a key");
+
+    // Inject a blob shaped like one written by the OLD app version, where a
+    // `{ kind: "capability", key: "simulate" }` grant was still creatable.
+    const legacyBlob = JSON.stringify([
+      {
+        scope: { kind: "capability", key: "simulate" },
+        lifetime: { type: "permanent" },
+        wallet_address: WALLET_A,
+        granted_at: 1,
+      },
+      {
+        scope: { kind: "capability", key: "read" },
+        lifetime: { type: "permanent" },
+        wallet_address: WALLET_A,
+        granted_at: 2,
+      },
+    ]);
+    adapter.store.set(storageKey, legacyBlob);
+
+    // Loading a fresh store should strip the dead simulate grant...
+    const store = new PermissionGrantStore(WALLET_A, adapter);
+    await store.whenLoaded();
+    await store.flushed();
+
+    const live = store.list(WALLET_A);
+    assert.equal(live.length, 1, "only the read grant should survive");
+    assert.equal(live[0].scope.kind, "capability");
+    assert.equal((live[0].scope as { key: string }).key, "read");
+
+    // ...and the cleaned set must be written back so the stale entry is gone
+    // for good, not re-filtered in memory on every launch.
+    const persisted = adapter.store.get(storageKey);
+    assert.ok(persisted, "cleaned grants should be persisted");
+    assert.ok(
+      !persisted.includes('"simulate"'),
+      "persisted blob must no longer contain the simulate grant",
+    );
+  });
+});
+
 describe("PermissionGrantStore — factories", () => {
   it("conservative() yields an empty store", async () => {
     const adapter = makeMemoryAdapter();

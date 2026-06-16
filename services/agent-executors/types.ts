@@ -25,7 +25,7 @@
  * `./chainRouter.ts` to obtain `{ publicClient, walletClient }` keyed on
  * `input.chain_id`.
  *
- * This keeps a single code path for read / simulate / write tools and
+ * This keeps a single code path for read / write tools and
  * matches how `walletService.ts` / `utils/clients.ts` already manage
  * clients in the rest of the app.
  */

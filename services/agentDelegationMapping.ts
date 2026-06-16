@@ -9,7 +9,7 @@
  * MetaMask SDK shapes at the port boundary.
  *
  * Design note — *which* local settings become onchain delegations:
- * only the **spending allowance** does. Read / simulate auto-approve and
+ * only the **spending allowance** does. Read auto-approve and
  * the always-ask / agent-decides / full-auto mode are off-chain UX
  * policy (nothing onchain to constrain), so they stay local-only in
  * `PermissionGrantStore`. A bounded USDC allowance is the one surface

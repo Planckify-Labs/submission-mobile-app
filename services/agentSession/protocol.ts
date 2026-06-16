@@ -66,7 +66,7 @@ export interface WalletContext {
  * to a UX treatment via `resolveUxTreatment` — the server never dictates
  * friction level, it only declares the action type.
  */
-export type ToolCapability = "read" | "simulate" | "write";
+export type ToolCapability = "read" | "write";
 
 /**
  * Logical grouping for policy rules. Kept as a widened string to match

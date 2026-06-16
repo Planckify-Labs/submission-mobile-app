@@ -22,7 +22,6 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
-  PlayCircle,
   Shield,
   ShieldCheck,
   ShieldOff,
@@ -125,7 +124,7 @@ const MODES: ModeMeta[] = [
  * controls would invite users to bypass the warning.
  */
 interface CapabilityMeta {
-  capability: "read" | "simulate";
+  capability: "read";
   label: string;
   subtitle: string;
   icon: typeof Eye;
@@ -140,14 +139,6 @@ const AUTO_APPROVE_CAPABILITIES: CapabilityMeta[] = [
     icon: Eye,
     accessibilityHint:
       "When on, the agent can perform read-only actions without prompting.",
-  },
-  {
-    capability: "simulate",
-    label: "Auto-approve simulations",
-    subtitle: "Agent estimates gas and dry-runs calls silently.",
-    icon: PlayCircle,
-    accessibilityHint:
-      "When on, gas estimates and contract simulations run without prompting.",
   },
 ];
 
@@ -560,7 +551,7 @@ export default function AgentPermissionsScreen() {
   );
 
   const applyCapabilityAutoApprove = useCallback(
-    (capability: "read" | "simulate", enabled: boolean) => {
+    (capability: "read", enabled: boolean) => {
       if (!store || !address) return;
       if (enabled) {
         store.add({

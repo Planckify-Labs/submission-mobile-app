@@ -1,8 +1,9 @@
 /**
- * Simulation executors.
+ * Dry-run / non-mutating executors.
  *
- * Simulations are capability: "simulate" — the protocol suggests mobile
- * may show a brief preview but does not require user approval.
+ * These tools are capability: "read" — no signature, no chain mutation —
+ * so the dispatcher routes them to the `silent` UX treatment with no
+ * approval prompt.
  *
  * Tools implemented here:
  *   - estimate_gas           — uses `publicClient.estimateGas` and
