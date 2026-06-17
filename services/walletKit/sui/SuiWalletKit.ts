@@ -24,8 +24,10 @@
  * call shape used in `services/chains/sui/transferService.ts`.
  */
 
+import { fromBase64 } from "@mysten/bcs";
 import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { Transaction } from "@mysten/sui/transactions";
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 
@@ -411,6 +413,67 @@ export function createSuiWalletKit(): WalletKitAdapter {
       balance,
     }: EstimateMaxTransferableArgs): Promise<bigint> {
       return balance > MAX_GAS_BUDGET_MIST ? balance - MAX_GAS_BUDGET_MIST : 0n;
+    },
+
+    // ── Sui-PTB submission (Intent Engine + future Sui DeFi adapters) ──
+    async signAndExecuteSuiPtb({ wallet, chain, ptbBase64 }): Promise<string> {
+      assertSui(chain);
+      breadcrumb({
+        category: "sui.signAndExecuteSuiPtb",
+        message: "start",
+        level: "info",
+        data: { network: chain.network },
+      });
+      const signer: Ed25519Keypair | null = await getSuiSignerForWallet(wallet);
+      if (!signer) {
+        breadcrumb({
+          category: "sui.signAndExecuteSuiPtb",
+          message: "failure: no signer",
+          level: "error",
+          data: { network: chain.network },
+        });
+        throw new Error("No Sui signer for wallet");
+      }
+      const client = new SuiJsonRpcClient({
+        url: chain.rpcUrl,
+        network: chain.network,
+      });
+      // The pre-built PTB is the exact bytes the user previewed (SI-4) —
+      // we re-hydrate and sign it, never rebuild. `signAndExecuteTransaction`
+      // wraps intent prefixing + BLAKE2b internally (see transferService).
+      const tx = Transaction.from(fromBase64(ptbBase64));
+      try {
+        const { digest } = await client.signAndExecuteTransaction({
+          transaction: tx,
+          signer,
+          options: { showEffects: false },
+        });
+        breadcrumb({
+          category: "sui.signAndExecuteSuiPtb",
+          message: "success",
+          level: "info",
+          data: { network: chain.network },
+        });
+        return digest;
+      } catch (err) {
+        breadcrumb({
+          category: "sui.signAndExecuteSuiPtb",
+          message: "failure",
+          level: "error",
+          data: {
+            network: chain.network,
+            errorName: err instanceof Error ? err.name : typeof err,
+          },
+        });
+        captureException(err, {
+          name: "sui.signAndExecuteSuiPtb",
+          payload: {
+            errorName: err instanceof Error ? err.name : typeof err,
+            network: chain.network,
+          },
+        });
+        throw err;
+      }
     },
 
     // ── Display ─────────────────────────────────────────────────────

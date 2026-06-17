@@ -1,4 +1,5 @@
 import BalancesCard from "./cards/BalancesCard";
+import IntentPreviewCard from "./cards/IntentPreviewCard";
 import OpportunityListCard from "./cards/OpportunityListCard";
 import PendingTxCard from "./cards/PendingTxCard";
 import PositionListCard from "./cards/PositionListCard";
@@ -6,6 +7,7 @@ import RebalancePreviewCard from "./cards/RebalancePreviewCard";
 import RedemptionCatalogCard from "./cards/RedemptionCatalogCard";
 import SolanaPendingTxCard from "./cards/SolanaPendingTxCard";
 import SpendingApprovalCard from "./cards/SpendingApprovalCard";
+import StrategyConfigCard from "./cards/StrategyConfigCard";
 import SuiPendingTxCard from "./cards/SuiPendingTxCard";
 import SwapQuoteCard from "./cards/SwapQuoteCard";
 import X402FetchCard from "./cards/X402FetchCard";
@@ -66,5 +68,10 @@ export const toolComponents: Record<string, ToolComponent<any, any>> = {
   defi_withdraw: PendingTxCard,
   defi_claim: PendingTxCard,
   defi_rebalance: RebalancePreviewCard,
+  // Sui Intent Engine (spec §7.1): preview is an informational read card;
+  // execute reuses the Sui pending-tx receipt + approval gate.
+  defi_intent_preview: IntentPreviewCard,
+  defi_intent_execute: SuiPendingTxCard,
+  defi_get_config: StrategyConfigCard,
   x402_fetch: X402FetchCard,
 };

@@ -300,6 +300,20 @@ export interface SendContractTransactionArgs {
 }
 
 /**
+ * Arguments for `WalletKitAdapter.signAndExecuteSuiPtb` — signs and
+ * executes a pre-built Programmable Transaction Block (base64 BCS, the
+ * `sui-ptb` `UnsignedCall` payload). Sui-only; other kits leave the method
+ * `undefined`. Consumers presence-check per chain-extension discipline.
+ */
+export interface SignAndExecuteSuiPtbArgs {
+  /** Paying wallet bound to the session (SI-1, intent.wallet discipline). */
+  wallet: TWallet;
+  chain: ChainConfig;
+  /** === `UnsignedCall.transactionBlockBase64` for kind "sui-ptb". */
+  ptbBase64: string;
+}
+
+/**
  * Arguments for `WalletKitAdapter.sendAnchorInstruction` — broadcasts a
  * Solana transaction containing Anchor program instructions. Used by the
  * onchain settlement rail to call TakumiPay program instructions
@@ -876,6 +890,16 @@ export interface WalletKitAdapter {
    * `undefined`. Consumers presence-check per chain-extension discipline.
    */
   sendAnchorInstruction?(args: SendAnchorInstructionArgs): Promise<string>;
+
+  /**
+   * Signs and executes a pre-built PTB (base64 BCS — the `sui-ptb`
+   * `UnsignedCall` payload) with the wallet's Sui signer. The general
+   * Sui-PTB submitter: it consumes the `transactionBlockBase64` any
+   * `UnsignedCall` carries, so the same method serves the Intent Engine and
+   * any future Sui `DefiProtocolAdapter`. Sui-only; other kits leave it
+   * `undefined`. Consumers presence-check. Returns the base58 digest.
+   */
+  signAndExecuteSuiPtb?(args: SignAndExecuteSuiPtbArgs): Promise<string>;
 
   // ── Optional capability flags ───────────────────────────────────────
   /** Whether this kit supports non-native token transfers. */

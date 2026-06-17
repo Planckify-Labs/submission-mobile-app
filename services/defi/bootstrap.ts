@@ -19,6 +19,7 @@
 import {
   FEATURE_DEFI_PHASE_2,
   FEATURE_DEFI_PHASE_3,
+  FEATURE_DEFI_SUI_ADAPTERS,
   FEATURE_DEFI_TESTNET_ADAPTERS,
 } from "@/constants/configs/featureFlags";
 import { walletKitRegistry } from "@/services/walletKit/registry";
@@ -47,6 +48,7 @@ import {
   MorphoSteakhouseUsdcEthAdapter,
   MorphoVaultAdapter,
 } from "./adapters/morpho";
+import { ScallopSuiAdapter } from "./adapters/scallopSui";
 import { SolanaJitoAdapter } from "./adapters/solanaJito";
 import {
   YearnV3EthereumAdapter,
@@ -91,6 +93,13 @@ export function bootDefi(): void {
     registerDefiAdapter(EigenLayerEthereumAdapter);
     registerDefiAdapter(EthenaEthereumAdapter);
     registerDefiAdapter(GmxV2ArbitrumAdapter);
+  }
+
+  // ── Sui adapters (Intent Engine) ────────────────────────────────
+  // Scallop is mainnet-only; `chainId:"mainnet"` makes it inert on
+  // testnet via the registry's network gate (spec §4.6).
+  if (FEATURE_DEFI_SUI_ADAPTERS) {
+    registerDefiAdapter(ScallopSuiAdapter);
   }
 
   // ── Testnet adapters (QA-only) ──────────────────────────────────

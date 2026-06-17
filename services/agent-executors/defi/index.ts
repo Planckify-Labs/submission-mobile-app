@@ -10,6 +10,7 @@
  */
 
 import type { MobileToolExecutor } from "../types";
+import { DEFI_INTENT_EXECUTORS } from "./intentExecutors";
 import { getConfig, listOpportunities, listPositions } from "./reads";
 import { simulateDeposit } from "./simulate";
 import {
@@ -32,4 +33,6 @@ export const DEFI_EXECUTORS: Record<string, MobileToolExecutor> = {
   defi_rebalance: rebalance,
   defi_cross_chain_deposit: crossChainDeposit,
   defi_compound: compound,
+  // Sui Intent Engine (spec §6.4) — defi_ prefix → DeFi specialist.
+  ...DEFI_INTENT_EXECUTORS,
 };

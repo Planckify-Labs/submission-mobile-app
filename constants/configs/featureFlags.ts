@@ -38,3 +38,15 @@ export const FEATURE_DEFI_CROSS_CHAIN_REBALANCE = flag(
   "EXPO_PUBLIC_FF_CROSS_CHAIN_REBALANCE",
   false,
 );
+
+/**
+ * Sui DeFi adapters (Scallop) for the Intent Engine (Sui Overflow 2026
+ * Phase 1). Default ON: the adapter is `chainId:"mainnet"`, so on testnet
+ * `listDefiAdaptersForChain("sui","testnet")` resolves it nowhere and it
+ * is inert until the user is on Sui mainnet (spec §4.6). Flag exists so ops
+ * can disable the mainnet supply/withdraw surface without a code change.
+ */
+export const FEATURE_DEFI_SUI_ADAPTERS = flag(
+  "EXPO_PUBLIC_FF_DEFI_SUI_ADAPTERS",
+  true,
+);
