@@ -4,28 +4,33 @@
  * exemplar): `namespace:"sui"`, `chainId:"mainnet"`, `kind:"stablecoin_lending"`,
  * returning a `{ kind:"sui-ptb", transactionBlockBase64 }` UnsignedCall.
  *
- * MAINNET-ONLY: the Scallop SDK ships no testnet addresses (§4.4), so this
- * adapter's `chainId:"mainnet"` means `listDefiAdaptersForChain("sui",
- * "testnet")` resolves it nowhere — the network gate is free, no `networks`
- * field. On testnet the agent simply doesn't offer supply/withdraw.
+ * NO SDK. We build the PTBs directly with `@mysten/sui` (the app's own v2),
+ * calling Scallop's public lending contract:
  *
- * The Scallop SDK (`@scallop-io/sui-scallop-sdk`) is dynamically imported
- * so its (Pyth, axios, sui-kit) module graph never loads at app boot — only
- * when a supply/withdraw actually runs (the `recordTransferHistory`
- * precedent). Every SDK failure maps to a curated `DefiError` — never a raw
- * SDK/RPC string (CLAUDE.md user-facing-errors).
+ *   supply   → scallop_protocol::mint::mint<T>(version, &mut market, coin, clock)
+ *                → Coin<MarketCoin<T>>  (the yield-bearing receipt)
+ *   withdraw → scallop_protocol::redeem::redeem<T>(version, &mut market, mCoin, clock)
+ *                → Coin<T>
  *
- * Mainnet build behaviour is validated against mainnet with a small real
- * amount (spec §14.5) before the yield hero is demoed; until then the
- * adapter is reachable only when the user is on Sui mainnet, and any SDK
- * shape drift surfaces as a typed friendly error, never a bad signature.
+ * The package + shared-object ids come from `scallop.config.ts`'s cached
+ * address resolver (Scallop's HTTPS address API, not the SDK). This drops the
+ * whole `@scallop-io/sui-scallop-sdk` → sui-kit → Pyth → axios dependency
+ * graph that does not survive Hermes — there is no oracle in the supply path
+ * (Scallop's docs: price updates are only for borrow/collateral), so a plain
+ * supply needs none of it.
+ *
+ * MAINNET-ONLY: `chainId:"mainnet"` means `listDefiAdaptersForChain("sui",
+ * "testnet")` resolves it nowhere — the network gate is free. Every failure
+ * maps to a curated `DefiError`, never a raw RPC string (CLAUDE.md).
  */
 
 import { toBase64 } from "@mysten/bcs";
-import type {
+import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import {
   Transaction,
-  TransactionObjectArgument,
+  type TransactionObjectArgument,
 } from "@mysten/sui/transactions";
+import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import type { SuiChainConfig } from "@/constants/configs/chainConfig";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { SuiSwapError } from "@/services/swap/sui/types";
@@ -37,10 +42,12 @@ import type {
   DefiProtocolAdapter,
   UnsignedCall,
 } from "../types";
-import { resolveScallopCoin } from "./scallop.config";
+import { getScallopCore, resolveScallopCoin } from "./scallop.config";
 
 const SLUG = "scallop-sui";
 const NETWORK = "mainnet" as const;
+const MINT_TARGET = "mint::mint" as const;
+const REDEEM_TARGET = "redeem::redeem" as const;
 
 function devWarn(scope: string, err: unknown): void {
   if (typeof __DEV__ !== "undefined" && __DEV__) {
@@ -48,44 +55,84 @@ function devWarn(scope: string, err: unknown): void {
   }
 }
 
-/** Lazily load the Scallop builder for the active (mainnet) network. */
-async function createBuilder() {
-  const mod = await import("@scallop-io/sui-scallop-sdk");
-  const scallop = new mod.Scallop({ networkType: NETWORK });
-  return scallop.createScallopBuilder();
+function suiClientFor(chain: SuiChainConfig): SuiJsonRpcClient {
+  return new SuiJsonRpcClient({ url: chain.rpcUrl, network: chain.network });
 }
 
-async function createQuery() {
-  const mod = await import("@scallop-io/sui-scallop-sdk");
-  const scallop = new mod.Scallop({ networkType: NETWORK });
-  return scallop.createScallopQuery();
+/** Native SUI in any address form (`0x2::sui::SUI` or zero-padded). */
+function isNativeSui(coinType: string): boolean {
+  return /^0x0*2::sui::SUI$/.test(coinType);
 }
 
 /**
- * Best-effort supply enrichment for the preview — APY + the resolved input
- * coinType — read from Scallop's market data. Never throws; returns an
- * empty object on any failure so the preview still renders.
+ * Select + prepare the exact input coin for a deposit: native SUI is split off
+ * the gas coin; any other coin is gathered (the wallet holds many small
+ * `Coin<T>` objects), merged, then split — the same pattern as
+ * `coinTransferService.ts`.
+ */
+async function prepareInputCoin(
+  tx: Transaction,
+  client: SuiJsonRpcClient,
+  owner: string,
+  coinType: string,
+  amount: bigint,
+): Promise<TransactionObjectArgument> {
+  if (isNativeSui(coinType)) {
+    const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amount)]);
+    return coin;
+  }
+  const { data } = await client.getCoins({ owner, coinType });
+  if (!data || data.length === 0) {
+    throw new DefiError("no_onchain_balance", `scallop: no ${coinType}`);
+  }
+  const objs = data.map((c) => tx.object(c.coinObjectId));
+  const primary = objs[0];
+  if (objs.length > 1) tx.mergeCoins(primary, objs.slice(1));
+  const [coin] = tx.splitCoins(primary, [tx.pure.u64(amount)]);
+  return coin;
+}
+
+/** Append `mint::mint<coinType>(version, market, coin, clock)` → market coin. */
+function appendMint(
+  tx: Transaction,
+  core: { protocolPkg: string; version: string; market: string },
+  coinType: string,
+  depositCoin: TransactionObjectArgument,
+): TransactionObjectArgument {
+  const [marketCoin] = tx.moveCall({
+    target: `${core.protocolPkg}::${MINT_TARGET}`,
+    typeArguments: [coinType],
+    arguments: [
+      tx.object(core.version),
+      tx.object(core.market),
+      depositCoin,
+      tx.object(SUI_CLOCK_OBJECT_ID),
+    ],
+  });
+  return marketCoin;
+}
+
+/**
+ * The underlying's `module::STRUCT` tail (e.g. `usdc::USDC`) — used to match
+ * the wallet's `…::reserve::MarketCoin<…>` objects regardless of address
+ * zero-padding or which (possibly upgraded) package minted them.
+ */
+function moduleStructTail(coinType: string): string {
+  return coinType.split("::").slice(-2).join("::");
+}
+
+/**
+ * Best-effort supply enrichment for the preview — the resolved input coinType.
+ * APY is left undefined for now (Scallop's public APY feed isn't wired); the
+ * preview still renders "Supply N USDC to Scallop". Never throws.
  */
 export async function readScallopSupplyMeta(
   assetSymbol: string,
-  ownerAddress: string,
+  _ownerAddress: string,
 ): Promise<{ apy?: string; inputCoinType?: string }> {
   const coin = resolveScallopCoin(assetSymbol);
   if (!coin) return {};
-  try {
-    const query = await createQuery();
-    const lending = await query.getLending(coin.coinName, ownerAddress);
-    return {
-      apy:
-        typeof lending?.supplyApy === "number"
-          ? (lending.supplyApy * 100).toFixed(2)
-          : undefined,
-      inputCoinType: lending?.coinType,
-    };
-  } catch (err) {
-    devWarn("readScallopSupplyMeta", err);
-    return {};
-  }
+  return { inputCoinType: coin.coinType };
 }
 
 /** The swap leg appended into the shared tx (the DEX side of a zap). */
@@ -122,17 +169,13 @@ export interface ZapSupplyResult {
 /**
  * Atomic swap→supply (spec §4.7, the "why Sui" hero) — MAINNET-ONLY.
  *
- * Builds ONE Programmable Transaction Block that swaps `fromAsset`→`toAsset`
- * on a DEX and supplies the resulting coin to Scallop, all-or-nothing. The
- * Scallop SDK is the master tx (its `ScallopTxBlock.txBlock` IS a `@mysten/sui`
- * `Transaction`, and the docs support driving both together); the DEX swap
- * appends to that same tx and we feed its output coin straight into
- * `scallopTxBlock.deposit(coin, coinName)` (official builder API, returns the
- * market coin). The market coin + any swap leftovers transfer back to the user.
- *
- * On EVM/Solana there is no atomic multi-step preview like this — that is the
- * Sui-specific advantage the Intent Engine showcases. Every SDK failure maps
- * to a curated `DefiError`/`SuiSwapError`, never a raw string.
+ * Builds ONE Programmable Transaction Block that swaps `fromAsset`→`toAsset` on
+ * a DEX and supplies the resulting coin to Scallop, all-or-nothing. Both legs
+ * append to the SAME `@mysten/sui` `Transaction`: the DEX swap (via the
+ * injected `appendSwap`) produces an output coin, which feeds straight into
+ * Scallop's `mint`, and the market coin + any swap leftovers transfer back to
+ * the user. On EVM/Solana there is no atomic multi-step preview like this —
+ * that is the Sui-specific advantage the Intent Engine showcases.
  */
 export async function buildScallopZapSupply(
   args: ZapSupplyArgs,
@@ -142,25 +185,11 @@ export async function buildScallopZapSupply(
   }
   const coin = resolveScallopCoin(args.supplyAssetSymbol);
   if (!coin) {
-    throw new DefiError(
-      "unsupported_asset",
-      `scallop: ${args.supplyAssetSymbol}`,
-    );
+    throw new DefiError("unsupported_asset", `scallop: ${args.supplyAssetSymbol}`);
   }
   try {
-    const builder = await createBuilder();
-    const stx = builder.createTxBlock();
-    // Version-skew boundary (the ONLY reason for the casts here): Scallop's
-    // `sui-kit@1.4.x` bundles `@mysten/sui@^1.x`, but this app runs
-    // `@mysten/sui@^2.x`. The SDK DOES type these — `ScallopTxBlock.txBlock`
-    // is `Transaction` and `deposit(coin: SuiObjectArg, poolCoinName)` returns
-    // `TransactionResult` — but those are the SAME shapes from a DIFFERENT
-    // major version, so TS sees them as nominally distinct. We bridge
-    // structurally at this one seam, exactly like the DeepBook path
-    // (`as unknown as DeepBookCompatibleClient`, "2.16 vs the SDK's 2.18 peer
-    // differ only structurally"). Runtime validation is the mainnet smoke
-    // test (spec §14.5).
-    const tx = stx.txBlock as unknown as Transaction;
+    const core = await getScallopCore();
+    const tx = new Transaction();
     tx.setSender(args.wallet.address);
 
     const swap = await args.appendSwap(tx);
@@ -168,23 +197,13 @@ export async function buildScallopZapSupply(
       throw new DefiError("deposit_failed", "zap: swap leg unavailable");
     }
 
-    // Supply the swapped coin to Scallop; `deposit(coin, poolCoinName)` returns
-    // the market coin (official builder API). The cast targets the SDK's REAL
-    // first-parameter type (`SuiObjectArg` from sui-kit), not `never`, so a
-    // genuine signature change still fails to compile — it only bridges the
-    // 1.x↔2.x `TransactionObjectArgument` skew described above.
-    const marketCoin = stx.deposit(
-      swap.outputCoin as unknown as Parameters<typeof stx.deposit>[0],
-      coin.coinName,
-    ) as unknown as TransactionObjectArgument;
-
-    // Return the market coin + any swap leftovers (unused input + DEEP).
+    const marketCoin = appendMint(tx, core, coin.coinType, swap.outputCoin);
     tx.transferObjects(
       [marketCoin, ...swap.leftoverCoins],
       tx.pure.address(args.wallet.address),
     );
 
-    const bytes = await tx.build({ client: builder.suiKit.client });
+    const bytes = await tx.build({ client: suiClientFor(args.chain) });
     return {
       ptbBase64: toBase64(bytes),
       expectedOut: swap.expectedOut,
@@ -209,6 +228,7 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
   staticSafetyScore: 80,
 
   async buildDeposit({
+    wallet,
     chain,
     asset,
     amount,
@@ -224,13 +244,22 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
       throw new DefiError("unsupported_asset", `scallop: ${asset.symbol}`);
     }
     try {
-      const builder = await createBuilder();
-      const tx = builder.createTxBlock();
-      // depositQuick selects + merges the input coin and (per Scallop's
-      // builder docs) handles the resulting market coin; the dry-run gate
-      // catches any leftover-value revert before signing.
-      await tx.depositQuick(Number(amount), coin.coinName);
-      const bytes = await tx.build({ client: builder.suiKit.client });
+      const core = await getScallopCore();
+      const client = suiClientFor(chain);
+      const tx = new Transaction();
+      tx.setSender(wallet.address);
+
+      const depositCoin = await prepareInputCoin(
+        tx,
+        client,
+        wallet.address,
+        coin.coinType,
+        amount,
+      );
+      const marketCoin = appendMint(tx, core, coin.coinType, depositCoin);
+      tx.transferObjects([marketCoin], tx.pure.address(wallet.address));
+
+      const bytes = await tx.build({ client });
       return { kind: "sui-ptb", transactionBlockBase64: toBase64(bytes) };
     } catch (err) {
       if (err instanceof DefiError) throw err;
@@ -255,26 +284,52 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
     if (!coin) {
       throw new DefiError("unsupported_asset", `scallop: ${asset.symbol}`);
     }
+    // First cut: full exit only. A partial withdraw by underlying amount needs
+    // the market-coin↔underlying exchange rate to split exactly; until that's
+    // read on-chain we support "withdraw all" (the common path).
+    if (amount !== "MAX") {
+      throw new DefiError(
+        "withdraw_failed",
+        "scallop: partial withdraw not supported yet",
+      );
+    }
     try {
-      let raw: number;
-      if (amount === "MAX") {
-        const query = await createQuery();
-        const lending = await query.getLending(coin.coinName, wallet.address);
-        const withdrawable = lending?.availableWithdrawAmount ?? 0;
-        if (!withdrawable || withdrawable <= 0) {
-          throw new DefiError(
-            "no_onchain_balance",
-            "scallop: nothing to withdraw",
-          );
-        }
-        raw = withdrawable;
-      } else {
-        raw = Number(amount);
+      const core = await getScallopCore();
+      const client = suiClientFor(chain);
+
+      // Gather the wallet's market coins for this asset. Match on the
+      // `reserve::MarketCoin<…>` wrapper + the underlying's module::STRUCT tail
+      // so address zero-padding / package upgrades never hide them.
+      const tail = moduleStructTail(coin.coinType);
+      const { data } = await client.getAllCoins({ owner: wallet.address });
+      const marketCoins = (data ?? []).filter(
+        (c) =>
+          c.coinType.includes("::reserve::MarketCoin<") &&
+          c.coinType.includes(`::${tail}>`),
+      );
+      if (marketCoins.length === 0) {
+        throw new DefiError("no_onchain_balance", "scallop: nothing to withdraw");
       }
-      const builder = await createBuilder();
-      const tx = builder.createTxBlock();
-      await tx.withdrawQuick(raw, coin.coinName);
-      const bytes = await tx.build({ client: builder.suiKit.client });
+
+      const tx = new Transaction();
+      tx.setSender(wallet.address);
+      const objs = marketCoins.map((c) => tx.object(c.coinObjectId));
+      const primary = objs[0];
+      if (objs.length > 1) tx.mergeCoins(primary, objs.slice(1));
+
+      const [underlying] = tx.moveCall({
+        target: `${core.protocolPkg}::${REDEEM_TARGET}`,
+        typeArguments: [coin.coinType],
+        arguments: [
+          tx.object(core.version),
+          tx.object(core.market),
+          primary,
+          tx.object(SUI_CLOCK_OBJECT_ID),
+        ],
+      });
+      tx.transferObjects([underlying], tx.pure.address(wallet.address));
+
+      const bytes = await tx.build({ client });
       return { kind: "sui-ptb", transactionBlockBase64: toBase64(bytes) };
     } catch (err) {
       if (err instanceof DefiError) throw err;
@@ -283,29 +338,12 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
     }
   },
 
-  async readPosition(walletAddress: string): Promise<DefiPosition | null> {
-    // Best-effort: report the USDC lending position as the representative
-    // Scallop position. Returns null on any failure (defi_list_positions
-    // just omits Scallop until the read is exercised on mainnet, §14.5).
-    try {
-      const query = await createQuery();
-      const lending = await query.getLending("usdc", walletAddress);
-      const supplied = lending?.suppliedAmount ?? 0;
-      if (!supplied || supplied <= 0) return null;
-      return {
-        protocolSlug: SLUG,
-        namespace: "sui",
-        chainId: NETWORK,
-        assetSymbol: "USDC",
-        amountAtDeposit: 0n,
-        amountAtDepositUsd: 0,
-        currentAmount: BigInt(Math.round(supplied)),
-        currentAmountUsd: lending?.suppliedValue ?? 0,
-        pnlUsd: 0,
-      };
-    } catch (err) {
-      devWarn("readPosition", err);
-      return null;
-    }
+  async readPosition(): Promise<DefiPosition | null> {
+    // First cut: omit Scallop from defi_list_positions. A correct position
+    // value needs the market-coin↔underlying exchange rate (an extra on-chain
+    // read); showing the raw market-coin balance as an underlying amount would
+    // mislead, so we return null until that read lands (it's best-effort/
+    // omittable per spec §14.5).
+    return null;
   },
 };

@@ -17,11 +17,10 @@ import {
 } from "./types";
 import { cetusSwapVenue } from "./venues/cetusSwap";
 import { deepbookSwapVenue } from "./venues/deepbookSwap";
-import { sevenkSwapVenue } from "./venues/sevenkSwap";
 
-/** Aggregators first (best route), DeepBook CLOB as the fallback. */
+/** Cetus aggregator first (best route), DeepBook CLOB as the fallback. */
 export const SWAP_PRIORITY: Record<SuiNetwork, string[]> = {
-  mainnet: ["cetus", "7k", "deepbook"],
+  mainnet: ["cetus", "deepbook"],
   testnet: ["deepbook"], // only DeepBook runs on testnet
   devnet: ["deepbook"],
 };
@@ -29,7 +28,6 @@ export const SWAP_PRIORITY: Record<SuiNetwork, string[]> = {
 export const DEFAULT_SWAP_VENUES: SuiSwapVenue[] = [
   deepbookSwapVenue,
   cetusSwapVenue,
-  sevenkSwapVenue,
 ];
 
 /**

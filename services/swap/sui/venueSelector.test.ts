@@ -61,7 +61,6 @@ describe("selectSwapRoute", () => {
     const venues = [
       makeVenue("deepbook", ALL, 100n),
       makeVenue("cetus", MAINNET, 999n),
-      makeVenue("7k", MAINNET, 999n),
     ];
     const route = await selectSwapRoute(params("testnet"), venues);
     expect(route?.venue).toBe("deepbook");
@@ -70,19 +69,17 @@ describe("selectSwapRoute", () => {
 
   it("on mainnet picks the best expected-out", async () => {
     const venues = [
-      makeVenue("cetus", MAINNET, 200n),
-      makeVenue("7k", MAINNET, 300n),
+      makeVenue("cetus", MAINNET, 300n),
       makeVenue("deepbook", ALL, 100n),
     ];
     const route = await selectSwapRoute(params("mainnet"), venues);
-    expect(route?.venue).toBe("7k");
+    expect(route?.venue).toBe("cetus");
     expect(route?.expectedOut).toBe(300n);
   });
 
   it("breaks ties toward the earlier-priority venue", async () => {
     const venues = [
       makeVenue("cetus", MAINNET, 200n),
-      makeVenue("7k", MAINNET, 200n),
       makeVenue("deepbook", ALL, 200n),
     ];
     const route = await selectSwapRoute(params("mainnet"), venues);
@@ -92,17 +89,15 @@ describe("selectSwapRoute", () => {
   it("skips venues that throw", async () => {
     const venues = [
       makeVenue("cetus", MAINNET, "throw"),
-      makeVenue("7k", MAINNET, 300n),
       makeVenue("deepbook", ALL, 100n),
     ];
     const route = await selectSwapRoute(params("mainnet"), venues);
-    expect(route?.venue).toBe("7k");
+    expect(route?.venue).toBe("deepbook");
   });
 
   it("returns null when no venue answers", async () => {
     const venues = [
       makeVenue("cetus", MAINNET, null),
-      makeVenue("7k", MAINNET, null),
       makeVenue("deepbook", ALL, null),
     ];
     expect(await selectSwapRoute(params("mainnet"), venues)).toBeNull();

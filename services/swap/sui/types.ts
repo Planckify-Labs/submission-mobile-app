@@ -41,7 +41,7 @@ export interface SuiSwapRouteParams {
 }
 
 export interface SuiSwapRoute {
-  /** Venue id that produced this route ("deepbook" | "cetus" | "7k"). */
+  /** Venue id that produced this route ("deepbook" | "cetus"). */
   venue: string;
   /** base64 BCS — a finished `sui-ptb`. */
   ptbBase64: string;
