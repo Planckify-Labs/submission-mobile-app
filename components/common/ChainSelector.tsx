@@ -3,6 +3,7 @@ import React, {
   forwardRef,
   memo,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -13,6 +14,7 @@ import {
   Animated,
   Dimensions,
   Image,
+  Keyboard,
   Modal,
   PanResponder,
   Platform,
@@ -117,7 +119,7 @@ function ChainListSkeleton() {
 }
 
 const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
-  const { bottom } = useSafeAreaInsets();
+  const { top, bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
 
   const { activeChain, changeActiveChain, changeActiveChainToConfig } =
@@ -125,8 +127,51 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [switchingRowKey, setSwitchingRowKey] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+  // Drives the sheet's lift above the keyboard. Separate JS-driven value so
+  // the slide stays smooth instead of snapping with the keyboard frame.
+  const keyboardAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      // Collapse the list first (shrinking never clips the top), then glide up.
+      setKeyboardHeight(e.endCoordinates.height);
+      Animated.timing(keyboardAnim, {
+        toValue: e.endCoordinates.height,
+        duration: e.duration || 250,
+        useNativeDriver: true,
+      }).start();
+    });
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      // Glide the sheet down first, then expand the list back so it never
+      // overshoots the top of the screen mid-animation.
+      Animated.timing(keyboardAnim, {
+        toValue: 0,
+        duration: e.duration || 250,
+        useNativeDriver: true,
+      }).start(() => setKeyboardHeight(0));
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardAnim]);
+
+  // Lift the sheet above the keyboard and shrink the scroll area so the
+  // header/search stay on screen when the list is tall.
+  const scrollMaxHeight =
+    keyboardHeight > 0
+      ? Math.max(
+          140,
+          Math.min(SCROLL_MAX_HEIGHT, height - keyboardHeight - top - 160),
+        )
+      : SCROLL_MAX_HEIGHT;
 
   const { data: blockchains, isLoading: isLoadingBlockchains } =
     useBlockchainsWithStorage({ isActive: true });
@@ -217,6 +262,7 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
   }, [grouped, searchQuery]);
 
   const closeModal = useCallback(() => {
+    Keyboard.dismiss();
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -434,7 +480,10 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
                 paddingBottom: bottomOffset,
                 borderTopLeftRadius: 24,
                 borderTopRightRadius: 24,
-                transform: [{ translateY: translateY }],
+                transform: [
+                  { translateY: translateY },
+                  { translateY: Animated.multiply(keyboardAnim, -1) },
+                ],
               }}
             >
               <View className="bg-light-main-container rounded-t-3xl">
@@ -478,7 +527,7 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
                   </View>
 
                   <ScrollView
-                    style={{ maxHeight: SCROLL_MAX_HEIGHT }}
+                    style={{ maxHeight: scrollMaxHeight }}
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{ paddingBottom: 24 }}
