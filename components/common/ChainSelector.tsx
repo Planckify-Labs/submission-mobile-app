@@ -20,6 +20,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   Text,
   TextInput,
   TouchableWithoutFeedback,
@@ -38,7 +39,6 @@ import { walletKitRegistry } from "@/services/walletKit/registry";
 
 const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;
-const SCROLL_MAX_HEIGHT = MODAL_HEIGHT - 140;
 
 export interface ChainSelectorRef {
   open: () => void;
@@ -121,6 +121,14 @@ function ChainListSkeleton() {
 const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
   const { top, bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
+  // Hard ceiling for the lift: the sheet must stop this far below the top of
+  // the screen so it never slides behind the status bar / notch. The safe-area
+  // top inset covers iOS notches; `StatusBar.currentHeight` is the Android
+  // status bar (undefined on iOS, hence the guard).
+  const statusBarHeight = Math.max(
+    top,
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0,
+  );
 
   const { activeChain, changeActiveChain, changeActiveChainToConfig } =
     useWallet();
@@ -129,49 +137,56 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
   const [switchingRowKey, setSwitchingRowKey] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  // JS-driven (useNativeDriver: false): translateY shares the sheet node with
+  // the non-native animated height/padding (kbProgress), and a node can't mix
+  // native + non-native drivers — so the open/close slide is JS-driven too.
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
-  // Drives the sheet's lift above the keyboard. Separate JS-driven value so
-  // the slide stays smooth instead of snapping with the keyboard frame.
-  const keyboardAnim = useRef(new Animated.Value(0)).current;
+  // 0 = keyboard closed, 1 = keyboard fully open. Drives both the sheet's grow
+  // (MODAL_HEIGHT → screen minus status bar) and its bottom padding (so the
+  // list clears the keyboard). Both are layout props → JS-driven.
+  const kbProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const showEvent =
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent =
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    // Grow the sheet + pad its bottom as the keyboard opens, synced to the
+    // keyboard duration. JS-driven because height/padding are layout props.
     const showSub = Keyboard.addListener(showEvent, (e) => {
-      // Collapse the list first (shrinking never clips the top), then glide up.
       setKeyboardHeight(e.endCoordinates.height);
-      Animated.timing(keyboardAnim, {
-        toValue: e.endCoordinates.height,
+      Animated.timing(kbProgress, {
+        toValue: 1,
         duration: e.duration || 250,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start();
     });
     const hideSub = Keyboard.addListener(hideEvent, (e) => {
-      // Glide the sheet down first, then expand the list back so it never
-      // overshoots the top of the screen mid-animation.
-      Animated.timing(keyboardAnim, {
+      Animated.timing(kbProgress, {
         toValue: 0,
         duration: e.duration || 250,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start(() => setKeyboardHeight(0));
     });
     return () => {
       showSub.remove();
       hideSub.remove();
     };
-  }, [keyboardAnim]);
+  }, [kbProgress]);
 
-  // Lift the sheet above the keyboard and shrink the scroll area so the
-  // header/search stay on screen when the list is tall.
-  const scrollMaxHeight =
-    keyboardHeight > 0
-      ? Math.max(
-          140,
-          Math.min(SCROLL_MAX_HEIGHT, height - keyboardHeight - top - 160),
-        )
-      : SCROLL_MAX_HEIGHT;
+  // Sheet grows from MODAL_HEIGHT up to (screen − status bar); padding grows
+  // from the safe-area offset up to (offset + keyboard height). Both driven by
+  // the same 0→1 kbProgress so they animate in lock-step. The inner content is
+  // flex-laid-out, so growing this height expands the list automatically.
+  const animatedHeight = kbProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [MODAL_HEIGHT, height - statusBarHeight],
+    extrapolate: "clamp",
+  });
+  const animatedPaddingBottom = Animated.add(
+    bottomOffset,
+    Animated.multiply(kbProgress, keyboardHeight),
+  );
 
   const { data: blockchains, isLoading: isLoadingBlockchains } =
     useBlockchainsWithStorage({ isActive: true });
@@ -272,7 +287,7 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
       Animated.timing(translateY, {
         toValue: MODAL_HEIGHT,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start(() => {
       setModalVisible(false);
@@ -313,7 +328,7 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
       Animated.timing(translateY, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
   }, [fadeAnim, translateY]);
@@ -336,12 +351,12 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
           Animated.timing(translateY, {
             toValue: MODAL_HEIGHT,
             duration: 200,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }).start(() => closeModal());
         } else {
           Animated.spring(translateY, {
             toValue: 0,
-            useNativeDriver: true,
+            useNativeDriver: false,
             bounciness: 5,
           }).start();
         }
@@ -476,17 +491,21 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
                 bottom: 0,
                 left: 0,
                 right: 0,
-                height: "auto",
-                paddingBottom: bottomOffset,
+                // Grows up to (screen − status bar) when the keyboard opens;
+                // bottom padding grows in step so the list clears the keyboard.
+                height: animatedHeight,
+                paddingBottom: animatedPaddingBottom,
+                // bg lives on this (padded) outer view so it fills down to the
+                // screen bottom behind the keyboard and stays anchored — only
+                // the content lifts, the box itself doesn't move.
+                backgroundColor: "#f5f6f9",
                 borderTopLeftRadius: 24,
                 borderTopRightRadius: 24,
-                transform: [
-                  { translateY: translateY },
-                  { translateY: Animated.multiply(keyboardAnim, -1) },
-                ],
+                flexDirection: "column",
+                transform: [{ translateY: translateY }],
               }}
             >
-              <View className="bg-light-main-container rounded-t-3xl">
+              <View className="flex-1">
                 <View
                   {...panResponder.panHandlers}
                   className="w-full items-center pt-4 pb-2"
@@ -494,7 +513,7 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
                   <View className="w-12 h-1 bg-gray-300 rounded-full" />
                 </View>
 
-                <View className="px-6">
+                <View className="flex-1 px-6">
                   <View className="flex-row justify-between items-center mb-4">
                     <Text className="text-light-matte-black text-xl font-bold">
                       Select Network
@@ -527,7 +546,7 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
                   </View>
 
                   <ScrollView
-                    style={{ maxHeight: scrollMaxHeight }}
+                    className="flex-1"
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{ paddingBottom: 24 }}

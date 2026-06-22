@@ -1,14 +1,16 @@
 import { Check, Search, Star, X } from "lucide-react-native";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
   Image,
+  Keyboard,
   Modal,
   PanResponder,
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   Text,
   TextInput,
   TouchableWithoutFeedback,
@@ -25,8 +27,14 @@ const { height } = Dimensions.get("window");
 const MODAL_HEIGHT = height * 0.67;
 
 const NetworkSelectorModal = () => {
-  const { bottom } = useSafeAreaInsets();
+  const { top, bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
+  // The sheet grows up to this when the keyboard opens — its top stops just
+  // below the status bar / notch.
+  const statusBarHeight = Math.max(
+    top,
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0,
+  );
 
   const { isVisible, searchQuery, setSearchQuery, closeModal } =
     useNetworkModal();
@@ -35,7 +43,15 @@ const NetworkSelectorModal = () => {
   const { isPinned, togglePin } = usePinnedNetworks();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  // JS-driven (useNativeDriver: false): translateY shares the sheet node with
+  // the non-native animated height/padding (kbProgress), and a node can't mix
+  // native + non-native drivers — so the open/close slide is JS-driven too.
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+  // 0 = keyboard closed, 1 = keyboard fully open. Drives both the sheet's grow
+  // (MODAL_HEIGHT → screen minus status bar) and its bottom padding (so the
+  // list clears the keyboard). Both are layout props → JS-driven.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const kbProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (isVisible) {
@@ -48,16 +64,47 @@ const NetworkSelectorModal = () => {
         Animated.timing(translateY, {
           toValue: 0,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start();
     } else {
       fadeAnim.setValue(0);
       translateY.setValue(MODAL_HEIGHT);
+      kbProgress.setValue(0);
+      setKeyboardHeight(0);
     }
-  }, [isVisible, fadeAnim, translateY]);
+  }, [isVisible, fadeAnim, translateY, kbProgress]);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    // Grow the sheet + pad its bottom as the keyboard opens, synced to the
+    // keyboard duration. JS-driven because height/padding are layout props.
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      Animated.timing(kbProgress, {
+        toValue: 1,
+        duration: e.duration || 250,
+        useNativeDriver: false,
+      }).start();
+    });
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      Animated.timing(kbProgress, {
+        toValue: 0,
+        duration: e.duration || 250,
+        useNativeDriver: false,
+      }).start(() => setKeyboardHeight(0));
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [kbProgress]);
 
   const handleClose = () => {
+    Keyboard.dismiss();
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -67,7 +114,7 @@ const NetworkSelectorModal = () => {
       Animated.timing(translateY, {
         toValue: MODAL_HEIGHT,
         duration: 200,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start(() => {
       closeModal();
@@ -91,7 +138,7 @@ const NetworkSelectorModal = () => {
         } else {
           Animated.spring(translateY, {
             toValue: 0,
-            useNativeDriver: true,
+            useNativeDriver: false,
             bounciness: 5,
           }).start();
         }
@@ -135,6 +182,19 @@ const NetworkSelectorModal = () => {
 
   if (!isVisible) return null;
 
+  // Sheet grows from MODAL_HEIGHT up to (screen − status bar); padding grows
+  // from the safe-area offset up to (offset + keyboard height). Both are driven
+  // by the same 0→1 kbProgress so they animate in lock-step.
+  const animatedHeight = kbProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [MODAL_HEIGHT, height - statusBarHeight],
+    extrapolate: "clamp",
+  });
+  const animatedPaddingBottom = Animated.add(
+    bottomOffset,
+    Animated.multiply(kbProgress, keyboardHeight),
+  );
+
   return (
     <Modal
       visible={isVisible}
@@ -157,8 +217,10 @@ const NetworkSelectorModal = () => {
                 bottom: 0,
                 left: 0,
                 right: 0,
-                height: MODAL_HEIGHT,
-                paddingBottom: bottomOffset,
+                // Grows up to (screen − status bar) when the keyboard opens;
+                // bottom padding grows in step so the list clears the keyboard.
+                height: animatedHeight,
+                paddingBottom: animatedPaddingBottom,
                 backgroundColor: "#f5f6f9",
                 borderTopLeftRadius: 24,
                 borderTopRightRadius: 24,
@@ -213,6 +275,7 @@ const NetworkSelectorModal = () => {
 
                 <ScrollView
                   className="flex-1"
+                  keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={{ paddingTop: 10 }}
                 >
