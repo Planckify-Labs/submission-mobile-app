@@ -1,24 +1,9 @@
 import { Delete } from "lucide-react-native";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  Animated,
-  Modal,
-  PanResponder,
-  Platform,
-  Pressable,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import React, { useEffect, useState } from "react";
+import { Text, TouchableOpacity, View } from "react-native";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import { usePin } from "@/hooks/usePin";
+import { errorFeedback, tapFeedback } from "@/utils/hapticsUtils";
 import PinSetupModal from "./PinSetupModal";
 
 interface PinConfirmationModalProps {
@@ -27,7 +12,6 @@ interface PinConfirmationModalProps {
   onConfirm: (pin: string) => void;
   title?: string;
   pinLength?: number;
-  panResponder?: any;
 }
 
 const PinConfirmationModal: React.FC<PinConfirmationModalProps> = ({
@@ -36,109 +20,32 @@ const PinConfirmationModal: React.FC<PinConfirmationModalProps> = ({
   onConfirm,
   title = "Confirm with PIN",
   pinLength = 4,
-  panResponder: externalPanResponder,
 }) => {
-  const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
-
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [setupModalVisible, setSetupModalVisible] = useState(false);
 
   const { hasPin, isLoading, verifyPin, setPin: savePin } = usePin();
 
-  const fadeAnim = useRef(new Animated.Value(visible ? 1 : 0)).current;
-  const translateY = useRef(new Animated.Value(visible ? 0 : 300)).current;
-  const hasAnimatedIn = useRef(visible);
-
-  const animateOpenModal = useCallback(() => {
-    fadeAnim.setValue(0);
-    translateY.setValue(300);
-
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 0,
-      }),
-    ]).start(() => {
-      hasAnimatedIn.current = true;
-    });
-  }, [fadeAnim, translateY]);
-
-  const animateCloseModal = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 300,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(onClose);
-  }, [fadeAnim, translateY, onClose]);
-
-  const panResponderConfig = useMemo(
-    () => ({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_: any, gestureState: { dy: number }) => {
-        if (gestureState.dy > 0) {
-          translateY.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_: any, gestureState: { dy: number }) => {
-        if (gestureState.dy > 100) {
-          animateCloseModal();
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        }
-      },
-    }),
-    [animateCloseModal, translateY],
-  );
-
-  const internalPanResponder = useRef(
-    PanResponder.create(panResponderConfig),
-  ).current;
-
-  const activePanResponder = externalPanResponder || internalPanResponder;
-
+  // Reset entry once per open so a previous attempt doesn't carry over.
   useEffect(() => {
-    if (visible && !hasAnimatedIn.current) {
+    if (visible) {
       setPin("");
       setError("");
-
-      if (!isLoading && !hasPin) {
-        setSetupModalVisible(true);
-      }
-      animateOpenModal();
-    } else if (!visible) {
-      fadeAnim.setValue(0);
-      translateY.setValue(300);
-      hasAnimatedIn.current = false;
     }
-  }, [
-    visible,
-    isLoading,
-    hasPin,
-    animateOpenModal,
-    fadeAnim.setValue,
-    translateY.setValue,
-  ]);
+  }, [visible]);
+
+  // No PIN yet -> route the user to the setup flow instead.
+  useEffect(() => {
+    if (visible && !isLoading && !hasPin) {
+      setSetupModalVisible(true);
+    }
+  }, [visible, isLoading, hasPin]);
 
   const handlePinDigit = async (digit: string) => {
     if (pin.length >= pinLength) return;
+
+    tapFeedback();
 
     const newPin = pin + digit;
     setPin(newPin);
@@ -149,6 +56,7 @@ const PinConfirmationModal: React.FC<PinConfirmationModalProps> = ({
       if (isValid) {
         onConfirm(newPin);
       } else {
+        errorFeedback();
         setError("Incorrect PIN. Please try again.");
         setPin("");
       }
@@ -165,8 +73,8 @@ const PinConfirmationModal: React.FC<PinConfirmationModalProps> = ({
     try {
       await savePin(newPin);
       setSetupModalVisible(false);
-    } catch (error) {
-      console.error("Failed to save PIN:", error);
+    } catch (err) {
+      if (__DEV__) console.error("Failed to save PIN:", err);
       setError("Failed to save PIN. Please try again.");
     }
   };
@@ -238,84 +146,33 @@ const PinConfirmationModal: React.FC<PinConfirmationModalProps> = ({
 
   return (
     <>
-      <Modal
-        transparent
+      <BaseModal
         visible={visible && hasPin}
-        animationType="none"
-        onRequestClose={animateCloseModal}
+        onClose={onClose}
+        height="auto"
+        borderRadius={28}
+        contentClassName="px-6 pb-2"
       >
-        <View style={{ flex: 1 }}>
-          <TouchableWithoutFeedback onPress={animateCloseModal}>
-            <Animated.View
-              style={{
-                flex: 1,
-                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                opacity: fadeAnim,
-              }}
-            />
-          </TouchableWithoutFeedback>
+        <ModalHeader title={title} />
 
-          <Animated.View
-            style={{
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: "auto",
-              paddingBottom: bottomOffset,
-              backgroundColor: "#f5f6f9",
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              transform: [{ translateY: translateY }],
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: -3 },
-              shadowOpacity: 0.1,
-              shadowRadius: 10,
-              elevation: 10,
-              opacity: fadeAnim,
-            }}
-          >
-            <View
-              {...activePanResponder.panHandlers}
-              className="w-full items-center pt-4 pb-2"
-            >
-              <View className="w-12 h-1 bg-gray-300 rounded-full" />
-            </View>
+        <View className="bg-white rounded-3xl p-6 shadow-sm mb-5">
+          <Text className="text-light-matte-black/70 mb-6 text-center">
+            Please enter your PIN to confirm this action
+          </Text>
 
-            <View className="px-6 flex-1">
-              <View className="flex-row items-center justify-between mb-6">
-                <Text className="text-light-matte-black text-xl font-bold">
-                  {title}
-                </Text>
-                <Pressable
-                  onPress={animateCloseModal}
-                  className="bg-light-main-container p-2 rounded-full"
-                >
-                  <Text className="text-light-primary-red font-bold">✕</Text>
-                </Pressable>
-              </View>
+          <View className="flex-row justify-center items-center mb-6">
+            {renderPinDots()}
+          </View>
 
-              <View className="bg-white rounded-3xl p-6 shadow-sm mb-5">
-                <Text className="text-light-matte-black/70 mb-6 text-center">
-                  Please enter your PIN to confirm this transaction
-                </Text>
+          {error ? (
+            <Text className="text-light-primary-red mb-4 text-center">
+              {error}
+            </Text>
+          ) : null}
 
-                <View className="flex-row justify-center items-center mb-6">
-                  {renderPinDots()}
-                </View>
-
-                {error ? (
-                  <Text className="text-light-primary-red mb-4 text-center">
-                    {error}
-                  </Text>
-                ) : null}
-
-                <View className="items-center">{renderNumberPad()}</View>
-              </View>
-            </View>
-          </Animated.View>
+          <View className="items-center">{renderNumberPad()}</View>
         </View>
-      </Modal>
+      </BaseModal>
 
       <PinSetupModal
         visible={visible && !hasPin && setupModalVisible}

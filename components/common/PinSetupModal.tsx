@@ -1,16 +1,8 @@
 import { Delete, Lock, Shield } from "lucide-react-native";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Animated,
-  Modal,
-  Platform,
-  Pressable,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import React, { useEffect, useState } from "react";
+import { Pressable, Text, TouchableOpacity, View } from "react-native";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
+import { errorFeedback, tapFeedback } from "@/utils/hapticsUtils";
 
 interface PinSetupModalProps {
   visible: boolean;
@@ -25,68 +17,27 @@ const PinSetupModal: React.FC<PinSetupModalProps> = ({
   onSetupComplete,
   pinLength = 4,
 }) => {
-  const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
-
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [step, setStep] = useState<"intro" | "create" | "confirm">("intro");
   const [error, setError] = useState("");
 
-  const fadeAnim = useRef(new Animated.Value(visible ? 1 : 0)).current;
-  const translateY = useRef(new Animated.Value(visible ? 0 : 300)).current;
-  const hasAnimatedIn = useRef(visible);
-
-  const animateOpenModal = useCallback(() => {
-    fadeAnim.setValue(0);
-    translateY.setValue(300);
-
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 0,
-      }),
-    ]).start(() => {
-      hasAnimatedIn.current = true;
-    });
-  }, [fadeAnim, translateY]);
-
-  const animateCloseModal = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 300,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(onClose);
-  }, [fadeAnim, translateY, onClose]);
-
+  // Reset the flow each time the sheet opens.
   useEffect(() => {
-    if (visible && !hasAnimatedIn.current) {
+    if (visible) {
       setPin("");
       setConfirmPin("");
       setStep("intro");
       setError("");
-      animateOpenModal();
-    } else if (!visible) {
-      fadeAnim.setValue(0);
-      translateY.setValue(300);
-      hasAnimatedIn.current = false;
     }
-  }, [visible, animateOpenModal, fadeAnim.setValue, translateY.setValue]);
+  }, [visible]);
 
   const handlePinDigit = (digit: string) => {
+    const currentPin = step === "create" ? pin : confirmPin;
+    if (currentPin.length >= pinLength) return;
+
+    tapFeedback();
+
     if (step === "create") {
       if (pin.length < pinLength) {
         setPin((prev) => prev + digit);
@@ -133,6 +84,7 @@ const PinSetupModal: React.FC<PinSetupModalProps> = ({
       }
 
       if (pin !== confirmPin) {
+        errorFeedback();
         setError("PINs don't match. Please try again.");
         setConfirmPin("");
         return;
@@ -280,93 +232,49 @@ const PinSetupModal: React.FC<PinSetupModalProps> = ({
   );
 
   return (
-    <Modal
-      transparent
+    <BaseModal
       visible={visible}
-      animationType="none"
-      onRequestClose={animateCloseModal}
+      onClose={onClose}
+      height="auto"
+      borderRadius={28}
+      contentClassName="px-6 pb-2"
     >
-      <View style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={animateCloseModal}>
-          <Animated.View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-              opacity: fadeAnim,
-            }}
-          />
-        </TouchableWithoutFeedback>
+      <ModalHeader
+        title={
+          step === "intro"
+            ? "Security Setup"
+            : step === "create"
+              ? "Create PIN"
+              : "Confirm PIN"
+        }
+      />
 
-        <Animated.View
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "auto",
-            paddingBottom: bottomOffset,
-            backgroundColor: "#f5f6f9",
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            transform: [{ translateY: translateY }],
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: -3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
-            elevation: 10,
-            opacity: fadeAnim,
-          }}
-        >
-          <View className="w-full items-center pt-4 pb-2">
-            <View className="w-12 h-1 bg-gray-300 rounded-full" />
-          </View>
+      {step === "intro" && renderIntroScreen()}
+      {step === "create" && renderCreatePinScreen()}
+      {step === "confirm" && renderConfirmPinScreen()}
 
-          <View className="px-6 flex-1">
-            <View className="flex-row items-center justify-between mb-6">
-              <Text className="text-light-matte-black text-xl font-bold">
-                {step === "intro"
-                  ? "Security Setup"
-                  : step === "create"
-                    ? "Create PIN"
-                    : "Confirm PIN"}
-              </Text>
-              <Pressable
-                onPress={animateCloseModal}
-                className="bg-light-main-container p-2 rounded-full"
-              >
-                <Text className="text-light-primary-red font-bold">✕</Text>
-              </Pressable>
-            </View>
-
-            {step === "intro" && renderIntroScreen()}
-            {step === "create" && renderCreatePinScreen()}
-            {step === "confirm" && renderConfirmPinScreen()}
-
-            <Pressable
-              className={`bg-light-primary-red py-4 rounded-xl items-center ${
-                (step === "create" && pin.length < pinLength) ||
-                (step === "confirm" && confirmPin.length < pinLength)
-                  ? "opacity-50"
-                  : ""
-              }`}
-              onPress={handleConfirm}
-              disabled={
-                (step === "create" && pin.length < pinLength) ||
-                (step === "confirm" && confirmPin.length < pinLength)
-              }
-            >
-              <Text className="text-white font-bold">
-                {step === "intro"
-                  ? "Set Up PIN"
-                  : step === "create"
-                    ? "Next"
-                    : "Confirm"}
-              </Text>
-            </Pressable>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
+      <Pressable
+        className={`bg-light-primary-red py-4 rounded-xl items-center ${
+          (step === "create" && pin.length < pinLength) ||
+          (step === "confirm" && confirmPin.length < pinLength)
+            ? "opacity-50"
+            : ""
+        }`}
+        onPress={handleConfirm}
+        disabled={
+          (step === "create" && pin.length < pinLength) ||
+          (step === "confirm" && confirmPin.length < pinLength)
+        }
+      >
+        <Text className="text-white font-bold">
+          {step === "intro"
+            ? "Set Up PIN"
+            : step === "create"
+              ? "Next"
+              : "Confirm"}
+        </Text>
+      </Pressable>
+    </BaseModal>
   );
 };
 

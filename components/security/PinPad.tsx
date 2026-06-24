@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { tapFeedback } from "@/utils/hapticsUtils";
 
 interface PinPadProps {
   title: string;
@@ -21,6 +22,7 @@ export function PinPad({
 
   const handlePress = useCallback(
     (digit: string) => {
+      tapFeedback();
       setError("");
       const newPin = pin + digit;
       setPin(newPin);
