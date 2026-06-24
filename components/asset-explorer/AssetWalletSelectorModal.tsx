@@ -1,25 +1,11 @@
 import { Check, Info } from "lucide-react-native";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Animated,
-  Dimensions,
-  Modal,
-  PanResponder,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TouchableWithoutFeedback,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCallback, useEffect, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import type { TAssetWalletSelectorModalProps } from "@/constants/types/assetTypes";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { loadWalletAssets, saveWalletAssets } from "@/utils/assetUtils";
 import OptimizedImage from "../common/OptimizedImage";
-
-const { height } = Dimensions.get("window");
-const MODAL_HEIGHT = height * 0.67;
 
 const AssetWalletSelectorModal = ({
   visible,
@@ -28,17 +14,12 @@ const AssetWalletSelectorModal = ({
   onConfirm,
 }: TAssetWalletSelectorModalProps) => {
   const { asset, assets, wallets, activeNetwork } = data;
-  const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
 
   const [selectedWallets, setSelectedWallets] = useState<number[]>([0]);
   const [walletsWithAsset, setWalletsWithAsset] = useState<
     Record<number, string[]>
   >({});
   const [isLoading, setIsLoading] = useState(false);
-
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
 
   const checkExistingAssets = useCallback(async () => {
     if (!visible) return;
@@ -71,7 +52,7 @@ const AssetWalletSelectorModal = ({
             existingAssetMap[i] = existingAssets.map((a) => a.symbol);
           }
         } catch (error) {
-          console.error("Error checking wallet assets:", error);
+          if (__DEV__) console.warn("Error checking wallet assets:", error);
         }
       }
     }
@@ -84,67 +65,8 @@ const AssetWalletSelectorModal = ({
     if (visible) {
       setSelectedWallets([0]);
       checkExistingAssets();
-
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
     }
-  }, [visible, fadeAnim, translateY, checkExistingAssets]);
-
-  const closeModal = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: MODAL_HEIGHT,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-    });
-  }, [fadeAnim, translateY, onClose]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState: { dy: number }) => {
-        return gestureState.dy > 0;
-      },
-      onPanResponderMove: (_, gestureState: { dy: number }) => {
-        if (gestureState.dy > 0) {
-          translateY.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState: { dy: number; vy: number }) => {
-        if (gestureState.dy > 50 || gestureState.vy > 0.5) {
-          Animated.timing(translateY, {
-            toValue: MODAL_HEIGHT,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => closeModal());
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 5,
-          }).start();
-        }
-      },
-    }),
-  ).current;
+  }, [visible, checkExistingAssets]);
 
   const toggleWalletSelection = useCallback((index: number) => {
     setSelectedWallets((prev) => {
@@ -201,7 +123,7 @@ const AssetWalletSelectorModal = ({
               );
             }
           } catch (error) {
-            console.error("Error saving assets to wallet:", error);
+            if (__DEV__) console.warn("Error saving assets to wallet:", error);
           }
         }
       }
@@ -230,29 +152,27 @@ const AssetWalletSelectorModal = ({
               }
             }
           } catch (error) {
-            console.error("Error saving asset to wallet:", error);
+            if (__DEV__) console.warn("Error saving asset to wallet:", error);
           }
         }
       }
     }
 
-    if (duplicateCount > 0 && !hasAddedAssets) {
+    if (__DEV__ && duplicateCount > 0) {
       const assetNames = duplicateAssets.join(", ");
-      console.log(
-        "Already Added:",
-        `${assetNames} ${duplicateAssets.length > 1 ? "are" : "is"} already in the selected wallet(s) on this network.`,
-      );
-    } else if (duplicateCount > 0 && hasAddedAssets) {
-      console.log(
-        "Partial Addition:",
-        `Some assets were added, but ${duplicateCount} asset(s) were already in the selected wallet(s).`,
+      console.warn(
+        hasAddedAssets
+          ? `Partial addition: some assets added, but ${duplicateCount} were already present.`
+          : `Already added: ${assetNames} ${
+              duplicateAssets.length > 1 ? "are" : "is"
+            } already in the selected wallet(s) on this network.`,
       );
     }
 
     if (hasAddedAssets) {
       onConfirm(selectedWallets, asset, assets);
     } else {
-      closeModal();
+      onClose();
     }
   };
 
@@ -320,137 +240,96 @@ const AssetWalletSelectorModal = ({
     [selectedWallets, walletsWithAsset, toggleWalletSelection],
   );
 
-  if (!visible) return null;
-
   const isMultipleAssets = assets && assets.length > 0;
   const assetsToShow = isMultipleAssets ? assets : asset ? [asset] : [];
   const assetCount = assetsToShow.length;
 
   return (
-    <Modal transparent visible animationType="none" onRequestClose={closeModal}>
-      <View style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={closeModal}>
-          <Animated.View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-              opacity: fadeAnim,
-            }}
-          />
-        </TouchableWithoutFeedback>
+    <BaseModal
+      visible={visible}
+      onClose={onClose}
+      height="67%"
+      backgroundColor="#fff"
+      contentClassName="px-6"
+    >
+      <ModalHeader title="Select Wallet" />
 
-        <Animated.View
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: MODAL_HEIGHT,
-            paddingBottom: bottomOffset,
-            backgroundColor: "white",
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            transform: [{ translateY: translateY }],
-          }}
-        >
-          <View
-            {...panResponder.panHandlers}
-            className="w-full items-center pt-4 pb-2"
-          >
-            <View className="w-12 h-1 bg-gray-300 rounded-full" />
-          </View>
+      {assetsToShow.length > 0 && (
+        <View className="bg-light-main-container p-4 rounded-xl mb-4">
+          <Text className="text-light-matte-black/60 mb-1">
+            {isMultipleAssets ? "Adding Multiple Assets" : "Adding Asset"}
+          </Text>
 
-          <View className="px-6 flex-1">
-            <Text className="text-light-matte-black text-xl font-bold mb-4">
-              Select Wallet
-            </Text>
-
-            {assetsToShow.length > 0 && (
-              <View className="bg-light-main-container p-4 rounded-xl mb-4">
-                <Text className="text-light-matte-black/60 mb-1">
-                  {isMultipleAssets ? "Adding Multiple Assets" : "Adding Asset"}
-                </Text>
-
-                {isMultipleAssets ? (
-                  <View>
-                    <Text className="text-light-matte-black font-bold">
-                      {assetCount} asset{assetCount > 1 ? "s" : ""} selected
-                    </Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      className="mt-2"
-                    >
-                      {assetsToShow.slice(0, 5).map((item) => (
-                        <View
-                          key={item.id}
-                          className="flex-row items-center mr-3"
-                        >
-                          <View className="w-6 aspect-square bg-light-primary-red/10 overflow-hidden rounded-full items-center justify-center mr-1">
-                            <OptimizedImage
-                              source={{ uri: item.logo }}
-                              style={{ width: 20, height: 20 }}
-                              contentFit="contain"
-                              alt={`${item.name} logo`}
-                            />
-                          </View>
-                          <Text className="text-light-matte-black text-xs">
-                            {item.symbol}
-                          </Text>
-                        </View>
-                      ))}
-                      {assetCount > 5 && (
-                        <Text className="text-light-matte-black/60 text-xs ml-1">
-                          +{assetCount - 5} more
-                        </Text>
-                      )}
-                    </ScrollView>
-                  </View>
-                ) : (
-                  <View className="flex-row items-center">
-                    <View className="w-8 h-8 bg-light-primary-red/10 rounded-full items-center justify-center mr-2">
-                      {asset && (
-                        <OptimizedImage
-                          source={{ uri: asset.logo }}
-                          style={{ width: 20, height: 20 }}
-                          contentFit="contain"
-                          alt={`${asset.name} logo`}
-                        />
-                      )}
+          {isMultipleAssets ? (
+            <View>
+              <Text className="text-light-matte-black font-bold">
+                {assetCount} asset{assetCount > 1 ? "s" : ""} selected
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="mt-2"
+              >
+                {assetsToShow.slice(0, 5).map((item) => (
+                  <View key={item.id} className="flex-row items-center mr-3">
+                    <View className="w-6 aspect-square bg-light-primary-red/10 overflow-hidden rounded-full items-center justify-center mr-1">
+                      <OptimizedImage
+                        source={{ uri: item.logo }}
+                        style={{ width: 20, height: 20 }}
+                        contentFit="contain"
+                        alt={`${item.name} logo`}
+                      />
                     </View>
-                    <Text className="text-light-matte-black font-bold">
-                      {asset?.name} ({asset?.symbol})
+                    <Text className="text-light-matte-black text-xs">
+                      {item.symbol}
                     </Text>
                   </View>
-                )}
-              </View>
-            )}
-
-            {isLoading ? (
-              <View className="items-center py-4">
-                <Text className="text-light-matte-black/60">
-                  Checking wallets...
-                </Text>
-              </View>
-            ) : (
-              <ScrollView className="flex-1">
-                {wallets.map((wallet, index) =>
-                  renderWalletItem(wallet, index),
+                ))}
+                {assetCount > 5 && (
+                  <Text className="text-light-matte-black/60 text-xs ml-1">
+                    +{assetCount - 5} more
+                  </Text>
                 )}
               </ScrollView>
-            )}
+            </View>
+          ) : (
+            <View className="flex-row items-center">
+              <View className="w-8 h-8 bg-light-primary-red/10 rounded-full items-center justify-center mr-2">
+                {asset && (
+                  <OptimizedImage
+                    source={{ uri: asset.logo }}
+                    style={{ width: 20, height: 20 }}
+                    contentFit="contain"
+                    alt={`${asset.name} logo`}
+                  />
+                )}
+              </View>
+              <Text className="text-light-matte-black font-bold">
+                {asset?.name} ({asset?.symbol})
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
 
-            <Pressable
-              className="bg-light-primary-red py-3 rounded-xl my-4"
-              onPress={handleConfirm}
-              disabled={selectedWallets.length === 0}
-            >
-              <Text className="text-white font-bold text-center">Confirm</Text>
-            </Pressable>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
+      {isLoading ? (
+        <View className="items-center py-4">
+          <Text className="text-light-matte-black/60">Checking wallets...</Text>
+        </View>
+      ) : (
+        <ScrollView className="flex-1">
+          {wallets.map((wallet, index) => renderWalletItem(wallet, index))}
+        </ScrollView>
+      )}
+
+      <Pressable
+        className="bg-light-primary-red py-3 rounded-xl my-4"
+        onPress={handleConfirm}
+        disabled={selectedWallets.length === 0}
+      >
+        <Text className="text-white font-bold text-center">Confirm</Text>
+      </Pressable>
+    </BaseModal>
   );
 };
 

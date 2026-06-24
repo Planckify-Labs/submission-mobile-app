@@ -16,16 +16,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import {
-  Animated,
-  Dimensions,
-  Image,
-  PanResponder,
-  Text,
-  TouchableOpacity,
-  Vibration,
-  View,
-} from "react-native";
+import { Image, Text, TouchableOpacity, Vibration, View } from "react-native";
 import DepositIcon from "@/assets/icons/deposit-duotone.svg";
 import WithdrawIcon from "@/assets/icons/withdraw-duotone.svg";
 import ChainSelector from "@/components/common/ChainSelector";
@@ -70,9 +61,6 @@ const quickPaymentItems = [
     type: "product" as const,
   },
 ];
-
-const { height } = Dimensions.get("window");
-const MODAL_HEIGHT = height * 0.6;
 
 export interface BalanceSectionRef {
   refetch: () => void;
@@ -214,77 +202,10 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   };
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [isModalAnimationComplete, setIsModalAnimationComplete] =
-    useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
   const router = useRouter();
 
-  const openModal = useCallback(() => {
-    setModalVisible(true);
-    setIsModalAnimationComplete(false);
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setIsModalAnimationComplete(true);
-    });
-  }, [fadeAnim, translateY]);
-
-  const closeModal = useCallback(() => {
-    setIsModalAnimationComplete(false);
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: MODAL_HEIGHT,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setModalVisible(false);
-    });
-  }, [fadeAnim, translateY]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return gestureState.dy > 0;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          translateY.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 50 || gestureState.vy > 0.5) {
-          Animated.timing(translateY, {
-            toValue: MODAL_HEIGHT,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => closeModal());
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 5,
-          }).start();
-        }
-      },
-    }),
-  ).current;
+  const openModal = useCallback(() => setModalVisible(true), []);
+  const closeModal = useCallback(() => setModalVisible(false), []);
 
   return (
     <>
@@ -485,18 +406,12 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
         </View>
       </View>
 
-      {modalVisible && (
-        <RecievePaymentModal
-          modalVisible={modalVisible}
-          closeModal={closeModal}
-          activeWallet={activeWallet}
-          activeChain={activeChain}
-          fadeAnim={fadeAnim}
-          translateY={translateY}
-          panResponder={panResponder}
-          isModalAnimationComplete={isModalAnimationComplete}
-        />
-      )}
+      <RecievePaymentModal
+        modalVisible={modalVisible}
+        closeModal={closeModal}
+        activeWallet={activeWallet}
+        activeChain={activeChain}
+      />
 
       <DisplayTokenPickerModal
         visible={tokenPickerVisible}

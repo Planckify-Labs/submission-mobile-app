@@ -10,21 +10,17 @@ import {
   Wallet,
   X,
 } from "lucide-react-native";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  Dimensions,
-  Modal,
-  PanResponder,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
@@ -46,9 +42,6 @@ import {
 } from "@/services/walletKit/chainInfo";
 import { copyToClipboard } from "@/utils/helperUtils";
 
-const { height } = Dimensions.get("window");
-const MODAL_HEIGHT = height * 0.67;
-
 interface ConversationHistory {
   onScrollToChat?: () => void;
   onResumeConversation: (conversationId: string) => void;
@@ -61,8 +54,6 @@ export default function ConversationHistory({
   const [searchQuery, setSearchQuery] = useState("");
   const [showWalletSelector, setShowWalletSelector] = useState(false);
   const [showChainSelector, setShowChainSelector] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
 
   const {
     wallets,
@@ -133,22 +124,7 @@ export default function ConversationHistory({
     );
   }, [convListData?.items, searchQuery]);
 
-  const closeChainModal = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: MODAL_HEIGHT,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setShowChainSelector(false);
-    });
-  }, [fadeAnim, translateY]);
+  const closeChainModal = useCallback(() => setShowChainSelector(false), []);
 
   const handleChainSelect = useCallback(
     async (config: ChainConfig) => {
@@ -158,50 +134,7 @@ export default function ConversationHistory({
     [changeActiveChainToConfig, closeChainModal],
   );
 
-  const openChainModal = useCallback(() => {
-    setShowChainSelector(true);
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [fadeAnim, translateY]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return gestureState.dy > 0;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          translateY.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 50 || gestureState.vy > 0.5) {
-          Animated.timing(translateY, {
-            toValue: MODAL_HEIGHT,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => closeChainModal());
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 5,
-          }).start();
-        }
-      },
-    }),
-  ).current;
+  const openChainModal = useCallback(() => setShowChainSelector(true), []);
 
   const handleWalletSwitch = (index: number) => {
     setActiveWallet(index, { source: "agent" });
@@ -373,124 +306,72 @@ export default function ConversationHistory({
         title="Switch Wallet"
       />
 
-      {showChainSelector && (
-        <Modal
-          transparent
-          visible
-          animationType="none"
-          onRequestClose={closeChainModal}
-        >
-          <View style={{ flex: 1 }}>
-            <TouchableWithoutFeedback onPress={closeChainModal}>
-              <Animated.View
-                style={{
-                  flex: 1,
-                  backgroundColor: "rgba(0, 0, 0, 0.5)",
-                  opacity: fadeAnim,
-                }}
-              />
-            </TouchableWithoutFeedback>
+      <BaseModal
+        visible={showChainSelector}
+        onClose={closeChainModal}
+        height="67%"
+        contentClassName="px-6"
+      >
+        <ModalHeader title="Select Network" />
 
-            <Animated.View
-              style={{
-                position: "absolute",
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: MODAL_HEIGHT,
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-                transform: [{ translateY: translateY }],
-              }}
-            >
-              <View className="bg-light-main-container flex-1 rounded-t-3xl">
-                <View
-                  {...panResponder.panHandlers}
-                  className="w-full items-center pt-4 pb-2"
+        <ScrollView className="flex-1">
+          {isLoadingBlockchains || isLoadingTokens ? (
+            <View className="items-center justify-center py-8">
+              <Text className="text-light-matte-black">
+                Loading networks...
+              </Text>
+            </View>
+          ) : (
+            allChains.map((chain) => {
+              // Chain-agnostic active check — `chainCacheKey` folds each
+              // `ChainConfig` into a stable string that encodes the namespace
+              // and the chain's own id / cluster, so no `if (ns === "X")`
+              // branch is needed here.
+              const isActive = chainCacheKey(activeChain) === chain.key;
+
+              return (
+                <Pressable
+                  key={chain.key}
+                  className={`flex-row items-center p-4 mb-2 rounded-xl ${
+                    isActive ? "bg-light-primary-red/10" : "bg-light"
+                  }`}
+                  onPress={() => handleChainSelect(chain.config)}
                 >
-                  <View className="w-12 h-1 bg-gray-300 rounded-full" />
-                </View>
-
-                <View className="px-6 flex-1">
-                  <View className="flex-row justify-between items-center mb-4">
-                    <Text className="text-light-matte-black text-xl font-bold">
-                      Select Network
-                    </Text>
-
-                    <Pressable className="" onPress={closeChainModal}>
-                      <X size={18} color="#c71c4b" />
-                    </Pressable>
+                  <View className="mr-3 rounded-full overflow-hidden">
+                    <OptimizedImage
+                      source={{ uri: chain.iconUrl }}
+                      style={{ width: 24, height: 24 }}
+                    />
                   </View>
 
-                  <ScrollView className="flex-1">
-                    {isLoadingBlockchains || isLoadingTokens ? (
-                      <View className="items-center justify-center py-8">
-                        <Text className="text-light-matte-black">
-                          Loading networks...
-                        </Text>
-                      </View>
-                    ) : (
-                      allChains.map((chain) => {
-                        // Chain-agnostic active check — `chainCacheKey`
-                        // folds each `ChainConfig` into a stable string
-                        // that encodes the namespace and the chain's
-                        // own id / cluster, so no `if (ns === "X")`
-                        // branch is needed here.
-                        const isActive =
-                          chainCacheKey(activeChain) === chain.key;
+                  <View className="flex-1">
+                    <Text className="text-light-matte-black font-bold">
+                      {chain.label}
+                    </Text>
+                    <Text className="text-light-matte-black/70 text-sm">
+                      {chain.symbol || "N/A"}
+                    </Text>
+                  </View>
 
-                        return (
-                          <Pressable
-                            key={chain.key}
-                            className={`flex-row items-center p-4 mb-2 rounded-xl ${
-                              isActive ? "bg-light-primary-red/10" : "bg-light"
-                            }`}
-                            onPress={() => handleChainSelect(chain.config)}
-                          >
-                            <View className="mr-3 rounded-full overflow-hidden">
-                              <OptimizedImage
-                                source={{ uri: chain.iconUrl }}
-                                style={{ width: 24, height: 24 }}
-                              />
-                            </View>
+                  {chain.isTestnet && (
+                    <View className="bg-yellow-500/20 px-2 py-1 rounded-full mr-2">
+                      <Text className="text-yellow-700 text-xs font-medium">
+                        Testnet
+                      </Text>
+                    </View>
+                  )}
 
-                            <View className="flex-1">
-                              <Text className="text-light-matte-black font-bold">
-                                {chain.label}
-                              </Text>
-                              <Text className="text-light-matte-black/70 text-sm">
-                                {chain.symbol || "N/A"}
-                              </Text>
-                            </View>
-
-                            {chain.isTestnet && (
-                              <View className="bg-yellow-500/20 px-2 py-1 rounded-full mr-2">
-                                <Text className="text-yellow-700 text-xs font-medium">
-                                  Testnet
-                                </Text>
-                              </View>
-                            )}
-
-                            {isActive && (
-                              <View className="w-6 h-6 rounded-full bg-light-primary-red/10 items-center justify-center">
-                                <Check
-                                  size={14}
-                                  color="#c71c4b"
-                                  strokeWidth={3}
-                                />
-                              </View>
-                            )}
-                          </Pressable>
-                        );
-                      })
-                    )}
-                  </ScrollView>
-                </View>
-              </View>
-            </Animated.View>
-          </View>
-        </Modal>
-      )}
+                  {isActive && (
+                    <View className="w-6 h-6 rounded-full bg-light-primary-red/10 items-center justify-center">
+                      <Check size={14} color="#c71c4b" strokeWidth={3} />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
+      </BaseModal>
     </View>
   );
 }

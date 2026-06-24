@@ -26,33 +26,20 @@
  *     closing the whole sheet — the back chevron feels like a sub-flow
  *     rewind, not an exit.
  *
- * Pattern: matches `WalletSwitcherModal.tsx` (`react-native` `Modal` +
- * `Animated` + `PanResponder`). No `@gorhom/bottom-sheet` — the
- * sibling sheets don't use it either.
+ * Shell: the shared `BaseModal` bottom sheet (`components/common/modal`),
+ * which owns the slide/backdrop/drag + the standardized close button.
  */
 
-import {
-  ChevronRight,
-  KeyRound,
-  Plus,
-  ShieldCheck,
-  X,
-} from "lucide-react-native";
+import { ChevronRight, KeyRound, Plus, ShieldCheck } from "lucide-react-native";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  BackHandler,
   Dimensions,
-  Modal,
-  PanResponder,
-  Platform,
   Pressable,
   Text,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import { bootstrapFirstLoginWallets } from "@/services/walletKit/bootstrap";
@@ -131,11 +118,7 @@ const AddWalletSheet: React.FC<Props> = memo(function AddWalletSheet({
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const { addWallets } = useWallet();
-  const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 16;
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(PICKER_HEIGHT)).current;
   const prevVisibleRef = useRef<boolean>(false);
 
   // Close handler: always wipe the step so next open starts on the
@@ -155,81 +138,6 @@ const AddWalletSheet: React.FC<Props> = memo(function AddWalletSheet({
     }
     prevVisibleRef.current = visible;
   }, [visible]);
-
-  // Animate picker modal open. Only runs while the picker step is
-  // active — sub-sheet modals run their own animations.
-  useEffect(() => {
-    if (visible && step === "picker") {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      // Snap animation state back to "closed" so next time we become
-      // the picker, the open animation plays from the bottom.
-      fadeAnim.setValue(0);
-      translateY.setValue(PICKER_HEIGHT);
-    }
-  }, [visible, step, fadeAnim, translateY]);
-
-  // Android hardware back while picker is visible → close entirely.
-  useEffect(() => {
-    if (!visible || step !== "picker") return;
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      handleClose();
-      return true;
-    });
-    return () => sub.remove();
-  }, [visible, step, handleClose]);
-
-  const animateCloseThen = useCallback(
-    (after: () => void) => {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: PICKER_HEIGHT,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start(() => after());
-    },
-    [fadeAnim, translateY],
-  );
-
-  // Swipe-dismiss on the picker drag handle. Mirrors the thresholds
-  // used by `CreateWalletSheet` / `WalletSwitcherModal`.
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 0,
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) translateY.setValue(g.dy);
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 60 || g.vy > 0.5) {
-          animateCloseThen(handleClose);
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 4,
-          }).start();
-        }
-      },
-    }),
-  ).current;
 
   // ── Sub-sheet wiring ───────────────────────────────────────────────
   // Each sub-sheet gets `visible={visible && step === "..."}` so only
@@ -312,96 +220,54 @@ const AddWalletSheet: React.FC<Props> = memo(function AddWalletSheet({
   }
 
   // step === "picker"
-  if (!visible) return null;
-
   return (
-    <Modal
-      transparent
-      visible
-      animationType="none"
-      onRequestClose={handleClose}
+    <BaseModal
+      visible={visible}
+      onClose={handleClose}
+      height={PICKER_HEIGHT}
+      contentClassName="px-4"
     >
-      <TouchableWithoutFeedback onPress={handleClose}>
-        <Animated.View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            opacity: fadeAnim,
-          }}
-        >
-          <TouchableWithoutFeedback>
-            <Animated.View
-              style={{
-                transform: [{ translateY }],
-                height: PICKER_HEIGHT,
-                marginTop: "auto",
-                paddingBottom: bottomOffset,
-              }}
-              className="bg-light-main-container rounded-t-3xl"
-            >
-              {/* Drag handle — swipe-down closes. */}
-              <View {...panResponder.panHandlers} className="items-center py-3">
-                <View className="w-10 h-1 bg-light-matte-black/20 rounded-full" />
-              </View>
+      <ModalHeader title="Add wallet" />
 
-              {/* Header */}
-              <View className="flex-row items-center justify-between px-4 pb-3">
-                <Text className="text-light-matte-black text-xl font-bold">
-                  Add wallet
-                </Text>
-                <Pressable
-                  onPress={handleClose}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                  className="w-9 h-9 rounded-full bg-light-matte-black/10 items-center justify-center"
-                >
-                  <X size={18} color="#20222c" />
-                </Pressable>
-              </View>
-
-              {/* Cards */}
-              <View className="px-4 pt-2">
-                <PickerCard
-                  testID="add-wallet-card-create"
-                  icon={
-                    creating ? (
-                      <ActivityIndicator size="small" color="#c71c4b" />
-                    ) : (
-                      <Plus size={22} color="#c71c4b" />
-                    )
-                  }
-                  title={creating ? "Creating wallet…" : "Create new wallet"}
-                  subtitle="Generates a wallet on every supported chain"
-                  onPress={handleCreatePressed}
-                  disabled={creating}
-                />
-                {createError ? (
-                  <Text className="text-light-primary-red text-xs mb-2 px-1">
-                    {createError}
-                  </Text>
-                ) : null}
-                <PickerCard
-                  testID="add-wallet-card-seed"
-                  icon={<ShieldCheck size={22} color="#c71c4b" />}
-                  title="Import seed phrase"
-                  subtitle="12 or 24 words"
-                  onPress={() => setStep("seed")}
-                  disabled={creating}
-                />
-                <PickerCard
-                  testID="add-wallet-card-pk"
-                  icon={<KeyRound size={22} color="#c71c4b" />}
-                  title="Import private key"
-                  subtitle="One chain, one key"
-                  onPress={() => setStep("pk")}
-                  disabled={creating}
-                />
-              </View>
-            </Animated.View>
-          </TouchableWithoutFeedback>
-        </Animated.View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      {/* Cards */}
+      <View className="pt-2">
+        <PickerCard
+          testID="add-wallet-card-create"
+          icon={
+            creating ? (
+              <ActivityIndicator size="small" color="#c71c4b" />
+            ) : (
+              <Plus size={22} color="#c71c4b" />
+            )
+          }
+          title={creating ? "Creating wallet…" : "Create new wallet"}
+          subtitle="Generates a wallet on every supported chain"
+          onPress={handleCreatePressed}
+          disabled={creating}
+        />
+        {createError ? (
+          <Text className="text-light-primary-red text-xs mb-2 px-1">
+            {createError}
+          </Text>
+        ) : null}
+        <PickerCard
+          testID="add-wallet-card-seed"
+          icon={<ShieldCheck size={22} color="#c71c4b" />}
+          title="Import seed phrase"
+          subtitle="12 or 24 words"
+          onPress={() => setStep("seed")}
+          disabled={creating}
+        />
+        <PickerCard
+          testID="add-wallet-card-pk"
+          icon={<KeyRound size={22} color="#c71c4b" />}
+          title="Import private key"
+          subtitle="One chain, one key"
+          onPress={() => setStep("pk")}
+          disabled={creating}
+        />
+      </View>
+    </BaseModal>
   );
 });
 

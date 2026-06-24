@@ -1,33 +1,22 @@
 import { Check, ChevronDown, Search, X } from "lucide-react-native";
-import React, {
+import {
   forwardRef,
   memo,
   useCallback,
-  useEffect,
   useImperativeHandle,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  Dimensions,
   Image,
-  Keyboard,
-  Modal,
-  PanResponder,
-  Platform,
   Pressable,
   ScrollView,
-  StatusBar,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import { useTokens } from "@/hooks/queries/useTokens";
@@ -36,9 +25,6 @@ import { useWallet } from "@/hooks/useWallet";
 import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
 import type { Namespace } from "@/services/chains/types";
 import { walletKitRegistry } from "@/services/walletKit/registry";
-
-const { height } = Dimensions.get("window");
-const MODAL_HEIGHT = height * 0.67;
 
 export interface ChainSelectorRef {
   open: () => void;
@@ -119,74 +105,11 @@ function ChainListSkeleton() {
 }
 
 const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
-  const { top, bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
-  // Hard ceiling for the lift: the sheet must stop this far below the top of
-  // the screen so it never slides behind the status bar / notch. The safe-area
-  // top inset covers iOS notches; `StatusBar.currentHeight` is the Android
-  // status bar (undefined on iOS, hence the guard).
-  const statusBarHeight = Math.max(
-    top,
-    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0,
-  );
-
   const { activeChain, changeActiveChain, changeActiveChainToConfig } =
     useWallet();
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [switchingRowKey, setSwitchingRowKey] = useState<string | null>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  // JS-driven (useNativeDriver: false): translateY shares the sheet node with
-  // the non-native animated height/padding (kbProgress), and a node can't mix
-  // native + non-native drivers — so the open/close slide is JS-driven too.
-  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
-  // 0 = keyboard closed, 1 = keyboard fully open. Drives both the sheet's grow
-  // (MODAL_HEIGHT → screen minus status bar) and its bottom padding (so the
-  // list clears the keyboard). Both are layout props → JS-driven.
-  const kbProgress = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    // Grow the sheet + pad its bottom as the keyboard opens, synced to the
-    // keyboard duration. JS-driven because height/padding are layout props.
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-      Animated.timing(kbProgress, {
-        toValue: 1,
-        duration: e.duration || 250,
-        useNativeDriver: false,
-      }).start();
-    });
-    const hideSub = Keyboard.addListener(hideEvent, (e) => {
-      Animated.timing(kbProgress, {
-        toValue: 0,
-        duration: e.duration || 250,
-        useNativeDriver: false,
-      }).start(() => setKeyboardHeight(0));
-    });
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, [kbProgress]);
-
-  // Sheet grows from MODAL_HEIGHT up to (screen − status bar); padding grows
-  // from the safe-area offset up to (offset + keyboard height). Both driven by
-  // the same 0→1 kbProgress so they animate in lock-step. The inner content is
-  // flex-laid-out, so growing this height expands the list automatically.
-  const animatedHeight = kbProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [MODAL_HEIGHT, height - statusBarHeight],
-    extrapolate: "clamp",
-  });
-  const animatedPaddingBottom = Animated.add(
-    bottomOffset,
-    Animated.multiply(kbProgress, keyboardHeight),
-  );
 
   const { data: blockchains, isLoading: isLoadingBlockchains } =
     useBlockchainsWithStorage({ isActive: true });
@@ -276,24 +199,10 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
     return out;
   }, [grouped, searchQuery]);
 
-  const closeModal = useCallback(() => {
-    Keyboard.dismiss();
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: MODAL_HEIGHT,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-    ]).start(() => {
-      setModalVisible(false);
-      setSearchQuery("");
-    });
-  }, [fadeAnim, translateY]);
+  const openModal = useCallback(() => setModalVisible(true), []);
+  const closeModal = useCallback(() => setModalVisible(false), []);
+
+  useImperativeHandle(ref, () => ({ open: openModal }), [openModal]);
 
   const handleChainSelect = useCallback(
     async (row: ChainRowItem) => {
@@ -316,53 +225,6 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
     },
     [changeActiveChain, changeActiveChainToConfig, closeModal],
   );
-
-  const openModal = useCallback(() => {
-    setModalVisible(true);
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [fadeAnim, translateY]);
-
-  useImperativeHandle(ref, () => ({ open: openModal }), [openModal]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return gestureState.dy > 0;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          translateY.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 50 || gestureState.vy > 0.5) {
-          Animated.timing(translateY, {
-            toValue: MODAL_HEIGHT,
-            duration: 200,
-            useNativeDriver: false,
-          }).start(() => closeModal());
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: false,
-            bounciness: 5,
-          }).start();
-        }
-      },
-    }),
-  ).current;
 
   const isRowActive = useCallback(
     (row: ChainRowItem): boolean => {
@@ -467,117 +329,59 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
         <ChevronDown size={16} color="#c71c4b" />
       </Pressable>
 
-      {modalVisible && (
-        <Modal
-          transparent
-          visible
-          animationType="none"
-          onRequestClose={closeModal}
+      <BaseModal
+        visible={modalVisible}
+        onClose={closeModal}
+        onClosed={() => setSearchQuery("")}
+        height="67%"
+        contentClassName="px-6"
+      >
+        <ModalHeader title="Select Network" />
+
+        <View className="flex-row items-center bg-light rounded-2xl px-3 py-2 mb-3">
+          <Search size={16} color="#20222c80" />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search networks"
+            placeholderTextColor="#20222c80"
+            autoCorrect={false}
+            autoCapitalize="none"
+            className="flex-1 ml-2 text-light-matte-black"
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery("")}>
+              <X size={14} color="#20222c80" />
+            </Pressable>
+          )}
+        </View>
+
+        <ScrollView
+          className="flex-1"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 24 }}
         >
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <TouchableWithoutFeedback onPress={closeModal}>
-              <Animated.View
-                style={{
-                  flex: 1,
-                  backgroundColor: "rgba(0, 0, 0, 0.5)",
-                  opacity: fadeAnim,
-                }}
-              />
-            </TouchableWithoutFeedback>
-
-            <Animated.View
-              style={{
-                position: "absolute",
-                bottom: 0,
-                left: 0,
-                right: 0,
-                // Grows up to (screen − status bar) when the keyboard opens;
-                // bottom padding grows in step so the list clears the keyboard.
-                height: animatedHeight,
-                paddingBottom: animatedPaddingBottom,
-                // bg lives on this (padded) outer view so it fills down to the
-                // screen bottom behind the keyboard and stays anchored — only
-                // the content lifts, the box itself doesn't move.
-                backgroundColor: "#f5f6f9",
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-                flexDirection: "column",
-                transform: [{ translateY: translateY }],
-              }}
-            >
-              <View className="flex-1">
-                <View
-                  {...panResponder.panHandlers}
-                  className="w-full items-center pt-4 pb-2"
-                >
-                  <View className="w-12 h-1 bg-gray-300 rounded-full" />
-                </View>
-
-                <View className="flex-1 px-6">
-                  <View className="flex-row justify-between items-center mb-4">
-                    <Text className="text-light-matte-black text-xl font-bold">
-                      Select Network
-                    </Text>
-
-                    <Pressable
-                      onPress={closeModal}
-                      hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-                    >
-                      <X size={18} color="#c71c4b" />
-                    </Pressable>
-                  </View>
-
-                  <View className="flex-row items-center bg-light rounded-2xl px-3 py-2 mb-3">
-                    <Search size={16} color="#20222c80" />
-                    <TextInput
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      placeholder="Search networks"
-                      placeholderTextColor="#20222c80"
-                      autoCorrect={false}
-                      autoCapitalize="none"
-                      className="flex-1 ml-2 text-light-matte-black"
-                    />
-                    {searchQuery.length > 0 && (
-                      <Pressable onPress={() => setSearchQuery("")}>
-                        <X size={14} color="#20222c80" />
-                      </Pressable>
-                    )}
-                  </View>
-
-                  <ScrollView
-                    className="flex-1"
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingBottom: 24 }}
-                  >
-                    {isLoading ? (
-                      <ChainListSkeleton />
-                    ) : filteredGrouped.size === 0 ? (
-                      <View className="items-center justify-center py-8">
-                        <Text className="text-light-matte-black/60 text-sm">
-                          No networks match &quot;{searchQuery}&quot;
-                        </Text>
-                      </View>
-                    ) : (
-                      Array.from(filteredGrouped.entries()).map(
-                        ([ns, rows]) => (
-                          <View key={ns} className="mb-2">
-                            <Text className="text-light-matte-black/60 text-xs font-semibold uppercase mb-2 mt-2">
-                              {sectionTitleForNamespace(ns)}
-                            </Text>
-                            {rows.map(renderChainItem)}
-                          </View>
-                        ),
-                      )
-                    )}
-                  </ScrollView>
-                </View>
+          {isLoading ? (
+            <ChainListSkeleton />
+          ) : filteredGrouped.size === 0 ? (
+            <View className="items-center justify-center py-8">
+              <Text className="text-light-matte-black/60 text-sm">
+                No networks match &quot;{searchQuery}&quot;
+              </Text>
+            </View>
+          ) : (
+            Array.from(filteredGrouped.entries()).map(([ns, rows]) => (
+              <View key={ns} className="mb-2">
+                <Text className="text-light-matte-black/60 text-xs font-semibold uppercase mb-2 mt-2">
+                  {sectionTitleForNamespace(ns)}
+                </Text>
+                {rows.map(renderChainItem)}
               </View>
-            </Animated.View>
-          </GestureHandlerRootView>
-        </Modal>
-      )}
+            ))
+          )}
+        </ScrollView>
+      </BaseModal>
     </>
   );
 });

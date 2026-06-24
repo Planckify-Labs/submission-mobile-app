@@ -37,12 +37,11 @@
  *   - We do NOT mutate / replace `useWallet.addWallets`; we call the
  *     existing one landed in Task 23.
  *
- * Pattern: matches `CreateWalletSheet.tsx` — `react-native` `Modal` +
- * `Animated` + `PanResponder`. No `@gorhom/bottom-sheet` because the
- * sibling sheets don't use it.
+ * Shell: the shared `BaseModal` bottom sheet (`components/common/modal`),
+ * which owns the slide/backdrop/drag + the standardized close button.
  */
 
-import { ArrowLeft, Check, Info, X } from "lucide-react-native";
+import { ArrowLeft, Check, Info } from "lucide-react-native";
 import React, {
   memo,
   useCallback,
@@ -53,20 +52,14 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  BackHandler,
   Dimensions,
-  Modal,
-  PanResponder,
-  Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BaseModal } from "@/components/common/BaseModal";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import type { Namespace } from "@/services/chains/types";
@@ -129,8 +122,6 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
     useScreenshotGuard(visible, { alertOnScreenshot: true });
 
     const { addWallets } = useWallet();
-    const { bottom } = useSafeAreaInsets();
-    const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 16;
 
     // ── State ──────────────────────────────────────────────────────
     // Step machine — explicit enum rather than derived from state so
@@ -165,10 +156,6 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
     // flashing while they're still typing / pasting in chunks.
     const showInvalidError = hasBlurred && validationState === "invalid";
 
-    // ── Animated sheet ────────────────────────────────────────────
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
-
     const resetState = useCallback(() => {
       // TWV-2026-057 dwell discipline — drop every reference to the
       // mnemonic before the sheet next opens.
@@ -183,86 +170,10 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
       setAllDuplicates(false);
     }, []);
 
-    const animateClose = useCallback(
-      (after?: () => void) => {
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(translateY, {
-            toValue: SHEET_HEIGHT,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          after?.();
-        });
-      },
-      [fadeAnim, translateY],
-    );
-
     const handleCancel = useCallback(() => {
       if (isSaving) return; // cannot cancel mid-save
-      animateClose(() => {
-        resetState();
-        onClose();
-      });
-    }, [animateClose, resetState, onClose, isSaving]);
-
-    // Open-animation effect
-    useEffect(() => {
-      if (visible) {
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 250,
-            useNativeDriver: true,
-          }),
-          Animated.timing(translateY, {
-            toValue: 0,
-            duration: 250,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }
-    }, [visible, fadeAnim, translateY]);
-
-    // Android hardware back — mirror the X button.
-    useEffect(() => {
-      if (!visible) return;
-      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-        handleCancel();
-        return true;
-      });
-      return () => sub.remove();
-    }, [visible, handleCancel]);
-
-    // Swipe-down gesture on the drag handle.
-    const panResponder = useRef(
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, g) => g.dy > 0,
-        onPanResponderMove: (_, g) => {
-          if (g.dy > 0) translateY.setValue(g.dy);
-        },
-        onPanResponderRelease: (_, g) => {
-          if (g.dy > 60 || g.vy > 0.5) {
-            animateClose(() => {
-              resetState();
-              onClose();
-            });
-          } else {
-            Animated.spring(translateY, {
-              toValue: 0,
-              useNativeDriver: true,
-              bounciness: 4,
-            }).start();
-          }
-        },
-      }),
-    ).current;
+      onClose();
+    }, [onClose, isSaving]);
 
     // ── Handlers ───────────────────────────────────────────────────
     const handlePasteBlur = useCallback(() => {
@@ -339,11 +250,9 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
         }
         setCompleted(true);
         onWalletsAdded(toAdd);
-        // Defer close so users see the success flash briefly.
-        animateClose(() => {
-          resetState();
-          onClose();
-        });
+        // Close — success stays visible through BaseModal's slide-out and
+        // `resetState` runs on `onClosed`.
+        onClose();
       } catch (e) {
         if (__DEV__) {
           console.warn("[ImportSeedPhraseSheet] confirm threw", e);
@@ -358,8 +267,6 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
       addWallets,
       onWalletsAdded,
       onClose,
-      animateClose,
-      resetState,
       isSaving,
       completed,
     ]);
@@ -384,8 +291,6 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
       }
       setStep((s) => (s === 3 ? 2 : 1) as Step);
     }, [step, isSaving, handleCancel]);
-
-    if (!visible) return null;
 
     // ── Step renderers ──────────────────────────────────────────────
     const renderStep1 = () => (
@@ -559,96 +464,60 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
     };
 
     return (
-      <Modal
-        transparent
-        visible
-        animationType="none"
-        onRequestClose={handleCancel}
+      <BaseModal
+        visible={visible}
+        onClose={handleCancel}
+        onClosed={resetState}
+        height={SHEET_HEIGHT}
+        enablePanToClose={!isSaving}
+        enableBackdropClose={!isSaving}
+        closeButtonDisabled={isSaving}
       >
-        <TouchableWithoutFeedback onPress={handleCancel}>
-          <Animated.View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              opacity: fadeAnim,
-            }}
+        {/* Header */}
+        <View className="flex-row items-center justify-between px-4 pb-2">
+          <Pressable
+            onPress={handleBack}
+            disabled={isSaving}
+            accessibilityLabel="Back"
+            className={`w-9 h-9 items-center justify-center ${
+              isSaving ? "opacity-30" : ""
+            }`}
           >
-            <TouchableWithoutFeedback>
-              <Animated.View
-                style={{
-                  transform: [{ translateY }],
-                  height: SHEET_HEIGHT,
-                  marginTop: "auto",
-                }}
-                className="bg-light-main-container rounded-t-3xl"
-              >
-                {/* Drag handle */}
-                <View
-                  {...panResponder.panHandlers}
-                  className="items-center py-3"
-                >
-                  <View className="w-10 h-1 bg-light-matte-black/20 rounded-full" />
-                </View>
+            <ArrowLeft size={22} color="#c71c4b" />
+          </Pressable>
+          <Text className="text-light-matte-black text-lg font-bold">
+            Import seed phrase
+          </Text>
+          {/* Spacer balances the back button; BaseModal renders the close. */}
+          <View className="w-9" />
+        </View>
 
-                {/* Header */}
-                <View className="flex-row items-center justify-between px-4 pb-2">
-                  <Pressable
-                    onPress={handleBack}
-                    disabled={isSaving}
-                    accessibilityLabel="Back"
-                    className={`w-9 h-9 items-center justify-center ${
-                      isSaving ? "opacity-30" : ""
-                    }`}
-                  >
-                    <ArrowLeft size={22} color="#c71c4b" />
-                  </Pressable>
-                  <Text className="text-light-matte-black text-lg font-bold">
-                    Import seed phrase
-                  </Text>
-                  <Pressable
-                    onPress={handleCancel}
-                    disabled={isSaving}
-                    accessibilityLabel="Close"
-                    className={`w-9 h-9 items-center justify-center ${
-                      isSaving ? "opacity-30" : ""
-                    }`}
-                  >
-                    <X size={22} color="#20222c" />
-                  </Pressable>
-                </View>
+        {/* Step indicator */}
+        <View className="flex-row gap-2 px-4 mb-3">
+          {[1, 2, 3].map((i) => (
+            <View
+              key={i}
+              className={`h-1 flex-1 rounded-full ${
+                i <= step ? "bg-light-primary-red" : "bg-gray-300"
+              }`}
+            />
+          ))}
+        </View>
 
-                {/* Step indicator */}
-                <View className="flex-row gap-2 px-4 mb-3">
-                  {[1, 2, 3].map((i) => (
-                    <View
-                      key={i}
-                      className={`h-1 flex-1 rounded-full ${
-                        i <= step ? "bg-light-primary-red" : "bg-gray-300"
-                      }`}
-                    />
-                  ))}
-                </View>
+        {/* Body */}
+        <ScrollView
+          className="flex-1 px-4"
+          contentContainerStyle={{ paddingBottom: 16 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {step === 1 ? renderStep1() : null}
+          {step === 2 ? renderStep2() : null}
+          {step === 3 ? renderStep3() : null}
+        </ScrollView>
 
-                {/* Body */}
-                <ScrollView
-                  className="flex-1 px-4"
-                  contentContainerStyle={{ paddingBottom: 16 }}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {step === 1 ? renderStep1() : null}
-                  {step === 2 ? renderStep2() : null}
-                  {step === 3 ? renderStep3() : null}
-                </ScrollView>
-
-                <View className="px-4" style={{ paddingBottom: bottomOffset }}>
-                  {renderFooter()}
-                </View>
-              </Animated.View>
-            </TouchableWithoutFeedback>
-          </Animated.View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        <View className="px-4 pt-2">{renderFooter()}</View>
+      </BaseModal>
     );
   },
 );

@@ -11,52 +11,30 @@
  * The screen handles biometric gating, delegation building/signing, and
  * persistence; this sheet only collects intent.
  *
- * Animation: mount-on-open with a slide-in + fade backdrop, drag-to-close
- * on the handle, and keyboard-aware bottom spacing — mirrors the
- * `OverridePickerSheet` in `app/transfer-thresholds.tsx` so the
- * smart-account flows feel like one family. The parent renders this only
- * while open; `animatedCancel` runs the slide-out before calling
+ * Shell: the shared `BaseModal` bottom-sheet (slide-in + fade backdrop,
+ * drag-to-close, keyboard-aware grow) so the smart-account flows share the
+ * app-wide sheet feel. The parent renders this only while open; an internal
+ * `open` flag runs BaseModal's slide-out, then `onClosed` calls the parent's
  * `onClose` (which unmounts us).
  */
 
-import { ArrowLeft, Search, ShieldCheck, X } from "lucide-react-native";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { ArrowLeft, Search, ShieldCheck } from "lucide-react-native";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  Dimensions,
-  Keyboard,
-  Modal,
-  PanResponder,
-  Platform,
-  Pressable,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BaseModal } from "@/components/common/BaseModal";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import type { AllowanceLifetime } from "@/services/agentDelegationMapping";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-// Slide distance + timings. Mirrors `transfer-thresholds`'s sheet and the
-// `MODAL_HEIGHT = height * 0.6` convention used across the app's sheets.
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const SHEET_TRAVEL = SCREEN_HEIGHT * 0.6;
-const SHEET_ANIM_DURATION = 300;
-const SHEET_CLOSE_ANIM_DURATION = 200;
 
 export interface SelectedAllowanceToken {
   contractAddress: `0x${string}`;
@@ -146,12 +124,15 @@ export default function AgentAllowanceSheet({
   onClose,
   onConfirm,
 }: AgentAllowanceSheetProps) {
-  const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
+  // The parent mounts this sheet only while open. Drive BaseModal with an
+  // internal `open` flag so a close request animates out first, then bridges
+  // to the parent's `onClose` (which unmounts us) via `onClosed`.
+  const [open, setOpen] = useState(true);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(SHEET_TRAVEL)).current;
-  const keyboardHeight = useRef(new Animated.Value(0)).current;
+  const requestClose = useCallback(() => {
+    if (busy) return;
+    setOpen(false);
+  }, [busy]);
 
   const [stage, setStage] = useState<"pick" | "amount">("pick");
   const [selected, setSelected] = useState<SelectedAllowanceToken | null>(null);
@@ -208,106 +189,6 @@ export default function AgentAllowanceSheet({
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
   }, [rawTokenList, blockchainId, search]);
 
-  // Slide-in on mount.
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: SHEET_ANIM_DURATION,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: SHEET_ANIM_DURATION,
-        useNativeDriver: true,
-      }),
-    ]).start();
-    // Slide-out is driven by `animatedCancel`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Keyboard-aware spacer so the amount input / Authorize button stay
-  // above the keyboard edge. `useNativeDriver: false` because we animate
-  // layout height, not a transform.
-  useEffect(() => {
-    const onShow = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (event) => {
-        Animated.timing(keyboardHeight, {
-          toValue: event.endCoordinates.height,
-          duration: Platform.OS === "ios" ? event.duration : 200,
-          useNativeDriver: false,
-        }).start();
-      },
-    );
-    const onHide = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      (event) => {
-        Animated.timing(keyboardHeight, {
-          toValue: 0,
-          duration: Platform.OS === "ios" ? event.duration : 200,
-          useNativeDriver: false,
-        }).start();
-      },
-    );
-    return () => {
-      onShow.remove();
-      onHide.remove();
-    };
-  }, [keyboardHeight]);
-
-  // Reverse animation → then unmount via parent `onClose`.
-  const animatedCancel = useCallback(() => {
-    if (busy) return;
-    Keyboard.dismiss();
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: SHEET_CLOSE_ANIM_DURATION,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: SHEET_TRAVEL,
-        duration: SHEET_CLOSE_ANIM_DURATION,
-        useNativeDriver: true,
-      }),
-    ]).start(() => onClose());
-  }, [busy, fadeAnim, translateY, onClose]);
-
-  // Drag-to-close on the handle. Same thresholds as the sibling sheets:
-  // 50px travel OR 0.5 velocity triggers close.
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 0,
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) translateY.setValue(g.dy);
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 50 || g.vy > 0.5) {
-          Animated.parallel([
-            Animated.timing(fadeAnim, {
-              toValue: 0,
-              duration: SHEET_CLOSE_ANIM_DURATION,
-              useNativeDriver: true,
-            }),
-            Animated.timing(translateY, {
-              toValue: SHEET_TRAVEL,
-              duration: SHEET_CLOSE_ANIM_DURATION,
-              useNativeDriver: true,
-            }),
-          ]).start(() => onClose());
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 5,
-          }).start();
-        }
-      },
-    }),
-  ).current;
-
   const duration = DURATION_OPTIONS[durationIndex];
   const amountValid = /^\d*\.?\d+$/.test(amountText.trim());
   const canAuthorize = !!selected && amountValid && !busy;
@@ -320,242 +201,198 @@ export default function AgentAllowanceSheet({
       : "Enter a spending cap and pick how long it stays valid.";
 
   return (
-    <Modal
-      transparent
-      visible
-      animationType="none"
-      onRequestClose={animatedCancel}
+    <BaseModal
+      visible={open}
+      onClose={requestClose}
+      onClosed={onClose}
+      maxHeight="85%"
+      borderRadius={32}
+      enablePanToClose={!busy}
+      enableBackdropClose={!busy}
+      closeButtonDisabled={busy}
     >
-      <View style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={animatedCancel}>
-          <Animated.View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-              opacity: fadeAnim,
-            }}
-          />
-        </TouchableWithoutFeedback>
+      <View className="px-6 pb-1">
+        <View className="flex-row items-center mb-4 pr-10">
+          {stage === "amount" && (
+            <TouchableOpacity
+              onPress={() => setStage("pick")}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Back to token selection"
+              className="mr-2 bg-light-main-container p-2 rounded-full"
+            >
+              <ArrowLeft size={16} color="#20222c" />
+            </TouchableOpacity>
+          )}
+          <ShieldCheck size={22} color="#c71c4b" />
+          <Text className="text-light-matte-black text-xl font-bold ml-2">
+            {stage === "pick" ? "Choose a token" : "Spending Delegation"}
+          </Text>
+        </View>
+      </View>
 
-        <Animated.View
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            maxHeight: "85%",
-            backgroundColor: "#f5f6f9",
-            borderTopLeftRadius: 32,
-            borderTopRightRadius: 32,
-            transform: [{ translateY }],
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: -3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
-            elevation: 10,
-          }}
-        >
-          <View
-            {...panResponder.panHandlers}
-            className="w-full items-center pt-4 pb-2"
-          >
-            <View className="w-12 h-1 bg-gray-300 rounded-full" />
+      {stage === "pick" ? (
+        <View className="px-6">
+          <View className="flex-row items-center bg-white rounded-2xl px-3 mb-3">
+            <Search size={16} color="#9aa0ab" />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search tokens"
+              placeholderTextColor="#9aa0ab"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              className="flex-1 py-3 px-2 text-light-matte-black"
+            />
           </View>
 
-          <View className="px-6 pb-1">
-            <View className="flex-row items-center justify-between mb-4">
-              <View className="flex-row items-center flex-1">
-                {stage === "amount" && (
-                  <TouchableOpacity
-                    onPress={() => setStage("pick")}
-                    disabled={busy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Back to token selection"
-                    className="mr-2 bg-light-main-container p-2 rounded-full"
-                  >
-                    <ArrowLeft size={16} color="#20222c" />
-                  </TouchableOpacity>
-                )}
-                <ShieldCheck size={22} color="#c71c4b" />
-                <Text className="text-light-matte-black text-xl font-bold ml-2">
-                  {stage === "pick" ? "Choose a token" : "Spending Delegation"}
-                </Text>
-              </View>
-              <Pressable
-                onPress={animatedCancel}
-                disabled={busy}
-                className="bg-light-main-container p-2 rounded-full"
-              >
-                <X size={16} color="#20222c" />
-              </Pressable>
+          {tokensLoading && tokens.length === 0 ? (
+            <View className="py-10 items-center">
+              <ActivityIndicator size="small" color="#c71c4b" />
+              <Text className="text-light-matte-black/50 text-xs mt-2">
+                Loading tokens…
+              </Text>
             </View>
-          </View>
-
-          {stage === "pick" ? (
-            <View className="px-6">
-              <View className="flex-row items-center bg-white rounded-2xl px-3 mb-3">
-                <Search size={16} color="#9aa0ab" />
-                <TextInput
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder="Search tokens"
-                  placeholderTextColor="#9aa0ab"
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  className="flex-1 py-3 px-2 text-light-matte-black"
-                />
-              </View>
-
-              {tokensLoading && tokens.length === 0 ? (
-                <View className="py-10 items-center">
-                  <ActivityIndicator size="small" color="#c71c4b" />
-                  <Text className="text-light-matte-black/50 text-xs mt-2">
-                    Loading tokens…
-                  </Text>
-                </View>
-              ) : tokens.length === 0 ? (
-                <View className="py-10 items-center">
-                  <Text className="text-light-matte-black/60 text-sm">
-                    No tokens available on this network.
-                  </Text>
-                </View>
-              ) : (
-                <ScrollView
-                  style={{ maxHeight: 360 }}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                >
-                  {tokens.map((t, index) => (
-                    <TouchableOpacity
-                      key={t.contractAddress}
-                      onPress={() => {
-                        setSelected(t);
-                        setStage("amount");
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Select ${t.symbol}`}
-                      className={`flex-row items-center py-3 ${index > 0 ? "border-t border-light-matte-black/5" : ""}`}
-                    >
-                      <TokenAvatar logoUrl={t.logoUrl} symbol={t.symbol} />
-                      <View className="flex-1">
-                        <Text className="text-light-matte-black font-semibold">
-                          {t.symbol}
-                        </Text>
-                        <Text
-                          className="text-light-matte-black/50 text-xs mt-0.5"
-                          numberOfLines={1}
-                        >
-                          {t.name}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
+          ) : tokens.length === 0 ? (
+            <View className="py-10 items-center">
+              <Text className="text-light-matte-black/60 text-sm">
+                No tokens available on this network.
+              </Text>
             </View>
           ) : (
-            selected && (
-              <View className="px-6">
-                <View className="flex-row items-center bg-white rounded-2xl p-3 mb-4">
-                  <TokenAvatar
-                    logoUrl={selected.logoUrl}
-                    symbol={selected.symbol}
-                  />
+            <ScrollView
+              style={{ maxHeight: 360 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {tokens.map((t, index) => (
+                <TouchableOpacity
+                  key={t.contractAddress}
+                  onPress={() => {
+                    setSelected(t);
+                    setStage("amount");
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${t.symbol}`}
+                  className={`flex-row items-center py-3 ${index > 0 ? "border-t border-light-matte-black/5" : ""}`}
+                >
+                  <TokenAvatar logoUrl={t.logoUrl} symbol={t.symbol} />
                   <View className="flex-1">
                     <Text className="text-light-matte-black font-semibold">
-                      {selected.symbol}
+                      {t.symbol}
                     </Text>
                     <Text
                       className="text-light-matte-black/50 text-xs mt-0.5"
                       numberOfLines={1}
                     >
-                      {selected.name}
+                      {t.name}
                     </Text>
                   </View>
-                </View>
-
-                <Text className="text-light-matte-black/50 text-xs uppercase tracking-wide mb-2">
-                  Spending cap
-                </Text>
-                <View className="flex-row items-center bg-white rounded-2xl px-4 mb-5">
-                  <TextInput
-                    value={amountText}
-                    onChangeText={setAmountText}
-                    placeholder="0.0"
-                    placeholderTextColor="#9aa0ab"
-                    keyboardType="decimal-pad"
-                    className="flex-1 py-3 text-light-matte-black text-lg font-semibold"
-                  />
-                  <Text className="text-light-matte-black/50 font-semibold ml-2">
-                    {selected.symbol}
-                  </Text>
-                </View>
-
-                <Text className="text-light-matte-black/50 text-xs uppercase tracking-wide mb-2">
-                  Valid for
-                </Text>
-                <View className="flex-row flex-wrap gap-2 mb-5">
-                  {DURATION_OPTIONS.map((opt, i) => {
-                    const active = i === durationIndex;
-                    return (
-                      <TouchableOpacity
-                        key={opt.label}
-                        onPress={() => setDurationIndex(i)}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: active }}
-                        className={`px-4 py-2.5 rounded-2xl ${active ? "bg-light-primary-red" : "bg-white"}`}
-                      >
-                        <Text
-                          className={`font-semibold text-sm ${active ? "text-white" : "text-light-matte-black"}`}
-                        >
-                          {opt.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                <View className="bg-light-main-container/60 p-4 rounded-2xl mb-5">
-                  <Text className="text-light-matte-black/60 text-xs leading-4 text-center">
-                    {summary}
-                  </Text>
-                </View>
-
-                <Text className="text-light-matte-black/50 text-[11px] leading-4 mb-4 text-center">
-                  This signs a cryptographic ERC-7710 delegation. The cap is
-                  enforced onchain — the agent can never exceed it.
-                </Text>
-
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  disabled={!canAuthorize}
-                  className={`py-4 rounded-full items-center justify-center shadow-md flex-row ${canAuthorize ? "bg-light-primary-red" : "bg-light-primary-red/40"}`}
-                  onPress={() =>
-                    selected &&
-                    onConfirm({
-                      token: selected,
-                      amountText: amountText.trim(),
-                      lifetime: duration.build(),
-                    })
-                  }
-                >
-                  {busy ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text className="text-white font-bold text-base">
-                      Authorize Delegation
-                    </Text>
-                  )}
                 </TouchableOpacity>
-              </View>
-            )
+              ))}
+            </ScrollView>
           )}
+        </View>
+      ) : (
+        selected && (
+          <View className="px-6">
+            <View className="flex-row items-center bg-white rounded-2xl p-3 mb-4">
+              <TokenAvatar
+                logoUrl={selected.logoUrl}
+                symbol={selected.symbol}
+              />
+              <View className="flex-1">
+                <Text className="text-light-matte-black font-semibold">
+                  {selected.symbol}
+                </Text>
+                <Text
+                  className="text-light-matte-black/50 text-xs mt-0.5"
+                  numberOfLines={1}
+                >
+                  {selected.name}
+                </Text>
+              </View>
+            </View>
 
-          {/* Static bottom inset + keyboard-aware spacer. */}
-          <View style={{ height: bottomOffset + 24 }} />
-          <Animated.View style={{ height: keyboardHeight }} />
-        </Animated.View>
-      </View>
-    </Modal>
+            <Text className="text-light-matte-black/50 text-xs uppercase tracking-wide mb-2">
+              Spending cap
+            </Text>
+            <View className="flex-row items-center bg-white rounded-2xl px-4 mb-5">
+              <TextInput
+                value={amountText}
+                onChangeText={setAmountText}
+                placeholder="0.0"
+                placeholderTextColor="#9aa0ab"
+                keyboardType="decimal-pad"
+                className="flex-1 py-3 text-light-matte-black text-lg font-semibold"
+              />
+              <Text className="text-light-matte-black/50 font-semibold ml-2">
+                {selected.symbol}
+              </Text>
+            </View>
+
+            <Text className="text-light-matte-black/50 text-xs uppercase tracking-wide mb-2">
+              Valid for
+            </Text>
+            <View className="flex-row flex-wrap gap-2 mb-5">
+              {DURATION_OPTIONS.map((opt, i) => {
+                const active = i === durationIndex;
+                return (
+                  <TouchableOpacity
+                    key={opt.label}
+                    onPress={() => setDurationIndex(i)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    className={`px-4 py-2.5 rounded-2xl ${active ? "bg-light-primary-red" : "bg-white"}`}
+                  >
+                    <Text
+                      className={`font-semibold text-sm ${active ? "text-white" : "text-light-matte-black"}`}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View className="bg-light-main-container/60 p-4 rounded-2xl mb-5">
+              <Text className="text-light-matte-black/60 text-xs leading-4 text-center">
+                {summary}
+              </Text>
+            </View>
+
+            <Text className="text-light-matte-black/50 text-[11px] leading-4 mb-4 text-center">
+              This signs a cryptographic ERC-7710 delegation. The cap is
+              enforced onchain — the agent can never exceed it.
+            </Text>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              disabled={!canAuthorize}
+              className={`py-4 rounded-full items-center justify-center shadow-md flex-row ${canAuthorize ? "bg-light-primary-red" : "bg-light-primary-red/40"}`}
+              onPress={() =>
+                selected &&
+                onConfirm({
+                  token: selected,
+                  amountText: amountText.trim(),
+                  lifetime: duration.build(),
+                })
+              }
+            >
+              {busy ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text className="text-white font-bold text-base">
+                  Authorize Delegation
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )
+      )}
+
+      {/* Breathing room above the safe-area inset BaseModal already pads. */}
+      <View style={{ height: 24 }} />
+    </BaseModal>
   );
 }

@@ -1,27 +1,19 @@
 import { BookUser, Search, Wallet, X } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { SectionListData, SectionListRenderItemInfo } from "react-native";
 import {
-  Animated,
-  Dimensions,
-  Modal,
   Platform,
   Pressable,
   SectionList,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import type { TAddressBookEntry } from "@/constants/types/addressBookTypes";
 import type { TWallet } from "@/constants/types/walletTypes";
 import type { Namespace } from "@/services/chains/types";
 import { truncateAddress } from "@/utils/walletUtils";
-
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const SHEET_INITIAL_TRANSLATE_Y = 300;
-const DRAG_CLOSE_THRESHOLD = 100;
 
 function getInitials(label: string): string {
   const words = label.trim().split(/\s+/);
@@ -76,60 +68,6 @@ export default function RecipientPickerModal({
   onSelect,
 }: RecipientPickerModalProps) {
   const [search, setSearch] = useState("");
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = useRef(
-    new Animated.Value(SHEET_INITIAL_TRANSLATE_Y),
-  ).current;
-  const dragStartY = useRef(0);
-  const hasAnimatedIn = useRef(false);
-  const { bottom: safeAreaBottom } = useSafeAreaInsets();
-
-  const animateOpen = useCallback(() => {
-    backdropOpacity.setValue(0);
-    sheetTranslateY.setValue(SHEET_INITIAL_TRANSLATE_Y);
-    Animated.parallel([
-      Animated.timing(backdropOpacity, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.spring(sheetTranslateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 0,
-      }),
-    ]).start(() => {
-      hasAnimatedIn.current = true;
-    });
-  }, [backdropOpacity, sheetTranslateY]);
-
-  const animateClose = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(backdropOpacity, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetTranslateY, {
-        toValue: SHEET_INITIAL_TRANSLATE_Y,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-    });
-  }, [backdropOpacity, sheetTranslateY, onClose]);
-
-  useEffect(() => {
-    if (visible && !hasAnimatedIn.current) {
-      setSearch("");
-      animateOpen();
-    } else if (!visible) {
-      backdropOpacity.setValue(0);
-      sheetTranslateY.setValue(SHEET_INITIAL_TRANSLATE_Y);
-      hasAnimatedIn.current = false;
-    }
-  }, [visible, animateOpen, backdropOpacity, sheetTranslateY]);
 
   const sections = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -175,9 +113,9 @@ export default function RecipientPickerModal({
   const handleSelect = useCallback(
     (address: string, label: string) => {
       onSelect(address, label);
-      animateClose();
+      onClose();
     },
-    [onSelect, animateClose],
+    [onSelect, onClose],
   );
 
   const renderItem = useCallback(
@@ -275,7 +213,7 @@ export default function RecipientPickerModal({
     [],
   );
 
-  const keyExtractor = useCallback((item: RecipientItem, index: number) => {
+  const keyExtractor = useCallback((item: RecipientItem) => {
     if (item.type === "wallet") return `wallet-${item.index}`;
     return `contact-${item.contact.id}`;
   }, []);
@@ -283,129 +221,68 @@ export default function RecipientPickerModal({
   const isEmpty = sections.length === 0;
 
   return (
-    <Modal
-      transparent
+    <BaseModal
       visible={visible}
-      animationType="none"
-      onRequestClose={animateClose}
+      onClose={onClose}
+      onClosed={() => setSearch("")}
+      height="75%"
+      borderRadius={28}
     >
-      <View style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={animateClose}>
-          <Animated.View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              opacity: backdropOpacity,
-            }}
-          />
-        </TouchableWithoutFeedback>
+      <ModalHeader title="Select Recipient" className="px-6" />
 
-        <Animated.View
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            maxHeight: SCREEN_HEIGHT * 0.75,
-            backgroundColor: "#f5f6f9",
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            transform: [{ translateY: sheetTranslateY }],
-            opacity: backdropOpacity,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: -3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
-            elevation: 10,
-          }}
-        >
-          {/* Drag handle */}
+      <View
+        className="mx-6 mb-3 flex-row items-center bg-white rounded-xl px-4 border"
+        style={{ borderColor: "#c71c4b33" }}
+      >
+        <Search size={15} color="#20222c50" />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search by name or address..."
+          placeholderTextColor="#20222c40"
+          autoCapitalize="none"
+          autoCorrect={false}
+          className="flex-1 ml-2 py-3 text-sm text-light-matte-black"
+        />
+        {!!search && (
           <Pressable
-            className="w-full items-center pt-4 pb-2"
-            onTouchStart={(e) => {
-              dragStartY.current = e.nativeEvent.pageY;
-            }}
-            onTouchEnd={(e) => {
-              if (
-                e.nativeEvent.pageY - dragStartY.current >
-                DRAG_CLOSE_THRESHOLD
-              ) {
-                animateClose();
-              }
-            }}
+            onPress={() => setSearch("")}
+            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
           >
-            <View className="w-12 h-1 bg-gray-300 rounded-full" />
+            <X size={14} color="#20222c60" />
           </Pressable>
-
-          {/* Header */}
-          <View className="flex-row items-center justify-between px-6 pb-4">
-            <Text className="text-xl font-bold text-light-matte-black">
-              Select Recipient
-            </Text>
-            <Pressable
-              onPress={animateClose}
-              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-              className="bg-light-main-container p-2 rounded-full"
-            >
-              <X size={20} color="#c71c4b" />
-            </Pressable>
-          </View>
-
-          {/* Search */}
-          <View
-            className="mx-6 mb-3 flex-row items-center bg-white rounded-xl px-4 border"
-            style={{ borderColor: "#c71c4b33" }}
-          >
-            <Search size={15} color="#20222c50" />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search by name or address..."
-              placeholderTextColor="#20222c40"
-              autoCapitalize="none"
-              autoCorrect={false}
-              className="flex-1 ml-2 py-3 text-sm text-light-matte-black"
-            />
-            {!!search && (
-              <Pressable
-                onPress={() => setSearch("")}
-                hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-              >
-                <X size={14} color="#20222c60" />
-              </Pressable>
-            )}
-          </View>
-
-          {isEmpty ? (
-            <View className="items-center justify-center py-12 px-10">
-              <View className="w-14 h-14 rounded-2xl bg-light-primary-red/10 items-center justify-center mb-3">
-                <BookUser size={26} color="#c71c4b" />
-              </View>
-              <Text className="text-[15px] font-semibold text-light-matte-black text-center mb-1">
-                {search
-                  ? "No results found"
-                  : `No ${activeNamespace === "solana" ? "Solana" : "Ethereum"} recipients`}
-              </Text>
-              <Text className="text-xs text-light-matte-black/50 text-center">
-                {search
-                  ? "Try a different name or address"
-                  : "Only wallets and contacts that match the active chain appear here. Paste an address manually to send to a new recipient."}
-              </Text>
-            </View>
-          ) : (
-            <SectionList
-              sections={sections}
-              renderItem={renderItem}
-              renderSectionHeader={renderSectionHeader}
-              keyExtractor={keyExtractor}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              stickySectionHeadersEnabled={false}
-              contentContainerStyle={{ paddingBottom: safeAreaBottom + 16 }}
-            />
-          )}
-        </Animated.View>
+        )}
       </View>
-    </Modal>
+
+      {isEmpty ? (
+        <View className="flex-1 items-center justify-center px-10">
+          <View className="w-14 h-14 rounded-2xl bg-light-primary-red/10 items-center justify-center mb-3">
+            <BookUser size={26} color="#c71c4b" />
+          </View>
+          <Text className="text-[15px] font-semibold text-light-matte-black text-center mb-1">
+            {search
+              ? "No results found"
+              : `No ${activeNamespace === "solana" ? "Solana" : "Ethereum"} recipients`}
+          </Text>
+          <Text className="text-xs text-light-matte-black/50 text-center">
+            {search
+              ? "Try a different name or address"
+              : "Only wallets and contacts that match the active chain appear here. Paste an address manually to send to a new recipient."}
+          </Text>
+        </View>
+      ) : (
+        <SectionList
+          style={{ flex: 1 }}
+          sections={sections}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          keyExtractor={keyExtractor}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={{ paddingBottom: 16 }}
+        />
+      )}
+    </BaseModal>
   );
 }

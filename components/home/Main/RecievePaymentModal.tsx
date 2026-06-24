@@ -1,20 +1,12 @@
 import { router } from "expo-router";
 import { Copy } from "lucide-react-native";
-import React, { memo, useEffect, useMemo, useState } from "react";
-import {
-  Animated,
-  Modal,
-  Platform,
-  Pressable,
-  Text,
-  TouchableWithoutFeedback,
-  View,
-} from "react-native";
+import { memo, useEffect, useMemo, useState } from "react";
+import { Pressable, Text, View } from "react-native";
 import QRCodeStyled from "react-native-qrcode-styled";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import { takumipayLogoBase64 } from "@/constants/takumipay";
-import { TWallet } from "@/constants/types/walletTypes";
+import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import { prefetchQRMatrix } from "@/services/qrMatrixCache";
 import { copyToClipboard } from "@/utils/helperUtils";
@@ -93,10 +85,6 @@ type ReceivePaymentModalProps = {
   closeModal: () => void;
   activeWallet: TWallet;
   activeChain: ChainConfig;
-  fadeAnim: Animated.Value;
-  translateY: Animated.Value;
-  panResponder: any;
-  isModalAnimationComplete: boolean;
 };
 
 export default function RecievePaymentModal({
@@ -104,18 +92,11 @@ export default function RecievePaymentModal({
   closeModal,
   activeWallet,
   activeChain,
-  fadeAnim,
-  translateY,
-  panResponder,
-  isModalAnimationComplete,
 }: ReceivePaymentModalProps) {
-  const { bottom } = useSafeAreaInsets();
-  const getBottomOffset = () => {
-    if (Platform.OS === "ios") return 16;
-    if (bottom > 0) return bottom + 8;
-    return 0;
-  };
-  const bottomOffset = getBottomOffset();
+  // Gate the QR render until the sheet has finished sliding up, so the
+  // native-SVG matrix layout never competes with the open animation.
+  const [isModalAnimationComplete, setIsModalAnimationComplete] =
+    useState(false);
 
   // The Receive modal is account-scoped, not chain-scoped: if the
   // active wallet shares a `seedPhrase` with other rows (EVM + Solana
@@ -171,14 +152,16 @@ export default function RecievePaymentModal({
     prefetchQRMatrix(qrAddress, { errorCorrectionLevel: "M" });
   }, [qrAddress]);
 
-  const tabLabelFor = (ns: string): string =>
-    ns === "eip155"
+  const tabLabelFor = (ns?: string): string => {
+    if (!ns) return "Wallet";
+    return ns === "eip155"
       ? "Ethereum"
       : ns === "solana"
         ? "Solana"
         : ns === "sui"
           ? "Sui"
           : ns.charAt(0).toUpperCase() + ns.slice(1);
+  };
 
   const suiNetworkLabel = (n: "mainnet" | "testnet" | "devnet"): string =>
     n === "mainnet" ? "Mainnet" : n === "testnet" ? "Testnet" : "Devnet";
@@ -198,158 +181,107 @@ export default function RecievePaymentModal({
             : "Sui"
           : tabLabelFor(displayWallet.namespace);
   return (
-    <Modal
-      transparent
+    <BaseModal
       visible={modalVisible}
-      animationType="none"
-      onRequestClose={closeModal}
+      onClose={closeModal}
+      onOpened={() => setIsModalAnimationComplete(true)}
+      onClosed={() => setIsModalAnimationComplete(false)}
+      borderRadius={28}
+      contentClassName="px-6"
     >
-      <View style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={closeModal}>
-          <Animated.View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-              opacity: fadeAnim,
-            }}
-          />
-        </TouchableWithoutFeedback>
+      <ModalHeader title="Receive Funds" />
 
-        <Animated.View
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "auto",
-            paddingBottom: bottomOffset,
-            backgroundColor: "#f5f6f9",
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            transform: [{ translateY: translateY }],
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: -3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
-            elevation: 10,
-          }}
-        >
-          <View
-            {...panResponder.panHandlers}
-            className="w-full items-center pt-4 pb-2"
-          >
-            <View className="w-12 h-1 bg-gray-300 rounded-full" />
-          </View>
-
-          <View className="px-6 flex-1">
-            <View className="flex-row items-center justify-between mb-6">
-              <Text className="text-light-matte-black text-xl font-bold">
-                Receive Funds
-              </Text>
-              <Pressable
-                onPress={closeModal}
-                className="bg-light-main-container p-2 rounded-full"
-              >
-                <Text className="text-light-primary-red font-bold">✕</Text>
-              </Pressable>
-            </View>
-
-            {pairedWallets.length > 1 && (
-              <View className="flex-row bg-light-main-container rounded-full p-1 mb-4">
-                {pairedWallets.map((w) => {
-                  const active = w.namespace === tabNamespace;
-                  return (
-                    <Pressable
-                      key={w.namespace}
-                      onPress={() => setTabNamespace(w.namespace)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${tabLabelFor(w.namespace)} address`}
-                      accessibilityState={{ selected: active }}
-                      className={`flex-1 py-2 items-center rounded-full ${
-                        active ? "bg-light" : ""
-                      }`}
-                    >
-                      <Text
-                        className={`text-sm font-semibold ${
-                          active
-                            ? "text-light-primary-red"
-                            : "text-light-matte-black/60"
-                        }`}
-                      >
-                        {tabLabelFor(w.namespace)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-
-            <View className="bg-white rounded-3xl p-6 shadow-sm mb-5">
-              <View className="items-center mb-6 h-64">
-                <View className="bg-light-main-container/50 p-4 rounded-2xl aspect-square grow">
-                  {isModalAnimationComplete && (
-                    <MemoQRCode data={qrAddress} logoScale={qrLogoScale} />
-                  )}
-                </View>
-              </View>
-
-              <View className="items-center mb-4">
-                <View className="bg-light-primary-red/10 px-3 py-1 rounded-full mb-2">
-                  <Text className="text-light-primary-red text-xs font-medium">
-                    {chainPillLabel}
-                  </Text>
-                </View>
-                <Text className="text-light-matte-black font-medium text-base">
-                  {displayWallet.name || activeWallet.name || "My Wallet"}
-                </Text>
-              </View>
-
-              <View className="bg-light-main-container p-4 rounded-xl w-full">
-                <View className="flex-row items-center justify-between mb-1">
-                  <Text className="text-light-matte-black/70 text-xs font-medium">
-                    WALLET ADDRESS
-                  </Text>
-                  <Chip label={displayWallet?.source} size="small" />
-                </View>
-                <Text
-                  className="text-light-matte-black text-sm font-medium"
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
+      <View>
+        {pairedWallets.length > 1 && (
+          <View className="flex-row bg-light-main-container rounded-full p-1 mb-4">
+            {pairedWallets.map((w) => {
+              const active = w.namespace === tabNamespace;
+              return (
+                <Pressable
+                  key={w.namespace}
+                  onPress={() => setTabNamespace(w.namespace)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${tabLabelFor(w.namespace)} address`}
+                  accessibilityState={{ selected: active }}
+                  className={`flex-1 py-2 items-center rounded-full ${
+                    active ? "bg-light" : ""
+                  }`}
                 >
-                  {displayWallet.address}
-                </Text>
-              </View>
-            </View>
-
-            <View className="flex-row gap-4">
-              <Pressable
-                className="flex-1 bg-light-main-container p-4 rounded-xl"
-                onPress={() =>
-                  copyToClipboard(displayWallet.address, "Address")
-                }
-              >
-                <View className="flex-row items-center justify-center gap-2">
-                  <Copy size={18} color="#c71c4b" className="mr-2" />
-                  <Text className="text-light-matte-black font-medium">
-                    Copy Address
+                  <Text
+                    className={`text-sm font-semibold ${
+                      active
+                        ? "text-light-primary-red"
+                        : "text-light-matte-black/60"
+                    }`}
+                  >
+                    {tabLabelFor(w.namespace)}
                   </Text>
-                </View>
-              </Pressable>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
-              <Pressable
-                className="flex-1 bg-light-primary-red p-4 rounded-xl"
-                onPress={() => {
-                  router.push("/scan-to-pay");
-                }}
-              >
-                <Text className="text-white font-bold text-center">
-                  Scan QR
-                </Text>
-              </Pressable>
+        <View className="bg-white rounded-3xl p-6 shadow-sm mb-5">
+          <View className="items-center mb-6 h-64">
+            <View className="bg-light-main-container/50 p-4 rounded-2xl aspect-square grow">
+              {isModalAnimationComplete && (
+                <MemoQRCode data={qrAddress} logoScale={qrLogoScale} />
+              )}
             </View>
           </View>
-        </Animated.View>
+
+          <View className="items-center mb-4">
+            <View className="bg-light-primary-red/10 px-3 py-1 rounded-full mb-2">
+              <Text className="text-light-primary-red text-xs font-medium">
+                {chainPillLabel}
+              </Text>
+            </View>
+            <Text className="text-light-matte-black font-medium text-base">
+              {displayWallet.name || activeWallet.name || "My Wallet"}
+            </Text>
+          </View>
+
+          <View className="bg-light-main-container p-4 rounded-xl w-full">
+            <View className="flex-row items-center justify-between mb-1">
+              <Text className="text-light-matte-black/70 text-xs font-medium">
+                WALLET ADDRESS
+              </Text>
+              <Chip label={displayWallet?.source} size="small" />
+            </View>
+            <Text
+              className="text-light-matte-black text-sm font-medium"
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              {displayWallet.address}
+            </Text>
+          </View>
+        </View>
+
+        <View className="flex-row gap-4">
+          <Pressable
+            className="flex-1 bg-light-main-container p-4 rounded-xl"
+            onPress={() => copyToClipboard(displayWallet.address, "Address")}
+          >
+            <View className="flex-row items-center justify-center gap-2">
+              <Copy size={18} color="#c71c4b" className="mr-2" />
+              <Text className="text-light-matte-black font-medium">
+                Copy Address
+              </Text>
+            </View>
+          </Pressable>
+
+          <Pressable
+            className="flex-1 bg-light-primary-red p-4 rounded-xl"
+            onPress={() => {
+              router.push("/scan-to-pay");
+            }}
+          >
+            <Text className="text-white font-bold text-center">Scan QR</Text>
+          </Pressable>
+        </View>
       </View>
-    </Modal>
+    </BaseModal>
   );
 }

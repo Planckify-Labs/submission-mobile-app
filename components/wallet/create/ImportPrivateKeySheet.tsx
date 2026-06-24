@@ -34,24 +34,19 @@
  *   - Trim + optional `0x` strip on EVM; no silent re-encoding elsewhere.
  */
 
-import { ArrowLeft, X } from "lucide-react-native";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { ArrowLeft } from "lucide-react-native";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
+  Dimensions,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { BaseModal } from "@/components/common/BaseModal";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import type { Namespace } from "@/services/chains/types";
@@ -62,6 +57,9 @@ import {
 } from "./ImportPrivateKeySheet.helpers";
 import { inferNamespaceFromKey } from "./inferNamespaceFromKey";
 import { NamespacePicker } from "./NamespacePicker";
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const SHEET_HEIGHT = SCREEN_HEIGHT * 0.92;
 
 type Props = {
   visible: boolean;
@@ -242,7 +240,7 @@ function ImportPrivateKeySheet({
       setName("");
       onClose();
     } catch (e) {
-      console.error("ImportPrivateKeySheet: confirm failed", e);
+      if (__DEV__) console.warn("ImportPrivateKeySheet: confirm failed", e);
       setSubmitError(
         "Something went wrong importing this wallet. Please try again.",
       );
@@ -250,8 +248,6 @@ function ImportPrivateKeySheet({
       setSubmitting(false);
     }
   }, [namespace, privateKey, name, addWallet, onWalletAdded, onClose]);
-
-  if (!visible) return null;
 
   const title =
     step === 1
@@ -261,119 +257,118 @@ function ImportPrivateKeySheet({
         : "Name this wallet";
 
   return (
-    <Modal
-      transparent={false}
-      visible
-      animationType="slide"
-      onRequestClose={goBack}
+    <BaseModal
+      visible={visible}
+      onClose={onClose}
+      height={SHEET_HEIGHT}
+      enablePanToClose={!submitting}
+      enableBackdropClose={!submitting}
+      closeButtonDisabled={submitting}
     >
-      <SafeAreaView className="flex-1 bg-light-main-container" edges={["top"]}>
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-3">
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-4 pb-3">
+        {step > 1 ? (
           <Pressable
             onPress={goBack}
             accessibilityRole="button"
-            accessibilityLabel={step === 1 ? "Close" : "Back"}
+            accessibilityLabel="Back"
             hitSlop={12}
             className="p-1"
           >
-            {step === 1 ? (
-              <X size={24} color="#c71c4b" />
-            ) : (
-              <ArrowLeft size={24} color="#c71c4b" />
-            )}
+            <ArrowLeft size={24} color="#c71c4b" />
           </Pressable>
-          <Text className="text-light-matte-black font-semibold text-base">
-            Step {step} of 3
-          </Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        <ScrollView
-          className="flex-1 px-6"
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: 24 }}
-        >
-          <Text className="text-light-matte-black text-2xl font-bold mb-2">
-            {title}
-          </Text>
-
-          {step === 1 ? (
-            <Step1Body
-              selected={selectedForPicker}
-              onChange={handleNamespaceChange}
-              inferredHint={!namespace && inferred !== null}
-            />
-          ) : null}
-
-          {step === 2 && namespace ? (
-            <Step2Body
-              namespace={namespace}
-              value={privateKey}
-              onChangeText={setPrivateKey}
-              validationState={validationState}
-              inputRef={keyInputRef}
-            />
-          ) : null}
-
-          {step === 3 && namespace ? (
-            <Step3Body
-              namespace={namespace}
-              name={name}
-              onChangeName={setName}
-              submitError={submitError}
-            />
-          ) : null}
-        </ScrollView>
-
-        {/* Primary action */}
-        <View className="px-6 pb-2">
-          {step === 1 ? (
-            <PrimaryButton
-              label="Continue"
-              disabled={!namespace}
-              onPress={proceedFromStep1}
-            />
-          ) : null}
-          {step === 2 ? (
-            <PrimaryButton
-              label="Continue"
-              disabled={validationState !== "valid"}
-              onPress={proceedFromStep2}
-            />
-          ) : null}
-          {step === 3 ? (
-            <PrimaryButton
-              label={submitting ? "Importing..." : "Import wallet"}
-              disabled={submitting}
-              loading={submitting}
-              onPress={handleConfirm}
-            />
-          ) : null}
-        </View>
-
-        {/* Footer — present on every step */}
-        {onImportSeedPhraseInstead ? (
-          <View className="px-6 pb-6 pt-2">
-            <Text className="text-light-matte-black/60 text-xs text-center mb-1">
-              Wrong chain? A seed phrase imports all chains at once.
-            </Text>
-            <Pressable
-              onPress={onImportSeedPhraseInstead}
-              accessibilityRole="button"
-              accessibilityLabel="Import seed phrase instead"
-              hitSlop={8}
-            >
-              <Text className="text-light-primary-red text-sm font-semibold text-center">
-                Import seed phrase instead
-              </Text>
-            </Pressable>
-          </View>
         ) : (
-          <View className="pb-6" />
+          <View className="w-8" />
         )}
-      </SafeAreaView>
-    </Modal>
+        <Text className="text-light-matte-black font-semibold text-base">
+          Step {step} of 3
+        </Text>
+        {/* Spacer balances the back button; BaseModal renders the close. */}
+        <View className="w-8" />
+      </View>
+
+      <ScrollView
+        className="flex-1 px-6"
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 24 }}
+      >
+        <Text className="text-light-matte-black text-2xl font-bold mb-2">
+          {title}
+        </Text>
+
+        {step === 1 ? (
+          <Step1Body
+            selected={selectedForPicker}
+            onChange={handleNamespaceChange}
+            inferredHint={!namespace && inferred !== null}
+          />
+        ) : null}
+
+        {step === 2 && namespace ? (
+          <Step2Body
+            namespace={namespace}
+            value={privateKey}
+            onChangeText={setPrivateKey}
+            validationState={validationState}
+            inputRef={keyInputRef}
+          />
+        ) : null}
+
+        {step === 3 && namespace ? (
+          <Step3Body
+            namespace={namespace}
+            name={name}
+            onChangeName={setName}
+            submitError={submitError}
+          />
+        ) : null}
+      </ScrollView>
+
+      {/* Primary action */}
+      <View className="px-6 pb-2">
+        {step === 1 ? (
+          <PrimaryButton
+            label="Continue"
+            disabled={!namespace}
+            onPress={proceedFromStep1}
+          />
+        ) : null}
+        {step === 2 ? (
+          <PrimaryButton
+            label="Continue"
+            disabled={validationState !== "valid"}
+            onPress={proceedFromStep2}
+          />
+        ) : null}
+        {step === 3 ? (
+          <PrimaryButton
+            label={submitting ? "Importing..." : "Import wallet"}
+            disabled={submitting}
+            loading={submitting}
+            onPress={handleConfirm}
+          />
+        ) : null}
+      </View>
+
+      {/* Footer — present on every step */}
+      {onImportSeedPhraseInstead ? (
+        <View className="px-6 pt-2">
+          <Text className="text-light-matte-black/60 text-xs text-center mb-1">
+            Wrong chain? A seed phrase imports all chains at once.
+          </Text>
+          <Pressable
+            onPress={onImportSeedPhraseInstead}
+            accessibilityRole="button"
+            accessibilityLabel="Import seed phrase instead"
+            hitSlop={8}
+          >
+            <Text className="text-light-primary-red text-sm font-semibold text-center">
+              Import seed phrase instead
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </BaseModal>
   );
 }
 

@@ -43,7 +43,6 @@ import { Controller, useForm } from "react-hook-form";
 import {
   ActivityIndicator,
   Image,
-  Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -54,6 +53,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { TChannel } from "@/api/types/channel";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import { useChannelsWithStorage } from "@/hooks/useChannelsWithStorage";
 
 /**
@@ -580,78 +580,68 @@ export default function MerchantSignupForm() {
           </View>
         </ScrollView>
 
-        <Modal
+        <BaseModal
           visible={pickerOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setPickerOpen(false)}
+          onClose={() => setPickerOpen(false)}
+          backgroundColor="#fff"
+          contentClassName="px-5"
         >
-          <Pressable
-            className="flex-1 bg-black/40 justify-end"
-            onPress={() => setPickerOpen(false)}
-          >
-            <Pressable
-              onPress={(e) => e.stopPropagation()}
-              className="bg-light rounded-t-3xl px-5 pt-5 pb-8"
-            >
-              <Text className="text-light-matte-black font-semibold text-lg mb-4">
-                Pick a QRIS type
-              </Text>
-              {channels.length === 0 ? (
-                <View className="items-center py-8">
-                  {isLoadingChannels ? (
-                    <>
-                      <ActivityIndicator color="#c71c4b" />
-                      <Text className="text-light-matte-black/60 text-sm mt-3">
-                        Loading QRIS types…
-                      </Text>
-                    </>
-                  ) : (
-                    <Text className="text-light-matte-black/60 text-sm text-center">
-                      Couldn&apos;t load QRIS types. Check your connection and try
-                      again.
+          <ModalHeader title="Pick a QRIS type" />
+          <View>
+            {channels.length === 0 ? (
+              <View className="items-center py-8">
+                {isLoadingChannels ? (
+                  <>
+                    <ActivityIndicator color="#c71c4b" />
+                    <Text className="text-light-matte-black/60 text-sm mt-3">
+                      Loading QRIS types…
                     </Text>
-                  )}
-                </View>
-              ) : (
-                channels.map((c) => {
-                  const active = c.code === pickedChannelCode;
-                  return (
-                    <TouchableOpacity
-                      key={c.code}
-                      activeOpacity={0.7}
-                      onPress={() => handlePickChannel(c.code)}
-                      className="flex-row items-center py-3 border-b border-light-matte-black/5"
-                    >
-                      <View className="w-10 h-10 bg-light-primary-red/10 rounded-full items-center justify-center mr-3 overflow-hidden">
-                        {c.iconUrl ? (
-                          <Image
-                            source={{ uri: c.iconUrl }}
-                            style={{ width: 40, height: 40 }}
-                            resizeMode="contain"
-                          />
-                        ) : c.kind === "ewallet" ? (
-                          <Wallet color="#c71c4b" size={18} />
-                        ) : (
-                          <Building2 color="#c71c4b" size={18} />
-                        )}
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-light-matte-black font-medium">
-                          {c.label}
-                        </Text>
-                        <Text className="text-light-matte-black/50 text-xs">
-                          {c.kind === "ewallet" ? "E-wallet" : "Bank"}
-                        </Text>
-                      </View>
-                      {active ? <Check color="#c71c4b" size={18} /> : null}
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </Pressable>
-          </Pressable>
-        </Modal>
+                  </>
+                ) : (
+                  <Text className="text-light-matte-black/60 text-sm text-center">
+                    Couldn&apos;t load QRIS types. Check your connection and try
+                    again.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              channels.map((c) => {
+                const active = c.code === pickedChannelCode;
+                return (
+                  <TouchableOpacity
+                    key={c.code}
+                    activeOpacity={0.7}
+                    onPress={() => handlePickChannel(c.code)}
+                    className="flex-row items-center py-3 border-b border-light-matte-black/5"
+                  >
+                    <View className="w-10 h-10 bg-light-primary-red/10 rounded-full items-center justify-center mr-3 overflow-hidden">
+                      {c.iconUrl ? (
+                        <Image
+                          source={{ uri: c.iconUrl }}
+                          style={{ width: 40, height: 40 }}
+                          resizeMode="contain"
+                        />
+                      ) : c.kind === "ewallet" ? (
+                        <Wallet color="#c71c4b" size={18} />
+                      ) : (
+                        <Building2 color="#c71c4b" size={18} />
+                      )}
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-light-matte-black font-medium">
+                        {c.label}
+                      </Text>
+                      <Text className="text-light-matte-black/50 text-xs">
+                        {c.kind === "ewallet" ? "E-wallet" : "Bank"}
+                      </Text>
+                    </View>
+                    {active ? <Check color="#c71c4b" size={18} /> : null}
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </View>
+        </BaseModal>
       </SafeAreaView>
     </>
   );

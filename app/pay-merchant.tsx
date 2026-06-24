@@ -57,26 +57,19 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
   Dimensions,
   Image,
-  Modal,
-  PanResponder,
-  Platform,
   Pressable,
   ScrollView,
   StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { formatUnits } from "viem";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import PinConfirmationModal from "@/components/common/PinConfirmationModal";
 import { PaymentError } from "@/components/PaymentError";
 import WalletSelectorModal from "@/components/wallet/WalletSelectorModal";
@@ -2142,149 +2135,37 @@ function PickerSheet({
   searchPlaceholder: string;
   children: React.ReactNode;
 }) {
-  const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 0;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(SHEET_MAX_HEIGHT)).current;
-
-  const animateOutAndClose = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: SHEET_MAX_HEIGHT,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-    });
-  }, [fadeAnim, translateY, onClose]);
-
-  useEffect(() => {
-    if (!visible) return;
-    fadeAnim.setValue(0);
-    translateY.setValue(SHEET_MAX_HEIGHT);
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [visible, fadeAnim, translateY]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 0,
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) translateY.setValue(g.dy);
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 50 || g.vy > 0.5) {
-          animateOutAndClose();
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 5,
-          }).start();
-        }
-      },
-    }),
-  ).current;
-
-  if (!visible) return null;
-
   return (
-    <Modal
-      transparent
-      visible
-      animationType="none"
-      onRequestClose={animateOutAndClose}
-    >
-      <View style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={animateOutAndClose}>
-          <Animated.View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-              opacity: fadeAnim,
-            }}
-          />
-        </TouchableWithoutFeedback>
+    <BaseModal visible={visible} onClose={onClose} contentClassName="px-6">
+      <ModalHeader title={title} />
 
-        <Animated.View
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "auto",
-            paddingBottom: bottomOffset,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            transform: [{ translateY }],
-          }}
-        >
-          <View className="bg-light-main-container rounded-t-3xl">
-            <View
-              {...panResponder.panHandlers}
-              className="w-full items-center pt-4 pb-2"
-            >
-              <View className="w-12 h-1 bg-gray-300 rounded-full" />
-            </View>
-
-            <View className="px-6">
-              <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-light-matte-black text-xl font-bold">
-                  {title}
-                </Text>
-                <Pressable onPress={animateOutAndClose} hitSlop={8}>
-                  <X size={18} color="#c71c4b" />
-                </Pressable>
-              </View>
-
-              <View className="flex-row items-center bg-light rounded-2xl px-3 py-2 mb-3">
-                <Search size={16} color="#20222c80" />
-                <TextInput
-                  value={searchQuery}
-                  onChangeText={onSearchChange}
-                  placeholder={searchPlaceholder}
-                  placeholderTextColor="#20222c80"
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  className="flex-1 ml-2 text-light-matte-black"
-                />
-                {searchQuery.length > 0 ? (
-                  <Pressable onPress={() => onSearchChange("")} hitSlop={8}>
-                    <X size={14} color="#20222c80" />
-                  </Pressable>
-                ) : null}
-              </View>
-
-              <ScrollView
-                style={{ maxHeight: SHEET_SCROLL_MAX_HEIGHT }}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 24 }}
-              >
-                {children}
-              </ScrollView>
-            </View>
-          </View>
-        </Animated.View>
+      <View className="flex-row items-center bg-light rounded-2xl px-3 py-2 mb-3">
+        <Search size={16} color="#20222c80" />
+        <TextInput
+          value={searchQuery}
+          onChangeText={onSearchChange}
+          placeholder={searchPlaceholder}
+          placeholderTextColor="#20222c80"
+          autoCorrect={false}
+          autoCapitalize="none"
+          className="flex-1 ml-2 text-light-matte-black"
+        />
+        {searchQuery.length > 0 ? (
+          <Pressable onPress={() => onSearchChange("")} hitSlop={8}>
+            <X size={14} color="#20222c80" />
+          </Pressable>
+        ) : null}
       </View>
-    </Modal>
+
+      <ScrollView
+        style={{ maxHeight: SHEET_SCROLL_MAX_HEIGHT }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 24 }}
+      >
+        {children}
+      </ScrollView>
+    </BaseModal>
   );
 }
 

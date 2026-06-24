@@ -1,19 +1,7 @@
 import { Check, Plus, Search, Star, X } from "lucide-react-native";
-import React, { memo, useCallback, useMemo, useRef, useState } from "react";
-import {
-  Animated,
-  Dimensions,
-  FlatList,
-  Modal,
-  PanResponder,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  TouchableWithoutFeedback,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { memo, useCallback, useMemo, useState } from "react";
+import { FlatList, Pressable, Text, TextInput, View } from "react-native";
+import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import Chip from "@/components/common/Chip";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { usePinnedWallets } from "@/hooks/usePinnedWallets";
@@ -27,9 +15,6 @@ const NAMESPACE_LABEL: Record<Namespace, string> = {
   solana: "Solana",
   sui: "Sui",
 };
-
-const { height } = Dimensions.get("window");
-const MODAL_HEIGHT = height * 0.75;
 
 type WalletSwitcherModalProps = {
   visible: boolean;
@@ -48,13 +33,8 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
   onSelectWallet,
   onAddWallet,
 }: WalletSwitcherModalProps) {
-  const { bottom } = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === "ios" ? 16 : bottom > 0 ? bottom : 16;
-
   const [searchQuery, setSearchQuery] = useState("");
   const [nsFilter, setNsFilter] = useState<NamespaceFilter>("all");
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
 
   const { isPinned, togglePin, canPinMore, maxPinned } = usePinnedWallets();
 
@@ -81,80 +61,18 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
     });
   }, [wallets, searchQuery, nsFilter]);
 
-  const closeModal = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: MODAL_HEIGHT,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setSearchQuery("");
-      setNsFilter("all");
-      onClose();
-    });
-  }, [fadeAnim, translateY, onClose]);
+  const resetFilters = useCallback(() => {
+    setSearchQuery("");
+    setNsFilter("all");
+  }, []);
 
   const handleWalletSelect = useCallback(
     (index: number) => {
       onSelectWallet(index);
-      closeModal();
+      onClose();
     },
-    [onSelectWallet, closeModal],
+    [onSelectWallet, onClose],
   );
-
-  React.useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [visible, fadeAnim, translateY]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => gestureState.dy > 0,
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          translateY.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 50 || gestureState.vy > 0.5) {
-          Animated.timing(translateY, {
-            toValue: MODAL_HEIGHT,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => {
-            setSearchQuery("");
-            setNsFilter("all");
-            onClose();
-          });
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 5,
-          }).start();
-        }
-      },
-    }),
-  ).current;
 
   const renderWalletItem = useCallback(
     ({ item }: { item: TWallet }) => {
@@ -235,133 +153,89 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
     [],
   );
 
-  if (!visible) return null;
-
   return (
-    <Modal transparent visible animationType="none">
-      <TouchableWithoutFeedback onPress={closeModal}>
-        <Animated.View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            opacity: fadeAnim,
-          }}
-        >
-          <TouchableWithoutFeedback>
-            <Animated.View
-              style={{
-                transform: [{ translateY }],
-                height: MODAL_HEIGHT,
-                marginTop: "auto",
-              }}
-              className="bg-light-main-container rounded-t-3xl"
-            >
-              <View {...panResponder.panHandlers} className="items-center py-3">
-                <View className="w-10 h-1 bg-light-matte-black/20 rounded-full" />
-              </View>
+    <BaseModal
+      visible={visible}
+      onClose={onClose}
+      onClosed={resetFilters}
+      height="75%"
+      contentClassName="px-4"
+    >
+      <ModalHeader title="Select Wallet" />
 
-              <View className="flex-row items-center justify-between px-4 pb-3">
-                <Text className="text-light-matte-black text-xl font-bold">
-                  Select Wallet
-                </Text>
-                <Pressable
-                  onPress={closeModal}
-                  className="w-8 h-8 rounded-full bg-light-matte-black/10 items-center justify-center"
+      <View className="mb-3">
+        <View className="bg-light rounded-xl flex-row items-center px-4">
+          <Search size={18} color="#20222c" />
+          <TextInput
+            className="flex-1 py-3 px-2 text-light-matte-black"
+            placeholder="Search by name, address, or type..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#20222c80"
+          />
+          {searchQuery ? (
+            <Pressable onPress={() => setSearchQuery("")}>
+              <X size={16} color="#20222c" />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+
+      {availableNamespaces.length > 1 ? (
+        <View className="mb-3 flex-row">
+          {(["all", ...availableNamespaces] as NamespaceFilter[]).map((key) => {
+            const isActive = nsFilter === key;
+            const label = key === "all" ? "All" : NAMESPACE_LABEL[key];
+            return (
+              <Pressable
+                key={key}
+                onPress={() => setNsFilter(key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                className={`px-4 py-2 rounded-full mr-2 ${
+                  isActive ? "bg-light-primary-red" : "bg-light-matte-black/5"
+                }`}
+              >
+                <Text
+                  className={`text-sm font-semibold ${
+                    isActive ? "text-light" : "text-light-matte-black/70"
+                  }`}
                 >
-                  <X size={18} color="#20222c" />
-                </Pressable>
-              </View>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
 
-              <View className="px-4 mb-3">
-                <View className="bg-light rounded-xl flex-row items-center px-4">
-                  <Search size={18} color="#20222c" />
-                  <TextInput
-                    className="flex-1 py-3 px-2 text-light-matte-black"
-                    placeholder="Search by name, address, or type..."
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholderTextColor="#20222c80"
-                  />
-                  {searchQuery ? (
-                    <Pressable onPress={() => setSearchQuery("")}>
-                      <X size={16} color="#20222c" />
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-
-              {availableNamespaces.length > 1 ? (
-                <View className="px-4 mb-3 flex-row">
-                  {(["all", ...availableNamespaces] as NamespaceFilter[]).map(
-                    (key) => {
-                      const isActive = nsFilter === key;
-                      const label =
-                        key === "all" ? "All" : NAMESPACE_LABEL[key];
-                      return (
-                        <Pressable
-                          key={key}
-                          onPress={() => setNsFilter(key)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: isActive }}
-                          className={`px-4 py-2 rounded-full mr-2 ${
-                            isActive
-                              ? "bg-light-primary-red"
-                              : "bg-light-matte-black/5"
-                          }`}
-                        >
-                          <Text
-                            className={`text-sm font-semibold ${
-                              isActive
-                                ? "text-light"
-                                : "text-light-matte-black/70"
-                            }`}
-                          >
-                            {label}
-                          </Text>
-                        </Pressable>
-                      );
-                    },
-                  )}
-                </View>
-              ) : null}
-
-              <FlatList
-                data={filteredWallets}
-                renderItem={renderWalletItem}
-                keyExtractor={keyExtractor}
-                extraData={searchQuery}
-                contentContainerStyle={{
-                  paddingHorizontal: 16,
-                  paddingBottom: bottomOffset,
-                }}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                  <View className="items-center py-8">
-                    <Text className="text-light-matte-black/60">
-                      No wallets found
-                    </Text>
-                  </View>
-                }
-                ListFooterComponent={
-                  <Pressable
-                    className="flex-row items-center justify-center p-4 mt-2 border-2 border-dashed border-light-matte-black/15 rounded-xl"
-                    onPress={() => {
-                      closeModal();
-                      onAddWallet();
-                    }}
-                  >
-                    <Plus size={20} color="#c71c4b" />
-                    <Text className="text-light-primary-red font-medium ml-2">
-                      Add New Wallet
-                    </Text>
-                  </Pressable>
-                }
-              />
-            </Animated.View>
-          </TouchableWithoutFeedback>
-        </Animated.View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      <FlatList
+        data={filteredWallets}
+        renderItem={renderWalletItem}
+        keyExtractor={keyExtractor}
+        extraData={searchQuery}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View className="items-center py-8">
+            <Text className="text-light-matte-black/60">No wallets found</Text>
+          </View>
+        }
+        ListFooterComponent={
+          <Pressable
+            className="flex-row items-center justify-center p-4 mt-2 border-2 border-dashed border-light-matte-black/15 rounded-xl"
+            onPress={() => {
+              onClose();
+              onAddWallet();
+            }}
+          >
+            <Plus size={20} color="#c71c4b" />
+            <Text className="text-light-primary-red font-medium ml-2">
+              Add New Wallet
+            </Text>
+          </Pressable>
+        }
+      />
+    </BaseModal>
   );
 });
 
