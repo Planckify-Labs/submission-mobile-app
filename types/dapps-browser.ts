@@ -17,6 +17,8 @@ export interface TBrowserAddressBarProps {
   onSubmitEditing: () => void;
   addressBarRef: React.RefObject<TextInput | null>;
   isWalletConnected?: boolean;
+  /** Opens the wallet connection manager sheet. */
+  onPressWallet?: () => void;
 }
 
 export interface TBrowserNavigationControlsProps {

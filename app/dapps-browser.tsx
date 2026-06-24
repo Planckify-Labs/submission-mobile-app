@@ -77,7 +77,9 @@ function isWebviewThirdPartyNoise(args: readonly unknown[]): boolean {
 import { mainnet } from "viem/chains";
 import BrowserAddressBar from "@/components/dapps-browser/BrowserAddressBar";
 import BrowserNavigationControls from "@/components/dapps-browser/BrowserNavigationControls";
+import ConnectionManagerSheet from "@/components/dapps-browser/connections/ConnectionManagerSheet";
 import DAppsHub from "@/components/dapps-browser/DAppsHub";
+import { useDappConnections } from "@/hooks/useDappConnections";
 import { useNavigationReady } from "@/hooks/useNavigationReady";
 import { useWallet } from "@/hooks/useWallet";
 import { ApprovalHost } from "@/services/bridge/ApprovalHost";
@@ -102,6 +104,7 @@ export default function DappsBrowser() {
   const addressBarRef = useRef<TextInput>(null);
   const [addressBarText, setAddressBarText] = useState("");
   const [showHub, setShowHub] = useState(true);
+  const [showConnections, setShowConnections] = useState(false);
   const [isAddressBarAutoFocus, setIsAddressBarAutoFocus] = useState(false);
   const [browserState, setBrowserState] = useState<TBrowserState>({
     url: "",
@@ -333,6 +336,15 @@ export default function DappsBrowser() {
     bridge.setSessionNonce(sessionNonce);
   }, [bridge, sessionNonce]);
 
+  // Connection state for the address-bar indicator + the manager sheet.
+  // `null` origin on the hub puts the sheet into its global "connected
+  // sites" mode; a live URL scopes it to the open dApp.
+  const currentOrigin = showHub ? null : browserState.url || null;
+  const { isConnected } = useDappConnections({
+    origin: currentOrigin,
+    wallets,
+  });
+
   if (!ready) {
     return (
       <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
@@ -350,6 +362,8 @@ export default function DappsBrowser() {
           onChangeText={setAddressBarText}
           onSubmitEditing={() => navigateToUrl(addressBarText)}
           addressBarRef={addressBarRef}
+          isWalletConnected={isConnected}
+          onPressWallet={() => setShowConnections(true)}
         />
         {showHub ? (
           <DAppsHub onNavigateToDapp={navigateToUrl} />
@@ -448,6 +462,17 @@ export default function DappsBrowser() {
         )}
       </View>
       <ApprovalHost />
+      <ConnectionManagerSheet
+        visible={showConnections}
+        onClose={() => setShowConnections(false)}
+        currentOrigin={currentOrigin}
+        dappTitle={browserState.title}
+        wallets={wallets}
+        onVisitSite={(origin) => {
+          setShowConnections(false);
+          navigateToUrl(origin);
+        }}
+      />
     </SafeAreaView>
   );
 }

@@ -34,6 +34,17 @@ const STUB_SOURCES = {
       delete: () => {},
     };
   `,
+  // In-memory AsyncStorage stub for the permissions store test
+  // (services/permissions/store.ts persists grants through it).
+  "async-storage": `
+    const mem = new Map();
+    export default {
+      getItem: async (k) => (mem.has(k) ? mem.get(k) : null),
+      setItem: async (k, v) => { mem.set(k, String(v)); },
+      removeItem: async (k) => { mem.delete(k); },
+      clear: async () => { mem.clear(); },
+    };
+  `,
   "@metamask/smart-accounts-kit": `
     let mockEnvironment = null;
     export function setMockEnvironment(env) {
@@ -125,6 +136,14 @@ export async function resolve(specifier, context, nextResolve) {
     return {
       shortCircuit: true,
       url: stubUrl(STUB_SOURCES["mmkv-storage"]),
+      format: "module",
+    };
+  }
+  // Stub AsyncStorage (used by services/permissions/store.ts).
+  if (specifier === "@react-native-async-storage/async-storage") {
+    return {
+      shortCircuit: true,
+      url: stubUrl(STUB_SOURCES["async-storage"]),
       format: "module",
     };
   }

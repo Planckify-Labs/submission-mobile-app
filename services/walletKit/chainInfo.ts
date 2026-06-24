@@ -92,6 +92,22 @@ export function getChainFamilyLabel(namespace: string | undefined): string {
 }
 
 /**
+ * Compact uppercase badge code for a namespace (`"EVM"` / `"SOL"` / `"SUI"`).
+ * Object-literal lookup — no `namespace === …` branching — so shared UI
+ * (e.g. the dApp connection manager) can render a chain chip without
+ * tripping `check:chains`. Unknown namespaces fall back to uppercase.
+ */
+const CHAIN_BADGE_LABELS: Record<Namespace, string> = {
+  eip155: "EVM",
+  solana: "SOL",
+  sui: "SUI",
+};
+export function chainBadgeLabel(namespace: Namespace | undefined): string {
+  if (!namespace) return "—";
+  return CHAIN_BADGE_LABELS[namespace] ?? namespace.toUpperCase();
+}
+
+/**
  * Auth-nonce `chainSlug` for `chain` (`"solana-devnet"`, `"sui-testnet"`,
  * …) via the registered kit. `null` for EVM (which keys on `chainId`) or
  * when no kit is registered. Prefer `getNonceParams` at call sites.

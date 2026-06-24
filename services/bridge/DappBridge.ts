@@ -8,6 +8,10 @@ import type {
   Origin,
 } from "@/services/chains/types";
 import { originKey } from "@/services/permissions/caip";
+import {
+  namespaceForChainKey,
+  PermissionStore,
+} from "@/services/permissions/store";
 import type { ApprovalDecision, ApprovalIntent } from "./approval";
 import { bridgeEventBus } from "./events";
 import { runPipeline, runSingleInspector } from "./inspector";
@@ -310,6 +314,73 @@ export class DappBridge {
    */
   resolve(id: string, decision: ApprovalDecision): void {
     pendingIntentsStore.resolve(id, decision);
+  }
+
+  /**
+   * UI-initiated disconnect. The connection manager sheet calls this when
+   * the user revokes a wallet (or a whole site) from the dApps browser.
+   *
+   * Two effects:
+   *   1. Revoke the persisted grant(s) in `PermissionStore` so the next
+   *      `standard:connect({silent})` / `eth_accounts` is denied — i.e. no
+   *      silent reconnect on the dApp's next visit.
+   *   2. If the revoked origin is the live top-frame, push an empty
+   *      accounts update into the WebView for each affected namespace so
+   *      the injected provider fires the standard wallet→dApp disconnect
+   *      event (`accountsChanged []` + `disconnect` on EVM; Wallet-Standard
+   *      `change({accounts:[]})` on Solana/Sui). Revokes for a site that
+   *      isn't currently open need no event — there's no live session to
+   *      notify.
+   *
+   * `walletAddress` omitted ⇒ disconnect every wallet for the origin.
+   */
+  async revokeConnection(args: {
+    origin: string;
+    walletAddress?: string;
+  }): Promise<void> {
+    // Snapshot the affected grants BEFORE revoke so we know which
+    // namespaces' providers need an empty-accounts push.
+    const before = PermissionStore.listByOrigin(args.origin);
+    await PermissionStore.revoke(args);
+
+    const live =
+      this.trackedTopOrigin !== null &&
+      originKey(this.trackedTopOrigin) === originKey(args.origin);
+    if (!live) return;
+
+    const wanted = args.walletAddress?.toLowerCase();
+    const affected = new Set<Namespace>();
+    for (const g of before) {
+      if (wanted && g.walletAddress.toLowerCase() !== wanted) continue;
+      affected.add(namespaceForChainKey(g.chainId));
+    }
+    for (const ns of affected) this.pushDisconnectForNamespace(ns);
+  }
+
+  /**
+   * Inject the empty-accounts update for one namespace into the live
+   * WebView. Reuses the same injected provider helpers the connect flow
+   * drives in `pushPostDecisionUpdate` — pushing an empty account set is
+   * exactly what makes each provider emit its disconnect/accounts-changed
+   * event. Each helper is guarded with `&&` so a page that never had that
+   * namespace's provider installed is a no-op.
+   */
+  private pushDisconnectForNamespace(namespace: Namespace): void {
+    const wv = this.opts.getWebView();
+    if (!wv) return;
+    if (namespace === "eip155") {
+      wv.injectJavaScript(
+        `try{window._updateEthereumProvider&&window._updateEthereumProvider({selectedAddress:null});}catch(e){}\ntrue;`,
+      );
+    } else if (namespace === "solana") {
+      wv.injectJavaScript(
+        `try{window._updateSolanaWallet&&window._updateSolanaWallet({accounts:[]});}catch(e){}\ntrue;`,
+      );
+    } else if (namespace === "sui") {
+      wv.injectJavaScript(
+        `try{window._updateSuiWallet&&window._updateSuiWallet({accounts:[]});}catch(e){}\ntrue;`,
+      );
+    }
   }
 
   /**

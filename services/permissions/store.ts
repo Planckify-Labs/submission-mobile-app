@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import type { Namespace } from "@/services/chains/types";
 import { originKey } from "./caip";
 
 // Stored in AsyncStorage, not SecureStore. Grants are (origin, wallet
@@ -31,6 +32,26 @@ export type PermissionGrant = {
   caveats: PermissionCaveat[];
   grantedAt: number;
 };
+
+/**
+ * Derive the chain namespace of a stored grant from its `chainId`.
+ *
+ * Grants don't persist `namespace` explicitly — it's recoverable from the
+ * `chainId` shape each adapter writes: EVM grants store a numeric chainId
+ * (`EvmAdapter`), Solana stores CAIP-2 `"solana:<cluster>"`
+ * (`clusterToChain`), Sui stores `"sui:<network>"` (`networkToChain`).
+ *
+ * Lives here (a `services/` module, outside the `check:chains` guard) so
+ * the bridge can route a disconnect to the right injected provider helper
+ * and shared UI can label a grant's chain without branching on namespace
+ * strings itself.
+ */
+export function namespaceForChainKey(chainId: ChainKey): Namespace {
+  if (typeof chainId === "number") return "eip155";
+  if (chainId.startsWith("solana")) return "solana";
+  if (chainId.startsWith("sui")) return "sui";
+  return "eip155";
+}
 
 type Store = { grants: PermissionGrant[] };
 

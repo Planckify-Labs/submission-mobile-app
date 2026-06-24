@@ -72,6 +72,48 @@ describe("DappBridge — TWV-2026-013 origin-pin check", () => {
   });
 });
 
+describe("DappBridge — UI-initiated disconnect (revokeConnection)", () => {
+  it("exposes revokeConnection({origin, walletAddress?})", () => {
+    assert.match(
+      src,
+      /async revokeConnection\(args:\s*\{[\s\S]*?origin:\s*string;[\s\S]*?walletAddress\?:\s*string;[\s\S]*?\}\)/,
+    );
+  });
+
+  it("revokes the persisted grant via PermissionStore.revoke", () => {
+    assert.match(
+      src,
+      /async revokeConnection[\s\S]*?await PermissionStore\.revoke\(args\)/,
+    );
+  });
+
+  it("only pushes a live event when the origin is the tracked top frame", () => {
+    // The live check compares originKey(trackedTopOrigin) to the revoked
+    // origin and early-returns otherwise — a stale-site revoke must not
+    // inject anything into whatever dApp is currently open.
+    assert.match(
+      src,
+      /this\.trackedTopOrigin !== null[\s\S]*?originKey\(this\.trackedTopOrigin\)\s*===\s*originKey\(args\.origin\)[\s\S]*?if \(!live\) return;/,
+    );
+  });
+
+  it("derives affected namespaces from the pre-revoke grants", () => {
+    assert.match(
+      src,
+      /const before = PermissionStore\.listByOrigin\(args\.origin\)[\s\S]*?namespaceForChainKey\(g\.chainId\)/,
+    );
+  });
+
+  it("pushes the empty-accounts helper for each affected namespace", () => {
+    // EVM clears selectedAddress; Solana/Sui push an empty accounts array.
+    // Each is the exact provider call that makes the injected script emit
+    // its standard disconnect / accountsChanged event.
+    assert.match(src, /_updateEthereumProvider\(\{selectedAddress:null\}\)/);
+    assert.match(src, /_updateSolanaWallet\(\{accounts:\[\]\}\)/);
+    assert.match(src, /_updateSuiWallet\(\{accounts:\[\]\}\)/);
+  });
+});
+
 describe("DappBridge — TWV-2026-007 hard-reject eth_sign", () => {
   it("declares HARD_REJECT_METHODS and includes eth_sign", () => {
     assert.match(src, /export const HARD_REJECT_METHODS[\s\S]*?"eth_sign"/);

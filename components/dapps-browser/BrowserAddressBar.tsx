@@ -12,6 +12,7 @@ const BrowserAddressBar = memo<TBrowserAddressBarProps>(
     onSubmitEditing,
     addressBarRef,
     isWalletConnected = true,
+    onPressWallet,
   }) {
     return (
       <View className="flex-row gap-3 px-4 py-2 bg-light-main-container items-center">
@@ -38,6 +39,9 @@ const BrowserAddressBar = memo<TBrowserAddressBarProps>(
 
         <TouchableOpacity
           activeOpacity={0.7}
+          onPress={onPressWallet}
+          accessibilityRole="button"
+          accessibilityLabel="Manage wallet connections"
           className={`w-12 h-12 bg-light rounded-2xl items-center justify-center relative border-2 ${isWalletConnected ? "border-emerald-700" : "border-gray-400"}`}
         >
           <Image

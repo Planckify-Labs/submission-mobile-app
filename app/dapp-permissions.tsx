@@ -1,29 +1,22 @@
-import { Trash2 } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import React from "react";
+import { ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  type PermissionGrant,
-  PermissionStore,
-} from "@/services/permissions/store";
-import { truncateAddress } from "@/utils/walletUtils";
+import ConnectedSitesList from "@/components/dapps-browser/connections/ConnectedSitesList";
+import { useDappConnections } from "@/hooks/useDappConnections";
+import { useWallet } from "@/hooks/useWallet";
+
+// Stable empty set — this screen has no live WebView to push disconnect
+// events into, so there's no in-flight spinner state to track. Revokes
+// here just mutate `PermissionStore` (the hook's `disconnect*` actions
+// fall back to a bare revoke when no bridge/live session is present).
+const EMPTY_PENDING: Set<string> = new Set();
 
 export default function DappPermissions(): React.ReactElement {
-  const [grants, setGrants] = useState<PermissionGrant[]>([]);
-
-  useEffect(() => {
-    const refresh = () => setGrants(PermissionStore.listAll());
-    void PermissionStore.hydrate().then(refresh);
-    return PermissionStore.subscribe(refresh);
-  }, []);
-
-  const byOrigin = grants.reduce<Record<string, PermissionGrant[]>>(
-    (acc, g) => {
-      (acc[g.origin] = acc[g.origin] ?? []).push(g);
-      return acc;
-    },
-    {},
-  );
+  const { wallets } = useWallet();
+  const { sites, disconnectWallet, disconnectSite } = useDappConnections({
+    origin: null,
+    wallets,
+  });
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
@@ -36,56 +29,15 @@ export default function DappPermissions(): React.ReactElement {
         </Text>
       </View>
       <ScrollView className="flex-1 px-4 py-3">
-        {Object.keys(byOrigin).length === 0 && (
-          <Text className="text-sm text-gray-500 mt-8 text-center">
-            No connected sites yet.
-          </Text>
-        )}
-        {Object.entries(byOrigin).map(([origin, list]) => (
-          <View
-            key={origin}
-            className="bg-white border border-gray-200 rounded-xl p-3 mb-3"
-          >
-            <View className="flex-row items-center">
-              <Text
-                className="font-medium text-gray-900 flex-1"
-                numberOfLines={1}
-              >
-                {origin}
-              </Text>
-              <TouchableOpacity
-                onPress={() => PermissionStore.revoke({ origin })}
-                className="px-2 py-1"
-              >
-                <Trash2 size={14} color="#dc2626" />
-              </TouchableOpacity>
-            </View>
-            {list.map((g) => (
-              <View
-                key={`${g.walletAddress}-${g.chainId}`}
-                className="flex-row items-center mt-2"
-              >
-                <Text className="text-xs text-gray-600 flex-1">
-                  {truncateAddress({
-                    address: g.walletAddress,
-                    preset: "medium",
-                  })}{" "}
-                  · chain {g.chainId}
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    PermissionStore.revoke({
-                      origin,
-                      walletAddress: g.walletAddress,
-                    })
-                  }
-                >
-                  <Text className="text-xs text-red-600">Revoke</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        ))}
+        <ConnectedSitesList
+          sites={sites}
+          pending={EMPTY_PENDING}
+          onDisconnectWallet={(origin, address) =>
+            void disconnectWallet({ origin, address })
+          }
+          onDisconnectSite={(origin) => void disconnectSite({ origin })}
+          emptyLabel="No connected sites yet."
+        />
       </ScrollView>
     </SafeAreaView>
   );
