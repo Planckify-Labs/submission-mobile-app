@@ -236,10 +236,21 @@ async function runNonInteractive(
     const { executeToolWithRetry } = await import(
       "../agent-executors/retry.ts"
     );
+    // Idempotent reads (catalog, balances, history) retry a wider set of
+    // transient backend failures — a one-shot 5xx/503/429 on the public
+    // catalog is the "Couldn't load catalog" flakiness; a re-read can't
+    // double-spend so the wider net is safe. Writes keep the strict
+    // (write-safe) default predicate to preserve the anti-double-submit rule.
+    const { isTransientReadError } = await import(
+      "../agent-executors/types.ts"
+    );
     result = await executeToolWithRetry(
       payload.name,
       payload.input,
       session.executorContext,
+      payload.meta.capability === "read"
+        ? { isRetryable: isTransientReadError }
+        : {},
     );
   } catch (err) {
     // `executeToolWithRetry` is documented as never-throw, but treat

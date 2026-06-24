@@ -23,7 +23,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { executeToolWithRetry, executeWithRetry } from "./retry.ts";
-import type { ExecutorContext, ToolResult } from "./types.ts";
+import {
+  type ExecutorContext,
+  isTransientReadError,
+  type ToolResult,
+} from "./types.ts";
 
 function ok(): ToolResult {
   return { status: "success", data: { value: 42 } };
@@ -181,6 +185,55 @@ describe("executeWithRetry — retry decisions", () => {
       );
       assert.equal(calls, 2, `expected retry for "${msg}"`);
     }
+  });
+});
+
+describe("executeWithRetry — isRetryable override (read tolerance)", () => {
+  it("default predicate does NOT retry a transient 5xx (service_unavailable)", async () => {
+    let calls = 0;
+    const result = await executeWithRetry(
+      async () => {
+        calls++;
+        return { status: "failed", error: "service_unavailable" } as ToolResult;
+      },
+      { baseDelayMs: 1 },
+    );
+    // Write-safe default: a 5xx is not retried, so a single call is made.
+    assert.equal(calls, 1);
+    assert.equal(result.error, "service_unavailable");
+  });
+
+  it("isTransientReadError retries a transient 5xx then succeeds (the catalog fix)", async () => {
+    const sequence: ToolResult[] = [
+      { status: "failed", error: "service_unavailable" },
+      ok(),
+    ];
+    let calls = 0;
+    const result = await executeWithRetry(
+      async () => {
+        calls++;
+        return sequence[calls - 1]!;
+      },
+      { baseDelayMs: 1, isRetryable: isTransientReadError },
+    );
+    assert.equal(calls, 2);
+    assert.equal(result.status, "success");
+  });
+
+  it("isTransientReadError still does NOT retry a deterministic auth error", async () => {
+    let calls = 0;
+    const result = await executeWithRetry(
+      async () => {
+        calls++;
+        return {
+          status: "failed",
+          error: "authentication_required",
+        } as ToolResult;
+      },
+      { baseDelayMs: 1, isRetryable: isTransientReadError },
+    );
+    assert.equal(calls, 1);
+    assert.equal(result.error, "authentication_required");
   });
 });
 

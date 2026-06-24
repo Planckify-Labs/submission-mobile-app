@@ -58,6 +58,16 @@ export interface RetryOptions {
    * as "Retrying because: …".
    */
   onAttempt?: (attempt: number, lastError: string | undefined) => void;
+  /**
+   * Predicate deciding whether a failed result's `error` is worth
+   * retrying. Defaults to `isRetryableError` (the conservative,
+   * write-safe set: only `network_error`-class transients). Idempotent
+   * READ tools can pass a broader predicate (`isTransientReadError`) so
+   * a transient 5xx / 503 / 429 / unclassified hiccup gets a second
+   * chance instead of surfacing a one-shot failure card — a re-read can
+   * never double-spend, so the wider net is safe there only.
+   */
+  isRetryable?: (error: string | undefined) => boolean;
 }
 
 const DEFAULT_MAX_RETRIES = 2;
@@ -89,6 +99,7 @@ export async function executeWithRetry<T extends ToolResult>(
   const maxRetries = Math.max(0, opts.maxRetries ?? DEFAULT_MAX_RETRIES);
   const baseDelayMs = Math.max(0, opts.baseDelayMs ?? DEFAULT_BASE_DELAY_MS);
   const onAttempt = opts.onAttempt;
+  const retryable = opts.isRetryable ?? isRetryableError;
 
   let lastError: string | undefined;
 
@@ -119,7 +130,7 @@ export async function executeWithRetry<T extends ToolResult>(
 
     // Rule 3: non-retryable errors (user_declined, insufficient_funds,
     // wallet_type_cannot_execute, contract reverts, …) return as-is.
-    if (!isRetryableError(result.error)) {
+    if (!retryable(result.error)) {
       return result;
     }
 

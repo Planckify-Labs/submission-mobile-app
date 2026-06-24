@@ -290,9 +290,38 @@ export function isRetryableError(error: string | undefined): boolean {
     e.includes("fetch failed") ||
     e.includes("fetch") ||
     e.includes("nonce") ||
+    // Match BOTH the free-text RPC form ("rate limit exceeded") AND the
+    // classified `rate_limited` code (underscore) that `classifyPointsError`
+    // emits for a 429 — the old `"rate limit"` substring missed the latter,
+    // so a rate-limited call was silently never retried.
     e.includes("rate limit") ||
+    e.includes("rate_limit") ||
     e.includes("econnreset") ||
     e.includes("enotfound")
+  );
+}
+
+/**
+ * Retry predicate for IDEMPOTENT READ tools (catalog, balances, history,
+ * product details). A read can never double-spend or double-submit, so it
+ * can safely retry a broader class of transient backend failures than a
+ * write: on top of the `isRetryableError` network set, a `service_unavailable`
+ * (5xx/503), `rate_limited` (429), or unclassified `unknown_error` is usually
+ * a momentary hiccup that clears on a second attempt. This is what stops the
+ * "Couldn't load catalog" card from flashing on a single transient 5xx while
+ * the very same call succeeds a moment later. NEVER use this for writes — the
+ * anti-double-submit invariant requires the strict `isRetryableError` there.
+ *
+ * `bad_request`, `authentication_required`, `authorization_denied`,
+ * `product_unavailable`, and `insufficient_points` are deterministic — a retry
+ * cannot change the outcome — so they are deliberately NOT retried.
+ */
+export function isTransientReadError(error: string | undefined): boolean {
+  if (isRetryableError(error)) return true;
+  if (!error) return false;
+  const e = error.toLowerCase();
+  return (
+    e === "service_unavailable" || e === "rate_limited" || e === "unknown_error"
   );
 }
 
