@@ -1,6 +1,12 @@
 import type React from "react";
 import type { AgentMessagePart } from "@/services/agent-messages/types";
 
+/**
+ * Authorization decision threaded to a live write card (deny-layer spec
+ * §6.5). Mirrors the `decision` on the tool message part.
+ */
+export type ToolDecision = "authorized" | "ask" | "deny";
+
 export type ToolComponentProps<Input, Output> = {
   state: Extract<AgentMessagePart, { type: "tool" }>["state"];
   input: Input;
@@ -12,6 +18,19 @@ export type ToolComponentProps<Input, Output> = {
   // agent (e.g. OpportunityListCard's "Let Takumi pick for you"
   // footer). Undefined in historical mode so frozen cards stay inert.
   onUserPrompt?: (prompt: string) => void;
+  /**
+   * Authorization decision for this call (deny-layer spec §6.5). A write
+   * card renders the run-down veto ONLY when this is `authorized`
+   * (INV-1); for `ask` it renders the static proposal card whose Approve
+   * calls `onRequestApproval`. Absent → fail closed (treat as `ask`).
+   */
+  decision?: ToolDecision;
+  /**
+   * Open the approval sheet for an `ask` decision (deny-layer §4.1 step
+   * 2). The proposal card's Approve button calls this — it does NOT
+   * execute or post a result. Undefined in historical mode.
+   */
+  onRequestApproval?: () => void;
 };
 
 export type ToolComponent<Input, Output> = React.ComponentType<

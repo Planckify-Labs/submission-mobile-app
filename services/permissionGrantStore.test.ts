@@ -239,6 +239,93 @@ describe("resolveGrant — priority ordering", () => {
   });
 });
 
+describe("resolveGrant — deny-overrides-allow (the Never rule)", () => {
+  it("a tool-level always_deny resolves to always_deny", async () => {
+    const { store } = await freshStore();
+    store.add({
+      scope: { kind: "tool", key: "send_native_token" },
+      lifetime: { type: "always_deny" },
+      wallet_address: WALLET_A,
+      granted_at: Date.now(),
+    });
+    const result = resolveGrant(
+      "send_native_token",
+      "write",
+      WALLET_A,
+      SESSION_ID,
+      store,
+    );
+    assert.deepEqual(result, { type: "always_deny" });
+  });
+
+  it("a capability-level always_deny (Write→Never) beats a tool-level Auto grant", async () => {
+    const { store } = await freshStore();
+    // Per-tool Auto…
+    store.add({
+      scope: { kind: "tool", key: "send_native_token" },
+      lifetime: { type: "permanent" },
+      wallet_address: WALLET_A,
+      granted_at: Date.now(),
+    });
+    // …but the write capability is blocked. Deny must win regardless of
+    // the tool > capability > global priority.
+    store.add({
+      scope: { kind: "capability", key: "write" },
+      lifetime: { type: "always_deny" },
+      wallet_address: WALLET_A,
+      granted_at: Date.now(),
+    });
+    const result = resolveGrant(
+      "send_native_token",
+      "write",
+      WALLET_A,
+      SESSION_ID,
+      store,
+    );
+    assert.deepEqual(result, { type: "always_deny" });
+  });
+
+  it("a global always_deny beats a tool-level always_ask", async () => {
+    const { store } = await freshStore();
+    store.add({
+      scope: { kind: "tool", key: "send_native_token" },
+      lifetime: { type: "always_ask" },
+      wallet_address: WALLET_A,
+      granted_at: Date.now(),
+    });
+    store.add({
+      scope: { kind: "global" },
+      lifetime: { type: "always_deny" },
+      wallet_address: WALLET_A,
+      granted_at: Date.now(),
+    });
+    const result = resolveGrant(
+      "send_native_token",
+      "write",
+      WALLET_A,
+      SESSION_ID,
+      store,
+    );
+    assert.deepEqual(result, { type: "always_deny" });
+  });
+
+  it("notifies subscribers on add", async () => {
+    const { store } = await freshStore();
+    let fired = 0;
+    const unsub = store.subscribe(() => {
+      fired += 1;
+    });
+    store.add({
+      scope: { kind: "capability", key: "write" },
+      lifetime: { type: "always_deny" },
+      wallet_address: WALLET_A,
+      granted_at: Date.now(),
+    });
+    assert.ok(fired >= 1, "subscriber should fire on add");
+    unsub();
+  });
+});
+
 describe("PermissionGrantStore — pruning and scoping", () => {
   it("prunes expired timed grants on find()", async () => {
     const { store } = await freshStore();

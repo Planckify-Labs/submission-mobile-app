@@ -22,7 +22,7 @@ import type {
 } from "./types";
 
 export interface ShowPreviewCardOptions {
-  /** Override the default 3000ms auto-confirm window. */
+  /** Override the default 6000ms run-down veto window (deny-layer §D-2). */
   autoConfirmMs?: number;
   /**
    * Live reconnect flag from the SSE dispatcher. Pass `true` while the
@@ -51,7 +51,7 @@ export function showPreviewCard(
   callbacks: PreviewCardDispatcherCallbacks,
   options: ShowPreviewCardOptions = {},
 ): React.ReactElement {
-  const { autoConfirmMs = 3000, isReconnecting = false } = options;
+  const { autoConfirmMs = 6000, isReconnecting = false } = options;
 
   // Ensure the payload is tracked in session state. Task 09 may move
   // this up into the dispatcher so the check is idempotent across

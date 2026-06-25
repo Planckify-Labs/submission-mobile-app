@@ -26,6 +26,11 @@ export type ToolCapability = "read" | "write" | "defi_read" | "defi_write";
 
 export type GrantLifetime =
   | { type: "always_ask" }
+  // Hard deny — the `Never` rule (deny-layer spec §4.0 / §6.2). When
+  // present at ANY scope it wins over every allow/ask grant
+  // (deny-overrides-allow). Purely additive: existing grant blobs still
+  // deserialize because nothing reads `always_deny` unless it's written.
+  | { type: "always_deny" }
   | { type: "once" }
   | { type: "session"; session_id: string }
   | { type: "timed"; expires_at: number } // Unix ms
@@ -166,6 +171,7 @@ export class PermissionGrantStore {
   private grants: PermissionGrant[] = [];
   private loadPromise: Promise<void>;
   private persistTail: Promise<void> = Promise.resolve();
+  private subscribers = new Set<() => void>();
 
   constructor(
     wallet: `0x${string}`,
@@ -174,7 +180,32 @@ export class PermissionGrantStore {
   ) {
     this.wallet = wallet;
     this.adapter = adapter ?? getSecureStoreAdapter();
-    this.loadPromise = this.loadGrantsFromStorage(seed);
+    this.loadPromise = this.loadGrantsFromStorage(seed).then(() =>
+      this.notify(),
+    );
+  }
+
+  /**
+   * Subscribe to changes (hydrate-completion + every mutation). Returns
+   * the unsubscribe function. Mirrors `TransferThresholdStore.subscribe`
+   * so a live agent session can re-snapshot its `ConnectedWallet` when
+   * the settings screen edits grants — the deny layer's "single source of
+   * truth" only holds if both surfaces share one instance AND observe its
+   * changes (spec §6.7 P0).
+   */
+  subscribe(fn: () => void): () => void {
+    this.subscribers.add(fn);
+    return () => this.subscribers.delete(fn);
+  }
+
+  private notify(): void {
+    for (const fn of this.subscribers) {
+      try {
+        fn();
+      } catch (err) {
+        console.warn("PermissionGrantStore: subscriber threw", err);
+      }
+    }
   }
 
   /**
@@ -254,6 +285,7 @@ export class PermissionGrantStore {
     this.grants = this.grants.filter((g) => !scopesEqual(g.scope, grant.scope));
     this.grants.push(grant);
     this.schedulePersist();
+    this.notify();
   }
 
   /** Remove a grant by reference or scope match. */
@@ -268,6 +300,7 @@ export class PermissionGrantStore {
     );
     if (this.grants.length !== before) {
       this.schedulePersist();
+      this.notify();
     }
   }
 
@@ -322,6 +355,7 @@ export class PermissionGrantStore {
     if (this.grants.length === 0) return;
     this.grants = [];
     this.schedulePersist();
+    this.notify();
   }
 
   /** Eagerly drop expired timed grants. Call on app launch. */
@@ -331,6 +365,7 @@ export class PermissionGrantStore {
     this.grants = this.grants.filter((g) => !isExpired(g, now));
     if (this.grants.length !== before) {
       this.schedulePersist();
+      this.notify();
     }
   }
 
@@ -396,9 +431,23 @@ export function resolveGrant(
     store.find({ scope: { kind: "global" }, wallet }),
   ];
 
+  // Deny-overrides-allow (spec §6.2): scan ALL scopes for an active
+  // `always_deny` first and short-circuit, regardless of scope
+  // specificity. This is what makes `Write → Never` (a capability-scoped
+  // deny) un-bypassable by a per-tool Auto grant — the safety-critical
+  // override beats the usual tool > capability > global priority.
+  for (const grant of candidates) {
+    if (grant?.lifetime.type === "always_deny") {
+      return { type: "always_deny" };
+    }
+  }
+
   for (const grant of candidates) {
     if (!grant) continue;
     switch (grant.lifetime.type) {
+      case "always_deny":
+        // Handled by the pre-scan above; kept for switch exhaustiveness.
+        return { type: "always_deny" };
       case "always_ask":
         return { type: "always_ask" };
       case "permanent":
@@ -418,4 +467,32 @@ export function resolveGrant(
   }
 
   return { type: "once" };
+}
+
+// --- Shared store cache -----------------------------------------------------
+
+/**
+ * Per-wallet store cache, so the settings screen, the dispatcher /
+ * `authorizeToolCall`, and the live session's approval flow all read and
+ * write through the SAME instance.
+ *
+ * Before this existed there were two `PermissionGrantStore` instances per
+ * wallet (settings had its own `storeCache`; the session built its own
+ * `conservative()` store) and the store had no `subscribe` — so a grant
+ * edited in settings only reached SecureStore and a running session kept a
+ * stale in-memory copy (spec §6.7 P0). Going through this singleton makes
+ * the deny layer's "single source of truth" actually single.
+ */
+const storeCache = new Map<string, PermissionGrantStore>();
+
+export function getPermissionGrantStore(
+  wallet: `0x${string}`,
+): PermissionGrantStore {
+  const key = wallet.toLowerCase();
+  let store = storeCache.get(key);
+  if (!store) {
+    store = new PermissionGrantStore(wallet);
+    storeCache.set(key, store);
+  }
+  return store;
 }

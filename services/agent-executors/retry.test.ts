@@ -22,12 +22,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import type { AuthorizationToken } from "../agentSession/authorizeToolCall.ts";
 import { executeToolWithRetry, executeWithRetry } from "./retry.ts";
 import {
   type ExecutorContext,
   isTransientReadError,
   type ToolResult,
 } from "./types.ts";
+
+// `executeToolWithRetry` requires an AuthorizationToken (INV-3). In real
+// code the only constructor is `authorizeToolCall`; the token carries no
+// runtime authority, so tests pass an inert stand-in.
+const TEST_TOKEN = {} as unknown as AuthorizationToken;
 
 function ok(): ToolResult {
   return { status: "success", data: { value: 42 } };
@@ -330,6 +336,7 @@ describe("executeToolWithRetry — registry dispatch", () => {
       "definitely_not_a_real_tool",
       {},
       fakeContext,
+      TEST_TOKEN,
       { baseDelayMs: 10_000 },
       // Inject an empty registry so the function does not attempt to
       // `import("./index")` — which would transitively load viem +
@@ -359,6 +366,7 @@ describe("executeToolWithRetry — registry dispatch", () => {
       "get_balance",
       { chain_id: 1 },
       fakeContext,
+      TEST_TOKEN,
       { baseDelayMs: 1 },
       registry,
     );

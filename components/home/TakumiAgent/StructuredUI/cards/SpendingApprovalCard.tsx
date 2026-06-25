@@ -6,11 +6,11 @@
  * historical receipt (spec §2 principle 6, §4.2.2).
  */
 
-import { CheckCircle2, ShieldAlert, XCircle } from "lucide-react-native";
+import { CheckCircle2, XCircle } from "lucide-react-native";
 import type React from "react";
-import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import type { ToolComponentProps } from "../types";
+import WriteApprovalGate from "../WriteApprovalGate";
 
 type SpendingApprovalInput = {
   amount?: string;
@@ -22,8 +22,14 @@ type SpendingApprovalInput = {
 };
 
 type SpendingApprovalOutput = {
-  decision: "approved" | "rejected";
+  // Display field kept for backward-compat with historical cached cards.
+  decision?: "approved" | "rejected";
   unlimited?: boolean;
+  // D3 fix (deny-layer spec §6.5): the canonical decision envelope is
+  // `user_decision`, read fail-closed by `handleAddToolResult`. `status`
+  // mirrors the executor result shape so the frozen receipt renders.
+  user_decision?: "approved" | "rejected";
+  status?: "success" | "failed" | string;
 };
 
 const SUCCESS_GREEN = "#10b981";
@@ -49,7 +55,10 @@ function FrozenReceipt({
   output: SpendingApprovalOutput | undefined;
 }) {
   const summary = summarize(input);
-  const approved = output?.decision === "approved";
+  const approved =
+    output?.user_decision === "approved" ||
+    output?.decision === "approved" ||
+    output?.status === "success";
   return (
     <View
       className={`my-1.5 rounded-2xl border px-3.5 py-2.5 ${
@@ -81,9 +90,15 @@ function FrozenReceipt({
 
 const SpendingApprovalCard: React.FC<
   ToolComponentProps<SpendingApprovalInput, SpendingApprovalOutput>
-> = ({ state, input, output, mode, addToolResult }) => {
-  const [pending, setPending] = useState<"approved" | "rejected" | null>(null);
-
+> = ({
+  state,
+  input,
+  output,
+  mode,
+  addToolResult,
+  decision,
+  onRequestApproval,
+}) => {
   if (mode === "historical") {
     return <FrozenReceipt input={input} output={output} />;
   }
@@ -108,53 +123,32 @@ const SpendingApprovalCard: React.FC<
     );
   }
 
-  // Live + input-available — interactive approval card.
-  const summary = summarize(input);
-  const onApprove = () => {
-    if (!addToolResult) return;
-    setPending("approved");
-    addToolResult({ decision: "approved" });
-  };
-  const onReject = () => {
-    if (!addToolResult) return;
-    setPending("rejected");
-    addToolResult({ decision: "rejected" });
-  };
+  // Live + input-available — decision-gated approval surface. Without a
+  // live `addToolResult` (forward-compat) freeze it.
+  if (!addToolResult) {
+    return <FrozenReceipt input={input} output={output} />;
+  }
 
   return (
-    <View className="my-1.5 rounded-2xl border border-light-primary-red/30 bg-light-primary-red/5 px-3.5 py-3">
-      <View className="flex-row items-center gap-2">
-        <ShieldAlert size={16} color={BRAND_RED} />
-        <Text className="text-xs font-bold uppercase tracking-wide text-light-primary-red">
-          Approval required
-        </Text>
-      </View>
-      <Text className="text-sm text-light-matte-black mt-1.5">{summary}</Text>
-      <View className="flex-row gap-2 mt-3">
-        <Pressable
-          onPress={onReject}
-          disabled={pending !== null}
-          accessibilityRole="button"
-          accessibilityLabel="Reject"
-          className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 active:opacity-70"
-        >
-          <Text className="text-xs font-semibold text-light-matte-black text-center">
-            {pending === "rejected" ? "Rejecting…" : "Reject"}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={onApprove}
-          disabled={pending !== null}
-          accessibilityRole="button"
-          accessibilityLabel="Approve"
-          className="flex-1 rounded-xl bg-light-primary-red px-3 py-2 active:opacity-80"
-        >
-          <Text className="text-xs font-semibold text-white text-center">
-            {pending === "approved" ? "Approving…" : "Approve"}
-          </Text>
-        </Pressable>
-      </View>
-    </View>
+    <WriteApprovalGate
+      decision={decision}
+      summary={summarize(input)}
+      onApprove={() =>
+        addToolResult({
+          decision: "approved",
+          user_decision: "approved",
+          status: "success",
+        })
+      }
+      onReject={() =>
+        addToolResult({
+          decision: "rejected",
+          user_decision: "rejected",
+          status: "failed",
+        })
+      }
+      onRequestApproval={onRequestApproval}
+    />
   );
 };
 

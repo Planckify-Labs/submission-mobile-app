@@ -336,7 +336,10 @@ describe("agentSession — dispatcher", () => {
     assert.equal(captured.length, 0, "no network calls on dedupe");
   });
 
-  it('"blocked" treatment posts tool_rejected with wallet_type_cannot_execute', async () => {
+  it("watch-only wallet (deny) posts tool_rejected with permission_denied", async () => {
+    // Deny-layer §6.3: a watch-only wallet resolves to `deny` (reason
+    // `watch_only`), which maps to the single wire token
+    // `permission_denied` — the specific reason stays in __DEV__ logs.
     const captured = installFetchStub();
     const session = makeSession(makeWatchOnlyWallet());
     const payload = makeToolPending("tool-blocked");
@@ -353,8 +356,81 @@ describe("agentSession — dispatcher", () => {
       reason: string;
     };
     assert.equal(typedBody.type, "tool_rejected");
-    assert.equal(typedBody.reason, "wallet_type_cannot_execute");
+    assert.equal(typedBody.reason, "permission_denied");
     assert.equal(typedBody.tool_call_id, "tool-blocked");
     assert.equal(session.pending_approvals.size, 0);
+  });
+
+  it("ask write opens the approval sheet and does NOT execute or auto-resolve", async () => {
+    // A write with no grant under HOT policy → `ask`. The hard invariant
+    // (INV-1/§4.1): nothing executes and nothing is posted to the server
+    // on inaction — the call just waits on the user.
+    const captured = installFetchStub();
+    const session = makeSession(makeHotWallet());
+    let approvalShown = 0;
+    session.ui.showApprovalSheet = () => {
+      approvalShown += 1;
+    };
+    const payload = makeToolPending("tool-ask");
+
+    await handleToolPending(payload, session);
+
+    assert.equal(
+      approvalShown,
+      1,
+      "approval sheet shown once (no proposal host)",
+    );
+    assert.equal(captured.length, 0, "nothing posted — no execute, no reject");
+    assert.equal(
+      session.pending_approvals.size,
+      1,
+      "still pending on the user",
+    );
+  });
+
+  it("headless ask write fails closed → permission_denied", async () => {
+    // No human present (`interactive: false`) + a would-be `ask` write →
+    // deny(approval_unavailable) → wire reason permission_denied.
+    const captured = installFetchStub();
+    const session = makeSession(makeHotWallet(), { interactive: false });
+    const payload = makeToolPending("tool-headless");
+
+    await handleToolPending(payload, session);
+
+    assert.equal(captured.length, 1, "one reject call");
+    const body = captured[0]!.body as { type: string; reason: string };
+    assert.equal(body.type, "tool_rejected");
+    assert.equal(body.reason, "permission_denied");
+    assert.equal(session.pending_approvals.size, 0);
+  });
+
+  it("authorized write shows the run-down and does NOT auto-execute synchronously", async () => {
+    // Full-auto (global permanent grant) → authorized write → run-down
+    // veto card. The card owns the countdown; the dispatcher must not
+    // execute or post anything synchronously.
+    const captured = installFetchStub();
+    const wallet = makeHotWallet();
+    wallet.grantStore.add({
+      scope: { kind: "global" },
+      lifetime: { type: "permanent" },
+      wallet_address: WALLET_ADDRESS,
+      granted_at: Date.now(),
+    });
+    const session = makeSession(wallet);
+    let previewShown = 0;
+    session.ui.showPreviewCard = () => {
+      previewShown += 1;
+    };
+    const payload = makeToolPending("tool-authorized");
+
+    await handleToolPending(payload, session);
+
+    assert.equal(previewShown, 1, "run-down card shown once");
+    assert.equal(captured.length, 0, "no synchronous execute/post");
+    assert.equal(
+      session.pending_approvals.size,
+      1,
+      "pending until the veto window resolves",
+    );
   });
 });

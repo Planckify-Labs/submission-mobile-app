@@ -19,6 +19,8 @@ import {
   formatLifetimeLabel,
   formatScopeLabel,
   groupDelegationGrantsByChain,
+  isCapabilityAsk,
+  isCapabilityDenied,
   listRenderableGrants,
   partitionGrants,
 } from "./agentPermissionsHelpers.ts";
@@ -153,9 +155,63 @@ describe("formatLifetimeLabel", () => {
     assert.equal(label.secondary, "override");
   });
 
+  it("always_deny → 'Never' + blocked note (the Never rule)", () => {
+    const label = formatLifetimeLabel({ type: "always_deny" }, now, granted);
+    assert.equal(label.primary, "Never");
+    assert.equal(label.secondary, "blocked");
+  });
+
   it("once is defensively rendered (should never be persisted though)", () => {
     const label = formatLifetimeLabel({ type: "once" }, now, granted);
     assert.equal(label.primary, "Once");
+  });
+});
+
+// --- isCapabilityDenied ----------------------------------------------------
+
+describe("isCapabilityDenied", () => {
+  it("true when a capability has an always_deny grant (Write→Never)", () => {
+    const grants: PermissionGrant[] = [
+      {
+        scope: { kind: "capability", key: "write" },
+        lifetime: { type: "always_deny" },
+        wallet_address: WALLET_A,
+        granted_at: 1,
+      },
+    ];
+    assert.equal(isCapabilityDenied(grants, "write"), true);
+    assert.equal(isCapabilityDenied(grants, "read"), false);
+  });
+
+  it("false when the capability only has an allow grant", () => {
+    const grants: PermissionGrant[] = [
+      {
+        scope: { kind: "capability", key: "write" },
+        lifetime: { type: "permanent" },
+        wallet_address: WALLET_A,
+        granted_at: 1,
+      },
+    ];
+    assert.equal(isCapabilityDenied(grants, "write"), false);
+  });
+});
+
+describe("isCapabilityAsk", () => {
+  it("true when a capability has an always_ask grant (read toggle off)", () => {
+    const grants: PermissionGrant[] = [
+      {
+        scope: { kind: "capability", key: "read" },
+        lifetime: { type: "always_ask" },
+        wallet_address: WALLET_A,
+        granted_at: 1,
+      },
+    ];
+    assert.equal(isCapabilityAsk(grants, "read"), true);
+    assert.equal(isCapabilityAsk(grants, "write"), false);
+  });
+
+  it("false on an empty store — reads are Auto by default (toggle ON)", () => {
+    assert.equal(isCapabilityAsk([], "read"), false);
   });
 });
 

@@ -29,8 +29,8 @@ import {
 } from "lucide-react-native";
 import type React from "react";
 import { Pressable, Text, View } from "react-native";
-import PreviewCard from "../../PreviewCard/PreviewCard";
 import type { ToolComponentProps } from "../types";
+import WriteApprovalGate from "../WriteApprovalGate";
 
 type SolanaWriteData = {
   signature?: string;
@@ -214,7 +214,15 @@ function ResultCard({
 
 const SolanaPendingTxCard: React.FC<
   ToolComponentProps<SolanaWriteInput, SolanaWriteOutput>
-> = ({ state, input, output, mode, addToolResult }) => {
+> = ({
+  state,
+  input,
+  output,
+  mode,
+  addToolResult,
+  decision,
+  onRequestApproval,
+}) => {
   if (mode === "historical") {
     return <ResultCard input={input} output={output} state={state} />;
   }
@@ -224,14 +232,16 @@ const SolanaPendingTxCard: React.FC<
       return <ResultCard input={input} output={output} state={state} />;
     }
     return (
-      <PreviewCard
+      <WriteApprovalGate
+        decision={decision}
         summary={describe(input)}
-        onConfirm={() =>
+        onApprove={() =>
           addToolResult({ status: "success", user_decision: "approved" })
         }
-        onDismiss={() =>
+        onReject={() =>
           addToolResult({ status: "failed", user_decision: "rejected" })
         }
+        onRequestApproval={onRequestApproval}
       />
     );
   }

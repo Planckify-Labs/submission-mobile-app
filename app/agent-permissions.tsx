@@ -25,7 +25,6 @@ import {
   Shield,
   ShieldCheck,
   ShieldOff,
-  SlidersHorizontal,
   Sparkles,
   Trash2,
 } from "lucide-react-native";
@@ -64,15 +63,16 @@ import {
   formatLifetimeLabel,
   formatScopeLabel,
   groupDelegationGrantsByChain,
-  isCapabilityAutoApproved,
+  isCapabilityAsk,
+  isCapabilityDenied,
   listRenderableGrants,
   partitionGrants,
 } from "@/services/agentPermissionsHelpers";
 import {
   type DelegationMeta,
   type GrantLifetime,
+  getPermissionGrantStore,
   type PermissionGrant,
-  PermissionGrantStore,
 } from "@/services/permissionGrantStore";
 import { formatChainLabel } from "@/services/walletKit/chainInfo";
 import type { DelegationStruct } from "@/services/walletKit/types";
@@ -97,16 +97,16 @@ const MODES: ModeMeta[] = [
     id: "agent_decides",
     label: "Agent decides",
     subtitle:
-      "Agent uses wallet policy — asks for writes, previews simulations.",
+      "Writes you haven't pre-approved show a proposal card you confirm.",
     accessibilityHint:
-      "The wallet approval policy controls when to prompt you.",
+      "Unapproved writes ask first via a proposal card, then an approval sheet.",
   },
   {
     id: "full_auto",
     label: "Full auto",
-    subtitle: "Agent executes writes silently until revoked.",
+    subtitle: "Writes auto-approve after a 6-second run-down you can veto.",
     accessibilityHint:
-      "The agent can sign and submit transactions without asking.",
+      "The agent submits writes after a 6 second countdown you can cancel; nothing executes silently.",
   },
 ];
 
@@ -141,26 +141,6 @@ const AUTO_APPROVE_CAPABILITIES: CapabilityMeta[] = [
       "When on, the agent can perform read-only actions without prompting.",
   },
 ];
-
-// --- Store cache per wallet address ---------------------------------------
-
-/**
- * Cache of `PermissionGrantStore` instances keyed by lowercased wallet
- * address. Re-used across renders so switching the wallet picker doesn't
- * spin up a fresh store (and so the screen observes the same instance
- * that the agent dispatcher will eventually use).
- */
-const storeCache = new Map<string, PermissionGrantStore>();
-
-function getStoreFor(address: `0x${string}`): PermissionGrantStore {
-  const key = address.toLowerCase();
-  let store = storeCache.get(key);
-  if (!store) {
-    store = new PermissionGrantStore(address);
-    storeCache.set(key, store);
-  }
-  return store;
-}
 
 // --- Helpers ---------------------------------------------------------------
 
@@ -213,10 +193,21 @@ export default function AgentPermissionsScreen() {
   const selectedWallet = wallets[selectedWalletIndex] ?? activeWallet;
   const address = (selectedWallet?.address ?? "") as `0x${string}`;
 
+  // The SHARED per-wallet grant store (spec §6.7 P0). Settings, the live
+  // agent session, and the approval flow all read/write this same instance
+  // via `getPermissionGrantStore`, so an edit here takes effect on the
+  // next tool call without a remount.
   const store = useMemo(() => {
     if (!address) return null;
-    return getStoreFor(address);
+    return getPermissionGrantStore(address);
   }, [address]);
+
+  // Re-render when the store changes from ANY surface (e.g. a grant the
+  // approval flow installed mid-session) so the list stays in sync.
+  useEffect(() => {
+    if (!store) return;
+    return store.subscribe(() => forceRender((n) => n + 1));
+  }, [store]);
 
   // Prune expired timed grants on mount / wallet change.
   useEffect(() => {
@@ -488,15 +479,19 @@ export default function AgentPermissionsScreen() {
     [store, refresh],
   );
 
-  const handleRevokeAll = useCallback(() => {
+  // "Reset to defaults" (deny-layer spec §D-4). A *maintenance* action
+  // that clears every override (Auto / Ask / Never grants) and returns to
+  // the Default rule. Renamed from "Revoke all" so it no longer reads like
+  // a second "block" action next to the Write→Never rule.
+  const handleResetToDefaults = useCallback(() => {
     if (!store || !address) return;
     Alert.alert(
-      "Revoke all permissions",
-      "This removes every active grant for this wallet. The agent will ask for approval on every write until you grant new permissions.",
+      "Reset to defaults",
+      "This clears every permission override for this wallet (including any blocks) and returns to the default rule. The agent will ask for approval on writes until you set new rules.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Revoke all",
+          text: "Reset",
           style: "destructive",
           onPress: () => {
             store.revokeAll(address);
@@ -550,22 +545,62 @@ export default function AgentPermissionsScreen() {
     [store, address, refresh],
   );
 
-  const applyCapabilityAutoApprove = useCallback(
-    (capability: "read", enabled: boolean) => {
+  // Reads are auto-approved by DEFAULT (the wallet policy treats reads as
+  // silent). So the toggle is ON unless the user has explicitly pinned
+  // reads to "ask" (a capability:read always_ask grant) or blocked them.
+  // This is why a fresh wallet shows the toggle ON even with no grants —
+  // it reflects the real default, not just an explicit grant.
+  const readAutoApproved = useMemo(
+    () =>
+      !isCapabilityAsk(grants, "read") && !isCapabilityDenied(grants, "read"),
+    [grants],
+  );
+
+  const applyReadAutoApprove = useCallback(
+    (enabled: boolean) => {
       if (!store || !address) return;
       if (enabled) {
+        // Back to the Auto default: clear any read restriction grant.
+        // `remove` matches by scope, so this drops an always_ask/deny/
+        // permanent read grant whatever its lifetime.
+        store.remove({
+          scope: { kind: "capability", key: "read" },
+          lifetime: { type: "always_ask" },
+          wallet_address: address,
+          granted_at: 0,
+        });
+      } else {
+        // Make reads ask before running.
         store.add({
-          scope: { kind: "capability", key: capability },
-          lifetime: { type: "permanent" },
+          scope: { kind: "capability", key: "read" },
+          lifetime: { type: "always_ask" },
+          wallet_address: address,
+          granted_at: Date.now(),
+        });
+      }
+      refresh();
+    },
+    [store, address, refresh],
+  );
+
+  // "Block all writes" = `Write → Never` (deny-layer spec §D-4). Installs
+  // / removes a capability-scoped `always_deny`; deny-overrides-allow then
+  // blocks every write tool, un-bypassable by any per-tool Auto. This is a
+  // rule value, NOT a second destructive button next to "Reset".
+  const applyWriteBlock = useCallback(
+    (blocked: boolean) => {
+      if (!store || !address) return;
+      if (blocked) {
+        store.add({
+          scope: { kind: "capability", key: "write" },
+          lifetime: { type: "always_deny" },
           wallet_address: address,
           granted_at: Date.now(),
         });
       } else {
-        // `remove` matches by scope; lifetime/granted_at are ignored by
-        // the comparator (see `permissionGrantStore.remove`).
         store.remove({
-          scope: { kind: "capability", key: capability },
-          lifetime: { type: "permanent" },
+          scope: { kind: "capability", key: "write" },
+          lifetime: { type: "always_deny" },
           wallet_address: address,
           granted_at: 0,
         });
@@ -573,6 +608,11 @@ export default function AgentPermissionsScreen() {
       refresh();
     },
     [store, address, refresh],
+  );
+
+  const writesBlocked = useMemo(
+    () => isCapabilityDenied(grants, "write"),
+    [grants],
   );
 
   const handleSelectMode = useCallback(
@@ -977,14 +1017,13 @@ export default function AgentPermissionsScreen() {
               }}
             >
               {AUTO_APPROVE_CAPABILITIES.map((meta, index) => {
-                const isOn = isCapabilityAutoApproved(grants, meta.capability);
                 const Icon = meta.icon;
                 return (
                   <View
                     key={meta.capability}
                     accessible
                     accessibilityRole="switch"
-                    accessibilityState={{ checked: isOn }}
+                    accessibilityState={{ checked: readAutoApproved }}
                     accessibilityLabel={meta.label}
                     accessibilityHint={meta.accessibilityHint}
                     className={`px-4 py-3 flex-row items-center ${index > 0 ? "border-t border-light-matte-black/5" : ""}`}
@@ -1001,10 +1040,8 @@ export default function AgentPermissionsScreen() {
                       </Text>
                     </View>
                     <Switch
-                      value={isOn}
-                      onValueChange={(next) =>
-                        applyCapabilityAutoApprove(meta.capability, next)
-                      }
+                      value={readAutoApproved}
+                      onValueChange={applyReadAutoApprove}
                       trackColor={{ false: "#E5E7EB", true: "#c71c4b" }}
                       thumbColor="#fff"
                     />
@@ -1013,21 +1050,22 @@ export default function AgentPermissionsScreen() {
               })}
             </View>
             <Text className="text-light-matte-black/50 text-xs mt-2 ml-1 leading-4">
-              Toggles add a permanent grant for that category. They override the
-              default mode for matching tools.
+              Reading is on by default — the agent can check balances, prices,
+              and history without asking. Turn this off to make it ask first.
             </Text>
           </View>
 
-          {/* Transfer thresholds link */}
+          {/* Write protection — the Write → Never rule (spec §D-4) */}
           <View className="mx-4 mb-6">
             <Text className="text-light-matte-black/50 text-xs uppercase tracking-wide mb-2 ml-1">
-              Transfer auto-approve
+              Safety
             </Text>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => router.push("/transfer-thresholds")}
-              accessibilityRole="button"
-              accessibilityLabel="Open transfer thresholds settings"
+            <View
+              accessible
+              accessibilityRole="switch"
+              accessibilityState={{ checked: writesBlocked }}
+              accessibilityLabel="Freeze the agent"
+              accessibilityHint="When on, the agent can't send, swap, or approve anything. It can still check your balances. This overrides every auto-approve."
               className="bg-light rounded-2xl px-4 py-3 flex-row items-center"
               style={{
                 shadowColor: "#000",
@@ -1038,19 +1076,25 @@ export default function AgentPermissionsScreen() {
               }}
             >
               <View className="w-9 h-9 rounded-xl bg-light-primary-red/10 items-center justify-center mr-3">
-                <SlidersHorizontal size={18} color="#c71c4b" />
+                <ShieldOff size={18} color="#c71c4b" />
               </View>
-              <View className="flex-1">
+              <View className="flex-1 pr-3">
                 <Text className="text-light-matte-black font-semibold">
-                  Transfer thresholds
+                  Freeze the agent
                 </Text>
                 <Text className="text-light-matte-black/60 text-xs mt-0.5">
-                  Auto-approve transfers below a USD limit. Per-token overrides
-                  supported.
+                  Stop the agent from sending, swapping, or approving anything.
+                  It can still check your balances. This overrides every
+                  auto-approve.
                 </Text>
               </View>
-              <ChevronRight size={18} color="#c71c4b" />
-            </TouchableOpacity>
+              <Switch
+                value={writesBlocked}
+                onValueChange={applyWriteBlock}
+                trackColor={{ false: "#E5E7EB", true: "#c71c4b" }}
+                thumbColor="#fff"
+              />
+            </View>
           </View>
 
           {/* Default mode selector */}
@@ -1108,12 +1152,22 @@ export default function AgentPermissionsScreen() {
                 );
               })}
             </View>
-            {currentMode === "full_auto" && (
+            {currentMode === "full_auto" && !writesBlocked && (
               <View className="flex-row items-start mt-3 px-1">
                 <AlertTriangle size={14} color="#c71c4b" />
                 <Text className="text-light-primary-red text-xs ml-2 flex-1 leading-4">
                   Full auto is enabled. The agent can move funds out of this
                   wallet without asking.
+                </Text>
+              </View>
+            )}
+            {writesBlocked && (
+              <View className="flex-row items-start mt-3 px-1">
+                <ShieldOff size={14} color="#c71c4b" />
+                <Text className="text-light-primary-red text-xs ml-2 flex-1 leading-4">
+                  The agent is frozen. It can&apos;t send, swap, or approve
+                  anything until you turn off Freeze the agent above — this
+                  overrides the mode here.
                 </Text>
               </View>
             )}
@@ -1123,14 +1177,14 @@ export default function AgentPermissionsScreen() {
           {grants.length > 0 && (
             <View className="mx-4 mb-4">
               <TouchableOpacity
-                onPress={handleRevokeAll}
+                onPress={handleResetToDefaults}
                 accessibilityRole="button"
-                accessibilityLabel="Revoke all permissions for this wallet"
+                accessibilityLabel="Reset all permissions for this wallet to defaults"
                 className="bg-light-primary-red/10 border border-light-primary-red/30 rounded-2xl px-4 py-3 flex-row items-center justify-center"
               >
-                <ShieldOff size={16} color="#c71c4b" />
+                <Trash2 size={16} color="#c71c4b" />
                 <Text className="text-light-primary-red font-bold ml-2">
-                  Revoke all permissions
+                  Reset to defaults
                 </Text>
               </TouchableOpacity>
             </View>

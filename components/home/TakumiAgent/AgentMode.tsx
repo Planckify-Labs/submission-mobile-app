@@ -64,12 +64,14 @@ import {
   type WalletContext,
 } from "@/services/agentSession";
 import { pendingTxStore } from "@/services/pendingTxStore";
-import { PermissionGrantStore } from "@/services/permissionGrantStore";
+import {
+  getPermissionGrantStore,
+  type PermissionGrantStore,
+} from "@/services/permissionGrantStore";
 import {
   type ConnectedWallet,
   HOT_WALLET_POLICY,
 } from "@/services/resolveUxTreatment";
-import { getTransferThresholdStore } from "@/services/transferThresholdStore";
 import {
   formatChainLabel,
   getEvmChainId,
@@ -291,7 +293,16 @@ export default function AgentMode() {
   // StructuredUI card resolves via `addToolResult`; we look up the
   // stashed onConfirm/onDismiss here and call the right one.
   const toolDecisionsRef = useRef<
-    Map<string, { onConfirm: () => void; onDismiss: () => void }>
+    Map<
+      string,
+      {
+        onConfirm: () => void;
+        onDismiss: () => void;
+        // `ask` proposal card → approval sheet (deny-layer §4.1). Present
+        // only for `ask` decisions; the run-down path leaves it undefined.
+        onRequestApproval?: () => void;
+      }
+    >
   >(new Map());
   useEffect(() => {
     inlinePreviewRef.current = inlinePreview;
@@ -316,41 +327,22 @@ export default function AgentMode() {
     }
   }, []);
 
-  // Rebuild / reuse the wallet-scoped grant store whenever the active
-  // wallet changes. The store is lazy-loaded from SecureStore — keeping
-  // a ref means we don't re-hydrate on every render.
+  // The wallet-scoped grant store — the SHARED per-wallet singleton
+  // (spec §6.7 P0). Using `getPermissionGrantStore` means the settings
+  // screen, this live session, and the approval flow all read/write the
+  // SAME instance. The dispatcher reads grants LIVE from this store via
+  // `authorizeToolCall` at each tool_pending, so a grant added/revoked in
+  // settings takes effect on the next tool call mid-session without a
+  // remount.
   const grantStore = useMemo(() => {
     const address = activeWallet?.address as `0x${string}` | undefined;
     if (!address) return null;
-    if (grantStoreRef.current?.address === address) {
-      return grantStoreRef.current.store;
-    }
-    const store = PermissionGrantStore.conservative(address);
+    const store = getPermissionGrantStore(address);
     grantStoreRef.current = { address, store };
     return store;
   }, [activeWallet?.address]);
 
-  // Snapshot the wallet's transfer thresholds. Re-snapshots whenever
-  // the active wallet changes OR the store emits a change event (the
-  // settings screen mutates the same per-wallet store instance via
-  // `getTransferThresholdStore`, so edits propagate here without any
-  // explicit cross-screen wiring).
-  const [thresholdRev, bumpThresholdRev] = useState(0);
-  useEffect(() => {
-    const address = activeWallet?.address as `0x${string}` | undefined;
-    if (!address) return;
-    const store = getTransferThresholdStore(address);
-    return store.subscribe(() => bumpThresholdRev((n) => n + 1));
-  }, [activeWallet?.address]);
-
-  const transferThresholdsSnapshot = useMemo(() => {
-    const address = activeWallet?.address as `0x${string}` | undefined;
-    if (!address) return undefined;
-    return getTransferThresholdStore(address).snapshot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- thresholdRev is the explicit re-snapshot trigger
-  }, [activeWallet?.address, thresholdRev]);
-
-  // ConnectedWallet — plumbed into `resolveUxTreatment` via the session.
+  // ConnectedWallet — plumbed into `authorizeToolCall` via the session.
   const connectedWallet: ConnectedWallet | null = useMemo(() => {
     const address = activeWallet?.address as `0x${string}` | undefined;
     if (!address || !grantStore) return null;
@@ -358,9 +350,8 @@ export default function AgentMode() {
       address,
       approvalPolicy: HOT_WALLET_POLICY,
       grantStore,
-      transferThresholds: transferThresholdsSnapshot,
     };
-  }, [activeWallet?.address, grantStore, transferThresholdsSnapshot]);
+  }, [activeWallet?.address, grantStore]);
 
   // Executor context — forwarded to every mobile tool call.
   // `activeChainId` is the fallback the executors use when the agent
@@ -805,6 +796,7 @@ export default function AgentMode() {
               state: part.state,
               ...(part.output !== undefined ? { output: part.output } : {}),
               ...(part.error ? { error: part.error } : {}),
+              ...(part.decision ? { decision: part.decision } : {}),
             };
             if (existingIdx >= 0) {
               const nextParts = [...m.parts];
@@ -846,6 +838,47 @@ export default function AgentMode() {
           payload,
           onConfirm: wrappedConfirm,
           onDismiss: wrappedDismiss,
+        });
+      },
+      showProposalCard: (payload, onApprove, onReject) => {
+        // `ask` step 1 (deny-layer §4.1): the inline proposal card. NO
+        // timer — nothing auto-resolves. Reject rejects outright; Approve
+        // (via `handleRequestApproval` → `onRequestApproval`) opens the
+        // approval sheet. We register a no-op `onConfirm` because the
+        // run-down confirm path doesn't apply here, and an `onDismiss`
+        // that the inline `addToolResult({user_decision:"rejected"})`
+        // routes to. `inlinePreview` is set as the busy/cleanup marker so
+        // stop/reset rejects an un-actioned proposal as `user_declined`.
+        setCurrentStatus(null);
+        const wrappedReject = () => {
+          setInlinePreview((current) =>
+            current?.payload.tool_call_id === payload.tool_call_id
+              ? null
+              : current,
+          );
+          toolDecisionsRef.current.delete(payload.tool_call_id);
+          void onReject();
+        };
+        const wrappedApprove = () => {
+          // Transition from proposal → sheet: drop the proposal marker
+          // (the sheet now owns the pending state) and open the sheet.
+          setInlinePreview((current) =>
+            current?.payload.tool_call_id === payload.tool_call_id
+              ? null
+              : current,
+          );
+          toolDecisionsRef.current.delete(payload.tool_call_id);
+          void onApprove();
+        };
+        toolDecisionsRef.current.set(payload.tool_call_id, {
+          onConfirm: () => {},
+          onDismiss: wrappedReject,
+          onRequestApproval: wrappedApprove,
+        });
+        setInlinePreview({
+          payload,
+          onConfirm: () => {},
+          onDismiss: wrappedReject,
         });
       },
       showApprovalSheet: (payload, onApprove, onReject) => {
@@ -1236,14 +1269,28 @@ export default function AgentMode() {
         output && typeof output === "object" && "user_decision" in output
           ? (output as { user_decision?: string }).user_decision
           : undefined;
-      if (userDecision === "rejected") {
-        decision.onDismiss();
-      } else {
+      // D3 fix (deny-layer §6.5): FAIL CLOSED. Only an explicit
+      // `user_decision: "approved"` confirms; ANY other envelope (a
+      // reject, a missing/garbled decision, a card emitting the old
+      // `{decision}` shape) is treated as a reject. This is the inverse
+      // of the old behaviour, where anything not literally
+      // `user_decision: "rejected"` was executed as an approve.
+      if (userDecision === "approved") {
         decision.onConfirm();
+      } else {
+        decision.onDismiss();
       }
     },
     [],
   );
+
+  // `ask` proposal card → approval sheet (deny-layer §4.1). The proposal
+  // card's Approve calls this; it opens the sheet (step 2) and does NOT
+  // execute or post a result.
+  const handleRequestApproval = useCallback((toolCallId: string) => {
+    const decision = toolDecisionsRef.current.get(toolCallId);
+    decision?.onRequestApproval?.();
+  }, []);
 
   const renderChatMessage = useCallback(
     ({ item }: ListRenderItemInfo<ChatMessage>) => {
@@ -1268,11 +1315,17 @@ export default function AgentMode() {
             mode={mode}
             addToolResult={handleAddToolResult}
             onUserPrompt={sendTextMessage}
+            onRequestApproval={handleRequestApproval}
           />
         </View>
       );
     },
-    [streamingMessageId, handleAddToolResult, sendTextMessage],
+    [
+      streamingMessageId,
+      handleAddToolResult,
+      handleRequestApproval,
+      sendTextMessage,
+    ],
   );
 
   const isLoading = isStreaming;

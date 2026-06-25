@@ -30,7 +30,11 @@ import { usePreviewCountdown } from "./usePreviewCountdown";
 export interface PreviewCardProps {
   /** Server-built `payload.meta.human_summary` string. */
   summary: string;
-  /** Milliseconds to wait before auto-firing `onConfirm`. Defaults to 3000. */
+  /**
+   * Milliseconds to wait before auto-firing `onConfirm`. Defaults to 6000
+   * — the run-down veto window (deny-layer spec §D-2). Only ever rendered
+   * for an already-authorized call (INV-1).
+   */
   autoConfirmMs?: number;
   /** User tapped "Approve now" OR the countdown elapsed. */
   onConfirm: () => void;
@@ -59,7 +63,7 @@ const MUTED_GRAY = "#6b7280";
 
 const PreviewCard: React.FC<PreviewCardProps> = ({
   summary,
-  autoConfirmMs = 3000,
+  autoConfirmMs = 6000,
   onConfirm,
   onDismiss,
   isReconnecting = false,

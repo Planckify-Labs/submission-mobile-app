@@ -30,8 +30,8 @@ import {
 } from "@/services/pendingTxStore";
 import { buildExplorerUrl } from "../../PendingTxCard/explorerUrl";
 import PendingTxCardLegacy from "../../PendingTxCard/PendingTxCard";
-import PreviewCard from "../../PreviewCard/PreviewCard";
 import type { ToolComponentProps } from "../types";
+import WriteApprovalGate from "../WriteApprovalGate";
 
 type WriteToolOutput = {
   status?: "success" | "failed" | string;
@@ -239,25 +239,36 @@ function useLiveRecord(
 
 const PendingTxCard: React.FC<
   ToolComponentProps<WriteToolInput, WriteToolOutput>
-> = ({ state, input, output, mode, addToolResult }) => {
+> = ({
+  state,
+  input,
+  output,
+  mode,
+  addToolResult,
+  decision,
+  onRequestApproval,
+}) => {
   if (mode === "historical") {
     return <HistoricalReceipt input={input} output={output} state={state} />;
   }
 
-  // Live: input-available → preview / countdown card.
+  // Live: input-available → decision-gated approval surface (run-down for
+  // `authorized`, static proposal for `ask`). INV-1 lives in the gate.
   if (state === "input-streaming" || state === "input-available") {
     if (!addToolResult) {
       return <HistoricalReceipt input={input} output={output} state={state} />;
     }
     return (
-      <PreviewCard
+      <WriteApprovalGate
+        decision={decision}
         summary={describe(input)}
-        onConfirm={() =>
+        onApprove={() =>
           addToolResult({ status: "success", user_decision: "approved" })
         }
-        onDismiss={() =>
+        onReject={() =>
           addToolResult({ status: "failed", user_decision: "rejected" })
         }
+        onRequestApproval={onRequestApproval}
       />
     );
   }

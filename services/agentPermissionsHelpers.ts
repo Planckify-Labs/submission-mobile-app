@@ -94,6 +94,45 @@ export function isCapabilityAutoApproved(
   );
 }
 
+/**
+ * Check whether a capability is pinned to the `Ask` rule — a capability-
+ * scoped `always_ask` grant. Used by the read toggle, whose default is
+ * `Auto`: reads are auto-approved by the wallet policy unless the user
+ * explicitly turns the toggle off, which installs `{capability, always_ask}`.
+ */
+export function isCapabilityAsk(
+  grants: PermissionGrant[],
+  capability: "read" | "write",
+): boolean {
+  return grants.some(
+    (g) =>
+      g.scope.kind === "capability" &&
+      (g.scope as { key: string }).key === capability &&
+      g.lifetime.type === "always_ask",
+  );
+}
+
+/**
+ * Check whether a capability is set to the `Never` rule — a capability-
+ * scoped `always_deny` grant (deny-layer spec §D-4). `Write → Never` is
+ * exactly "block all writes": by deny-overrides-allow it blocks every
+ * write tool and cannot be bypassed by any per-tool Auto grant.
+ *
+ * Mirrors `isCapabilityAutoApproved` so the settings screen can render a
+ * single toggle whose ON state installs `{capability, always_deny}`.
+ */
+export function isCapabilityDenied(
+  grants: PermissionGrant[],
+  capability: "read" | "write",
+): boolean {
+  return grants.some(
+    (g) =>
+      g.scope.kind === "capability" &&
+      (g.scope as { key: string }).key === capability &&
+      g.lifetime.type === "always_deny",
+  );
+}
+
 // --- Scope label -----------------------------------------------------------
 
 /**
@@ -268,6 +307,10 @@ export function formatLifetimeLabel(
   switch (lifetime.type) {
     case "always_ask":
       return { primary: "Always ask", secondary: "override" };
+    case "always_deny":
+      // The `Never` rule (deny-layer spec §6.7 P1). Blocks the scope and
+      // overrides any allow grant (deny-overrides-allow).
+      return { primary: "Never", secondary: "blocked" };
     case "once":
       return { primary: "Once", secondary: "" };
     case "session": {

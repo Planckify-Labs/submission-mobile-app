@@ -110,6 +110,8 @@ export function RebalancePreviewCard({
   error,
   mode,
   addToolResult,
+  decision,
+  onRequestApproval,
 }: ToolComponentProps<RebalancePreviewInput, RebalancePreviewOutput>) {
   const from = input.from;
   const to = input.to;
@@ -243,6 +245,14 @@ export function RebalancePreviewCard({
         </View>
       </View>
 
+      {/*
+        Decision-routed actions (deny-layer spec §6.5). The rich preview
+        above IS the proposal surface — it never auto-executes (no
+        countdown), so it's strictly safer than the run-down and satisfies
+        INV-1. When `authorized`, Approve executes; when `ask` (or absent,
+        fail-closed) Approve opens the approval sheet (§4.1 step 2) rather
+        than executing. Reject always declines (`user_decision: rejected`).
+      */}
       <View className="flex-row gap-3">
         <TouchableOpacity
           onPress={() =>
@@ -253,9 +263,13 @@ export function RebalancePreviewCard({
           <Text className="text-light-matte-black font-semibold">Not now</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() =>
-            addToolResult?.({ status: "ok", user_decision: "approved" })
-          }
+          onPress={() => {
+            if (decision === "authorized") {
+              addToolResult?.({ status: "ok", user_decision: "approved" });
+            } else {
+              onRequestApproval?.();
+            }
+          }}
           className="flex-1 bg-light-matte-black rounded-2xl py-3 items-center"
         >
           <Text className="text-light font-semibold">Approve rebalance</Text>

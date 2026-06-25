@@ -28,6 +28,7 @@
  * extend the helper in `types.ts` in place.
  */
 
+import type { AuthorizationToken } from "../agentSession/authorizeToolCall.ts";
 import {
   type ExecutorContext,
   isRetryableError,
@@ -176,14 +177,26 @@ export type ExecutorRegistry = Record<string, MobileToolExecutor>;
  * executor dependencies — viem clients, expo-secure-store, the `@/`
  * path alias — would otherwise blow up at import time. Tests may pass
  * a `registry` override to avoid triggering the dynamic import at all.
+ *
+ * `token` is an {@link AuthorizationToken} minted ONLY by
+ * `authorizeToolCall()` (deny-layer spec §6.4 / INV-3). It is not read at
+ * runtime — its sole purpose is the compile-time guarantee that no code
+ * path can execute a tool without having passed through the single
+ * authorization gate. A caller that never authorized the call cannot
+ * produce a value of this type, so it cannot call this function.
  */
 export async function executeToolWithRetry(
   toolName: string,
   input: ToolInput,
   context: ExecutorContext,
+  token: AuthorizationToken,
   opts: RetryOptions = {},
   registry?: ExecutorRegistry,
 ): Promise<ToolResult> {
+  // The token carries no runtime authority — see the brand note in
+  // `authorizeToolCall.ts`. Reference it so linters don't flag it as
+  // unused; the guarantee is entirely in the type system.
+  void token;
   const resolved: ExecutorRegistry =
     registry ?? (await import("./index.ts")).EXECUTORS;
   const executor = resolved[toolName];

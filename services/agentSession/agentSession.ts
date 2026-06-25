@@ -85,12 +85,37 @@ export interface AgentSessionUIBindings {
       | "output-error";
     output?: unknown;
     error?: string;
+    /**
+     * Authorization decision for this tool call (deny-layer spec §6.3).
+     * Lets the inline StructuredUI write card choose its surface:
+     * `authorized` → run-down veto card; `ask` → static proposal card
+     * (no countdown). Absent for reads / silent calls.
+     */
+    decision?: "authorized" | "ask" | "deny";
   }) => void;
   showStatus: (message: string) => void;
+  /**
+   * Authorized-write run-down (deny-layer §4.2). MUST call exactly one
+   * of the callbacks; `onConfirm` executes (also fired on countdown
+   * elapse — correct only because the call is already authorized),
+   * `onDismiss` rejects as `user_declined`.
+   */
   showPreviewCard: (
     payload: ToolPendingPayload,
     onConfirm: () => void | Promise<void>,
     onDismiss: () => void | Promise<void>,
+  ) => void;
+  /**
+   * The `ask` two-step proposal card (deny-layer §4.1). Step 1, inline,
+   * NO timer. `onApprove` advances to the approval sheet (it does NOT
+   * execute); `onReject` rejects the proposed tool as `user_declined`.
+   * Optional so hosts that haven't adopted the two-step flow fall back to
+   * the approval sheet directly.
+   */
+  showProposalCard?: (
+    payload: ToolPendingPayload,
+    onApprove: () => void | Promise<void>,
+    onReject: () => void | Promise<void>,
   ) => void;
   showApprovalSheet: (
     payload: ToolPendingPayload,
@@ -137,12 +162,18 @@ export interface CreateAgentSessionOptions {
   messages: unknown[];
   /** Executor context forwarded to every mobile tool. */
   executorContext: ExecutorContext;
-  /** ConnectedWallet used by `resolveUxTreatment`. */
+  /** ConnectedWallet used by `authorizeToolCall` / `resolveUxTreatment`. */
   connectedWallet: ConnectedWallet;
   /** UI effect bindings injected by the chat screen. */
   ui: AgentSessionUIBindings;
   /** When resuming a persisted conversation, pass its id. */
   conversation_id?: string;
+  /**
+   * Whether a human is present to approve tool calls. Defaults to `true`
+   * (the chat screen). A headless/autonomous run passes `false` so a
+   * would-be `ask` fails closed to `deny` (deny-layer spec §6.1).
+   */
+  interactive?: boolean;
 }
 
 /**
@@ -158,6 +189,8 @@ export interface AgentSession {
   executorContext: ExecutorContext;
   connectedWallet: ConnectedWallet;
   ui: AgentSessionUIBindings;
+  /** See `CreateAgentSessionOptions.interactive`. Defaults to `true`. */
+  interactive: boolean;
 
   start: () => Promise<void>;
   stop: () => void;
@@ -180,6 +213,7 @@ export function createAgentSession(
     executorContext: options.executorContext,
     connectedWallet: options.connectedWallet,
     ui: options.ui,
+    interactive: options.interactive ?? true,
 
     start: async () => {
       if (stream || stopped) return;

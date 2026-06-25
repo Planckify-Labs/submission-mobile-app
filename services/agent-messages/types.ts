@@ -12,6 +12,15 @@ export type AgentMessagePart =
         | "output-available"
         | "output-error";
       error?: string;
+      /**
+       * Authorization decision for this tool call (deny-layer spec §6.3).
+       * Drives which surface a live write card renders: `authorized` →
+       * run-down veto card; `ask` → static proposal card (no countdown).
+       * Absent for reads / silent calls and for historical (pre-feature)
+       * cached messages — a missing decision is treated fail-closed (no
+       * auto-confirm) by the cards.
+       */
+      decision?: "authorized" | "ask" | "deny";
     };
 
 export type AgentMessage = {

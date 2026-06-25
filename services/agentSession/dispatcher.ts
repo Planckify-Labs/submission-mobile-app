@@ -2,10 +2,12 @@
  * SSE `tool_pending` dispatcher.
  *
  * Called once per `tool_pending` event with the parsed payload and the
- * current `AgentSession`. Decides — via `resolveUxTreatment` — whether
- * to execute silently, show a preview, show an approval sheet, or
- * reject the call outright. This file is the routing layer; actual
- * tool execution goes through `executeToolWithRetry` → `EXECUTORS`.
+ * current `AgentSession`. Decides — via `authorizeToolCall` (the single
+ * authorization gate, deny-layer spec §6.1) — whether the call is
+ * `authorized` (run silently or behind the run-down veto), `ask` (proposal
+ * card → approval sheet, no timer), or `deny` (hard reject,
+ * `permission_denied`). This file is the routing layer; actual tool
+ * execution goes through `executeToolWithRetry` → `EXECUTORS`.
  *
  * Strict rules (spec §10, non-negotiables for this task):
  *
@@ -21,14 +23,13 @@
  */
 
 import { pendingTxStore } from "../pendingTxStore.ts";
-import {
-  type ConnectedWallet,
-  resolveUXTreatment,
-  type TransferInfo,
-  type UXTreatment,
-} from "../resolveUxTreatment.ts";
-import { NATIVE_TOKEN_KEY } from "../transferThresholdStore.ts";
+import type { ConnectedWallet } from "../resolveUxTreatment.ts";
 import type { AgentSession } from "./agentSession.ts";
+import {
+  type AuthorizationToken,
+  authorizeToolCall,
+  type ToolAuthorization,
+} from "./authorizeToolCall.ts";
 import { postProgress, postRespond, rejectTool } from "./networkHelpers.ts";
 import type { ToolPendingPayload, ToolResult } from "./protocol.ts";
 
@@ -61,24 +62,6 @@ export async function handleToolPending(
   // Reserve the slot BEFORE any async work.
   session.pending_approvals.set(toolCallId, payload);
 
-  // Inline the tool as a part on the current assistant message so the
-  // registered StructuredUI card renders at the correct position in
-  // the thread (generative-ui-spec §4.3). State flips to
-  // `output-available` / `output-error` when the tool resolves in
-  // `runNonInteractive`.
-  try {
-    session.ui.upsertToolPart?.({
-      toolCallId,
-      toolName: payload.name,
-      input: payload.input,
-      state: "input-available",
-    });
-  } catch (err) {
-    console.warn(
-      `[agentSession] upsertToolPart(pending) threw: ${String(err)}`,
-    );
-  }
-
   const wallet = getConnectedWallet(session);
   if (!wallet) {
     // No wallet bound — we can't reason about policy. Reject the
@@ -88,118 +71,162 @@ export async function handleToolPending(
     return;
   }
 
-  let treatment: UXTreatment;
+  // --- The single authorization decision (deny-layer spec §6.1) ----
+  // Computed BEFORE painting any card so the inline StructuredUI card is
+  // never a decision-blind auto-confirm surface (fixes D2). This is the
+  // ONLY place the gate is consulted; the dispatcher switches purely on
+  // the `decision` it returns.
+  let auth: ToolAuthorization;
   try {
-    treatment = resolveUXTreatment(
-      payload.meta.capability,
-      payload.name,
+    auth = authorizeToolCall({
+      capability: payload.meta.capability,
+      toolName: payload.name,
       wallet,
-      session.session_id,
-      payload.meta.amount_usd,
-      extractTransferInfo(payload),
-    );
+      sessionId: session.session_id,
+      // Headless runs (no human to approve) fail an `ask` closed — see
+      // authorizeToolCall. The chat screen is always interactive.
+      interactive: session.interactive ?? true,
+    });
   } catch (err) {
     session.pending_approvals.delete(toolCallId);
     session.ui.showError?.(
-      `[agentSession] resolveUXTreatment failed: ${String(err)}`,
+      `[agentSession] authorizeToolCall failed: ${String(err)}`,
       false,
     );
     await safeReject(payload, session, "network_error");
     return;
   }
 
-  switch (treatment) {
-    case "silent": {
-      await runNonInteractive(payload, session);
+  const { decision, token } = auth;
+
+  // Shared user-decline path used by the run-down cancel and the ask
+  // proposal/sheet reject.
+  const rejectDeclined = async () => {
+    session.pending_approvals.delete(toolCallId);
+    try {
+      session.ui.upsertToolPart?.({
+        toolCallId,
+        toolName: payload.name,
+        input: payload.input,
+        state: "output-error",
+        error: "user_declined",
+      });
+    } catch {}
+    await safeReject(payload, session, "user_declined");
+  };
+
+  // --- DENY — hard reject, no card (fail closed) -------------------
+  if (decision === "deny") {
+    // The specific reason (watch_only / approval_unavailable /
+    // policy_denied) stays in logs only; the agent sees the single fixed
+    // `permission_denied` token (user-facing-error rule, §6.6).
+    console.warn(
+      `[agentSession] ${payload.name} denied (${auth.reason ?? "policy_denied"})`,
+    );
+    try {
+      session.ui.upsertToolPart?.({
+        toolCallId,
+        toolName: payload.name,
+        input: payload.input,
+        state: "output-error",
+        error: "permission_denied",
+      });
+    } catch {}
+    session.pending_approvals.delete(toolCallId);
+    await safeReject(payload, session, "permission_denied");
+    return;
+  }
+
+  // Paint the inline card now that the decision is known. The card reads
+  // `decision` to choose its surface — INV-1: only `authorized` ever
+  // wires the auto-execute run-down.
+  try {
+    session.ui.upsertToolPart?.({
+      toolCallId,
+      toolName: payload.name,
+      input: payload.input,
+      state: "input-available",
+      decision,
+    });
+  } catch (err) {
+    console.warn(
+      `[agentSession] upsertToolPart(pending) threw: ${String(err)}`,
+    );
+  }
+
+  // --- AUTHORIZED --------------------------------------------------
+  if (decision === "authorized") {
+    if (auth.treatment === "silent") {
+      // Reads (and deliberately-silent overrides like x402) run with no
+      // card interaction.
+      await runNonInteractive(payload, session, token);
       return;
     }
-
-    case "preview": {
-      // Hand off to the UI — task 13 (PreviewCard) implements the
-      // showPreviewCard callback. The dispatcher provides the
-      // onConfirm / onDismiss callbacks, which execute the tool or
-      // reject it respectively.
-      const onConfirm = async () => {
-        await runNonInteractive(payload, session);
-      };
-      const onDismiss = async () => {
-        session.pending_approvals.delete(toolCallId);
-        try {
-          session.ui.upsertToolPart?.({
-            toolCallId,
-            toolName: payload.name,
-            input: payload.input,
-            state: "output-error",
-            error: "user_declined",
-          });
-        } catch {}
-        await safeReject(payload, session, "user_declined");
-      };
-      try {
-        session.ui.showPreviewCard(payload, onConfirm, onDismiss);
-      } catch (err) {
-        session.pending_approvals.delete(toolCallId);
-        session.ui.showError?.(
-          `[agentSession] showPreviewCard threw: ${String(err)}`,
-          false,
-        );
-        await safeReject(payload, session, "network_error");
-      }
-      return;
-    }
-
-    case "confirm": {
-      // Hard stop — task 14 provides the approval sheet. User tap
-      // drives onApprove / onReject.
-      const onApprove = async () => {
-        await runNonInteractive(payload, session);
-      };
-      const onReject = async () => {
-        session.pending_approvals.delete(toolCallId);
-        try {
-          session.ui.upsertToolPart?.({
-            toolCallId,
-            toolName: payload.name,
-            input: payload.input,
-            state: "output-error",
-            error: "user_declined",
-          });
-        } catch {}
-        await safeReject(payload, session, "user_declined");
-      };
-      try {
-        session.ui.showApprovalSheet(payload, onApprove, onReject);
-      } catch (err) {
-        session.pending_approvals.delete(toolCallId);
-        session.ui.showError?.(
-          `[agentSession] showApprovalSheet threw: ${String(err)}`,
-          false,
-        );
-        await safeReject(payload, session, "network_error");
-      }
-      return;
-    }
-
-    case "blocked": {
-      // Watch-only wallet or equivalent — cannot execute. Drop the
-      // slot and reject immediately with the canonical reason.
+    // Authorized WRITE → the 6 s run-down veto card. Inaction at 0
+    // executes (the card fires onConfirm) — correct ONLY because the
+    // call is already authorized (§D-1 / INV-1).
+    const onConfirm = async () => {
+      await runNonInteractive(payload, session, token);
+    };
+    try {
+      session.ui.showPreviewCard(payload, onConfirm, rejectDeclined);
+    } catch (err) {
       session.pending_approvals.delete(toolCallId);
-      await safeReject(payload, session, "wallet_type_cannot_execute");
-      return;
-    }
-
-    default: {
-      // Exhaustiveness check: compile-time guarantee that every
-      // UXTreatment case is handled. If the union grows and this
-      // stops compiling, add a case above.
-      const _exhaustive: never = treatment;
-      session.pending_approvals.delete(toolCallId);
-      console.warn(
-        `[agentSession] unknown UX treatment, rejecting: ${String(_exhaustive)}`,
+      session.ui.showError?.(
+        `[agentSession] showPreviewCard threw: ${String(err)}`,
+        false,
       );
-      await safeReject(payload, session, "wallet_type_cannot_execute");
-      return;
+      await safeReject(payload, session, "network_error");
     }
+    return;
+  }
+
+  // --- ASK — two-step, no timer (§4.1) -----------------------------
+  // Step 1: the inline proposal card (Reject / Approve). Reject rejects
+  // outright; Approve opens the approval sheet (step 2). NOTHING
+  // auto-resolves on this path.
+  const openApprovalSheet = () => {
+    try {
+      session.ui.showApprovalSheet(
+        payload,
+        // Step 2 Confirm: execute (and the sheet may install a grant so
+        // the next call resolves `authorized`).
+        async () => {
+          await runNonInteractive(payload, session, token);
+        },
+        rejectDeclined,
+      );
+    } catch (err) {
+      session.pending_approvals.delete(toolCallId);
+      session.ui.showError?.(
+        `[agentSession] showApprovalSheet threw: ${String(err)}`,
+        false,
+      );
+      void safeReject(payload, session, "network_error");
+    }
+  };
+
+  // The inline proposal card (step 1) is only rendered by WRITE cards —
+  // read cards have no approval surface. So an `ask` read (e.g. the user
+  // turned off "Auto-approve read actions") goes straight to the approval
+  // sheet, which always renders. Writes get the two-step proposal flow
+  // when the host supports it.
+  const isWrite = payload.meta.capability === "write";
+  try {
+    if (session.ui.showProposalCard && isWrite) {
+      session.ui.showProposalCard(payload, openApprovalSheet, rejectDeclined);
+    } else {
+      // Read ask, or a host without the two-step proposal card: go
+      // straight to the approval sheet (still no timer, still explicit).
+      openApprovalSheet();
+    }
+  } catch (err) {
+    session.pending_approvals.delete(toolCallId);
+    session.ui.showError?.(
+      `[agentSession] showProposalCard threw: ${String(err)}`,
+      false,
+    );
+    await safeReject(payload, session, "network_error");
   }
 }
 
@@ -214,6 +241,7 @@ export async function handleToolPending(
 async function runNonInteractive(
   payload: ToolPendingPayload,
   session: AgentSession,
+  token: AuthorizationToken,
 ): Promise<void> {
   // Start the delay-hint timer BEFORE kicking off the executor. If the
   // executor resolves (success or failure) within DELAY_HINT_MS we
@@ -248,6 +276,9 @@ async function runNonInteractive(
       payload.name,
       payload.input,
       session.executorContext,
+      // Structural single-source-of-truth (INV-3): execution requires the
+      // token minted by `authorizeToolCall`.
+      token,
       payload.meta.capability === "read"
         ? { isRetryable: isTransientReadError }
         : {},
@@ -455,52 +486,4 @@ async function safeReject(
  */
 function getConnectedWallet(session: AgentSession): ConnectedWallet | null {
   return session.connectedWallet ?? null;
-}
-
-/**
- * Pull `TransferInfo` (chain id + token) out of the tool payload for
- * value-moving tools so the resolver can consult per-token thresholds.
- *
- * Returns `undefined` for any tool that isn't a recognised transfer —
- * the resolver then falls back to the policy's legacy single-threshold
- * logic. We intentionally only handle `send_native_token` and
- * `transfer_erc20`: those are the two tools whose payloads carry an
- * unambiguous transfer-target token. `write_contract` could in theory
- * also move value, but inferring "this is a transfer" from arbitrary
- * calldata is the kind of guesswork that produces wrong-bucket
- * thresholds — better to leave those on the legacy path until the
- * server tags them explicitly.
- */
-function extractTransferInfo(
-  payload: ToolPendingPayload,
-): TransferInfo | undefined {
-  const input = payload.input as Record<string, unknown>;
-  const chainIdRaw = input.chain_id;
-  const chainId =
-    typeof chainIdRaw === "number" && Number.isInteger(chainIdRaw)
-      ? chainIdRaw
-      : undefined;
-  if (chainId === undefined || chainId <= 0) return undefined;
-
-  if (payload.name === "send_native_token") {
-    return {
-      chainId,
-      contractAddressOrNative: NATIVE_TOKEN_KEY,
-      isNative: true,
-    };
-  }
-
-  if (payload.name === "transfer_erc20") {
-    const contract = input.contract_address;
-    if (typeof contract !== "string" || !contract.startsWith("0x")) {
-      return undefined;
-    }
-    return {
-      chainId,
-      contractAddressOrNative: contract.toLowerCase(),
-      isNative: false,
-    };
-  }
-
-  return undefined;
 }

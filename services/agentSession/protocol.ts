@@ -229,7 +229,21 @@ export type MobileResponse =
       type: "tool_rejected";
       session_id: string;
       tool_call_id: string;
-      reason: "user_declined" | "insufficient_funds" | "network_error" | string;
+      /**
+       * Short fixed token, never raw error text (user-facing-error rule).
+       * `permission_denied` (deny-layer spec §6.6) means the capability is
+       * not authorised at all — semantically distinct from `user_declined`
+       * ("the user said no to this specific action"). The agent-api system
+       * prompts must handle the two differently (§4.2). The union stays
+       * open (`| string`) for forward-compatible reasons.
+       */
+      reason:
+        | "user_declined"
+        | "permission_denied"
+        | "insufficient_funds"
+        | "network_error"
+        | "wallet_type_cannot_execute"
+        | string;
     };
 
 // --- POST /chat request body ------------------------------------------------

@@ -18,31 +18,6 @@ import {
   resolveGrant,
   type ToolCapability,
 } from "./permissionGrantStore.ts";
-import {
-  type DefiInfo,
-  resolveDefiThreshold,
-  resolveTransferThreshold,
-  type TransferThresholds,
-} from "./transferThresholdStore.ts";
-
-/**
- * Optional transfer context passed to `resolveUXTreatment` when the
- * tool being dispatched is a value-moving transfer (`send_native_token`
- * or `transfer_erc20`). Populated by the dispatcher from the tool
- * payload — see `extractTransferInfo` there.
- *
- * The fields here are exactly what `resolveTransferThreshold` needs to
- * pick the right per-token override or default. Decoupled from the
- * tool input shape so this resolver doesn't have to know about every
- * future transfer-style tool's schema.
- */
-export interface TransferInfo {
-  chainId: number;
-  /** Lowercased contract address, or `"native"` for the chain's native currency. */
-  contractAddressOrNative: string;
-  symbol?: string;
-  isNative: boolean;
-}
 
 // --- Types ------------------------------------------------------------------
 
@@ -50,9 +25,16 @@ export interface TransferInfo {
  * The four possible UX treatments a tool invocation can receive.
  *
  * - `silent`:  execute immediately, show a small status label
- * - `preview`: summary card, auto-proceed after a short delay (task 13)
- * - `confirm`: hard stop, explicit user tap required (task 14)
+ * - `preview`: summary card, auto-proceed after a short delay
+ * - `confirm`: hard stop, explicit user tap required
  * - `blocked`: immediate rejection (e.g. watch-only wallet cannot write)
+ *
+ * NOTE: `preview` is retained as a treatment value a custom policy may
+ * set, but no shipped policy produces it — the USD "Fund Thresholds" that
+ * used to downgrade `confirm → preview` were removed (on-device USD caps
+ * are oracle-dependent and only enforce friction, not a real cap; the
+ * hard cap is the on-chain ERC-7710 delegation). `authorizeToolCall`
+ * still maps any `preview` to `authorized`.
  */
 export type UXTreatment = "silent" | "preview" | "confirm" | "blocked";
 
@@ -63,10 +45,6 @@ export type UXTreatment = "silent" | "preview" | "confirm" | "blocked";
  * `tool_overrides` lets a policy pin a specific tool to a treatment
  * regardless of capability — e.g. always `confirm` on `approve_erc20`
  * even for hot wallets that would otherwise preview writes.
- *
- * `auto_approve_below_usd` lets a policy downgrade `confirm` to
- * `preview` for small-value writes; useful for autonomous agents that
- * should still stop and ask before moving serious money.
  */
 export interface ApprovalPolicy {
   read: UXTreatment;
@@ -74,7 +52,6 @@ export interface ApprovalPolicy {
   defi_read: UXTreatment;
   defi_write: UXTreatment;
   tool_overrides?: Record<string, UXTreatment>;
-  auto_approve_below_usd?: number;
 }
 
 /**
@@ -92,19 +69,6 @@ export interface ConnectedWallet {
   address: `0x${string}`;
   approvalPolicy: ApprovalPolicy;
   grantStore: PermissionGrantStore;
-  /**
-   * Snapshot of the wallet's transfer auto-approve thresholds.
-   *
-   * Optional — when absent, the resolver falls back to the policy's
-   * single `auto_approve_below_usd` value (the legacy single-threshold
-   * behaviour). Present when the dispatcher reads from
-   * `getTransferThresholdStore(wallet)` at session bootstrap.
-   *
-   * A snapshot rather than a live store reference because the resolver
-   * is pure and we want every call from the dispatcher to use the
-   * snapshot consistent with that tool_pending event.
-   */
-  transferThresholds?: TransferThresholds;
 }
 
 // --- Built-in policies ------------------------------------------------------
@@ -186,9 +150,6 @@ export function resolveUXTreatment(
   toolName: string,
   wallet: ConnectedWallet,
   sessionId: string,
-  amountUsd?: number,
-  transferInfo?: TransferInfo,
-  defiInfo?: DefiInfo,
 ): UXTreatment {
   const grant = resolveGrant(
     toolName,
@@ -199,6 +160,12 @@ export function resolveUXTreatment(
   );
 
   switch (grant.type) {
+    case "always_deny":
+      // Hard deny (the `Never` rule, deny-layer spec §6.2). Surfaces as
+      // `blocked` so the legacy resolver fails closed; `authorizeToolCall`
+      // distinguishes this from a watch-only block via `resolveGrant`.
+      return "blocked";
+
     case "always_ask":
       // Hard override: even a global permanent grant cannot loosen this.
       return "confirm";
@@ -211,89 +178,24 @@ export function resolveUXTreatment(
 
     case "once":
       // No active grant — fall through to the wallet's policy.
-      return resolveFromPolicy(
-        wallet.approvalPolicy,
-        capability,
-        toolName,
-        amountUsd,
-        wallet.transferThresholds,
-        transferInfo,
-        defiInfo,
-      );
+      return resolveFromPolicy(wallet.approvalPolicy, capability, toolName);
   }
 }
 
 /**
- * Pure policy resolver. Extracted so tests can exercise the
- * tool-override / auto-approve-below-usd logic without constructing a
- * grant store.
+ * Pure policy resolver: a tool override wins over the capability base.
  *
- * Order of precedence:
  *   1. `tool_overrides[toolName]` — absolute win if set.
  *   2. `policy[capability]` — the base treatment.
- *   3. Downgrade `confirm` → `preview` when:
- *      a. transfer thresholds are configured AND `transferInfo` is
- *         present — use `resolveTransferThreshold` to find the
- *         per-token override or per-kind default.
- *      b. otherwise fall back to the legacy single-threshold
- *         `auto_approve_below_usd` field on the policy.
  *
- * The transfer-threshold path takes priority over the legacy field
- * when both are configured. That gives users who upgrade the new
- * granular control without losing the old behaviour for non-transfer
- * tools.
+ * (The USD "auto-approve below $X" downgrade that used to live here was
+ * removed with the Fund Thresholds feature — see the note on
+ * `UXTreatment`.)
  */
 export function resolveFromPolicy(
   policy: ApprovalPolicy,
   capability: ToolCapability,
   toolName: string,
-  amountUsd?: number,
-  thresholds?: TransferThresholds,
-  transferInfo?: TransferInfo,
-  defiInfo?: DefiInfo,
 ): UXTreatment {
-  const override = policy.tool_overrides?.[toolName];
-  if (override) return override;
-
-  const base = policy[capability];
-
-  if (base !== "confirm" || amountUsd === undefined) {
-    return base;
-  }
-
-  // Path A — granular per-token thresholds. Only consulted for transfer-style
-  // tools where the dispatcher could extract the token info.
-  if (thresholds && transferInfo) {
-    const resolved = resolveTransferThreshold(
-      thresholds,
-      transferInfo.chainId,
-      transferInfo.contractAddressOrNative,
-      transferInfo.isNative,
-    );
-    if (resolved.threshold_usd > 0 && amountUsd < resolved.threshold_usd) {
-      return "preview";
-    }
-    return base;
-  }
-
-  // Path A.2 — DeFi thresholds (Task 18).
-  if (thresholds && defiInfo) {
-    const resolved = resolveDefiThreshold(thresholds, defiInfo);
-    if (resolved.threshold_usd > 0 && amountUsd < resolved.threshold_usd) {
-      return "preview";
-    }
-    return base;
-  }
-
-  // Path B — legacy single-threshold fallback. Preserves existing
-  // behaviour for tools that aren't transfers (or wallets that haven't
-  // configured the granular thresholds yet).
-  if (
-    policy.auto_approve_below_usd !== undefined &&
-    amountUsd < policy.auto_approve_below_usd
-  ) {
-    return "preview";
-  }
-
-  return base;
+  return policy.tool_overrides?.[toolName] ?? policy[capability];
 }

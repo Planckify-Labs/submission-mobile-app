@@ -12,6 +12,11 @@ interface MessageContentProps {
   mode: "live" | "historical";
   addToolResult?: (toolCallId: string, output: unknown) => void;
   onUserPrompt?: (prompt: string) => void;
+  /**
+   * Open the approval sheet for an `ask` proposal card (deny-layer §4.1).
+   * Keyed by `toolCallId` like `addToolResult`.
+   */
+  onRequestApproval?: (toolCallId: string) => void;
 }
 
 /**
@@ -160,7 +165,7 @@ function computeSuppressedRetryParts(message: AgentMessage): Set<string> {
 }
 
 const MessageContent: React.FC<MessageContentProps> = React.memo(
-  ({ message, mode, addToolResult, onUserPrompt }) => {
+  ({ message, mode, addToolResult, onUserPrompt, onRequestApproval }) => {
     const isUser = message.role === "user";
     const suppressedBalanceParts = computeSuppressedToolParts(message);
     const suppressedRetryParts = computeSuppressedRetryParts(message);
@@ -200,6 +205,10 @@ const MessageContent: React.FC<MessageContentProps> = React.memo(
                 : undefined;
             const livePromptCallback =
               mode === "live" ? onUserPrompt : undefined;
+            const liveRequestApproval =
+              mode === "live" && onRequestApproval
+                ? () => onRequestApproval(part.toolCallId)
+                : undefined;
             return (
               <Component
                 key={part.toolCallId}
@@ -210,6 +219,8 @@ const MessageContent: React.FC<MessageContentProps> = React.memo(
                 mode={mode}
                 addToolResult={liveCallback}
                 onUserPrompt={livePromptCallback}
+                decision={part.decision}
+                onRequestApproval={liveRequestApproval}
               />
             );
           }
