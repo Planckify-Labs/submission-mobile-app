@@ -38,6 +38,7 @@ import type {
 } from "@/hooks/queries/useConversations";
 import { useAgentBusyPublisher } from "@/hooks/useAgentBusy";
 import { useAgentOnboarding } from "@/hooks/useAgentOnboarding";
+import { useAgentPrefill } from "@/hooks/useAgentPrefill";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { useWallet } from "@/hooks/useWallet";
 import { chatConvKey, chatListKey } from "@/lib/storage/chatKeys";
@@ -218,6 +219,18 @@ export default function AgentMode() {
   const [input, setInput] = useState("");
   const lastSendTimeRef = useRef<number>(0);
   const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Voice prompt handed over from the home `TakumiAgentSection` mic.
+  // Prefill the composer (do NOT auto-send — the user reviews then taps
+  // send), then clear so a later remount doesn't re-fill a stale value.
+  const { prefill, clearPrefill } = useAgentPrefill();
+  useEffect(() => {
+    if (!prefill) return;
+    setInput((prev) =>
+      prev.trim().length > 0 ? `${prev} ${prefill}` : prefill,
+    );
+    clearPrefill();
+  }, [prefill, clearPrefill]);
 
   // Onboarding state
   const {

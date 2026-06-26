@@ -1,3 +1,4 @@
+import { type AudioRecorder, useAudioRecorderState } from "expo-audio";
 import {
   ArrowRight,
   ArrowUp,
@@ -13,20 +14,26 @@ import {
 import React, {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
 } from "react";
 import {
+  ActivityIndicator,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  Pressable,
   ScrollView,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
+import { AudioWaveBars } from "@/components/home/TakumiAgent/AudioWaveBars";
+import { useAgentPrefill } from "@/hooks/useAgentPrefill";
+import { useVoiceTranscription } from "@/hooks/useVoiceTranscription";
 import ActivitySection, { type ActivitySectionRef } from "./ActivitySection";
 
 export interface TakumiAgentSectionRef {
@@ -34,12 +41,66 @@ export interface TakumiAgentSectionRef {
 }
 
 export interface TakumiAgentSectionProps {
-  /** Fired when the user taps the "Ask Takumi anything…" bar or the mic. */
+  /** Fired when the user taps the "Ask Takumi anything…" bar. */
   onAsk?: () => void;
   /** Fired with a ready-made prompt when a card / quick chip is tapped. */
   onSelectPrompt?: (prompt: string) => void;
   /** Fired when the spotlight "Show me" CTA is tapped. */
   onSpotlightPress?: () => void;
+  /**
+   * Opens the Takumi Agent chat page. Called after a voice transcript is
+   * ready (the transcript is handed off separately via `useAgentPrefill`)
+   * and when the user taps the ask bar to type.
+   */
+  onOpenAgentChat?: () => void;
+  /**
+   * Asks the parent scroll container to bring this section into focus.
+   * Fired on mic press-in so the wave bar has room to breathe.
+   */
+  onVoiceFocus?: () => void;
+}
+
+// expo-audio reports metering in dB. Silence sits near the noise floor
+// (~ -50/-60 dB); conversational speech peaks around -25..-5 dB. Once a
+// tick crosses this threshold we treat the user as "speaking" and reveal
+// the waveform for the rest of the recording (latched, so brief pauses
+// between words don't flicker the hint back in).
+const SPEAKING_DB = -40;
+
+/**
+ * Recording-state content for the ask bar. Mirrors agent mode's
+ * `ChatInput` recording UX: shows a "hold to speak" hint until the user
+ * actually starts talking, then swaps in the shared `AudioWaveBars`
+ * oscilloscope.
+ */
+function VoiceRecordingBar({ recorder }: { recorder: AudioRecorder }) {
+  const state = useAudioRecorderState(recorder, 100);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    if (
+      !started &&
+      state.metering !== undefined &&
+      state.metering > SPEAKING_DB
+    ) {
+      setStarted(true);
+    }
+  }, [state.metering, started]);
+
+  return (
+    <View className="flex-1 justify-center" style={{ height: 22 }}>
+      {started ? (
+        <AudioWaveBars recorder={recorder} />
+      ) : (
+        <Text
+          className="text-light-matte-black/40 text-[13px]"
+          numberOfLines={1}
+        >
+          Hold the mic button to speak
+        </Text>
+      )}
+    </View>
+  );
 }
 
 type CardVariant = "red" | "dark" | "light";
@@ -244,224 +305,317 @@ function CapabilityCard({
 const TakumiAgentSection = forwardRef<
   TakumiAgentSectionRef,
   TakumiAgentSectionProps
->(({ onAsk, onSelectPrompt, onSpotlightPress }, ref) => {
-  const { width } = useWindowDimensions();
-  const [activeTab, setActiveTab] = useState<"takumi" | "history">("takumi");
-  const [activeCard, setActiveCard] = useState(0);
-  const activityRef = useRef<ActivitySectionRef>(null);
+>(
+  (
+    { onAsk, onSelectPrompt, onSpotlightPress, onOpenAgentChat, onVoiceFocus },
+    ref,
+  ) => {
+    const { width } = useWindowDimensions();
+    const [activeTab, setActiveTab] = useState<"takumi" | "history">("takumi");
+    const [activeCard, setActiveCard] = useState(0);
+    const activityRef = useRef<ActivitySectionRef>(null);
 
-  // The History tab hosts the real activity list; forward refresh to it.
-  useImperativeHandle(ref, () => ({
-    refetch: () => activityRef.current?.refetch(),
-  }));
+    // ── Voice input (tap-to-arm once, then hold-to-talk) ─────────────
+    // Two-phase by design, to guard against an accidental tap firing the
+    // mic: the FIRST tap only *arms* voice mode — it scrolls the section
+    // into focus (once) and swaps the placeholder to a "hold to speak"
+    // hint, but records nothing. Arming is sticky: once armed, every
+    // subsequent press-and-hold records (same STT + waveform stack as
+    // agent mode's `ChatInput`) with no re-tap — including right after a
+    // transcription. Releasing transcribes, hands the text to the agent
+    // chat via `useAgentPrefill` (prefilled, not sent), and asks the
+    // parent to open that page.
+    const voice = useVoiceTranscription();
+    const { setPrefill } = useAgentPrefill();
+    const [voiceArmed, setVoiceArmed] = useState(false);
+    const holdActiveRef = useRef(false);
+    // True for the duration of the arming tap so its matching press-out
+    // doesn't get mistaken for the end of a recording hold.
+    const justArmedRef = useRef(false);
 
-  // Rail card geometry. The card has horizontal padding of 18 (p-[18px]); the
-  // rail bleeds to the card edges with a negative margin so the next card peeks.
-  const innerWidth = width - 32 /* px-4 */ - 36 /* p-[18px] x2 */;
-  const heroWidth = Math.round(innerWidth * 0.8);
-  const capWidth = Math.round(innerWidth * 0.46);
+    // Fast-tap guard: `voice.start()` is async (permission + prepare), so
+    // a quick hold can flip to "recording" only AFTER the finger lifted.
+    // If that happens with no active hold, cancel immediately so the mic
+    // is never left open.
+    useEffect(() => {
+      if (voice.status === "recording" && !holdActiveRef.current) {
+        void voice.cancel();
+      }
+    }, [voice.status, voice.cancel]);
 
-  const snapOffsets = useMemo(() => {
-    const widths = [heroWidth, ...CAPABILITIES.map(() => capWidth)];
-    const offsets: number[] = [];
-    let acc = 0;
-    for (const w of widths) {
-      offsets.push(acc);
-      acc += w + RAIL_GAP;
-    }
-    return offsets;
-  }, [heroWidth, capWidth]);
+    const handleMicPressIn = useCallback(() => {
+      if (voice.status === "transcribing") return;
+      // Phase 1 — first tap arms voice mode without recording.
+      if (!voiceArmed) {
+        justArmedRef.current = true;
+        setVoiceArmed(true);
+        onVoiceFocus?.();
+        return;
+      }
+      // Phase 2 — already armed: a press-and-hold starts recording.
+      holdActiveRef.current = true;
+      void voice.start();
+    }, [voice, voiceArmed, onVoiceFocus]);
 
-  const handleRailScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const x = e.nativeEvent.contentOffset.x;
-      let nearest = 0;
-      let best = Number.POSITIVE_INFINITY;
-      snapOffsets.forEach((offset, i) => {
-        const d = Math.abs(offset - x);
-        if (d < best) {
-          best = d;
-          nearest = i;
+    const handleMicPressOut = useCallback(() => {
+      // Release that completes the arming tap — nothing to record yet.
+      if (justArmedRef.current) {
+        justArmedRef.current = false;
+        return;
+      }
+      holdActiveRef.current = false;
+      // Not yet recording (start still in flight from an ultra-quick
+      // hold): the status effect above will cancel it once it spins up.
+      if (voice.status !== "recording") return;
+      // NOTE: arming stays on — the user can hold to speak again straight
+      // away without re-tapping.
+      void (async () => {
+        const transcript = await voice.stopAndTranscribe();
+        if (transcript) {
+          setPrefill(transcript);
+          onOpenAgentChat?.();
         }
-      });
-      if (nearest !== activeCard) setActiveCard(nearest);
-    },
-    [snapOffsets, activeCard],
-  );
+      })();
+    }, [voice, setPrefill, onOpenAgentChat]);
 
-  const railLength = CAPABILITIES.length + 1;
+    // The History tab hosts the real activity list; forward refresh to it.
+    useImperativeHandle(ref, () => ({
+      refetch: () => activityRef.current?.refetch(),
+    }));
 
-  return (
-    <View className="px-4">
-      <View className="bg-light rounded-[22px] w-full p-[18px] gap-3.5">
-        {/* tab switcher */}
-        <View className="flex-row bg-light-main-container rounded-full p-1">
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setActiveTab("takumi")}
-            className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-full ${
-              activeTab === "takumi" ? "bg-light" : ""
-            }`}
-            style={
-              activeTab === "takumi"
-                ? {
-                    shadowColor: "#20222c",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 4,
-                    elevation: 2,
-                  }
-                : undefined
-            }
-          >
-            <Sparkles
-              size={14}
-              color={activeTab === "takumi" ? "#c71c4b" : "#9aa0ad"}
-              strokeWidth={2.4}
-            />
-            <Text
-              className={`text-[13px] font-bold ${
+    // Rail card geometry. The card has horizontal padding of 18 (p-[18px]); the
+    // rail bleeds to the card edges with a negative margin so the next card peeks.
+    const innerWidth = width - 32 /* px-4 */ - 36 /* p-[18px] x2 */;
+    const heroWidth = Math.round(innerWidth * 0.8);
+    const capWidth = Math.round(innerWidth * 0.46);
+
+    const snapOffsets = useMemo(() => {
+      const widths = [heroWidth, ...CAPABILITIES.map(() => capWidth)];
+      const offsets: number[] = [];
+      let acc = 0;
+      for (const w of widths) {
+        offsets.push(acc);
+        acc += w + RAIL_GAP;
+      }
+      return offsets;
+    }, [heroWidth, capWidth]);
+
+    const handleRailScroll = useCallback(
+      (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const x = e.nativeEvent.contentOffset.x;
+        let nearest = 0;
+        let best = Number.POSITIVE_INFINITY;
+        snapOffsets.forEach((offset, i) => {
+          const d = Math.abs(offset - x);
+          if (d < best) {
+            best = d;
+            nearest = i;
+          }
+        });
+        if (nearest !== activeCard) setActiveCard(nearest);
+      },
+      [snapOffsets, activeCard],
+    );
+
+    const railLength = CAPABILITIES.length + 1;
+
+    return (
+      <View className="px-4">
+        <View className="bg-light rounded-[22px] w-full p-[18px] gap-3.5">
+          {/* tab switcher */}
+          <View className="flex-row bg-light-main-container rounded-full p-1">
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setActiveTab("takumi")}
+              className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-full ${
+                activeTab === "takumi" ? "bg-light" : ""
+              }`}
+              style={
                 activeTab === "takumi"
-                  ? "text-light-primary-red"
-                  : "text-light-matte-black/40"
-              }`}
+                  ? {
+                      shadowColor: "#20222c",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                      elevation: 2,
+                    }
+                  : undefined
+              }
             >
-              TakumiAgent
-            </Text>
-          </TouchableOpacity>
+              <Sparkles
+                size={14}
+                color={activeTab === "takumi" ? "#c71c4b" : "#9aa0ad"}
+                strokeWidth={2.4}
+              />
+              <Text
+                className={`text-[13px] font-bold ${
+                  activeTab === "takumi"
+                    ? "text-light-primary-red"
+                    : "text-light-matte-black/40"
+                }`}
+              >
+                TakumiAgent
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setActiveTab("history")}
-            className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-full ${
-              activeTab === "history" ? "bg-light" : ""
-            }`}
-            style={
-              activeTab === "history"
-                ? {
-                    shadowColor: "#20222c",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 4,
-                    elevation: 2,
-                  }
-                : undefined
-            }
-          >
-            <Clock
-              size={14}
-              color={activeTab === "history" ? "#c71c4b" : "#9aa0ad"}
-              strokeWidth={2.4}
-            />
-            <Text
-              className={`text-[13px] font-bold ${
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setActiveTab("history")}
+              className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-full ${
+                activeTab === "history" ? "bg-light" : ""
+              }`}
+              style={
                 activeTab === "history"
-                  ? "text-light-primary-red"
-                  : "text-light-matte-black/40"
-              }`}
+                  ? {
+                      shadowColor: "#20222c",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                      elevation: 2,
+                    }
+                  : undefined
+              }
             >
-              History
-            </Text>
-          </TouchableOpacity>
-        </View>
+              <Clock
+                size={14}
+                color={activeTab === "history" ? "#c71c4b" : "#9aa0ad"}
+                strokeWidth={2.4}
+              />
+              <Text
+                className={`text-[13px] font-bold ${
+                  activeTab === "history"
+                    ? "text-light-primary-red"
+                    : "text-light-matte-black/40"
+                }`}
+              >
+                History
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-        {activeTab === "takumi" ? (
-          <>
-            {/* greeting */}
-            <View className="flex-row items-center gap-2.5">
-              <View className="w-9 h-9 rounded-full bg-light-primary-red items-center justify-center">
-                <Sparkles size={18} color="#ffffff" strokeWidth={2.2} />
+          {activeTab === "takumi" ? (
+            <>
+              {/* greeting */}
+              <View className="flex-row items-center gap-2.5">
+                <View className="w-9 h-9 rounded-full bg-light-primary-red items-center justify-center">
+                  <Sparkles size={18} color="#ffffff" strokeWidth={2.2} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-light-matte-black font-extrabold text-[15px]">
+                    Hi, I'm TakumiAgent 👋
+                  </Text>
+                  <Text className="text-light-matte-black/45 text-[11px]">
+                    Swipe to see what I can do →
+                  </Text>
+                </View>
               </View>
-              <View className="flex-1">
-                <Text className="text-light-matte-black font-extrabold text-[15px]">
-                  Hi, I'm TakumiAgent 👋
-                </Text>
-                <Text className="text-light-matte-black/45 text-[11px]">
-                  Swipe to see what I can do →
-                </Text>
+
+              {/* swipe rail: spotlight + capability cards */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                decelerationRate="fast"
+                snapToOffsets={snapOffsets}
+                onScroll={handleRailScroll}
+                scrollEventThrottle={16}
+                style={{ marginHorizontal: -18 }}
+                contentContainerStyle={{
+                  gap: RAIL_GAP,
+                  paddingHorizontal: 18,
+                }}
+              >
+                <SpotlightCard width={heroWidth} onPress={onSpotlightPress} />
+                {CAPABILITIES.map((item) => (
+                  <CapabilityCard
+                    key={item.id}
+                    item={item}
+                    width={capWidth}
+                    onPress={() => onSelectPrompt?.(item.prompt)}
+                  />
+                ))}
+              </ScrollView>
+
+              {/* rail dots */}
+              <View className="flex-row items-center justify-center gap-1.5">
+                {Array.from({ length: railLength }).map((_, i) => (
+                  <View
+                    key={i}
+                    className={`h-1.5 rounded-full ${
+                      i === activeCard
+                        ? "w-4 bg-light-primary-red"
+                        : "w-1.5 bg-light-matte-black/15"
+                    }`}
+                  />
+                ))}
               </View>
-            </View>
 
-            {/* swipe rail: spotlight + capability cards */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToOffsets={snapOffsets}
-              onScroll={handleRailScroll}
-              scrollEventThrottle={16}
-              style={{ marginHorizontal: -18 }}
-              contentContainerStyle={{
-                gap: RAIL_GAP,
-                paddingHorizontal: 18,
-              }}
-            >
-              <SpotlightCard width={heroWidth} onPress={onSpotlightPress} />
-              {CAPABILITIES.map((item) => (
-                <CapabilityCard
-                  key={item.id}
-                  item={item}
-                  width={capWidth}
-                  onPress={() => onSelectPrompt?.(item.prompt)}
-                />
-              ))}
-            </ScrollView>
+              {/* quick prompt chips */}
+              <View className="flex-row items-center justify-between gap-1">
+                {QUICK_PROMPTS.map((chip) => {
+                  const Icon = chip.icon;
+                  return (
+                    <TouchableOpacity
+                      key={chip.id}
+                      activeOpacity={0.8}
+                      onPress={() => onSelectPrompt?.(chip.prompt)}
+                      className="flex-row items-center gap-1.5 bg-light-main-container grow border border-light-matte-black/5 rounded-full px-3 py-2"
+                    >
+                      <Icon size={14} color="#c71c4b" strokeWidth={2.4} />
+                      <Text className="text-light-matte-black font-bold text-[12px]">
+                        {chip.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
 
-            {/* rail dots */}
-            <View className="flex-row items-center justify-center gap-1.5">
-              {Array.from({ length: railLength }).map((_, i) => (
-                <View
-                  key={i}
-                  className={`h-1.5 rounded-full ${
-                    i === activeCard
-                      ? "w-4 bg-light-primary-red"
-                      : "w-1.5 bg-light-matte-black/15"
-                  }`}
-                />
-              ))}
-            </View>
-
-            {/* quick prompt chips */}
-            <View className="flex-row items-center justify-between gap-1">
-              {QUICK_PROMPTS.map((chip) => {
-                const Icon = chip.icon;
-                return (
+              {/* ask bar */}
+              <View className="flex-row items-center gap-2 bg-light-main-container border border-light-matte-black/5 rounded-full pl-4 pr-1.5 py-1.5">
+                {voice.status === "recording" ? (
+                  <VoiceRecordingBar recorder={voice.recorder} />
+                ) : (
                   <TouchableOpacity
-                    key={chip.id}
-                    activeOpacity={0.8}
-                    onPress={() => onSelectPrompt?.(chip.prompt)}
-                    className="flex-row items-center gap-1.5 bg-light-main-container grow border border-light-matte-black/5 rounded-full px-3 py-2"
+                    activeOpacity={0.7}
+                    onPress={onOpenAgentChat ?? onAsk}
+                    className="flex-1"
+                    disabled={voice.status === "transcribing"}
                   >
-                    <Icon size={14} color="#c71c4b" strokeWidth={2.4} />
-                    <Text className="text-light-matte-black font-bold text-[12px]">
-                      {chip.label}
+                    <Text className="text-light-matte-black/40 text-[13px]">
+                      {voice.status === "transcribing"
+                        ? "Transcribing…"
+                        : voiceArmed
+                          ? "Hold the mic button to speak"
+                          : "Ask TakumiAgent anything…"}
                     </Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* ask bar */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={onAsk}
-              className="flex-row items-center gap-2 bg-light-main-container border border-light-matte-black/5 rounded-full pl-4 pr-1.5 py-1.5"
-            >
-              <Text className="flex-1 text-light-matte-black/40 text-[13px]">
-                Ask TakumiAgent anything…
-              </Text>
-              <View className="w-9 h-9 rounded-full bg-light-primary-red items-center justify-center">
-                <Mic size={18} color="#ffffff" strokeWidth={2.2} />
+                )}
+                <Pressable
+                  onPressIn={handleMicPressIn}
+                  onPressOut={handleMicPressOut}
+                  disabled={voice.status === "transcribing"}
+                  accessibilityLabel={
+                    voiceArmed
+                      ? "Hold to record, release to send to TakumiAgent"
+                      : "Tap to start voice input for TakumiAgent"
+                  }
+                  className="w-10 h-10 rounded-full bg-light-primary-red items-center justify-center active:opacity-90"
+                >
+                  {voice.status === "transcribing" ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Mic size={18} color="#ffffff" strokeWidth={2.2} />
+                  )}
+                </Pressable>
               </View>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <ActivitySection ref={activityRef} embedded />
-        )}
+            </>
+          ) : (
+            <ActivitySection ref={activityRef} embedded />
+          )}
+        </View>
       </View>
-    </View>
-  );
-});
+    );
+  },
+);
 
 TakumiAgentSection.displayName = "TakumiAgentSection";
 

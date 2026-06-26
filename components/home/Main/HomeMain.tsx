@@ -1,5 +1,10 @@
 import React, { useCallback, useRef, useState } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import {
+  type LayoutChangeEvent,
+  RefreshControl,
+  ScrollView,
+  View,
+} from "react-native";
 import BalanceSection, {
   BalanceSectionRef,
 } from "@/components/home/Main/BalanceSection";
@@ -13,13 +18,33 @@ import TakumiAgentSection, {
 } from "@/components/home/Main/TakumiAgentSection";
 import { useDepositPrefetch } from "@/hooks/deposit/useDepositPrefetch";
 
-export default function HomeMain() {
+interface HomeMainProps {
+  /** Opens the Takumi Agent chat page (owned by the home pager). */
+  onOpenAgentChat?: () => void;
+}
+
+export default function HomeMain({ onOpenAgentChat }: HomeMainProps) {
   useDepositPrefetch();
   const [refreshing, setRefreshing] = useState(false);
   const balanceSectionRef = useRef<BalanceSectionRef>(null);
   const agentSectionRef = useRef<TakumiAgentSectionRef>(null);
   const paymentSectionRef = useRef<PaymentSectionRef>(null);
   const recommendationSectionRef = useRef<RecommendationSectionRef>(null);
+
+  // Scroll the page so the agent section sits near the top when the user
+  // starts a voice prompt — gives the waveform bar room and signals that
+  // voice mode is live.
+  const scrollViewRef = useRef<ScrollView>(null);
+  const agentSectionYRef = useRef(0);
+  const handleAgentSectionLayout = useCallback((e: LayoutChangeEvent) => {
+    agentSectionYRef.current = e.nativeEvent.layout.y;
+  }, []);
+  const handleVoiceFocus = useCallback(() => {
+    scrollViewRef.current?.scrollTo({
+      y: Math.max(0, agentSectionYRef.current - 8),
+      animated: true,
+    });
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -39,6 +64,7 @@ export default function HomeMain() {
 
   return (
     <ScrollView
+      ref={scrollViewRef}
       className="bg-light-main-container flex-1"
       contentContainerStyle={{ gap: 16 }}
       showsVerticalScrollIndicator={false}
@@ -54,7 +80,13 @@ export default function HomeMain() {
       <View className="flex-1 gap-4 py-4 pb-24">
         <Header />
         <BalanceSection ref={balanceSectionRef} />
-        <TakumiAgentSection ref={agentSectionRef} />
+        <View onLayout={handleAgentSectionLayout}>
+          <TakumiAgentSection
+            ref={agentSectionRef}
+            onOpenAgentChat={onOpenAgentChat}
+            onVoiceFocus={handleVoiceFocus}
+          />
+        </View>
         <RecommendationSection ref={recommendationSectionRef} />
       </View>
     </ScrollView>

@@ -75,7 +75,7 @@ export default function Home() {
           contentContainerStyle={{ paddingBottom: bottomOffset }}
         >
           <View style={{ width: SCREEN_WIDTH }}>
-            <HomeMain />
+            <HomeMain onOpenAgentChat={handleChatModePress} />
           </View>
           <View style={{ width: SCREEN_WIDTH }}>
             {hasVisitedAgentMode && <AgentMode />}
