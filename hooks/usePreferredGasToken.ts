@@ -4,9 +4,9 @@
  * Canonical store is MMKV (`storage`), so the value is readable
  * synchronously both inside React (this hook, via `useRQGlobalState` for
  * reactive UI) and outside it (`getPreferredGasToken()` for the agent
- * executor, which runs off the render tree). `"usdc"` is the default —
- * the whole point of the gas-abstraction layer is to pay gas in
- * stablecoin unless the user opts back into native.
+ * executor, which runs off the render tree). `"native"` is the default —
+ * gas is paid in the chain's native coin unless the user opts into the
+ * USDC gas-abstraction path.
  */
 
 import { useCallback } from "react";
@@ -16,7 +16,7 @@ import useRQGlobalState from "./useRQGlobalState";
 
 const STORAGE_KEY = "takumipay_preferred_gas_token";
 const QUERY_KEY = ["preferredGasToken"];
-const DEFAULT: GasFeeTokenPreference = "usdc";
+const DEFAULT: GasFeeTokenPreference = "native";
 
 function normalize(raw: string | undefined): GasFeeTokenPreference {
   return raw === "native" || raw === "usdc" ? raw : DEFAULT;
