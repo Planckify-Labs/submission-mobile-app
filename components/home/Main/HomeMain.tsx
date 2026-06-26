@@ -1,8 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
 import { RefreshControl, ScrollView, View } from "react-native";
-import ActivitySection, {
-  ActivitySectionRef,
-} from "@/components/home/Main/ActivitySection";
 import BalanceSection, {
   BalanceSectionRef,
 } from "@/components/home/Main/BalanceSection";
@@ -11,13 +8,16 @@ import { PaymentSectionRef } from "@/components/home/Main/PaymentSection";
 import RecommendationSection, {
   RecommendationSectionRef,
 } from "@/components/home/Main/RecommendationSection";
+import TakumiAgentSection, {
+  TakumiAgentSectionRef,
+} from "@/components/home/Main/TakumiAgentSection";
 import { useDepositPrefetch } from "@/hooks/deposit/useDepositPrefetch";
 
 export default function HomeMain() {
   useDepositPrefetch();
   const [refreshing, setRefreshing] = useState(false);
   const balanceSectionRef = useRef<BalanceSectionRef>(null);
-  const activitySectionRef = useRef<ActivitySectionRef>(null);
+  const agentSectionRef = useRef<TakumiAgentSectionRef>(null);
   const paymentSectionRef = useRef<PaymentSectionRef>(null);
   const recommendationSectionRef = useRef<RecommendationSectionRef>(null);
 
@@ -26,7 +26,7 @@ export default function HomeMain() {
 
     // Call refetch on all components
     balanceSectionRef.current?.refetch();
-    activitySectionRef.current?.refetch();
+    agentSectionRef.current?.refetch();
     paymentSectionRef.current?.refetch();
     recommendationSectionRef.current?.refetch();
 
@@ -54,8 +54,8 @@ export default function HomeMain() {
       <View className="flex-1 gap-4 py-4 pb-24">
         <Header />
         <BalanceSection ref={balanceSectionRef} />
+        <TakumiAgentSection ref={agentSectionRef} />
         <RecommendationSection ref={recommendationSectionRef} />
-        <ActivitySection ref={activitySectionRef} />
       </View>
     </ScrollView>
   );
