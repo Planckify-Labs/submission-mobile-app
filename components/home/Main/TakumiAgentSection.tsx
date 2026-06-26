@@ -15,6 +15,7 @@ import React, {
   useCallback,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -26,6 +27,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import ActivitySection, { type ActivitySectionRef } from "./ActivitySection";
 
 export interface TakumiAgentSectionRef {
   refetch: () => void;
@@ -246,9 +248,12 @@ const TakumiAgentSection = forwardRef<
   const { width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<"takumi" | "history">("takumi");
   const [activeCard, setActiveCard] = useState(0);
+  const activityRef = useRef<ActivitySectionRef>(null);
 
-  // No data wired yet — keep parity with the other home sections' refresh hook.
-  useImperativeHandle(ref, () => ({ refetch: () => {} }));
+  // The History tab hosts the real activity list; forward refresh to it.
+  useImperativeHandle(ref, () => ({
+    refetch: () => activityRef.current?.refetch(),
+  }));
 
   // Rail card geometry. The card has horizontal padding of 18 (p-[18px]); the
   // rail bleeds to the card edges with a negative margin so the next card peeks.
@@ -328,7 +333,7 @@ const TakumiAgentSection = forwardRef<
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => setActiveTab("history")}
-            className={`flex-1 items-center justify-center py-2 rounded-full ${
+            className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-full ${
               activeTab === "history" ? "bg-light" : ""
             }`}
             style={
@@ -343,6 +348,11 @@ const TakumiAgentSection = forwardRef<
                 : undefined
             }
           >
+            <Clock
+              size={14}
+              color={activeTab === "history" ? "#c71c4b" : "#9aa0ad"}
+              strokeWidth={2.4}
+            />
             <Text
               className={`text-[13px] font-bold ${
                 activeTab === "history"
@@ -412,11 +422,7 @@ const TakumiAgentSection = forwardRef<
             </View>
 
             {/* quick prompt chips */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8 }}
-            >
+            <View className="flex-row items-center justify-between gap-1">
               {QUICK_PROMPTS.map((chip) => {
                 const Icon = chip.icon;
                 return (
@@ -424,7 +430,7 @@ const TakumiAgentSection = forwardRef<
                     key={chip.id}
                     activeOpacity={0.8}
                     onPress={() => onSelectPrompt?.(chip.prompt)}
-                    className="flex-row items-center gap-1.5 bg-light-main-container border border-light-matte-black/5 rounded-full px-3 py-2"
+                    className="flex-row items-center gap-1.5 bg-light-main-container grow border border-light-matte-black/5 rounded-full px-3 py-2"
                   >
                     <Icon size={14} color="#c71c4b" strokeWidth={2.4} />
                     <Text className="text-light-matte-black font-bold text-[12px]">
@@ -433,7 +439,7 @@ const TakumiAgentSection = forwardRef<
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
+            </View>
 
             {/* ask bar */}
             <TouchableOpacity
@@ -442,7 +448,7 @@ const TakumiAgentSection = forwardRef<
               className="flex-row items-center gap-2 bg-light-main-container border border-light-matte-black/5 rounded-full pl-4 pr-1.5 py-1.5"
             >
               <Text className="flex-1 text-light-matte-black/40 text-[13px]">
-                Ask Takumi anything…
+                Ask TakumiAgent anything…
               </Text>
               <View className="w-9 h-9 rounded-full bg-light-primary-red items-center justify-center">
                 <Mic size={18} color="#ffffff" strokeWidth={2.2} />
@@ -450,20 +456,7 @@ const TakumiAgentSection = forwardRef<
             </TouchableOpacity>
           </>
         ) : (
-          // History tab — placeholder UI. Wire the real activity list here later
-          // (e.g. mount the existing ActivitySection content).
-          <View className="items-center py-10 gap-3">
-            <View className="w-16 h-16 rounded-2xl bg-light-primary-red/10 items-center justify-center">
-              <Clock size={28} color="#c71c4b" strokeWidth={2} />
-            </View>
-            <Text className="text-light-matte-black font-bold text-base">
-              Your activity, in one place
-            </Text>
-            <Text className="text-light-matte-black/45 text-xs text-center px-8 leading-5">
-              Payments, transfers and redemptions you make with Takumi will show
-              up here.
-            </Text>
-          </View>
+          <ActivitySection ref={activityRef} embedded />
         )}
       </View>
     </View>
