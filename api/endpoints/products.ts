@@ -12,12 +12,36 @@ import type {
 import { fetchList, searchItems } from "../utils/api-helpers";
 
 export interface TProductSearchParams {
+  /**
+   * Free-text search across product name, code, vendor, and category name.
+   * Maps to the backend `query` param — best for natural keyword searches
+   * like "gaming" or "mobile legends".
+   */
+  query?: string;
   name?: string;
   categoryId?: string;
+  /** Category name filter (case-insensitive substring), e.g. "gaming". */
+  categoryName?: string;
   isActive?: boolean;
+  isVoucher?: boolean;
+  /** Minimum points cost (inclusive) — products with a variant ≥ this. */
+  minPoints?: number;
+  /** Maximum points cost (inclusive) — products with a variant ≤ this. */
+  maxPoints?: number;
   take?: number;
   cursor?: string;
 }
+
+/**
+ * Search results carry the product's category and variant prices inline
+ * (the backend's `productInclude` eager-loads them), which `TProduct`
+ * doesn't model. We surface them so callers can group results by category
+ * and show each product's starting points cost without an extra lookup.
+ */
+export type TProductSearchResult = TProduct & {
+  category?: { id: string; name: string } | null;
+  variants?: TProductVariant[];
+};
 
 export const productApi = {
   getAllProducts: (): Promise<TProduct[]> =>
@@ -33,8 +57,10 @@ export const productApi = {
     );
   },
 
-  searchProducts: (params?: TProductSearchParams): Promise<TProduct[]> =>
-    searchItems<TProduct[]>(
+  searchProducts: (
+    params?: TProductSearchParams,
+  ): Promise<TProductSearchResult[]> =>
+    searchItems<TProductSearchResult[]>(
       publicApi,
       "products/search",
       params || {},

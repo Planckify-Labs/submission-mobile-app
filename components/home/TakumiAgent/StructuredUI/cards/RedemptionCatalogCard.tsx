@@ -13,8 +13,18 @@ type CatalogProduct = {
   image_url?: string | null;
   code?: string;
   category_id?: string;
+  category?: { id: string; name: string } | null;
+  starting_points?: string | null;
   input_type?: string | null;
 };
+
+/** Format a raw points string ("2300") as "2,300 pts"; null-safe. */
+function formatPoints(raw?: string | null): string | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return `${n.toLocaleString("en-US")} pts`;
+}
 
 type CatalogGroup = {
   category: { id: string; name: string };
@@ -22,8 +32,12 @@ type CatalogGroup = {
 };
 
 type CatalogInput = {
+  query?: string;
   name?: string;
+  category?: string;
   category_id?: string;
+  min_points?: number;
+  max_points?: number;
   take?: number;
 };
 
@@ -75,6 +89,14 @@ function ProductTile({ product }: { product: CatalogProduct }) {
       >
         {product.name}
       </Text>
+      {formatPoints(product.starting_points) ? (
+        <Text
+          numberOfLines={1}
+          className="text-[9px] text-center text-light-primary-red font-bold max-w-16"
+        >
+          {formatPoints(product.starting_points)}
+        </Text>
+      ) : null}
     </TouchableOpacity>
   );
 }
@@ -181,12 +203,57 @@ function CategoryCard({
   );
 }
 
+/**
+ * Group a flat search result list by its inline category so multi-category
+ * matches (e.g. a query that hits both "Gaming" and "Vouchers") render as
+ * separate, View-All-able sections instead of one undifferentiated grid.
+ * Products with no category fall into a trailing "Other" bucket. Insertion
+ * order is preserved so the most-relevant category (first match) stays on
+ * top.
+ */
+function groupFlatByCategory(products: CatalogProduct[]): {
+  groups: CatalogGroup[];
+  uncategorized: CatalogProduct[];
+} {
+  const groups = new Map<string, CatalogGroup>();
+  const uncategorized: CatalogProduct[] = [];
+  for (const p of products) {
+    if (p.category?.id) {
+      const existing = groups.get(p.category.id);
+      if (existing) {
+        existing.products.push(p);
+      } else {
+        groups.set(p.category.id, { category: p.category, products: [p] });
+      }
+    } else {
+      uncategorized.push(p);
+    }
+  }
+  return { groups: [...groups.values()], uncategorized };
+}
+
 const RedemptionCatalogCard: React.FC<
   ToolComponentProps<CatalogInput, CatalogOutput>
 > = ({ state, input, output }) => {
-  const searchLabel = input.name
-    ? `Matches for "${input.name}"`
-    : "Redemption catalog";
+  // Surface whatever the user actually searched for. `query` is the broad
+  // keyword lever, `category` scopes to a product type, `name` is an exact
+  // product match — show the most specific one we have.
+  const searchTerm = input.query || input.name || input.category;
+  // A points-budget query ("under 2,300 pts") wants a flat cheapest-first
+  // list — the API already orders results that way, so we must NOT regroup
+  // them by category (that would shatter the price ordering).
+  const isPointsQuery = input.min_points != null || input.max_points != null;
+  const pointsLabel = (() => {
+    const min = formatPoints(input.min_points?.toString());
+    const max = formatPoints(input.max_points?.toString());
+    if (min && max) return `${min} – ${max}`;
+    if (max) return `Up to ${max}`;
+    if (min) return `From ${min}`;
+    return null;
+  })();
+  const searchLabel = searchTerm
+    ? `Matches for "${searchTerm}"`
+    : (pointsLabel ?? "Redemption catalog");
 
   if (state === "input-streaming" || state === "input-available" || !output) {
     return (
@@ -278,11 +345,42 @@ const RedemptionCatalogCard: React.FC<
       ))}
 
       {flat && flat.length > 0 ? (
-        <CategoryCard
-          title={input.name ? `Results for "${input.name}"` : "Items"}
-          products={flat}
-          showViewAll={false}
-        />
+        isPointsQuery ? (
+          // Cheapest-first: keep the API's price ordering as one flat
+          // grid; grouping by category would break it.
+          <CategoryCard
+            title={
+              pointsLabel ? `${pointsLabel} · cheapest first` : "Cheapest first"
+            }
+            products={flat}
+            showViewAll={false}
+          />
+        ) : (
+          (() => {
+            const { groups: flatGroups, uncategorized } =
+              groupFlatByCategory(flat);
+            return (
+              <>
+                {flatGroups.map((g) => (
+                  <CategoryCard
+                    key={g.category.id}
+                    title={g.category.name}
+                    products={g.products}
+                    categoryId={g.category.id}
+                    showViewAll
+                  />
+                ))}
+                {uncategorized.length > 0 ? (
+                  <CategoryCard
+                    title={searchTerm ? `Results for "${searchTerm}"` : "Items"}
+                    products={uncategorized}
+                    showViewAll={false}
+                  />
+                ) : null}
+              </>
+            );
+          })()
+        )
       ) : null}
     </View>
   );

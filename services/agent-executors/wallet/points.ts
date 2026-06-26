@@ -50,7 +50,7 @@ import { pointsApi } from "@/api/endpoints/points";
 import { productApi } from "@/api/endpoints/products";
 import { redeemApi } from "@/api/endpoints/redeem";
 import { smartContractApi } from "@/api/endpoints/smart-contracts";
-import type { TProductInputField } from "@/api/types/product";
+import type { TProductInputField, TProductVariant } from "@/api/types/product";
 import AbiTakumiPointDeposit from "@/contracts/abis/AbiTakumiPointDeposit";
 import { requireWalletClient, resolveChainClients } from "../chainRouter";
 import { checkPointsAuth } from "../pointsAuth";
@@ -160,6 +160,60 @@ function optionalInt(input: ToolInput, key: string): number | undefined {
 }
 
 /**
+ * Optional boolean reader — returns undefined if missing, tolerates the
+ * string forms ("true"/"false") the LLM sometimes emits, throws on
+ * anything else.
+ */
+function optionalBool(input: ToolInput, key: string): boolean | undefined {
+  const value = input[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new ExecutorError(ExecutorErrorCode.InvalidInput, `invalid_${key}`);
+}
+
+/**
+ * Optional non-negative number reader — used for the points-range filters
+ * (`min_points` / `max_points`). Tolerates the numeric-string form the LLM
+ * sometimes emits ("2300"), returns undefined when absent, throws on
+ * negative or non-numeric values.
+ */
+function optionalNonNegativeNumber(
+  input: ToolInput,
+  key: string,
+): number | undefined {
+  const value = input[key];
+  if (value === undefined || value === null || value === "") return undefined;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new ExecutorError(ExecutorErrorCode.InvalidInput, `invalid_${key}`);
+  }
+  return n;
+}
+
+/**
+ * Lowest active points cost across a product's variants — the "from X
+ * points" figure shown next to a search result. Returns null when the
+ * search payload carried no variant prices.
+ */
+function startingPoints(
+  variants: TProductVariant[] | undefined,
+): string | null {
+  if (!variants?.length) return null;
+  let min: number | null = null;
+  for (const v of variants) {
+    if (v.isActive === false) continue;
+    for (const p of v.ProductPrice ?? []) {
+      if (p.isActive === false) continue;
+      const n = Number(p.sellPrice);
+      if (Number.isFinite(n) && (min === null || n < min)) min = n;
+    }
+  }
+  return min === null ? null : String(min);
+}
+
+/**
  * Catalog / search pagination guardrail.
  *
  * The LLM can hallucinate a huge `take` (e.g. "show me what I can
@@ -222,14 +276,37 @@ export const getRedemptionCatalog: MobileToolExecutor = (input, _context) =>
   });
 
 /**
- * `search_redemption_catalog` — name / category filtered product search.
- * Public endpoint.
+ * `search_redemption_catalog` — flexible product search. Public endpoint.
+ *
+ * Accepts any combination of:
+ *   - `query`     — free-text across name / code / vendor / category, the
+ *                   primary lever for natural requests ("gaming",
+ *                   "telkomsel", "mobile legends").
+ *   - `name`      — exact product-name substring.
+ *   - `category`  — category name ("gaming", "pulsa", "voucher"). Resolved
+ *                   server-side, so the agent never needs the category UUID.
+ *   - `category_id` — category UUID (when the agent already has one).
+ *   - `is_voucher`  — voucher vs top-up filter.
+ *   - `min_points` / `max_points` — points-cost range. A product matches if
+ *                   any active variant is priced in range. Use `max_points`
+ *                   for "under N points" / "what can I redeem with my
+ *                   balance", `min_points` for "over N points".
+ *
+ * The `data` slice carries a compact `{id, name, category, starting_points}`
+ * list (not just ids) so the agent can confirm matches, report costs, and
+ * pick the right `product_id` for follow-ups; the rich tiles (images,
+ * descriptions) stay in `display` and are stripped before the LLM sees them.
  */
 export const searchRedemptionCatalog: MobileToolExecutor = (input, _context) =>
   safeExecute(async () => {
     const params = {
+      query: optionalString(input, "query"),
       name: optionalString(input, "name"),
       categoryId: optionalString(input, "category_id"),
+      categoryName: optionalString(input, "category"),
+      isVoucher: optionalBool(input, "is_voucher"),
+      minPoints: optionalNonNegativeNumber(input, "min_points"),
+      maxPoints: optionalNonNegativeNumber(input, "max_points"),
       take: clampTake(optionalInt(input, "take")),
       cursor: optionalString(input, "cursor"),
     };
@@ -243,12 +320,26 @@ export const searchRedemptionCatalog: MobileToolExecutor = (input, _context) =>
           image_url: p.imageUrl ?? null,
           code: p.code,
           category_id: p.categoryId,
+          category: p.category
+            ? { id: p.category.id, name: p.category.name }
+            : null,
+          // Lowest active points cost, so the card can show "from X pts"
+          // and the agent can confirm results match the requested range.
+          starting_points: startingPoints(p.variants),
           input_type: p.inputType ?? null,
         }));
         return {
           data: {
-            product_ids: displayProducts.map((p) => p.id),
             product_count: displayProducts.length,
+            // Lightweight name + category + cost list so the agent can talk
+            // about what it found, confirm the points range, and
+            // disambiguate before get_product_details.
+            products: displayProducts.map((p) => ({
+              id: p.id,
+              name: p.name,
+              category: p.category?.name ?? null,
+              starting_points: p.starting_points,
+            })),
           },
           display: { products: displayProducts },
         };
