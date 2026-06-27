@@ -1,10 +1,11 @@
 import type {
   DappCategoryListResponse,
   DappListResponse,
+  DappPromotionListResponse,
   TDapp,
   TDappSearchParams,
 } from "@/api/types/dapp";
-import { publicApi } from "@/constants/configs/ky";
+import { api, publicApi } from "@/constants/configs/ky";
 import {
   apiCall,
   fetchById,
@@ -94,4 +95,28 @@ export const dappApi = {
       );
       return response;
     }, "Failed to fetch dapp by id"),
+
+  getPromotions: () =>
+    apiCall(async () => {
+      const response = await fetchList<DappPromotionListResponse>(
+        publicApi,
+        "dapp-promotions",
+        "Failed to fetch promotions",
+      );
+      return response;
+    }, "Failed to fetch promotions"),
+
+  // Favorites are local-first (MMKV); these power the optional background
+  // sync once the user is signed in. Authed instance → uses the user's JWT.
+  addFavorite: (id: string) =>
+    apiCall(
+      () => api.post(`dapps/${id}/favorite`).json<{ message: string }>(),
+      "Failed to add favorite",
+    ),
+
+  removeFavorite: (id: string) =>
+    apiCall(
+      () => api.delete(`dapps/${id}/favorite`).then(() => undefined),
+      "Failed to remove favorite",
+    ),
 };

@@ -1,142 +1,138 @@
 import { FlashList } from "@shopify/flash-list";
-import { ChevronRight } from "lucide-react-native";
-import React, { memo, useCallback, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Image } from "expo-image";
+import { LayoutGrid } from "lucide-react-native";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import {
-  Dimensions,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Pressable,
+  RefreshControl,
   ScrollView,
-  SectionList,
   Text,
   View,
 } from "react-native";
-import type { TDApp, TDAppCategory } from "@/constants/dummyData/ecosystemList";
+import type { TDapp, TDappCategory } from "@/api/types/dapp";
 import {
-  getPopularDApps,
-  getPromotionalItems,
-  getWeb3EcosystemCategories,
-} from "@/constants/dummyData/ecosystemList";
-import { useFavoriteDApps } from "@/hooks/useFavoriteDApps";
+  useDappCategories,
+  useDappsByCategory,
+} from "@/hooks/queries/useDapps";
+import {
+  type TFavoriteRecord,
+  useFavoriteDApps,
+} from "@/hooks/useFavoriteDApps";
+import CategorySectionContainer from "./CategorySectionContainer";
 import DAppCard from "./DAppCard";
-import FeaturedBanner from "./FeaturedBanner";
-import QuickAccessGrid from "./QuickAccessGrid";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const BANNER_WIDTH = SCREEN_WIDTH * 0.88;
-const BANNER_SPACING = 12;
+import DAppCardSkeleton from "./DAppCardSkeleton";
+import DappsErrorMessage from "./DappsErrorMessage";
+import FeaturedCarousel from "./FeaturedCarousel";
+import PopularDApps from "./PopularDApps";
 
 type DAppsHubProps = {
   onNavigateToDapp: (url: string) => void;
 };
 
+const CATEGORY_SKELETONS = [0, 1, 2];
+
+// Favorites are stored as denormalized snapshots; widen to the shape the
+// shared DAppCard renders. Only the display fields are read.
+const favoriteToDapp = (f: TFavoriteRecord): TDapp =>
+  ({
+    id: f.id,
+    name: f.name,
+    description: f.description,
+    logoUrl: f.logoUrl,
+    websiteUrl: f.websiteUrl,
+    appearance: f.appearance,
+    categoryId: "",
+    isPopular: false,
+    isSponsor: false,
+    isHighlight: false,
+    isActive: true,
+    isFavorite: true,
+    createdAt: "",
+    updatedAt: "",
+  }) as TDapp;
+
 const DAppsHub = memo<DAppsHubProps>(function DAppsHub({ onNavigateToDapp }) {
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [activeBannerIndex, setActiveBannerIndex] = useState(0);
+  const queryClient = useQueryClient();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
+  const [refreshing, setRefreshing] = useState(false);
 
   const { favoriteDApps, isFavorite, toggleFavorite } = useFavoriteDApps();
+  const {
+    data: categories,
+    isLoading: categoriesLoading,
+    error: categoriesError,
+    refetch: refetchCategories,
+  } = useDappCategories();
 
-  const promotionalItems = getPromotionalItems();
-  const popularDapps = getPopularDApps();
-  const categories = getWeb3EcosystemCategories();
-
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const scrollPosition = event.nativeEvent.contentOffset.x;
-      const index = Math.round(
-        scrollPosition / (BANNER_WIDTH + BANNER_SPACING),
-      );
-      setActiveBannerIndex(index);
-    },
-    [],
+  const activeCategories = useMemo(
+    () =>
+      (categories ?? [])
+        .filter((c) => c.isActive)
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+    [categories],
   );
 
-  const handleViewAllCategory = useCallback((categoryId: string) => {
-    console.log("View all for category:", categoryId);
-  }, []);
+  // Drill-down grid for a single selected category ("" disables the query).
+  const selectedQueryId =
+    selectedCategoryId === "all" ? "" : selectedCategoryId;
+  const { data: selectedDapps, isLoading: selectedLoading } =
+    useDappsByCategory(selectedQueryId);
 
   const handleToggleFavorite = useCallback(
-    (dapp: TDApp) => {
+    (dapp: TDapp) => {
       toggleFavorite(dapp);
     },
     [toggleFavorite],
   );
 
-  const handleCategorySelect = useCallback((categoryId: string) => {
-    setSelectedCategoryId(categoryId);
-  }, []);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ["dapps"] }),
+        queryClient.invalidateQueries({ queryKey: ["dapp-categories"] }),
+        queryClient.invalidateQueries({ queryKey: ["dapp-promotions"] }),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient]);
 
-  const filteredCategories =
-    selectedCategoryId === "all"
-      ? categories
-      : categories.filter((cat) => cat.id === selectedCategoryId);
-
-  const selectedCategoryDapps =
-    selectedCategoryId !== "all" ? filteredCategories[0]?.dapps || [] : [];
-
-  const categorySections = useMemo(
-    () =>
-      filteredCategories.map((category) => ({
-        title: category.title,
-        description: category.description,
-        icon: category.icon,
-        id: category.id,
-        data: category.dapps,
-      })),
-    [filteredCategories],
-  );
-
-  const renderFavoriteDApp = useCallback(
-    ({ item }: { item: TDApp }) => (
+  const renderFavorite = useCallback(
+    ({ item }: { item: TFavoriteRecord }) => (
       <DAppCard
-        dapp={item}
+        dapp={favoriteToDapp(item)}
         onPress={onNavigateToDapp}
         variant="compact"
-        isFavorite={true}
+        isFavorite
         onToggleFavorite={handleToggleFavorite}
       />
     ),
     [onNavigateToDapp, handleToggleFavorite],
   );
 
-  const renderCategoryPill = useCallback(
-    ({ item }: { item: TDAppCategory | "all" }) => {
-      if (item === "all") {
-        return (
-          <Pressable
-            onPress={() => handleCategorySelect("all")}
-            className={`px-4 py-2.5 rounded-full border ${
-              selectedCategoryId === "all"
-                ? "bg-light-primary-red border-light-primary-red"
-                : "bg-white border-light-matte-black/10"
-            }`}
-            style={{
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.05,
-              shadowRadius: 2,
-              elevation: 1,
-            }}
-          >
-            <Text
-              className={`font-semibold text-sm ${
-                selectedCategoryId === "all"
-                  ? "text-white"
-                  : "text-light-matte-black/70"
-              }`}
-            >
-              All Categories
-            </Text>
-          </Pressable>
-        );
-      }
+  const renderGridDApp = useCallback(
+    ({ item }: { item: TDapp }) => (
+      <DAppCard
+        dapp={item}
+        onPress={onNavigateToDapp}
+        variant="grid"
+        isFavorite={isFavorite(item.id)}
+        onToggleFavorite={handleToggleFavorite}
+      />
+    ),
+    [onNavigateToDapp, isFavorite, handleToggleFavorite],
+  );
 
-      const category = item as TDAppCategory;
-      const isSelected = selectedCategoryId === category.id;
+  const renderCategoryPill = useCallback(
+    ({ item }: { item: TDappCategory | "all" }) => {
+      const isAll = item === "all";
+      const id = isAll ? "all" : item.id;
+      const isSelected = selectedCategoryId === id;
       return (
         <Pressable
-          onPress={() => handleCategorySelect(category.id)}
+          onPress={() => setSelectedCategoryId(id)}
           className={`px-4 py-2.5 rounded-full border flex-row items-center gap-2 ${
             isSelected
               ? "bg-light-primary-red border-light-primary-red"
@@ -150,135 +146,60 @@ const DAppsHub = memo<DAppsHubProps>(function DAppsHub({ onNavigateToDapp }) {
             elevation: 1,
           }}
         >
-          <View className={isSelected ? "opacity-100" : "opacity-70"}>
-            {category.icon(isSelected)}
-          </View>
+          {isAll ? (
+            <LayoutGrid size={16} color={isSelected ? "#fff" : "#c71c4b"} />
+          ) : item.iconUrl ? (
+            <Image
+              source={{ uri: item.iconUrl }}
+              style={{ width: 16, height: 16 }}
+              contentFit="contain"
+            />
+          ) : null}
           <Text
             className={`font-semibold text-sm ${
               isSelected ? "text-white" : "text-light-matte-black/70"
             }`}
           >
-            {category.title}
+            {isAll ? "All" : item.name}
           </Text>
         </Pressable>
       );
     },
-    [selectedCategoryId, handleCategorySelect],
+    [selectedCategoryId],
   );
 
-  const renderGridDApp = useCallback(
-    ({ item }: { item: TDApp }) => (
-      <DAppCard
-        dapp={item}
-        onPress={onNavigateToDapp}
-        variant="grid"
-        isFavorite={isFavorite(item.id)}
-        onToggleFavorite={handleToggleFavorite}
-      />
-    ),
-    [onNavigateToDapp, isFavorite, handleToggleFavorite],
+  const categoryPillsData = useMemo<(TDappCategory | "all")[]>(
+    () => ["all", ...activeCategories],
+    [activeCategories],
   );
 
-  const favoritesKeyExtractor = useCallback((item: TDApp) => item.id, []);
-  const categoryKeyExtractor = useCallback(
-    (item: TDAppCategory | "all") => (item === "all" ? "all" : item.id),
+  const pillKeyExtractor = useCallback(
+    (item: TDappCategory | "all") => (item === "all" ? "all" : item.id),
     [],
   );
-
-  const FavoritesSeparator = useCallback(
-    () => <View style={{ width: 12 }} />,
+  const favoriteKeyExtractor = useCallback(
+    (item: TFavoriteRecord) => item.id,
     [],
   );
-  const CategorySeparator = useCallback(
-    () => <View style={{ width: 8 }} />,
-    [],
-  );
+  const Separator = useCallback(() => <View style={{ width: 12 }} />, []);
+  const PillSeparator = useCallback(() => <View style={{ width: 8 }} />, []);
 
-  const categoryPillsData: (TDAppCategory | "all")[] = ["all", ...categories];
-
-  const renderSectionHeader = useCallback(
-    ({ section }: { section: (typeof categorySections)[0] }) => (
-      <View className="mb-6">
-        <View className="px-4 mb-4">
-          <View
-            className="p-4 rounded-2xl flex-row items-center justify-between"
-            style={{
-              backgroundColor: "#fff",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.06,
-              shadowRadius: 8,
-              elevation: 2,
-            }}
-          >
-            <View className="flex-1 flex-row items-center">
-              <View
-                className="w-10 h-10 rounded-xl items-center justify-center mr-3"
-                style={{ backgroundColor: "#c71c4b15" }}
-              >
-                {section.icon(false)}
-              </View>
-              <View className="flex-1">
-                <Text className="text-light-matte-black font-bold text-base mb-0.5">
-                  {section.title}
-                </Text>
-                <Text className="text-light-matte-black/50 text-xs">
-                  {section.description}
-                </Text>
-              </View>
-            </View>
-            {section.data.length > 3 && (
-              <Pressable
-                onPress={() => handleViewAllCategory(section.id)}
-                className="ml-3 flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
-                style={{ backgroundColor: "#c71c4b08" }}
-              >
-                <Text className="text-light-primary-red font-semibold text-xs mr-1">
-                  All
-                </Text>
-                <ChevronRight size={14} color="#c71c4b" strokeWidth={2.5} />
-              </Pressable>
-            )}
-          </View>
-        </View>
-        <View style={{ minHeight: 180 }}>
-          <FlashList
-            data={section.data}
-            renderItem={({ item }: { item: TDApp }) => (
-              <DAppCard
-                dapp={item}
-                onPress={onNavigateToDapp}
-                variant="compact"
-                isFavorite={isFavorite(item.id)}
-                onToggleFavorite={handleToggleFavorite}
-              />
-            )}
-            keyExtractor={(item: TDApp) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingHorizontal: 16,
-              paddingBottom: 10,
-            }}
-            ItemSeparatorComponent={() => <View style={{ width: 14 }} />}
-          />
-        </View>
-      </View>
-    ),
-    [handleViewAllCategory, onNavigateToDapp, isFavorite, handleToggleFavorite],
-  );
-
-  const renderSectionItem = useCallback(() => null, []);
-
-  const sectionKeyExtractor = useCallback(
-    (_: any, index: number) => `section-${index}`,
-    [],
+  const selectedCategory = activeCategories.find(
+    (c) => c.id === selectedCategoryId,
   );
 
   return (
     <ScrollView
       className="flex-1 bg-light-main-container"
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor="#c71c4b"
+          colors={["#c71c4b"]}
+        />
+      }
     >
       <View className="px-4 pt-4 pb-3 flex items-center">
         <Text className="text-light-matte-black font-bold text-3xl mb-2">
@@ -289,45 +210,8 @@ const DAppsHub = memo<DAppsHubProps>(function DAppsHub({ onNavigateToDapp }) {
         </Text>
       </View>
 
-      <View className="mb-5">
-        <ScrollView
-          ref={scrollViewRef}
-          horizontal
-          pagingEnabled={false}
-          showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToInterval={BANNER_WIDTH + BANNER_SPACING}
-          snapToAlignment="start"
-          contentContainerStyle={{
-            paddingHorizontal: (SCREEN_WIDTH - BANNER_WIDTH) / 2,
-            gap: BANNER_SPACING,
-          }}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-        >
-          {promotionalItems.map((item) => (
-            <FeaturedBanner
-              key={item.id}
-              item={item}
-              onPress={onNavigateToDapp}
-              width={BANNER_WIDTH}
-            />
-          ))}
-        </ScrollView>
+      <FeaturedCarousel onNavigateToDapp={onNavigateToDapp} />
 
-        <View className="flex-row justify-center mt-3 gap-2">
-          {promotionalItems.map((_, index) => (
-            <View
-              key={index}
-              className={`h-1.5 rounded-full transition-all ${
-                index === activeBannerIndex
-                  ? "bg-light-primary-red w-5"
-                  : "bg-light-matte-black/20 w-1.5"
-              }`}
-            />
-          ))}
-        </View>
-      </View>
       {favoriteDApps.length > 0 && (
         <View className="mb-4">
           <View className="px-4 mb-3">
@@ -338,22 +222,21 @@ const DAppsHub = memo<DAppsHubProps>(function DAppsHub({ onNavigateToDapp }) {
           <View style={{ minHeight: 180 }}>
             <FlashList
               data={favoriteDApps}
-              renderItem={renderFavoriteDApp}
-              keyExtractor={favoritesKeyExtractor}
+              renderItem={renderFavorite}
+              keyExtractor={favoriteKeyExtractor}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{
                 paddingHorizontal: 16,
                 paddingBottom: 5,
               }}
-              ItemSeparatorComponent={FavoritesSeparator}
+              ItemSeparatorComponent={Separator}
             />
           </View>
         </View>
       )}
 
-      <QuickAccessGrid
-        dapps={popularDapps}
+      <PopularDApps
         onNavigateToDapp={onNavigateToDapp}
         isFavorite={isFavorite}
         onToggleFavorite={handleToggleFavorite}
@@ -369,45 +252,73 @@ const DAppsHub = memo<DAppsHubProps>(function DAppsHub({ onNavigateToDapp }) {
           <FlashList
             data={categoryPillsData}
             renderItem={renderCategoryPill}
-            keyExtractor={categoryKeyExtractor}
+            keyExtractor={pillKeyExtractor}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 5 }}
-            ItemSeparatorComponent={CategorySeparator}
+            ItemSeparatorComponent={PillSeparator}
           />
         </View>
       </View>
 
-      {selectedCategoryId === "all" ? (
-        <SectionList
-          sections={categorySections}
-          renderSectionHeader={renderSectionHeader}
-          renderItem={renderSectionItem}
-          keyExtractor={sectionKeyExtractor}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={false}
-          stickySectionHeadersEnabled={false}
+      {categoriesError ? (
+        <DappsErrorMessage
+          onRetry={refetchCategories}
+          message="Can't load categories right now"
         />
+      ) : categoriesLoading ? (
+        CATEGORY_SKELETONS.map((i) => (
+          <View key={i} className="mb-6">
+            <View className="px-4 mb-4">
+              <DAppCardSkeleton />
+            </View>
+            <View className="flex-row px-4">
+              <View style={{ marginRight: 14 }}>
+                <DAppCardSkeleton variant="compact" />
+              </View>
+              <DAppCardSkeleton variant="compact" />
+            </View>
+          </View>
+        ))
+      ) : selectedCategoryId === "all" ? (
+        activeCategories.map((category) => (
+          <CategorySectionContainer
+            key={category.id}
+            category={category}
+            onNavigateToDapp={onNavigateToDapp}
+            isFavorite={isFavorite}
+            onToggleFavorite={handleToggleFavorite}
+          />
+        ))
       ) : (
         <View className="px-4 mb-6">
           <View className="mb-4">
             <Text className="text-light-matte-black font-bold text-lg mb-1">
-              {filteredCategories[0]?.title}
+              {selectedCategory?.name ?? ""}
             </Text>
             <Text className="text-light-matte-black/50 text-xs">
-              {filteredCategories[0]?.description}
+              {selectedCategory?.description ?? ""}
             </Text>
           </View>
-          <View style={{ minHeight: 400 }}>
-            <FlashList
-              data={selectedCategoryDapps}
-              renderItem={renderGridDApp}
-              keyExtractor={favoritesKeyExtractor}
-              numColumns={2}
-              showsHorizontalScrollIndicator={false}
-              showsVerticalScrollIndicator={false}
-            />
-          </View>
+          {selectedLoading ? (
+            <View className="flex-row flex-wrap">
+              {[0, 1, 2, 3].map((i) => (
+                <View key={i} className="w-1/2">
+                  <DAppCardSkeleton variant="grid" />
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={{ minHeight: 400 }}>
+              <FlashList
+                data={selectedDapps ?? []}
+                renderItem={renderGridDApp}
+                keyExtractor={(item: TDapp) => item.id}
+                numColumns={2}
+                showsVerticalScrollIndicator={false}
+              />
+            </View>
+          )}
         </View>
       )}
       <View className="h-4" />

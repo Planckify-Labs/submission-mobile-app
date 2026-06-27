@@ -1,6 +1,7 @@
 import { FlashList } from "@shopify/flash-list";
 import React, { memo, useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
+import type { TDapp } from "@/api/types/dapp";
 import { usePopularDapps } from "@/hooks/queries/useDapps";
 import { POPULAR_CARD_WIDTH } from "../../constants/dapps-browser";
 import { TDAppNavigationProps } from "../../types/dapps-browser";
@@ -9,8 +10,15 @@ import DAppCard from "./DAppCard";
 import DAppCardSkeleton from "./DAppCardSkeleton";
 import DappsErrorMessage from "./DappsErrorMessage";
 
-const PopularDApps = memo<TDAppNavigationProps>(function PopularDApps({
+type PopularDAppsProps = TDAppNavigationProps & {
+  isFavorite?: (dappId: string) => boolean;
+  onToggleFavorite?: (dapp: TDapp) => void;
+};
+
+const PopularDApps = memo<PopularDAppsProps>(function PopularDApps({
   onNavigateToDapp,
+  isFavorite,
+  onToggleFavorite,
 }) {
   const { data: popularDapps, error, refetch } = usePopularDapps();
 
@@ -31,11 +39,16 @@ const PopularDApps = memo<TDAppNavigationProps>(function PopularDApps({
 
       return (
         <View style={{ width: POPULAR_CARD_WIDTH }}>
-          <DAppCard dapp={item} onPress={onNavigateToDapp} />
+          <DAppCard
+            dapp={item}
+            onPress={onNavigateToDapp}
+            isFavorite={isFavorite?.(item.id)}
+            onToggleFavorite={onToggleFavorite}
+          />
         </View>
       );
     },
-    [onNavigateToDapp],
+    [onNavigateToDapp, isFavorite, onToggleFavorite],
   );
 
   const keyExtractor = useCallback((item: any) => item.id, []);

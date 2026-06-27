@@ -30,6 +30,13 @@ export const useSponsoredDapps = () => {
   });
 };
 
+export const usePromotions = () => {
+  return useQuery({
+    queryKey: ["dapp-promotions"],
+    queryFn: dappApi.getPromotions,
+  });
+};
+
 export const useFavoriteDapps = () => {
   return useQuery({
     queryKey: ["dapps", "favorites"],

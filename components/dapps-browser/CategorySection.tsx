@@ -1,33 +1,39 @@
 import { FlashList } from "@shopify/flash-list";
-import { ChevronRight } from "lucide-react-native";
+import { Image } from "expo-image";
+import { ChevronRight, LayoutGrid } from "lucide-react-native";
 import React, { memo, useCallback } from "react";
 import { Pressable, Text, View } from "react-native";
-import type { TDApp, TDAppCategory } from "@/constants/dummyData/ecosystemList";
+import type { TDapp, TDappCategory } from "@/api/types/dapp";
 import DAppCard from "./DAppCard";
+import DAppCardSkeleton from "./DAppCardSkeleton";
 
 type CategorySectionProps = {
-  category: TDAppCategory;
+  category: TDappCategory;
+  dapps: TDapp[];
+  isLoading?: boolean;
   onNavigateToDapp: (url: string) => void;
   onViewAll?: (categoryId: string) => void;
   isFavorite?: (dappId: string) => boolean;
-  onToggleFavorite?: (dapp: TDApp) => void;
+  onToggleFavorite?: (dapp: TDapp) => void;
 };
+
+const SKELETONS = [0, 1, 2];
 
 const CategorySection = memo<CategorySectionProps>(function CategorySection({
   category,
+  dapps,
+  isLoading = false,
   onNavigateToDapp,
   onViewAll,
   isFavorite,
   onToggleFavorite,
 }) {
-  const handleViewAll = () => {
-    if (onViewAll) {
-      onViewAll(category.id);
-    }
-  };
+  const handleViewAll = useCallback(() => {
+    onViewAll?.(category.id);
+  }, [onViewAll, category.id]);
 
   const renderDAppItem = useCallback(
-    ({ item }: { item: TDApp }) => (
+    ({ item }: { item: TDapp }) => (
       <DAppCard
         dapp={item}
         onPress={onNavigateToDapp}
@@ -39,13 +45,14 @@ const CategorySection = memo<CategorySectionProps>(function CategorySection({
     [onNavigateToDapp, isFavorite, onToggleFavorite],
   );
 
-  const keyExtractor = useCallback((item: TDApp) => item.id, []);
-
+  const keyExtractor = useCallback((item: TDapp) => item.id, []);
   const ItemSeparator = useCallback(() => <View style={{ width: 14 }} />, []);
+
+  // Don't render an empty header once a category has loaded with no dapps.
+  if (!isLoading && dapps.length === 0) return null;
 
   return (
     <View className="mb-6">
-      {/* Modern Header with Gradient Background */}
       <View className="px-4 mb-4">
         <View
           className="p-4 rounded-2xl flex-row items-center justify-between"
@@ -60,21 +67,30 @@ const CategorySection = memo<CategorySectionProps>(function CategorySection({
         >
           <View className="flex-1 flex-row items-center">
             <View
-              className="w-10 h-10 rounded-xl items-center justify-center mr-3"
+              className="w-10 h-10 rounded-xl items-center justify-center mr-3 overflow-hidden"
               style={{ backgroundColor: "#c71c4b15" }}
             >
-              {category.icon(false)}
+              {category.iconUrl ? (
+                <Image
+                  source={{ uri: category.iconUrl }}
+                  style={{ width: 22, height: 22 }}
+                  contentFit="contain"
+                  transition={200}
+                />
+              ) : (
+                <LayoutGrid size={20} color="#c71c4b" />
+              )}
             </View>
             <View className="flex-1">
               <Text className="text-light-matte-black font-bold text-base mb-0.5">
-                {category.title}
+                {category.name ?? ""}
               </Text>
               <Text className="text-light-matte-black/50 text-xs">
-                {category.description}
+                {category.description ?? ""}
               </Text>
             </View>
           </View>
-          {onViewAll && category.dapps.length > 3 && (
+          {onViewAll && dapps.length > 3 && (
             <Pressable
               onPress={handleViewAll}
               className="ml-3 flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
@@ -89,20 +105,26 @@ const CategorySection = memo<CategorySectionProps>(function CategorySection({
         </View>
       </View>
 
-      {/* DApps Horizontal FlashList */}
       <View style={{ minHeight: 180 }}>
-        <FlashList
-          data={category.dapps}
-          renderItem={renderDAppItem}
-          keyExtractor={keyExtractor}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            paddingBottom: 10,
-          }}
-          ItemSeparatorComponent={ItemSeparator}
-        />
+        {isLoading ? (
+          <View className="flex-row px-4">
+            {SKELETONS.map((i) => (
+              <View key={i} style={{ marginRight: 14 }}>
+                <DAppCardSkeleton variant="compact" />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <FlashList
+            data={dapps}
+            renderItem={renderDAppItem}
+            keyExtractor={keyExtractor}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 10 }}
+            ItemSeparatorComponent={ItemSeparator}
+          />
+        )}
       </View>
     </View>
   );

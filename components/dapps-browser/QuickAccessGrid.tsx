@@ -1,26 +1,32 @@
 import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import { Star } from "lucide-react-native";
-import React, { memo, useCallback } from "react";
+import React, { memo, useCallback, useMemo } from "react";
 import { Pressable, Text, TouchableOpacity, View } from "react-native";
-import type { TDApp } from "@/constants/dummyData/ecosystemList";
+import type { TDapp } from "@/api/types/dapp";
+import { resolveAppearance } from "@/utils/dappAppearance";
 
 type QuickAccessGridProps = {
-  dapps: TDApp[];
+  dapps: TDapp[];
   onNavigateToDapp: (url: string) => void;
   isFavorite?: (dappId: string) => boolean;
-  onToggleFavorite?: (dapp: TDApp) => void;
+  onToggleFavorite?: (dapp: TDapp) => void;
 };
 
 const DAppItem = memo<{
-  dapp: TDApp;
+  dapp: TDapp;
   onPress: (url: string) => void;
   isFavorite?: (dappId: string) => boolean;
-  onToggleFavorite?: (dapp: TDApp) => void;
+  onToggleFavorite?: (dapp: TDapp) => void;
 }>(function DAppItem({ dapp, onPress, isFavorite, onToggleFavorite }) {
+  const appearance = useMemo(
+    () => resolveAppearance(dapp.appearance),
+    [dapp.appearance],
+  );
+
   const handlePress = useCallback(() => {
-    onPress(dapp.url);
-  }, [dapp.url, onPress]);
+    onPress(dapp.websiteUrl);
+  }, [dapp.websiteUrl, onPress]);
 
   const handleToggleFavorite = useCallback(
     (e: any) => {
@@ -45,7 +51,7 @@ const DAppItem = memo<{
       <View className="flex-row items-center">
         <View
           className="w-11 h-11 rounded-xl items-center justify-center mr-2.5 overflow-hidden"
-          style={{ backgroundColor: "#c71c4b08" }}
+          style={{ backgroundColor: appearance.logoBackground }}
         >
           <Image
             source={{ uri: dapp.logoUrl }}
@@ -59,13 +65,13 @@ const DAppItem = memo<{
             className="text-light-matte-black font-bold text-xs mb-0.5"
             numberOfLines={1}
           >
-            {dapp.name}
+            {dapp.name ?? ""}
           </Text>
           <Text
             className="text-light-matte-black/50 text-[10px]"
             numberOfLines={1}
           >
-            {dapp.description}
+            {dapp.description ?? ""}
           </Text>
         </View>
         {isFavorite && onToggleFavorite && (
@@ -96,7 +102,7 @@ const QuickAccessGrid = memo<QuickAccessGridProps>(function QuickAccessGrid({
   const displayedDapps = dapps.slice(0, 6);
 
   const renderDAppItem = useCallback(
-    ({ item: dapp }: { item: TDApp }) => (
+    ({ item: dapp }: { item: TDapp }) => (
       <DAppItem
         dapp={dapp}
         onPress={onNavigateToDapp}
@@ -107,7 +113,7 @@ const QuickAccessGrid = memo<QuickAccessGridProps>(function QuickAccessGrid({
     [onNavigateToDapp, isFavorite, onToggleFavorite],
   );
 
-  const keyExtractor = useCallback((dapp: TDApp) => dapp.id, []);
+  const keyExtractor = useCallback((dapp: TDapp) => dapp.id, []);
 
   return (
     <View className="px-4 mb-6">

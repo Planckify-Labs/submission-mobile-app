@@ -1,15 +1,16 @@
 import { Image } from "expo-image";
 import { Star } from "lucide-react-native";
-import React, { memo } from "react";
+import React, { memo, useMemo } from "react";
 import { Pressable, Text, TouchableOpacity, View } from "react-native";
-import type { TDApp } from "@/constants/dummyData/ecosystemList";
+import type { TDapp } from "@/api/types/dapp";
+import { resolveAppearance } from "@/utils/dappAppearance";
 
 type DAppCardProps = {
-  dapp: TDApp;
+  dapp: TDapp;
   onPress: (url: string) => void;
   variant?: "default" | "compact" | "grid";
   isFavorite?: boolean;
-  onToggleFavorite?: (dapp: TDApp) => void;
+  onToggleFavorite?: (dapp: TDapp) => void;
   showFavoriteButton?: boolean;
 };
 
@@ -21,8 +22,13 @@ const DAppCard = memo<DAppCardProps>(function DAppCard({
   onToggleFavorite,
   showFavoriteButton = true,
 }) {
+  const appearance = useMemo(
+    () => resolveAppearance(dapp.appearance),
+    [dapp.appearance],
+  );
+
   const handlePress = () => {
-    onPress(dapp.url);
+    onPress(dapp.websiteUrl);
   };
 
   const handleToggleFavorite = (e: any) => {
@@ -68,7 +74,7 @@ const DAppCard = memo<DAppCardProps>(function DAppCard({
           )}
           <View
             className="w-14 h-14 rounded-2xl items-center justify-center mb-3 overflow-hidden"
-            style={{ backgroundColor: "#c71c4b08" }}
+            style={{ backgroundColor: appearance.logoBackground }}
           >
             <Image
               source={{ uri: dapp.logoUrl }}
@@ -81,13 +87,13 @@ const DAppCard = memo<DAppCardProps>(function DAppCard({
             className="text-light-matte-black font-bold text-sm text-center mb-1"
             numberOfLines={1}
           >
-            {dapp.name}
+            {dapp.name ?? ""}
           </Text>
           <Text
             className="text-light-matte-black/50 text-[11px] text-center leading-4"
             numberOfLines={2}
           >
-            {dapp.description}
+            {dapp.description ?? ""}
           </Text>
         </View>
       </Pressable>
@@ -110,7 +116,7 @@ const DAppCard = memo<DAppCardProps>(function DAppCard({
         <View className="flex-row items-center">
           <View
             className="w-11 h-11 rounded-xl items-center justify-center mr-2.5 overflow-hidden"
-            style={{ backgroundColor: "#c71c4b08" }}
+            style={{ backgroundColor: appearance.logoBackground }}
           >
             <Image
               source={{ uri: dapp.logoUrl }}
@@ -124,13 +130,13 @@ const DAppCard = memo<DAppCardProps>(function DAppCard({
               className="text-light-matte-black font-bold text-xs mb-0.5"
               numberOfLines={1}
             >
-              {dapp.name}
+              {dapp.name ?? ""}
             </Text>
             <Text
               className="text-light-matte-black/50 text-[10px]"
               numberOfLines={1}
             >
-              {dapp.description}
+              {dapp.description ?? ""}
             </Text>
           </View>
           {showFavoriteButton && onToggleFavorite && (
@@ -166,7 +172,7 @@ const DAppCard = memo<DAppCardProps>(function DAppCard({
     >
       <View
         className="w-14 h-14 rounded-2xl items-center justify-center mr-4 overflow-hidden"
-        style={{ backgroundColor: "#c71c4b08" }}
+        style={{ backgroundColor: appearance.logoBackground }}
       >
         <Image
           source={{ uri: dapp.logoUrl }}
@@ -176,11 +182,14 @@ const DAppCard = memo<DAppCardProps>(function DAppCard({
         />
       </View>
       <View className="flex-1">
-        <Text className="text-light-matte-black font-bold text-base mb-1">
-          {dapp.name}
+        <Text
+          className="text-light-matte-black font-bold text-base mb-1"
+          numberOfLines={1}
+        >
+          {dapp.name ?? ""}
         </Text>
         <Text className="text-light-matte-black/50 text-sm" numberOfLines={2}>
-          {dapp.description}
+          {dapp.description ?? ""}
         </Text>
       </View>
       {showFavoriteButton && onToggleFavorite && (
