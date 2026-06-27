@@ -1,9 +1,25 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { AlertTriangle, MoveRight, ShoppingBag } from "lucide-react-native";
+import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  MoveRight,
+  ShoppingBag,
+} from "lucide-react-native";
 import type React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import {
+  productApi,
+  type TProductSearchParams,
+} from "@/api/endpoints/products";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
+import {
+  formatPoints,
+  toCatalogDisplayProducts,
+} from "@/services/catalog/catalogDisplay";
 import type { ToolComponentProps } from "../types";
 
 type CatalogProduct = {
@@ -18,14 +34,6 @@ type CatalogProduct = {
   input_type?: string | null;
 };
 
-/** Format a raw points string ("2300") as "2,300 pts"; null-safe. */
-function formatPoints(raw?: string | null): string | null {
-  if (raw === undefined || raw === null || raw === "") return null;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return null;
-  return `${n.toLocaleString("en-US")} pts`;
-}
-
 type CatalogGroup = {
   category: { id: string; name: string };
   products: CatalogProduct[];
@@ -36,10 +44,28 @@ type CatalogInput = {
   name?: string;
   category?: string;
   category_id?: string;
+  is_voucher?: boolean;
   min_points?: number;
   max_points?: number;
   take?: number;
 };
+
+/**
+ * Translate the agent's snake_case tool input into the camelCase search
+ * params, so the card can re-fetch later pages with the exact same filters
+ * the agent used for page 0.
+ */
+function inputToSearchParams(input: CatalogInput): TProductSearchParams {
+  return {
+    query: input.query,
+    name: input.name,
+    categoryName: input.category,
+    categoryId: input.category_id,
+    isVoucher: input.is_voucher,
+    minPoints: input.min_points,
+    maxPoints: input.max_points,
+  };
+}
 
 type CatalogPayload = {
   products?: CatalogProduct[];
@@ -203,6 +229,38 @@ function CategoryCard({
   );
 }
 
+function PagerButton({
+  direction,
+  disabled,
+  onPress,
+}: {
+  direction: "prev" | "next";
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const isPrev = direction === "prev";
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      disabled={disabled}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={isPrev ? "Previous page" : "Next page"}
+      className={`flex-row items-center gap-1 rounded-full border-2 px-3 py-1 ${
+        disabled
+          ? "border-light-matte-black/15 opacity-40"
+          : "border-light-primary-red bg-light-primary-red/10"
+      }`}
+    >
+      {isPrev ? <ChevronLeft size={16} color={BRAND_RED} /> : null}
+      <Text className="text-light-matte-black text-xs font-bold">
+        {isPrev ? "Prev" : "Next"}
+      </Text>
+      {isPrev ? null : <ChevronRight size={16} color={BRAND_RED} />}
+    </TouchableOpacity>
+  );
+}
+
 /**
  * Group a flat search result list by its inline category so multi-category
  * matches (e.g. a query that hits both "Gaming" and "Vouchers") render as
@@ -255,6 +313,31 @@ const RedemptionCatalogCard: React.FC<
     ? `Matches for "${searchTerm}"`
     : (pointsLabel ?? "Redemption catalog");
 
+  // ── Client-side paging ───────────────────────────────────────────────
+  // Page 0 is the agent's tool result; Prev/Next fetch later pages here
+  // with the SAME filters, so the user browses without spending an agent
+  // turn. Hooks must run before the early returns below (rules of hooks).
+  const outputPayload = output?.display ?? output?.data ?? {};
+  const outputFlat = Array.isArray(outputPayload.products)
+    ? outputPayload.products
+    : null;
+  const pageSize = outputFlat?.length ?? 0;
+  const apiParams = inputToSearchParams(input);
+  const [page, setPage] = useState(0);
+  const pageQuery = useQuery({
+    queryKey: ["redemption-catalog-page", apiParams, pageSize, page],
+    queryFn: () =>
+      productApi.searchProducts({
+        ...apiParams,
+        take: pageSize,
+        skip: page * pageSize,
+      }),
+    // Page 0 already came from the tool result; only fetch beyond it.
+    enabled: page > 0 && pageSize > 0,
+    staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
+  });
+
   if (state === "input-streaming" || state === "input-available" || !output) {
     return (
       <View className="my-1.5-">
@@ -299,14 +382,28 @@ const RedemptionCatalogCard: React.FC<
     );
   }
 
-  const payload = output.display ?? output.data ?? {};
-  const groups = Array.isArray(payload.groups) ? payload.groups : null;
-  const flat = Array.isArray(payload.products) ? payload.products : null;
+  const groups = Array.isArray(outputPayload.groups)
+    ? outputPayload.groups
+    : null;
+  // Page 0 → the agent's tool result; later pages → freshly fetched and
+  // shaped with the same mapper the executor uses, so they look identical.
+  const flat: CatalogProduct[] | null =
+    page === 0
+      ? outputFlat
+      : pageQuery.data
+        ? toCatalogDisplayProducts(pageQuery.data)
+        : outputFlat;
   const totalCount =
     (groups?.reduce((sum, g) => sum + (g.products?.length ?? 0), 0) ?? 0) +
     (flat?.length ?? 0);
+  const canPrev = page > 0;
+  // A full page implies there may be more; a short page is the end.
+  const canNext = pageSize > 0 && (flat?.length ?? 0) >= pageSize;
+  const showPager = pageSize > 0 && (canPrev || canNext);
 
-  if (totalCount === 0) {
+  // Only an empty page 0 means "nothing found". An empty later page just
+  // ran past the end — keep the layout so Prev stays reachable.
+  if (totalCount === 0 && page === 0) {
     return (
       <View className="my-1.5 rounded-2xl border border-light-matte-black/10 bg-white px-3.5 py-3">
         <View className="flex-row items-center gap-2">
@@ -381,6 +478,27 @@ const RedemptionCatalogCard: React.FC<
             );
           })()
         )
+      ) : null}
+
+      {showPager ? (
+        <View className="flex-row items-center justify-between mt-1 px-1">
+          <PagerButton
+            direction="prev"
+            disabled={!canPrev || pageQuery.isFetching}
+            onPress={() => setPage((p) => Math.max(0, p - 1))}
+          />
+          <View className="flex-row items-center gap-2">
+            {pageQuery.isFetching ? (
+              <ActivityIndicator size="small" color={BRAND_RED} />
+            ) : null}
+            <Text className="text-[11px] text-gray-500">Page {page + 1}</Text>
+          </View>
+          <PagerButton
+            direction="next"
+            disabled={!canNext || pageQuery.isFetching}
+            onPress={() => setPage((p) => p + 1)}
+          />
+        </View>
       ) : null}
     </View>
   );

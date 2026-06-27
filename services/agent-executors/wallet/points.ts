@@ -50,8 +50,9 @@ import { pointsApi } from "@/api/endpoints/points";
 import { productApi } from "@/api/endpoints/products";
 import { redeemApi } from "@/api/endpoints/redeem";
 import { smartContractApi } from "@/api/endpoints/smart-contracts";
-import type { TProductInputField, TProductVariant } from "@/api/types/product";
+import type { TProductInputField } from "@/api/types/product";
 import AbiTakumiPointDeposit from "@/contracts/abis/AbiTakumiPointDeposit";
+import { toCatalogDisplayProducts } from "@/services/catalog/catalogDisplay";
 import { requireWalletClient, resolveChainClients } from "../chainRouter";
 import { checkPointsAuth } from "../pointsAuth";
 import {
@@ -193,27 +194,6 @@ function optionalNonNegativeNumber(
 }
 
 /**
- * Lowest active points cost across a product's variants — the "from X
- * points" figure shown next to a search result. Returns null when the
- * search payload carried no variant prices.
- */
-function startingPoints(
-  variants: TProductVariant[] | undefined,
-): string | null {
-  if (!variants?.length) return null;
-  let min: number | null = null;
-  for (const v of variants) {
-    if (v.isActive === false) continue;
-    for (const p of v.ProductPrice ?? []) {
-      if (p.isActive === false) continue;
-      const n = Number(p.sellPrice);
-      if (Number.isFinite(n) && (min === null || n < min)) min = n;
-    }
-  }
-  return min === null ? null : String(min);
-}
-
-/**
  * Catalog / search pagination guardrail.
  *
  * The LLM can hallucinate a huge `take` (e.g. "show me what I can
@@ -221,9 +201,11 @@ function startingPoints(
  * backend's request validator and surfaces as a generic 4xx that
  * `classifyPointsError` can only label `unknown_error`. Clamp here so
  * the LLM never reaches the backend with a value the catalog can't
- * serve. 50 mirrors the backend's max page size.
+ * serve. This MUST match the backend's `SEARCH_MAX_TAKE` (products
+ * service) — the backend is the real authority, this is just a fast
+ * fail-safe so the agent never sends an absurd page size.
  */
-const MAX_CATALOG_TAKE = 50;
+const MAX_CATALOG_TAKE = 24;
 
 function clampTake(value: number | undefined): number | undefined {
   if (value === undefined) return undefined;
@@ -313,21 +295,9 @@ export const searchRedemptionCatalog: MobileToolExecutor = (input, _context) =>
     return runApi(
       () => productApi.searchProducts(params),
       (raw) => {
-        const displayProducts = raw.map((p) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          image_url: p.imageUrl ?? null,
-          code: p.code,
-          category_id: p.categoryId,
-          category: p.category
-            ? { id: p.category.id, name: p.category.name }
-            : null,
-          // Lowest active points cost, so the card can show "from X pts"
-          // and the agent can confirm results match the requested range.
-          starting_points: startingPoints(p.variants),
-          input_type: p.inputType ?? null,
-        }));
+        // Same mapper the card uses for its own paged fetches, so page 0
+        // (here) and later pages render identically.
+        const displayProducts = toCatalogDisplayProducts(raw);
         return {
           data: {
             product_count: displayProducts.length,

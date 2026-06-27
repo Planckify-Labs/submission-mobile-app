@@ -3,6 +3,7 @@ import IntentPreviewCard from "./cards/IntentPreviewCard";
 import OpportunityListCard from "./cards/OpportunityListCard";
 import PendingTxCard from "./cards/PendingTxCard";
 import PositionListCard from "./cards/PositionListCard";
+import ProductDetailCard from "./cards/ProductDetailCard";
 import RebalancePreviewCard from "./cards/RebalancePreviewCard";
 import RedemptionCatalogCard from "./cards/RedemptionCatalogCard";
 import SolanaPendingTxCard from "./cards/SolanaPendingTxCard";
@@ -58,6 +59,7 @@ export const toolComponents: Record<string, ToolComponent<any, any>> = {
   get_wallet_sui_balance: BalancesCard,
   get_redemption_catalog: RedemptionCatalogCard,
   search_redemption_catalog: RedemptionCatalogCard,
+  get_product_details: ProductDetailCard,
   send_sol: SolanaPendingTxCard,
   send_spl_token: SolanaPendingTxCard,
   send_sui: SuiPendingTxCard,

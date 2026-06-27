@@ -30,6 +30,8 @@ export interface TProductSearchParams {
   maxPoints?: number;
   take?: number;
   cursor?: string;
+  /** Offset pagination (used by the catalog card's Prev/Next). */
+  skip?: number;
 }
 
 /**
