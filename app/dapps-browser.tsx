@@ -80,7 +80,6 @@ import BrowserNavigationControls from "@/components/dapps-browser/BrowserNavigat
 import ConnectionManagerSheet from "@/components/dapps-browser/connections/ConnectionManagerSheet";
 import DAppsHub from "@/components/dapps-browser/DAppsHub";
 import { useDappConnections } from "@/hooks/useDappConnections";
-import { useNavigationReady } from "@/hooks/useNavigationReady";
 import { useWallet } from "@/hooks/useWallet";
 import { ApprovalHost } from "@/services/bridge/ApprovalHost";
 import { bootBridge } from "@/services/bridge/boot";
@@ -98,7 +97,6 @@ interface TBrowserState {
 }
 
 export default function DappsBrowser() {
-  const ready = useNavigationReady();
   const { activeWallet, wallets, activeChain, changeActiveChain } = useWallet();
   const webViewRef = useRef<WebView>(null);
   const addressBarRef = useRef<TextInput>(null);
@@ -344,14 +342,6 @@ export default function DappsBrowser() {
     origin: currentOrigin,
     wallets,
   });
-
-  if (!ready) {
-    return (
-      <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f5f6f9" />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>

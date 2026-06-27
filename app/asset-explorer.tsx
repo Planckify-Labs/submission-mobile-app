@@ -29,7 +29,6 @@ import {
   useAssetSearchQuery,
 } from "@/hooks/useAssetExplorerState";
 import { useAssetSelection } from "@/hooks/useAssetSelection";
-import { useNavigationReady } from "@/hooks/useNavigationReady";
 import { useUserAssetsWithBalances } from "@/hooks/useUserAssetsWithBalances";
 import { useWallet } from "@/hooks/useWallet";
 import { resolveNamespace } from "@/hooks/useWallet.helpers";
@@ -41,7 +40,6 @@ import {
 import { ALL_NETWORKS } from "@/utils/networkUtils";
 
 export default function AssetExplorer() {
-  const ready = useNavigationReady();
   const [_showAddToken, setShowAddToken] = useState(false);
   const [tokenAddress, setTokenAddress] = useState("");
   const [_isLoading, setIsLoading] = useState(false);
@@ -219,18 +217,6 @@ export default function AssetExplorer() {
     },
     [selectionMode, handleToggleAssetSelection, openWalletSelector],
   );
-
-  if (!ready) {
-    return (
-      <>
-        <StatusBar barStyle="dark-content" />
-        <SafeAreaView
-          className="flex-1 bg-light-main-container"
-          edges={["top"]}
-        />
-      </>
-    );
-  }
 
   return (
     <>

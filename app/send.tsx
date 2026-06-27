@@ -44,7 +44,6 @@ import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useTokens } from "@/hooks/queries/useTokens";
 import { useCreateTransaction } from "@/hooks/queries/useTransactions";
 import { useAddressBook } from "@/hooks/useAddressBook";
-import { useNavigationReady } from "@/hooks/useNavigationReady";
 import { usePreferredGasToken } from "@/hooks/usePreferredGasToken";
 import { useWallet } from "@/hooks/useWallet";
 import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
@@ -93,8 +92,6 @@ function formatTokenAtoms(raw: bigint, decimals: number): string {
 }
 
 export default function SendScreen() {
-  const ready = useNavigationReady();
-
   const {
     wallets,
     activeWallet,
@@ -717,18 +714,6 @@ export default function SendScreen() {
     setActiveWallet(index);
     setWalletModalVisible(false);
   };
-
-  if (!ready) {
-    return (
-      <>
-        <StatusBar barStyle="dark-content" />
-        <SafeAreaView
-          className="flex-1 bg-light-main-container"
-          edges={["top"]}
-        />
-      </>
-    );
-  }
 
   // Transient-state guard: during a wallet ↔ chain switch there's a
   // render where `activeWallet.namespace !== activeChain.namespace`.
