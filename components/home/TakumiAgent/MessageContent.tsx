@@ -203,8 +203,14 @@ const MessageContent: React.FC<MessageContentProps> = React.memo(
               mode === "live" && addToolResult
                 ? (output: unknown) => addToolResult(part.toolCallId, output)
                 : undefined;
-            const livePromptCallback =
-              mode === "live" ? onUserPrompt : undefined;
+            // `onUserPrompt` only appends a user message, which is safe
+            // from any card — including a historical one (e.g. depositing
+            // from an earlier OpportunityListCard after the turn settled).
+            // Unlike addToolResult/onRequestApproval (write/approval gates
+            // kept live-only above), it never acts on stale state.
+            // IntentPreviewCard independently guards on `mode !==
+            // "historical"`, so it stays inert when frozen.
+            const livePromptCallback = onUserPrompt;
             const liveRequestApproval =
               mode === "live" && onRequestApproval
                 ? () => onRequestApproval(part.toolCallId)

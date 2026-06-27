@@ -1,12 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
-import {
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  MoveRight,
-  ShoppingBag,
-} from "lucide-react-native";
+import { AlertTriangle, MoveRight, ShoppingBag } from "lucide-react-native";
 import type React from "react";
 import { useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
@@ -21,6 +15,7 @@ import {
   toCatalogDisplayProducts,
 } from "@/services/catalog/catalogDisplay";
 import type { ToolComponentProps } from "../types";
+import PagerButton from "./PagerButton";
 
 type CatalogProduct = {
   id: string;
@@ -226,38 +221,6 @@ function CategoryCard({
       </View>
       <ProductGrid products={products} />
     </View>
-  );
-}
-
-function PagerButton({
-  direction,
-  disabled,
-  onPress,
-}: {
-  direction: "prev" | "next";
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  const isPrev = direction === "prev";
-  return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      disabled={disabled}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={isPrev ? "Previous page" : "Next page"}
-      className={`flex-row items-center gap-1 rounded-full border-2 px-3 py-1 ${
-        disabled
-          ? "border-light-matte-black/15 opacity-40"
-          : "border-light-primary-red bg-light-primary-red/10"
-      }`}
-    >
-      {isPrev ? <ChevronLeft size={16} color={BRAND_RED} /> : null}
-      <Text className="text-light-matte-black text-xs font-bold">
-        {isPrev ? "Prev" : "Next"}
-      </Text>
-      {isPrev ? null : <ChevronRight size={16} color={BRAND_RED} />}
-    </TouchableOpacity>
   );
 }
 
