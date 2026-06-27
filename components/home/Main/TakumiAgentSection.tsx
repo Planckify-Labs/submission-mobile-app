@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ArrowUp,
   Clock,
+  Coins,
   Gift,
   HelpCircle,
   LineChart,
@@ -160,10 +161,10 @@ const QUICK_PROMPTS: {
   icon: LucideIcon;
 }[] = [
   {
-    id: "balance",
-    label: "Balance",
-    prompt: "What's my balance?",
-    icon: Wallet,
+    id: "points",
+    label: "Points",
+    prompt: "How to use my points?",
+    icon: Coins,
   },
   {
     id: "prices",
