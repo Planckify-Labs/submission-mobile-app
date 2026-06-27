@@ -64,7 +64,7 @@ function ScanToPayLiquidButton() {
             style={sheenStyle}
           />
           <QrCode size={22} color="#fff" />
-          <Text className="text-light font-bold text-md">Scan To Pay</Text>
+          <Text className="text-light font-bold text-md">Scan QR</Text>
         </View>
       </BlurView>
     </AnimatedPressable>
