@@ -3,6 +3,7 @@ import React, { memo } from "react";
 import { Controller } from "react-hook-form";
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
 import OptimizedImage from "@/components/common/OptimizedImage";
+import { ContactPickerModal } from "@/components/pulsa-data/ContactPickerModal";
 import { formatPhoneNumber } from "@/constants/ISP-list";
 import { usePhoneNumber, usePhoneNumberForm } from "@/hooks/pulsa-data";
 import { useContactPicker } from "@/hooks/pulsa-data/useContactPicker";
@@ -13,7 +14,14 @@ export const PhoneNumberInput = memo(function PhoneNumberInput() {
   const { productDetail, showMinLengthError } = usePhoneNumber();
   const { control, setPhoneFromContact } = usePhoneNumberForm();
 
-  const { pickContact } = useContactPicker({
+  const {
+    pickContact,
+    closePicker,
+    handleSelect,
+    visible,
+    isLoading,
+    contacts,
+  } = useContactPicker({
     onPhoneSelected: setPhoneFromContact,
   });
 
@@ -65,6 +73,14 @@ export const PhoneNumberInput = memo(function PhoneNumberInput() {
           Phone number must be at least 11 digits
         </Text>
       )}
+
+      <ContactPickerModal
+        visible={visible}
+        contacts={contacts}
+        isLoading={isLoading}
+        onClose={closePicker}
+        onSelect={handleSelect}
+      />
     </View>
   );
 });

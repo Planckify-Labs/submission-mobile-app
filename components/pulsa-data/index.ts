@@ -1,3 +1,4 @@
+export { ContactPickerModal } from "./ContactPickerModal";
 export { PackageVariantItem } from "./PackageVariantItem";
 export { PackageVariantList } from "./PackageVariantList";
 export { PhoneNumberInput } from "./PhoneNumberInput";

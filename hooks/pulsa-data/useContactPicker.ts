@@ -1,60 +1,94 @@
 import * as Contacts from "expo-contacts";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Alert } from "react-native";
 
-const MAX_CONTACTS_TO_SHOW = 5;
+export interface PhoneContactEntry {
+  id: string;
+  name: string;
+  number: string;
+  label?: string;
+}
 
 interface UseContactPickerOptions {
   onPhoneSelected: (phone: string) => void;
 }
 
 export function useContactPicker({ onPhoneSelected }: UseContactPickerOptions) {
+  const [visible, setVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [contacts, setContacts] = useState<PhoneContactEntry[]>([]);
+
+  const closePicker = useCallback(() => setVisible(false), []);
+
+  const handleSelect = useCallback(
+    (entry: PhoneContactEntry) => {
+      onPhoneSelected(entry.number);
+      setVisible(false);
+    },
+    [onPhoneSelected],
+  );
+
   const pickContact = useCallback(async () => {
     try {
       const { status } = await Contacts.requestPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
-          "Permission Required",
-          "Please grant contacts permission to select a phone number.",
+          "Permission needed",
+          "Allow contacts access to pick a phone number.",
         );
         return;
       }
+
+      // Open the sheet immediately with a loading state so it feels responsive
+      // while we read what can be a large contact book.
+      setContacts([]);
+      setIsLoading(true);
+      setVisible(true);
 
       const { data } = await Contacts.getContactsAsync({
         fields: [Contacts.Fields.PhoneNumbers],
       });
 
-      if (data.length === 0) {
-        Alert.alert("No Contacts", "No contacts found.");
-        return;
+      // Flatten to one entry per phone number (a contact can have several) and
+      // de-duplicate by normalized digits so the list stays clean.
+      const entries: PhoneContactEntry[] = [];
+      const seen = new Set<string>();
+      for (const contact of data) {
+        if (!contact.phoneNumbers?.length) continue;
+        for (const phone of contact.phoneNumbers) {
+          const number = phone.number?.trim();
+          if (!number) continue;
+          const dedupeKey = number.replace(/\D/g, "");
+          if (!dedupeKey || seen.has(dedupeKey)) continue;
+          seen.add(dedupeKey);
+          entries.push({
+            id: `${contact.id ?? dedupeKey}-${phone.id ?? dedupeKey}`,
+            name: contact.name?.trim() || number,
+            number,
+            label: phone.label,
+          });
+        }
       }
 
-      const contactsWithPhone = data.filter(
-        (contact) => contact.phoneNumbers && contact.phoneNumbers.length > 0,
-      );
-
-      if (contactsWithPhone.length === 0) {
-        Alert.alert("No Contacts", "No contacts with phone numbers found.");
-        return;
-      }
-
-      Alert.alert("Select Contact", "Choose a contact:", [
-        ...contactsWithPhone.slice(0, MAX_CONTACTS_TO_SHOW).map((contact) => ({
-          text: contact.name || "Unknown",
-          onPress: () => {
-            const phone = contact.phoneNumbers?.[0]?.number;
-            if (phone) {
-              onPhoneSelected(phone);
-            }
-          },
-        })),
-        { text: "Cancel", style: "cancel" as const },
-      ]);
+      setContacts(entries);
     } catch (error) {
-      console.error("Error accessing contacts:", error);
-      Alert.alert("Error", "Failed to access contacts.");
+      if (__DEV__) console.warn("Failed to load contacts:", error);
+      setVisible(false);
+      Alert.alert(
+        "Couldn't open contacts",
+        "We couldn't load your contacts. Please try again.",
+      );
+    } finally {
+      setIsLoading(false);
     }
-  }, [onPhoneSelected]);
+  }, []);
 
-  return { pickContact };
+  return {
+    pickContact,
+    closePicker,
+    handleSelect,
+    visible,
+    isLoading,
+    contacts,
+  };
 }
