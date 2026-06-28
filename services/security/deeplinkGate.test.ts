@@ -13,7 +13,7 @@ import { inspectDeeplink } from "./deeplinkGate.ts";
 
 describe("inspectDeeplink", () => {
   it("accepts a verified HTTPS deeplink and routes to preview", () => {
-    const v = inspectDeeplink("https://takumi.wallet/send?to=0x123");
+    const v = inspectDeeplink("https://takumipay.xyz/send?to=0x123");
     assert.equal(v.ok, true);
     if (v.ok) {
       assert.equal(v.preview, true);
@@ -37,7 +37,7 @@ describe("inspectDeeplink", () => {
 
   it("rejects URLs whose fragment encodes seed material", () => {
     const v = inspectDeeplink(
-      "https://takumi.wallet/send?seed=abandon%20ability",
+      "https://takumipay.xyz/send?seed=abandon%20ability",
     );
     assert.equal(v.ok, false);
     if (!v.ok) assert.equal(v.code, "fragment_blocked");

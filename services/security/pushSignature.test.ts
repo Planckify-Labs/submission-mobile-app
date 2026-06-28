@@ -25,11 +25,11 @@ function signFor(notificationId: string, deeplink: string, expiresAt: number) {
 describe("verifySignedPush", () => {
   it("accepts a valid signed push", async () => {
     const expires = Date.now() + 60_000;
-    const sig = signFor("notif-1", "https://takumi.wallet/sign?id=1", expires);
+    const sig = signFor("notif-1", "https://takumipay.xyz/sign?id=1", expires);
     const v = await verifySignedPush(
       {
         notificationId: "notif-1",
-        deeplink: "https://takumi.wallet/sign?id=1",
+        deeplink: "https://takumipay.xyz/sign?id=1",
         expiresAt: expires,
         signatureHex: sig,
       },
@@ -40,11 +40,11 @@ describe("verifySignedPush", () => {
 
   it("rejects expired payload", async () => {
     const expires = Date.now() - 1000;
-    const sig = signFor("notif-2", "https://takumi.wallet/sign?id=2", expires);
+    const sig = signFor("notif-2", "https://takumipay.xyz/sign?id=2", expires);
     const v = await verifySignedPush(
       {
         notificationId: "notif-2",
-        deeplink: "https://takumi.wallet/sign?id=2",
+        deeplink: "https://takumipay.xyz/sign?id=2",
         expiresAt: expires,
         signatureHex: sig,
       },
@@ -59,7 +59,7 @@ describe("verifySignedPush", () => {
     const v = await verifySignedPush(
       {
         notificationId: "notif-3",
-        deeplink: "https://takumi.wallet/sign?id=3",
+        deeplink: "https://takumipay.xyz/sign?id=3",
         expiresAt: expires,
         signatureHex: "0x" + "b".repeat(64),
       },

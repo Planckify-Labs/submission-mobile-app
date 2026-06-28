@@ -116,7 +116,7 @@ export const OFFICIAL_LINKS: OfficialLinks = {
   appStore: null,
   playStore:
     "https://play.google.com/store/apps/details?id=com.planckify.takumiwallet",
-  website: "https://takumiaiwallet.xyz",
+  website: "https://takumipay.xyz",
   socials: {
     X: "https://x.com/takumiwallet",
     Instagram: "https://www.instagram.com/takumi_wallet/",

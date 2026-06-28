@@ -42,7 +42,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: getAppName(),
   slug: "takumiwallet",
-  version: "5.1.1",
+  version: "5.2.0",
   runtimeVersion: { policy: "fingerprint" },
   updates: {
     fallbackToCacheTimeout: 0,
@@ -72,9 +72,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // (`takumiwallet://`) are NOT exclusively registrable; a phishing
     // app can register the same scheme and intercept WalletConnect
     // pairing URIs. AASA hosted at
-    // `https://takumi.wallet/.well-known/apple-app-site-association`
-    // verifies this app as the sole opener for `https://takumi.wallet/*`.
-    associatedDomains: ["applinks:takumi.wallet"],
+    // `https://takumipay.xyz/.well-known/apple-app-site-association`
+    // verifies this app as the sole opener for `https://takumipay.xyz/*`.
+    associatedDomains: ["applinks:takumipay.xyz"],
   },
   android: {
     adaptiveIcon: {
@@ -104,7 +104,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "android.permission.RECORD_AUDIO",
     ],
     // TWV-2026-024 — verified Android App Links. assetlinks.json at
-    // `https://takumi.wallet/.well-known/assetlinks.json` is verified
+    // `https://takumipay.xyz/.well-known/assetlinks.json` is verified
     // by Play / Android on first install; until verification succeeds,
     // the system shows a disambiguation dialog instead of opening the
     // wallet — never auto-routes to a phishing app that registered the
@@ -113,7 +113,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         action: "VIEW",
         autoVerify: true,
-        data: [{ scheme: "https", host: "takumi.wallet" }],
+        data: [{ scheme: "https", host: "takumipay.xyz", pathPrefix: "/" }],
         category: ["BROWSABLE", "DEFAULT"],
       },
     ],

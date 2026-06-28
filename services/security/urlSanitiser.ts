@@ -30,8 +30,8 @@ export interface SanitisedUrl {
  * path and have their own provenance gate.
  */
 export const URL_ALLOWLIST: ReadonlyArray<string> = [
-  "takumi.wallet",
-  "docs.takumi.wallet",
+  "takumipay.xyz",
+  "docs.takumipay.xyz",
   "anthropic.com",
   "ethereum.org",
 ];

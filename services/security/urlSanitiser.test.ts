@@ -13,9 +13,9 @@ import { extractAndSanitiseUrls, sanitiseUrl } from "./urlSanitiser.ts";
 
 describe("sanitiseUrl", () => {
   it("accepts an https URL", () => {
-    const out = sanitiseUrl("https://docs.takumi.wallet/setup");
+    const out = sanitiseUrl("https://docs.takumipay.xyz/setup");
     assert.ok(out);
-    assert.equal(out.host, "docs.takumi.wallet");
+    assert.equal(out.host, "docs.takumipay.xyz");
     assert.equal(out.allowlisted, true);
   });
 
@@ -47,7 +47,7 @@ describe("sanitiseUrl", () => {
   });
 
   it("recognises a sub-domain of an allowlisted host", () => {
-    const out = sanitiseUrl("https://help.docs.takumi.wallet/article/1");
+    const out = sanitiseUrl("https://help.docs.takumipay.xyz/article/1");
     assert.ok(out);
     assert.equal(out.allowlisted, true);
   });
@@ -56,11 +56,11 @@ describe("sanitiseUrl", () => {
 describe("extractAndSanitiseUrls", () => {
   it("replaces URLs with [link:N] tokens", () => {
     const out = extractAndSanitiseUrls(
-      "Visit https://docs.takumi.wallet for more.",
+      "Visit https://docs.takumipay.xyz for more.",
     );
     assert.equal(out.text, "Visit [link:0] for more.");
     assert.equal(out.urls.length, 1);
-    assert.equal(out.urls[0].host, "docs.takumi.wallet");
+    assert.equal(out.urls[0].host, "docs.takumipay.xyz");
   });
 
   it("blocks javascript: URLs by replacing with [blocked-url]", () => {
