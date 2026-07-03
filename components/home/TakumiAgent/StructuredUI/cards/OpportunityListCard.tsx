@@ -52,6 +52,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { strategiesApi } from "@/api/endpoints/strategies";
 import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 import { useUserStrategy } from "@/hooks/queries/useStrategy";
 import {
@@ -388,6 +389,7 @@ function PoolRow({
   selected,
   onToggle,
   onManual,
+  onInspect,
 }: {
   pool: DisplayPool;
   isTop: boolean;
@@ -397,6 +399,7 @@ function PoolRow({
   selected: boolean;
   onToggle: () => void;
   onManual: () => void;
+  onInspect: () => void;
 }) {
   const inApp = pool.inApp;
   const primary = showProtocol
@@ -417,7 +420,10 @@ function PoolRow({
 
   return (
     <Pressable
-      onPress={inApp ? onToggle : onManual}
+      onPress={() => {
+        onInspect();
+        (inApp ? onToggle : onManual)();
+      }}
       android_ripple={{ color: "rgba(0,0,0,0.04)" }}
       className={`flex-row items-center gap-3 active:opacity-70 px-3.5 py-3 mb-1.5 rounded-2xl border ${
         selected
@@ -510,6 +516,7 @@ function GroupCard({
   isSelected,
   onTogglePool,
   onManualPool,
+  onInspect,
 }: {
   group: OpportunityGroup;
   isTop: boolean;
@@ -519,6 +526,7 @@ function GroupCard({
   isSelected: (rowKey: string) => boolean;
   onTogglePool: (rowKey: string) => void;
   onManualPool: (slug: string, appUrl?: string | null) => void;
+  onInspect: (pool: DisplayPool) => void;
 }) {
   const mixed = group.inAppCount > 0 && group.inAppCount < group.poolCount;
 
@@ -534,6 +542,7 @@ function GroupCard({
         selected={isSelected(pool.rowKey)}
         onToggle={() => onTogglePool(pool.rowKey)}
         onManual={() => onManualPool(pool.protocol_slug, pool.app_url)}
+        onInspect={() => onInspect(pool)}
       />
     );
   }
@@ -618,6 +627,7 @@ function GroupCard({
               selected={isSelected(pool.rowKey)}
               onToggle={() => onTogglePool(pool.rowKey)}
               onManual={() => onManualPool(pool.protocol_slug, pool.app_url)}
+              onInspect={() => onInspect(pool)}
             />
           ))}
         </View>
@@ -665,6 +675,33 @@ const OpportunityListCard: React.FC<
       pathname: "/dapps-browser",
       params: { url: protocolAppUrl(slug, appUrl) },
     });
+  };
+  // DEV-only diagnostic: the resolved deposit target (the actual on-chain
+  // address/ids) is intentionally kept OUT of the card payload (spec §8 — the
+  // LLM/client never handles an address), so on press we fetch it by poolId and
+  // log the on-chain identity the backend resolver produced: EVM contract
+  // (erc4626 vault / aave pool), Sui package+object ids (scallop-market), or
+  // Solana program+reserve+mint. `depositTarget: null` ⇒ unresolved (Manual).
+  // Never runs in production.
+  const devLogResolvedTarget = (pool: DisplayPool) => {
+    if (!__DEV__ || !pool.pool_id) return;
+    strategiesApi
+      .getPool(pool.pool_id)
+      .then((o) => {
+        console.log("[OpportunityListCard] resolved deposit target", {
+          protocol: pool.protocol_slug,
+          poolMeta: pool.pool_meta ?? null,
+          chain: pool.chain_name ?? pool.chain_id ?? pool.namespace ?? null,
+          poolId: pool.pool_id,
+          inApp: pool.inApp,
+          assetContract: o.assetContract,
+          depositTarget: o.depositTarget,
+          appUrl: o.appUrl,
+        });
+      })
+      .catch((err) => {
+        console.warn("[OpportunityListCard] getPool failed", err);
+      });
   };
 
   const inputTierLabel = input?.tier
@@ -812,7 +849,6 @@ const OpportunityListCard: React.FC<
     : null;
   const topHasScore = Number.isFinite(groups[0]?.bestScore ?? Number.NaN);
   const topGroupKey = groups[0]?.key;
-  const inAppPoolCount = allPools.filter((p) => p.inApp).length;
 
   // Selected in-app pools (across all pages) drive the deposit builder. A leg
   // is "depositable" once it has a positive amount. Manual pools can never be
@@ -899,6 +935,7 @@ const OpportunityListCard: React.FC<
             isSelected={(key) => selected.has(key)}
             onTogglePool={toggleRow}
             onManualPool={openManual}
+            onInspect={devLogResolvedTarget}
           />
         ))}
       </View>
