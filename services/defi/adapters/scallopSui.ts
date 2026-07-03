@@ -33,7 +33,7 @@ import {
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import type { SuiChainConfig } from "@/constants/configs/chainConfig";
 import { SuiSwapError } from "@/services/swap/sui/types";
-import { DefiError } from "../errors/defiErrors";
+import { classifySuiMoveError, DefiError } from "../errors/defiErrors";
 import type {
   BuildDepositArgs,
   BuildWithdrawArgs,
@@ -188,7 +188,7 @@ export async function buildScallopZapSupply(
     if (err instanceof DefiError) throw err;
     if (err instanceof SuiSwapError) throw err; // preserve actionable swap reason
     devWarn("buildScallopZapSupply", err);
-    throw new DefiError("deposit_failed", "zap: build failed");
+    throw classifySuiMoveError(err, "deposit_failed");
   }
 }
 
@@ -202,6 +202,11 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
   // DeFiLlama project slug (and shorthand) so a discovered opportunity or
   // an agent-named venue resolves to this adapter without a central map.
   externalSlugs: ["scallop-lend", "scallop"],
+  // Pool-level deposits (§7): when a resolved `{ kind: "scallop-market" }`
+  // target is present, read the concrete { market, coinType } from it instead
+  // of resolving from the symbol. Single-market today, so this is the
+  // forward-compatible hook for a future Scallop pool resolver.
+  targetKinds: ["scallop-market"],
   // Optional Sui Intent Engine capabilities, presence-checked by the
   // compiler — the supply preview meta and the atomic swap→supply zap.
   readSupplyMeta: readScallopSupplyMeta,
@@ -212,6 +217,7 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
     chain,
     asset,
     amount,
+    target,
   }: BuildDepositArgs): Promise<UnsignedCall> {
     if (chain.namespace !== "sui") {
       throw new DefiError(
@@ -219,12 +225,19 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
         "scallop: requires sui namespace",
       );
     }
-    const coin = resolveScallopCoin(asset.symbol);
-    if (!coin) {
+    const coinType =
+      target?.kind === "scallop-market"
+        ? target.coinType
+        : resolveScallopCoin(asset.symbol)?.coinType;
+    if (!coinType) {
       throw new DefiError("unsupported_asset", `scallop: ${asset.symbol}`);
     }
     try {
       const core = await getScallopCore();
+      const resolvedCore =
+        target?.kind === "scallop-market"
+          ? { ...core, market: target.market }
+          : core;
       const client = suiClientFor(chain);
       const tx = new Transaction();
       tx.setSender(wallet.address);
@@ -233,10 +246,10 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
         tx,
         client,
         wallet.address,
-        coin.coinType,
+        coinType,
         amount,
       );
-      const marketCoin = appendMint(tx, core, coin.coinType, depositCoin);
+      const marketCoin = appendMint(tx, resolvedCore, coinType, depositCoin);
       tx.transferObjects([marketCoin], tx.pure.address(wallet.address));
 
       const bytes = await tx.build({ client });
@@ -244,7 +257,11 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
     } catch (err) {
       if (err instanceof DefiError) throw err;
       devWarn("buildDeposit", err);
-      throw new DefiError("deposit_failed", "scallop: build failed");
+      // Classify the raw Sui build error (e.g. InsufficientCoinBalance) into a
+      // curated code+reason so the agent can be specific — not a blanket
+      // "deposit_failed" that reads as "venue unavailable" (agent tool-error
+      // standard).
+      throw classifySuiMoveError(err, "deposit_failed");
     }
   },
 
@@ -253,6 +270,7 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
     chain,
     asset,
     amount,
+    target,
   }: BuildWithdrawArgs): Promise<UnsignedCall> {
     if (chain.namespace !== "sui") {
       throw new DefiError(
@@ -260,8 +278,11 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
         "scallop: requires sui namespace",
       );
     }
-    const coin = resolveScallopCoin(asset.symbol);
-    if (!coin) {
+    const coinType =
+      target?.kind === "scallop-market"
+        ? target.coinType
+        : resolveScallopCoin(asset.symbol)?.coinType;
+    if (!coinType) {
       throw new DefiError("unsupported_asset", `scallop: ${asset.symbol}`);
     }
     // First cut: full exit only. A partial withdraw by underlying amount needs
@@ -275,12 +296,16 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
     }
     try {
       const core = await getScallopCore();
+      const resolvedCore =
+        target?.kind === "scallop-market"
+          ? { ...core, market: target.market }
+          : core;
       const client = suiClientFor(chain);
 
       // Gather the wallet's market coins for this asset. Match on the
       // `reserve::MarketCoin<…>` wrapper + the underlying's module::STRUCT tail
       // so address zero-padding / package upgrades never hide them.
-      const tail = moduleStructTail(coin.coinType);
+      const tail = moduleStructTail(coinType);
       const { data } = await client.getAllCoins({ owner: wallet.address });
       const marketCoins = (data ?? []).filter(
         (c) =>
@@ -301,11 +326,11 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
       if (objs.length > 1) tx.mergeCoins(primary, objs.slice(1));
 
       const [underlying] = tx.moveCall({
-        target: `${core.protocolPkg}::${REDEEM_TARGET}`,
-        typeArguments: [coin.coinType],
+        target: `${resolvedCore.protocolPkg}::${REDEEM_TARGET}`,
+        typeArguments: [coinType],
         arguments: [
-          tx.object(core.version),
-          tx.object(core.market),
+          tx.object(resolvedCore.version),
+          tx.object(resolvedCore.market),
           primary,
           tx.object(SUI_CLOCK_OBJECT_ID),
         ],
@@ -317,7 +342,7 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
     } catch (err) {
       if (err instanceof DefiError) throw err;
       devWarn("buildWithdraw", err);
-      throw new DefiError("withdraw_failed", "scallop: build failed");
+      throw classifySuiMoveError(err, "withdraw_failed");
     }
   },
 

@@ -108,10 +108,20 @@ function createAaveV3Adapter(
     chainId: deployment.chainId,
     displayName,
     staticSafetyScore: 90,
+    // Pool-level deposits (§7): when a resolved `{ kind: "aave-v3" }` target is
+    // present, the executor routes here by kind and we read the concrete
+    // { pool, asset } from it instead of the per-deployment constant.
+    targetKinds: ["aave-v3"],
 
-    async buildDeposit({ wallet, chain, asset, amount }) {
-      const pool = resolvePoolAddress(chain, deployment);
-      const underlying = resolveUnderlying(deployment, asset);
+    async buildDeposit({ wallet, chain, asset, amount, target }) {
+      const pool =
+        target?.kind === "aave-v3"
+          ? target.pool
+          : resolvePoolAddress(chain, deployment);
+      const underlying =
+        target?.kind === "aave-v3"
+          ? target.asset
+          : resolveUnderlying(deployment, asset);
       return {
         kind: "evm-call",
         to: pool,
@@ -133,9 +143,15 @@ function createAaveV3Adapter(
       } satisfies UnsignedCall;
     },
 
-    async buildWithdraw({ wallet, chain, asset, amount }) {
-      const pool = resolvePoolAddress(chain, deployment);
-      const underlying = resolveUnderlying(deployment, asset);
+    async buildWithdraw({ wallet, chain, asset, amount, target }) {
+      const pool =
+        target?.kind === "aave-v3"
+          ? target.pool
+          : resolvePoolAddress(chain, deployment);
+      const underlying =
+        target?.kind === "aave-v3"
+          ? target.asset
+          : resolveUnderlying(deployment, asset);
       const rawAmount = amount === "MAX" ? MAX_UINT256 : amount;
       return {
         kind: "evm-call",

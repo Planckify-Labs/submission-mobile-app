@@ -15,6 +15,7 @@
 import { strategiesApi } from "@/api/endpoints/strategies";
 import type { TOpportunity, TStrategyPosition } from "@/api/types/strategy";
 import { readPosition } from "@/services/defi/positions/reader";
+import { getDefiAdapter } from "@/services/defi/registry";
 import {
   type MobileToolExecutor,
   optionalString,
@@ -49,6 +50,21 @@ function shapeOpportunity(o: TOpportunity) {
     asset_symbol: o.assetSymbol,
     asset_contract: o.assetContract,
     pool_id: o.poolId,
+    pool_meta: o.poolMeta ?? null,
+    // Protocol's own site (DeFiLlama `/protocol/{slug}.url`) — the "Manual"
+    // badge opens this instead of the DeFiLlama page (spec §9.1 layer 2).
+    app_url: o.appUrl ?? null,
+    // Executability signal (spec §2.1). A pool is AI-agent-executable in-app
+    // via EITHER path:
+    //   1. the backend resolved a `depositTarget` (generic kind-routed adapter,
+    //      §7 — e.g. any Morpho/Yearn vault), OR
+    //   2. the mobile app has a registered adapter for this protocol slug
+    //      (bespoke/single-market path, §7 "bespoke adapters stay valid" —
+    //      e.g. Scallop via the Sui Intent Engine, Aave, Lido).
+    // The mobile registry is the authority on what we can actually sign, so we
+    // OR the two. We still expose only the boolean, never an address — the card
+    // badges/gates off it and the LLM passes `pool_id`/venue, not a target.
+    in_app: o.depositTarget != null || getDefiAdapter(o.protocolSlug) != null,
     apy: o.apy,
     apy_7d_avg: o.apy7dAvg,
     tvl_usd: o.tvlUsd,
@@ -68,6 +84,7 @@ function shapePosition(p: TStrategyPosition) {
     namespace: p.namespace,
     asset_symbol: p.assetSymbol,
     asset_contract: p.assetContract,
+    pool_id: p.poolId,
     amount_at_deposit: p.amountAtDeposit,
     amount_at_deposit_usd: p.amountAtDepositUsd,
     current_amount_raw: p.currentAmountRaw,

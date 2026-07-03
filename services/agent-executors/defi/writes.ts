@@ -27,7 +27,12 @@ import {
   DefiError,
 } from "@/services/defi/errors/defiErrors";
 import { readPosition } from "@/services/defi/positions/reader";
-import { getDefiAdapter, listDefiAdapters } from "@/services/defi/registry";
+import {
+  getDefiAdapter,
+  getDefiAdapterForTarget,
+  listDefiAdapters,
+} from "@/services/defi/registry";
+import type { DepositTarget } from "@/services/defi/types";
 import { getDefaultTokens } from "@/services/tokens/tokenList";
 import { resolveChainClients } from "../chainRouter";
 import {
@@ -38,6 +43,7 @@ import {
   requireString,
   resolveChainId,
   safeExecute,
+  type ToolInput,
 } from "../types";
 import { submitEvmCall } from "./submitTx";
 
@@ -73,25 +79,73 @@ function decimalsForSymbol(symbol: string): number {
   }
 }
 
+// Address-bearing DepositTarget fields the LLM must NEVER supply (spec §8:
+// "No LLM-supplied addresses"). The executor re-fetches the authoritative
+// target server-side by `pool_id`; a call carrying any of these is rejected.
+// `asset_contract` (the deposited asset) is intentionally NOT here — it's the
+// user's token, validated against the resolved target inside the adapter.
+const FORBIDDEN_TARGET_KEYS = [
+  "deposit_target",
+  "depositTarget",
+  "target",
+  "vault",
+  "vault_address",
+  "market",
+  "market_address",
+  "comet",
+  "reserve",
+  "program",
+  "pool_address",
+] as const;
+
+function assertNoLlmSuppliedTarget(input: ToolInput): void {
+  for (const key of FORBIDDEN_TARGET_KEYS) {
+    const value = input[key];
+    if (value !== undefined && value !== null && value !== "") {
+      if (__DEV__) {
+        console.warn("[defi/deposit] REJECT llm-supplied target field", {
+          key,
+        });
+      }
+      // Fail closed. The server owns target resolution (§6); the model only
+      // passes pool_id. Friendly copy via classifyDefiError → deposit_failed.
+      throw new DefiError(
+        "deposit_failed",
+        `address-shaped field "${key}" is not accepted from the model; the target is resolved server-side by pool_id`,
+      );
+    }
+  }
+}
+
 /**
  * Resolve user strategy + opportunity in parallel and apply the spec
  * §15 guards. Returns the validated opportunity for downstream code.
  */
 async function resolveAndGuard({
   protocolSlug,
+  poolId,
   expectedApy,
   expectedTier,
 }: {
   protocolSlug: string;
+  /**
+   * When present, guards + the returned `depositTarget` are read from the
+   * EXACT DeFiLlama pool (spec §6/§8: "APY-drift already per-row — fetch by
+   * poolId, not slug"). Falls back to the protocol-slug row otherwise.
+   */
+  poolId?: string;
   expectedApy?: number;
   expectedTier?: TierKey;
 }): Promise<{
   opportunity: TOpportunity | null;
   strategy: TUserStrategy | null;
 }> {
+  const opportunityFetch = poolId
+    ? strategiesApi.getPool(poolId).catch(() => null)
+    : strategiesApi.getOpportunity(protocolSlug).catch(() => null);
   const [strategyResult, opportunityResult] = await Promise.allSettled([
     strategiesApi.getStrategy(),
-    strategiesApi.getOpportunity(protocolSlug).catch(() => null),
+    opportunityFetch,
   ]);
 
   const strategy =
@@ -217,11 +271,21 @@ async function resolveAndGuard({
 export const deposit: MobileToolExecutor = (input, context) =>
   safeExecute(async () => {
     try {
+      // Reject any LLM-supplied address BEFORE anything else (spec §8).
+      assertNoLlmSuppliedTarget(input);
+
       const chainId = resolveChainId(input, context);
       const protocolSlug = requireString(input, "protocol_slug");
       const assetSymbol = requireString(input, "asset_symbol");
       const amountRaw = requireBigInt(input, "amount_raw");
       const assetContract = input.asset_contract as string | undefined;
+      // The exact DeFiLlama pool the user picked (spec §6). Optional →
+      // backward compatible: without it we route by slug to the canonical
+      // market (legacy behaviour).
+      const poolId =
+        typeof input.pool_id === "string" && input.pool_id
+          ? input.pool_id
+          : undefined;
       const expectedApy =
         typeof input.expected_apy === "number" ? input.expected_apy : undefined;
       const expectedTier =
@@ -235,6 +299,7 @@ export const deposit: MobileToolExecutor = (input, context) =>
         console.warn("[defi/deposit] ENTER", {
           chainId,
           protocolSlug,
+          poolId,
           assetSymbol,
           assetContract,
           amountRaw: amountRaw.toString(),
@@ -246,11 +311,30 @@ export const deposit: MobileToolExecutor = (input, context) =>
         });
       }
 
-      // Guards must run BEFORE we resolve the adapter / clients —
-      // they're the cheapest rejections.
-      await resolveAndGuard({ protocolSlug, expectedApy, expectedTier });
+      // Guards must run BEFORE we resolve the adapter / clients — they're the
+      // cheapest rejections. When `poolId` is present this ALSO re-fetches the
+      // authoritative `depositTarget` from the exact pool row server-side
+      // (§6): the model never handed us an address.
+      const { opportunity } = await resolveAndGuard({
+        protocolSlug,
+        poolId,
+        expectedApy,
+        expectedTier,
+      });
+      const depositTarget: DepositTarget | undefined =
+        opportunity?.depositTarget ?? undefined;
 
-      const adapter = getDefiAdapter(protocolSlug);
+      if (__DEV__) {
+        console.warn("[defi/deposit] resolved depositTarget", {
+          poolId,
+          kind: depositTarget?.kind ?? "none (manual/legacy slug route)",
+        });
+      }
+
+      // Route by the resolved target's `kind` when present (the generic
+      // family adapter — Erc4626/Aave/Scallop), else by slug (canonical
+      // market). Never a namespace/slug branch here — the registry owns it.
+      const adapter = getDefiAdapterForTarget(protocolSlug, depositTarget);
       if (!adapter) {
         if (__DEV__) {
           console.warn("[defi/deposit] protocol_not_found", {
@@ -284,6 +368,7 @@ export const deposit: MobileToolExecutor = (input, context) =>
           chain: chainConfig,
           asset: { symbol: assetSymbol, contract: assetContract, decimals },
           amount: amountRaw,
+          target: depositTarget,
         });
       } catch (buildErr) {
         if (__DEV__) {
@@ -504,6 +589,7 @@ export const deposit: MobileToolExecutor = (input, context) =>
           namespace: adapter.namespace,
           assetSymbol,
           assetContract,
+          poolId,
           amountAtDeposit: amountRaw.toString(),
           amountAtDepositUsd,
           openTxHash: hash,
@@ -589,10 +675,24 @@ export const withdraw: MobileToolExecutor = (input, context) =>
       const { protocolSlug, chainId, assetSymbol, assetContract, namespace } =
         position;
 
+      // Pool-level positions (spec §4.2, §7): re-fetch the authoritative
+      // depositTarget by the pinned poolId so the withdraw routes to the SAME
+      // vault the deposit used (the generic family adapter), not the protocol's
+      // canonical market. Legacy positions (no poolId) route by slug as before.
+      let withdrawTarget: DepositTarget | undefined;
+      if (position.poolId) {
+        const opp = await strategiesApi
+          .getPool(position.poolId)
+          .catch(() => null);
+        withdrawTarget = opp?.depositTarget ?? undefined;
+      }
+
       if (__DEV__) {
         console.warn("[defi/withdraw] position resolved", {
           positionId,
           protocolSlug,
+          poolId: position.poolId,
+          targetKind: withdrawTarget?.kind ?? "none (slug route)",
           chainId,
           assetSymbol,
           assetContract,
@@ -601,7 +701,7 @@ export const withdraw: MobileToolExecutor = (input, context) =>
         });
       }
 
-      const adapter = getDefiAdapter(protocolSlug);
+      const adapter = getDefiAdapterForTarget(protocolSlug, withdrawTarget);
       if (!adapter) {
         if (__DEV__) {
           console.warn("[defi/withdraw] protocol_not_found", {
@@ -643,6 +743,7 @@ export const withdraw: MobileToolExecutor = (input, context) =>
             decimals,
           },
           amount: amountRaw,
+          target: withdrawTarget,
         });
       } catch (buildErr) {
         if (__DEV__) {

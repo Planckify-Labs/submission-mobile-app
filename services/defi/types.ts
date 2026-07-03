@@ -1,3 +1,4 @@
+import type { Address, Hex } from "viem";
 import type {
   ChainConfig,
   SuiChainConfig,
@@ -6,6 +7,30 @@ import type { TWallet } from "@/constants/types/walletTypes";
 import type { Namespace } from "@/services/chains/types";
 
 export type RiskTier = "conservative" | "balanced" | "aggressive";
+
+/**
+ * DepositTarget — the resolved, on-chain-validated deposit destination for a
+ * specific DeFiLlama pool (docs/defi-pool-level-deposits-spec.md §4.1). The
+ * backend resolves it at score time (from the pool's matching keys) and the
+ * mobile executor re-fetches it by `pool_id` before signing — the LLM never
+ * handles an address (§6, §8). One resolved target routes to exactly one
+ * adapter by its `kind` (§7); a `null` target has no adapter and is the manual
+ * deep-link path. Adding a protocol = a new resolver + (if a new kind) a
+ * family adapter — never a branch.
+ *
+ * This is the MOBILE twin of the backend `DepositTarget` in
+ * `api/src/strategies/targets/types.ts` — keep the two in sync.
+ */
+export type DepositTarget =
+  | { kind: "erc4626"; vault: Address; asset: Address }
+  | { kind: "aave-v3"; pool: Address; asset: Address }
+  | { kind: "morpho-blue"; marketId: Hex }
+  | { kind: "compound-v3"; comet: Address; asset: Address }
+  | { kind: "curve-lp"; pool: Address; asset: Address; index: number }
+  | { kind: "scallop-market"; market: string; coinType: string }
+  | { kind: "solana-reserve"; program: string; reserve: string; mint: string };
+
+export type DepositTargetKind = DepositTarget["kind"];
 export type StrategyKind =
   | "stablecoin_lending"
   | "liquid_staking"
@@ -50,6 +75,14 @@ export interface BuildDepositArgs {
   chain: ChainConfig;
   asset: { symbol: string; contract?: string; decimals: number };
   amount: bigint; // raw units
+  /**
+   * Server-resolved, on-chain-validated deposit destination for the exact
+   * pool the user picked (spec §4.1, §6). Optional → backward compatible:
+   * adapters that ignore it keep their canonical market. Standard-family
+   * adapters (`Erc4626Adapter`, generalised Aave/Scallop) read the concrete
+   * address/market from here instead of a hardcoded per-deployment constant.
+   */
+  target?: DepositTarget;
 }
 
 export interface BuildWithdrawArgs extends Omit<BuildDepositArgs, "amount"> {
@@ -134,6 +167,15 @@ export interface DefiProtocolAdapter {
    * branch in shared code. Matched case-insensitively alongside `slug`.
    */
   readonly externalSlugs?: readonly string[];
+  /**
+   * `DepositTarget.kind`s this adapter fulfills (pool-level deposits §7).
+   * When a resolved `depositTarget` is present, shared code routes to the
+   * adapter whose `targetKinds` includes `target.kind` — the standard-family
+   * dispatch that lets ONE `Erc4626Adapter` cover every Morpho/Yearn vault.
+   * A new `kind` docks by declaring it here, never by a branch. Bespoke
+   * per-deployment adapters that only resolve by slug omit this.
+   */
+  readonly targetKinds?: readonly DepositTargetKind[];
   /**
    * Atomic swap→supply zap composer (Sui Intent Engine §4.7): one PTB that
    * swaps into the supply asset and supplies it, all-or-nothing. Optional —

@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from "expo-router";
 import React, {
   useCallback,
   useEffect,
@@ -98,6 +99,11 @@ interface TBrowserState {
 
 export default function DappsBrowser() {
   const { activeWallet, wallets, activeChain, changeActiveChain } = useWallet();
+  // Optional initial URL — e.g. the DeFi card's "Manual" deep-link pushes
+  // `router.push({ pathname: "/dapps-browser", params: { url } })` so the
+  // user completes a deposit through the protocol's own UI (still on the
+  // Takumi wallet via the DappBridge; pool-level deposits spec §9.1).
+  const { url: initialUrl } = useLocalSearchParams<{ url?: string }>();
   const webViewRef = useRef<WebView>(null);
   const addressBarRef = useRef<TextInput>(null);
   const [addressBarText, setAddressBarText] = useState("");
@@ -201,6 +207,18 @@ export default function DappsBrowser() {
     },
     [formatUrl],
   );
+
+  // Open the initial deep-link URL (if any) by mounting the WebView on it.
+  // We set state (not injectJavaScript) so the WebView's `source` loads it
+  // directly — the ref isn't mounted yet while the hub is showing.
+  useEffect(() => {
+    const raw = typeof initialUrl === "string" ? initialUrl.trim() : "";
+    if (!raw) return;
+    const formatted = formatUrl(raw);
+    setShowHub(false);
+    setAddressBarText(formatted);
+    setBrowserState((prev) => ({ ...prev, url: formatted, loading: true }));
+  }, [initialUrl, formatUrl]);
 
   const handleMessage = useCallback(
     (e: WebViewMessageEvent) => {

@@ -36,6 +36,7 @@ import {
   EigenLayerEthereumAdapter,
   EigenLayerHoleskyAdapter,
 } from "./adapters/eigenlayer";
+import { Erc4626Adapter } from "./adapters/erc4626";
 import { EthenaEthereumAdapter } from "./adapters/ethena";
 import { GmxV2ArbitrumAdapter } from "./adapters/gmxV2";
 import { LidoHoleskyAdapter, LidoMainnetAdapter } from "./adapters/lido";
@@ -70,6 +71,11 @@ export function bootDefi(): void {
   }
 
   // ── Phase 1 (always on) ──────────────────────────────────────────
+  // Generic ERC-4626 family adapter (pool-level deposits §7) — routed by
+  // `DepositTarget.kind`, so ONE registration covers every Morpho/Yearn/
+  // Euler vault the backend resolver returns. Bespoke per-deployment adapters
+  // below still resolve by slug for the legacy/canonical path.
+  registerDefiAdapter(Erc4626Adapter);
   registerDefiAdapter(AaveV3EthereumAdapter);
   registerDefiAdapter(AaveV3BaseAdapter);
   registerDefiAdapter(AaveV3ArbitrumAdapter);

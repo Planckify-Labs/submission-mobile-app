@@ -8,6 +8,8 @@
  * side when arithmetic is required.
  */
 
+import type { DepositTarget } from "@/services/defi/types";
+
 export type RiskTier = "conservative" | "balanced" | "aggressive";
 
 export type LiquidityProfile = "instant" | "queued_short" | "queued_long";
@@ -25,6 +27,19 @@ export interface TOpportunity {
   assetSymbol: string;
   assetContract: string | null;
   poolId: string;
+  /** DeFiLlama vault/market name — disambiguates sibling pools sharing
+   *  (protocol, asset, chain). Free-text label, null when absent. (spec §4.2) */
+  poolMeta: string | null;
+  /** Server-resolved, on-chain-validated deposit destination for this exact
+   *  pool (spec §4.1). `null` ⇒ unresolved → the pool is "Manual" (deep-link
+   *  out), not in-app depositable. The executor re-fetches this by poolId
+   *  before signing; the LLM never sees it. */
+  depositTarget: DepositTarget | null;
+  targetResolvedAt: string | null;
+  /** Protocol's own app URL (DeFiLlama `/protocol/{slug}.url`) — the "Manual"
+   *  badge opens this real site rather than the DeFiLlama page (spec §9.1).
+   *  Protocol-scoped, merged onto the row server-side; null when unknown. */
+  appUrl: string | null;
   apy: string;
   apy7dAvg: string;
   apyStddev30d: string;
@@ -48,6 +63,9 @@ export interface TStrategyPosition {
   protocolSlug: string;
   assetSymbol: string;
   assetContract: string | null;
+  /** DeFiLlama poolId the position was opened against — pins the exact sibling
+   *  pool (spec §4.2). Null for legacy positions opened before pool-level routing. */
+  poolId: string | null;
   amountAtDeposit: string;
   amountAtDepositUsd: string;
   currentAmountRaw: string | null;

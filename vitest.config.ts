@@ -29,6 +29,10 @@ export default defineConfig({
       "services/agent-executors/defi/intentExecutors.test.ts",
       "services/agent-executors/defi/intentSchemaParity.test.ts",
       "services/agent-executors/parseInput.test.ts",
+      // Pool-level DeFi deposits (docs/defi-pool-level-deposits-spec.md)
+      "services/defi/opportunityDisplay.test.ts",
+      "services/defi/registry.test.ts",
+      "services/defi/errors/defiErrors.test.ts",
     ],
   },
 });

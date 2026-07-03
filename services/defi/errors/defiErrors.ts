@@ -155,6 +155,71 @@ export function classifyDefiError(err: unknown): DefiErrorCode {
 }
 
 /**
+ * Classify a raw `@mysten/sui` transaction build/execute error into a curated
+ * `DefiError` (code + reason) — the STANDARD every Sui/Move DeFi adapter runs
+ * its catch-all through (Scallop, and any future Sui venue).
+ *
+ * A Sui `tx.build()` resolves coins and gas, so it fails with messages like
+ * `"Transaction resolution failed: InsufficientCoinBalance in command 1"`,
+ * `"No valid gas coins"`, or a `MoveAbort`. Collapsing all of these to a
+ * generic `deposit_failed` tells the user nothing and makes the agent invent a
+ * misleading "venue unavailable / parameter mismatch" story (the exact bug this
+ * fixes). Mapping the balance case to `insufficient_funds` lets the DeFi agent
+ * take its correct terminal branch ("you don't have enough — try a smaller
+ * amount") and the failure card show "Not enough balance".
+ *
+ * Never surfaces raw text — the return is always a closed `DefiErrorCode` + a
+ * short curated `reason` (CLAUDE.md user-facing-error rule). `fallback` is the
+ * flow's terminal code (`deposit_failed` / `withdraw_failed`) used when the
+ * message doesn't match a more specific class.
+ */
+export function classifySuiMoveError(
+  err: unknown,
+  fallback: DefiErrorCode,
+): DefiError {
+  if (err instanceof DefiError) return err;
+  const message =
+    (err instanceof Error && err.message) ||
+    (err as { message?: string } | null)?.message ||
+    "";
+  const lower = message.toLowerCase();
+
+  // Not enough of the input coin, or not enough SUI to cover gas.
+  if (
+    /insufficientcoinbalance|insufficientgas|no valid gas|gasbalancetoolow|insufficient (balance|coin|fund|gas)|balance.*not enough|not enough.*(balance|coin|fund|gas)/.test(
+      lower,
+    )
+  ) {
+    return new DefiError("insufficient_funds", "insufficient_balance");
+  }
+  // Transport / RPC — retryable.
+  if (
+    /network|fetch failed|failed to fetch|timeout|timed out|econn|enotfound|deadline exceeded|rate.?limit|rpc error|50[234]/.test(
+      lower,
+    )
+  ) {
+    return new DefiError("network_error", "network_error");
+  }
+  // A Move-level abort (paused market, cap hit, protocol precondition). We
+  // can't decode the abort code generically, but flag it distinctly so the
+  // agent says "the protocol rejected this" rather than "bad request".
+  if (
+    /moveabort|move abort|abort code|movePrimitiveRuntimeError/i.test(lower)
+  ) {
+    return new DefiError(fallback, "protocol_rejected");
+  }
+  // Safe `__DEV__` read — this module is imported by unit tests where RN's
+  // `__DEV__` global isn't defined.
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.warn(
+      `[classifySuiMoveError] no specific mapping -> ${fallback}. Detail:`,
+      message || err,
+    );
+  }
+  return new DefiError(fallback, "build_failed");
+}
+
+/**
  * Friendly copy. Keep strings hand-written per CLAUDE.md user-facing
  * error rule — never echo raw error text. The optional `cta` is a
  * semantic action; the rendering component maps it to a handler.

@@ -1,5 +1,9 @@
 import type { Namespace } from "@/services/chains/types";
-import type { DefiProtocolAdapter } from "./types";
+import type {
+  DefiProtocolAdapter,
+  DepositTarget,
+  DepositTargetKind,
+} from "./types";
 
 const adapters = new Map<string, DefiProtocolAdapter>();
 
@@ -26,6 +30,39 @@ export function getDefiAdapter(slug: string): DefiProtocolAdapter | null {
 
 export function listDefiAdapters(): DefiProtocolAdapter[] {
   return [...adapters.values()];
+}
+
+/**
+ * Resolve the adapter for a `DepositTarget.kind` (pool-level deposits §7).
+ * This is the standard-family dispatch: one resolved target routes to exactly
+ * one adapter by its `kind`, so a single `Erc4626Adapter` serves every
+ * Morpho/Yearn/Euler vault the resolver returns. Adding a `kind` is a new
+ * adapter that declares `targetKinds` — never a branch in shared code.
+ */
+export function getDefiAdapterForKind(
+  kind: DepositTargetKind,
+): DefiProtocolAdapter | null {
+  for (const a of adapters.values()) {
+    if ((a.targetKinds ?? []).includes(kind)) return a;
+  }
+  return null;
+}
+
+/**
+ * Pick the adapter for a resolved deposit: prefer the `kind`-based
+ * standard-family lookup (so all sibling vaults route to the generic family
+ * adapter), and fall back to the per-slug lookup for bespoke venues that have
+ * no `depositTarget` kind (single-market adapters, non-standard logic).
+ */
+export function getDefiAdapterForTarget(
+  slug: string,
+  target?: DepositTarget | null,
+): DefiProtocolAdapter | null {
+  if (target) {
+    const byKind = getDefiAdapterForKind(target.kind);
+    if (byKind) return byKind;
+  }
+  return getDefiAdapter(slug);
 }
 
 export function listDefiAdaptersForChain(

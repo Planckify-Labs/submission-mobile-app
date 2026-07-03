@@ -95,21 +95,32 @@ function assertAffordable(
 function mapCompileError(err: unknown): ExecutorError {
   if (err instanceof ExecutorError) return err;
   if (err instanceof DefiError) {
+    // Carry the DefiError's curated sub-reason (e.g. "insufficient_balance",
+    // "build_failed", "protocol_rejected") alongside the coarse code so the
+    // agent + card can be specific; fall back to the code when there's no
+    // more-specific detail.
+    const reason =
+      err.message && err.message !== err.code ? err.message : err.code;
     switch (err.code) {
       case "unsupported_chain":
-        return new ExecutorError(
-          ExecutorErrorCode.UnsupportedChain,
-          err.message,
-        );
-      case "unsupported_asset":
-      case "no_onchain_balance":
-        return new ExecutorError(ExecutorErrorCode.InvalidInput, err.code);
+        return new ExecutorError(ExecutorErrorCode.UnsupportedChain, reason);
       case "insufficient_funds":
-        return new ExecutorError(ExecutorErrorCode.InsufficientFunds, err.code);
+      case "no_onchain_balance":
+        // Terminal "not enough / nothing to act on" — the agent tells the user
+        // plainly and stops. Never `invalid_input` ("I couldn't read that
+        // request"), which is what a raw build failure used to collapse to.
+        return new ExecutorError(ExecutorErrorCode.InsufficientFunds, reason);
       case "network_error":
-        return new ExecutorError(ExecutorErrorCode.NetworkError, err.code);
+        return new ExecutorError(ExecutorErrorCode.NetworkError, reason);
+      case "deposit_failed":
+      case "withdraw_failed":
+        // A genuine build/execution failure (not bad params) — generic
+        // retryable, not `invalid_input`.
+        return new ExecutorError(ExecutorErrorCode.Unknown, reason);
+      case "unsupported_asset":
+        return new ExecutorError(ExecutorErrorCode.InvalidInput, reason);
       default:
-        return new ExecutorError(ExecutorErrorCode.InvalidInput, err.code);
+        return new ExecutorError(ExecutorErrorCode.InvalidInput, reason);
     }
   }
   if (err instanceof SuiSwapError) {

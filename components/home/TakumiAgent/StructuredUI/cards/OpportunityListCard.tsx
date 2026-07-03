@@ -33,7 +33,10 @@ import {
   AlertTriangle,
   ArrowRight,
   Check,
+  ChevronDown,
+  ChevronRight,
   Coins,
+  ExternalLink,
   LogIn,
   Search,
   ShieldCheck,
@@ -51,6 +54,13 @@ import {
 } from "react-native";
 import SingleLoadingSekeleton from "@/components/common/SingleLoadingSekeleton";
 import { useUserStrategy } from "@/hooks/queries/useStrategy";
+import {
+  type DisplayPool,
+  groupOpportunities,
+  type OpportunityGroup,
+  type RawOpportunity,
+} from "@/services/defi/opportunityDisplay";
+import { protocolAppUrl } from "@/services/defi/protocolLinks";
 import { getChainFamilyLabel } from "@/services/walletKit/chainInfo";
 import { tapFeedback } from "@/utils/hapticsUtils";
 import type { ToolComponentProps } from "../types";
@@ -70,6 +80,12 @@ type OpportunityRow = {
   namespace?: string;
   asset_symbol?: string;
   pool_id?: string;
+  /** DeFiLlama vault/market name — disambiguates sibling pools (spec §4.2). */
+  pool_meta?: string | null;
+  /** Protocol's own site for the "Manual" deep-link (spec §9.1). */
+  app_url?: string | null;
+  /** Executability: true ⇒ AI-agent-executable in-app; else "Manual" (§2.1). */
+  in_app?: boolean;
   apy?: number | string;
   apy_7d_avg?: number | string;
   tvl_usd?: number | string;
@@ -173,20 +189,6 @@ function apyNumber(value: OpportunityRow["apy"]): number {
   if (value === undefined || value === null) return Number.NEGATIVE_INFINITY;
   const n = typeof value === "string" ? Number(value) : value;
   return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY;
-}
-
-// Backend `score` is 0–100 where higher is safer (see opportunity-detail
-// "Risk score (0–100, higher is safer)"). Missing/NaN sinks to the bottom.
-function scoreNumber(value: OpportunityRow["score"]): number {
-  if (value === undefined || value === null) return Number.NEGATIVE_INFINITY;
-  const n = typeof value === "string" ? Number(value) : value;
-  return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY;
-}
-
-// Stable per-row identity for selection state — must survive paging, so it
-// can't be the render index. `poolId` is `@@unique` on the backend.
-function rowKey(row: OpportunityRow): string {
-  return row.id ?? row.pool_id ?? row.protocol_slug;
 }
 
 // Keep only digits and a single decimal point as the user types an amount.
@@ -346,41 +348,84 @@ function Checkbox({ checked }: { checked: boolean }) {
   );
 }
 
-function OpportunityRowItem({
-  row,
+// Per-row executability chip (spec §2.1 / §9.2). "Manual" reads as a subdued
+// grey chip; in-app rows carry the checkbox as their affordance, so they only
+// show an "In-app" chip when a group mixes both to make the split explicit.
+function ExecBadge({ inApp }: { inApp: boolean }) {
+  return inApp ? (
+    <View className="rounded-full bg-emerald-50 px-1.5 py-0.5">
+      <Text className="text-[9px] font-bold text-emerald-700">In-app</Text>
+    </View>
+  ) : (
+    <View className="rounded-full bg-gray-100 px-1.5 py-0.5">
+      <Text className="text-[9px] font-bold text-gray-500">Manual</Text>
+    </View>
+  );
+}
+
+// Leading glyph for a manual pool — replaces the checkbox entirely (§9.2:
+// "no checkbox at all"), signalling the deep-link-out affordance instead.
+function ManualGlyph() {
+  return (
+    <View className="w-5 h-5 rounded-md border-2 border-light-matte-black/20 items-center justify-center bg-white">
+      <ExternalLink size={11} color="#9ca3af" strokeWidth={2.5} />
+    </View>
+  );
+}
+
+/**
+ * One concrete pool. In-app pools are checkable (the multi-select builder
+ * acts only on these); manual pools render no checkbox and deep-link out
+ * (§9.2). `showProtocol` toggles the protocol name (standalone single-pool
+ * group) vs the poolMeta label (inside a sibling drill-down).
+ */
+function PoolRow({
+  pool,
   isTop,
   showTier,
+  showProtocol,
+  showBadge,
   selected,
   onToggle,
+  onManual,
 }: {
-  row: OpportunityRow;
+  pool: DisplayPool;
   isTop: boolean;
   showTier: boolean;
+  showProtocol: boolean;
+  showBadge: boolean;
   selected: boolean;
-  onToggle?: () => void;
+  onToggle: () => void;
+  onManual: () => void;
 }) {
-  const name = prettyProtocol(row.protocol_slug);
-  const tierKey = String(row.tier ?? "").toLowerCase();
+  const inApp = pool.inApp;
+  const primary = showProtocol
+    ? prettyProtocol(pool.protocol_slug)
+    : pool.pool_meta || "Pool";
+  const tierKey = String(pool.tier ?? "").toLowerCase();
   const tierLabel = TIER_LABEL[tierKey] ?? tierKey;
   const tierClass = TIER_PILL_COLOR[tierKey] ?? "bg-gray-100 text-gray-700";
-  const chain = chainLabel(row.chain_name, row.chain_id, row.namespace);
-  const tvl = formatTvl(row.tvl_usd);
-  const safety = formatSafety(row.score);
-  const meta = [row.asset_symbol, chain].filter(Boolean).join(" · ");
-  const sevenDay = formatApy(row.apy_7d_avg);
+  const chain = chainLabel(pool.chain_name, pool.chain_id, pool.namespace);
+  const tvl = formatTvl(pool.tvl_usd);
+  const safety = formatSafety(pool.score);
+  // Standalone rows show asset · chain; inside a group the header already does.
+  const meta = showProtocol
+    ? [pool.asset_symbol, chain].filter(Boolean).join(" · ")
+    : null;
+  const subLabel = showProtocol && pool.pool_meta ? pool.pool_meta : null;
+  const sevenDay = formatApy(pool.apy_7d_avg);
 
   return (
     <Pressable
-      onPress={onToggle}
-      disabled={!onToggle}
-      android_ripple={onToggle ? { color: "rgba(0,0,0,0.04)" } : undefined}
+      onPress={inApp ? onToggle : onManual}
+      android_ripple={{ color: "rgba(0,0,0,0.04)" }}
       className={`flex-row items-center gap-3 active:opacity-70 px-3.5 py-3 mb-1.5 rounded-2xl border ${
         selected
           ? "border-light-primary-red bg-light-primary-red/10"
           : "border-light-matte-black/10 bg-white"
       }`}
     >
-      <Checkbox checked={selected} />
+      {inApp ? <Checkbox checked={selected} /> : <ManualGlyph />}
       <View className="flex-1 min-w-0">
         <View className="flex-row items-center gap-1.5">
           <Text
@@ -389,10 +434,16 @@ function OpportunityRowItem({
             }`}
             numberOfLines={1}
           >
-            {name}
+            {primary}
           </Text>
           {isTop ? <SafestPill /> : null}
+          {showBadge ? <ExecBadge inApp={inApp} /> : null}
         </View>
+        {subLabel ? (
+          <Text className="text-[11px] text-gray-500 mt-0.5" numberOfLines={1}>
+            {subLabel}
+          </Text>
+        ) : null}
         {meta ? (
           <Text className="text-[11px] text-gray-500 mt-0.5" numberOfLines={1}>
             {meta}
@@ -408,15 +459,20 @@ function OpportunityRowItem({
               {safety}
             </Text>
           ) : null}
-          {row.il_exposure ? (
+          {pool.il_exposure ? (
             <Text className="text-[11px] text-rose-600">· IL risk</Text>
+          ) : null}
+          {!inApp ? (
+            <Text className="text-[11px] text-light-primary-red font-medium">
+              {tvl || safety ? "· " : ""}Deposit on site ↗
+            </Text>
           ) : null}
         </View>
       </View>
 
       <View className="items-end">
         <Text className="text-base font-bold text-emerald-600">
-          {formatApy(row.apy)}
+          {formatApy(pool.apy)}
         </Text>
         {sevenDay !== "—" ? (
           <Text className="text-[10px] text-gray-400 mt-0.5">
@@ -439,15 +495,149 @@ function OpportunityRowItem({
   );
 }
 
+/**
+ * A `(protocol, asset, chain)` group. A single-pool group renders as one flat
+ * PoolRow (the common case — unchanged UX). A multi-pool group renders a
+ * tappable header ("best of N pools") that expands to the sibling drill-down;
+ * each sibling is a PoolRow. Only in-app siblings are checkable.
+ */
+function GroupCard({
+  group,
+  isTop,
+  showTier,
+  expanded,
+  onToggleExpand,
+  isSelected,
+  onTogglePool,
+  onManualPool,
+}: {
+  group: OpportunityGroup;
+  isTop: boolean;
+  showTier: boolean;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  isSelected: (rowKey: string) => boolean;
+  onTogglePool: (rowKey: string) => void;
+  onManualPool: (slug: string, appUrl?: string | null) => void;
+}) {
+  const mixed = group.inAppCount > 0 && group.inAppCount < group.poolCount;
+
+  if (group.poolCount === 1) {
+    const pool = group.pools[0];
+    return (
+      <PoolRow
+        pool={pool}
+        isTop={isTop}
+        showTier={showTier}
+        showProtocol
+        showBadge={!pool.inApp}
+        selected={isSelected(pool.rowKey)}
+        onToggle={() => onTogglePool(pool.rowKey)}
+        onManual={() => onManualPool(pool.protocol_slug, pool.app_url)}
+      />
+    );
+  }
+
+  const name = prettyProtocol(group.protocolSlug);
+  const chain = chainLabel(group.chainName, group.chainId, group.namespace);
+  const meta = [group.assetSymbol, chain].filter(Boolean).join(" · ");
+  const tierKey = String(group.tier ?? "").toLowerCase();
+  const tierLabel = TIER_LABEL[tierKey] ?? tierKey;
+  const tierClass = TIER_PILL_COLOR[tierKey] ?? "bg-gray-100 text-gray-700";
+  const selectedInGroup = group.pools.filter((p) =>
+    isSelected(p.rowKey),
+  ).length;
+
+  return (
+    <View className="mb-1.5 rounded-2xl border border-light-matte-black/10 bg-white overflow-hidden">
+      <Pressable
+        onPress={() => {
+          tapFeedback();
+          onToggleExpand();
+        }}
+        android_ripple={{ color: "rgba(0,0,0,0.04)" }}
+        className="flex-row items-center gap-3 px-3.5 py-3 active:opacity-70"
+      >
+        {expanded ? (
+          <ChevronDown size={18} color="#6b7280" />
+        ) : (
+          <ChevronRight size={18} color="#6b7280" />
+        )}
+        <View className="flex-1 min-w-0">
+          <View className="flex-row items-center gap-1.5">
+            <Text
+              className="text-sm font-semibold text-light-matte-black shrink"
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+            {isTop ? <SafestPill /> : null}
+          </View>
+          {meta ? (
+            <Text
+              className="text-[11px] text-gray-500 mt-0.5"
+              numberOfLines={1}
+            >
+              {meta}
+            </Text>
+          ) : null}
+          <Text className="text-[11px] text-gray-400 mt-0.5">
+            {group.inAppCount > 0
+              ? `${group.inAppCount} in-app · ${group.poolCount} pools`
+              : `${group.poolCount} pools · manual`}
+            {selectedInGroup > 0 ? ` · ${selectedInGroup} selected` : ""}
+          </Text>
+        </View>
+        <View className="items-end">
+          <Text className="text-base font-bold text-emerald-600">
+            best {formatApy(group.bestApy)}
+          </Text>
+          {showTier && tierLabel ? (
+            <View
+              className={`rounded-full px-2 py-0.5 mt-1 ${tierClass.split(" ")[0]}`}
+            >
+              <Text
+                className={`text-[10px] font-semibold ${tierClass.split(" ")[1]}`}
+              >
+                {tierLabel}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </Pressable>
+      {expanded ? (
+        <View className="px-2 pb-2 pt-0.5 gap-1.5">
+          {group.pools.map((pool) => (
+            <PoolRow
+              key={pool.rowKey}
+              pool={pool}
+              isTop={false}
+              showTier={false}
+              showProtocol={false}
+              showBadge={mixed}
+              selected={isSelected(pool.rowKey)}
+              onToggle={() => onTogglePool(pool.rowKey)}
+              onManual={() => onManualPool(pool.protocol_slug, pool.app_url)}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 const OpportunityListCard: React.FC<
   ToolComponentProps<OpportunityInput, OpportunityOutput>
 > = ({ state, input, output, onUserPrompt }) => {
   const { data: strategy } = useUserStrategy();
   const [page, setPage] = useState(0);
-  // Multi-select deposit builder: checked rows + their per-row amount,
-  // keyed by the stable rowKey so a selection survives paging.
+  // Multi-select deposit builder: checked pools + their per-row amount, keyed
+  // by the stable rowKey so a selection survives paging (spec §9.2). Only
+  // in-app pools are ever added.
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  // Which multi-pool groups are expanded to their sibling drill-down.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const toggleRow = (key: string) => {
     tapFeedback();
     setSelected((prev) => {
@@ -457,36 +647,50 @@ const OpportunityListCard: React.FC<
       return next;
     });
   };
+  const toggleExpand = (key: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  // "Manual" deep-link: open the protocol's own UI in the in-app dapps-browser
+  // (still on the Takumi wallet via the DappBridge; spec §9.1). Prefer the
+  // server-provided protocol URL (`app_url`) so long-tail venues open their
+  // real dApp instead of the DeFiLlama page.
+  const openManual = (slug: string, appUrl?: string | null) => {
+    tapFeedback();
+    router.push({
+      pathname: "/dapps-browser",
+      params: { url: protocolAppUrl(slug, appUrl) },
+    });
+  };
 
   const inputTierLabel = input?.tier
     ? (TIER_LABEL[input.tier] ?? input.tier)
     : null;
 
-  // Rank by safety (score desc) — users asked to lead with the safest
-  // venue, not the highest yield — with APY as the tiebreak. Testnets
-  // always sink to the bottom and are hidden entirely in production when
-  // at least one mainnet row exists. Memoised so the sort/filter doesn't
-  // re-run on every page change.
-  const ranked = useMemo(() => {
+  // Group siblings by (protocol, asset, chain) so a multi-vault protocol shows
+  // as ONE row with a "best of N pools" drill-down instead of N indistinct
+  // rows (spec §2.1, §9). Testnets are filtered first (hidden in production
+  // when any mainnet row exists), then grouping ranks groups safest-first.
+  const groups = useMemo(() => {
     const all = output?.data?.opportunities ?? [];
     const mainnet = all.filter((r) => !isTestnetRow(r));
     const visible = !__DEV__ && mainnet.length > 0 ? mainnet : all;
-    return [...visible].sort((a, b) => {
-      const at = isTestnetRow(a) ? 1 : 0;
-      const bt = isTestnetRow(b) ? 1 : 0;
-      if (at !== bt) return at - bt;
-      const byScore = scoreNumber(b.score) - scoreNumber(a.score);
-      if (byScore !== 0) return byScore;
-      return apyNumber(b.apy) - apyNumber(a.apy);
-    });
+    return groupOpportunities(visible as RawOpportunity[]);
   }, [output]);
+
+  // Flattened pools (across all groups + pages) drive selection + counts.
+  const allPools = useMemo(() => groups.flatMap((g) => g.pools), [groups]);
 
   const headerAsset = useMemo(() => {
     const assets = new Set(
-      ranked.map((r) => r.asset_symbol).filter(Boolean) as string[],
+      allPools.map((p) => p.asset_symbol).filter(Boolean) as string[],
     );
     return assets.size === 1 ? [...assets][0] : null;
-  }, [ranked]);
+  }, [allPools]);
 
   const header = inputTierLabel
     ? `${inputTierLabel} opportunities`
@@ -559,7 +763,7 @@ const OpportunityListCard: React.FC<
     );
   }
 
-  if (ranked.length === 0) {
+  if (groups.length === 0) {
     return (
       <View className="my-1.5 rounded-2xl border border-light-matte-black/10 bg-white px-3.5 py-3">
         <View className="flex-row items-center gap-2">
@@ -591,43 +795,57 @@ const OpportunityListCard: React.FC<
     );
   }
 
-  const pageCount = Math.max(1, Math.ceil(ranked.length / PREVIEW_COUNT));
+  const pageCount = Math.max(1, Math.ceil(groups.length / PREVIEW_COUNT));
   const safePage = Math.min(page, pageCount - 1);
-  const shown = ranked.slice(
+  const shownGroups = groups.slice(
     safePage * PREVIEW_COUNT,
     safePage * PREVIEW_COUNT + PREVIEW_COUNT,
   );
-  // Tier uniformity is computed across the full list (not the current
-  // page) so the "All Low risk" header chip stays stable while paging.
+  // Tier uniformity is computed across every pool (not the current page) so
+  // the "All Low risk" header chip stays stable while paging.
   const allTiers = new Set(
-    ranked.map((r) => String(r.tier ?? "").toLowerCase()).filter(Boolean),
+    allPools.map((p) => String(p.tier ?? "").toLowerCase()).filter(Boolean),
   );
   const uniformTier = allTiers.size === 1 ? [...allTiers][0] : null;
   const uniformTierClass = uniformTier
     ? (TIER_PILL_COLOR[uniformTier] ?? "bg-gray-100 text-gray-700")
     : null;
-  const topHasScore = Number.isFinite(scoreNumber(ranked[0]?.score));
+  const topHasScore = Number.isFinite(groups[0]?.bestScore ?? Number.NaN);
+  const topGroupKey = groups[0]?.key;
+  const inAppPoolCount = allPools.filter((p) => p.inApp).length;
 
-  // Selected rows (in safety order, across all pages) drive the deposit
-  // builder. A leg is "depositable" once it has a positive amount; the
-  // card stays protocol-agnostic — it forwards every depositable pick and
-  // lets the agent triage which protocols it actually supports.
-  const selectedRows = ranked.filter((r) => selected.has(rowKey(r)));
-  const depositable = selectedRows.filter(
-    (r) => amountValue(amounts[rowKey(r)]) > 0,
+  // Selected in-app pools (across all pages) drive the deposit builder. A leg
+  // is "depositable" once it has a positive amount. Manual pools can never be
+  // selected (they have no checkbox), so the batch only ever acts on in-app
+  // pools (spec §9.2).
+  const selectedPools = allPools.filter(
+    (p) => p.inApp && selected.has(p.rowKey),
+  );
+  const depositable = selectedPools.filter(
+    (p) => amountValue(amounts[p.rowKey]) > 0,
   );
   const canDeposit = depositable.length > 0;
-  // Submitting needs the live agent callback (undefined once the card
-  // goes historical); selection/amount entry stays usable regardless.
+  // Submitting needs the live agent callback (undefined once the card goes
+  // historical); selection/amount entry stays usable regardless.
   const canSubmit = canDeposit && !!onUserPrompt;
   const submitDeposit = () => {
     if (!onUserPrompt || depositable.length === 0) return;
-    const legs = depositable.map((r) => {
-      const sym = r.asset_symbol ?? input?.asset_symbol ?? "tokens";
-      const chain = chainLabel(r.chain_name, r.chain_id, r.namespace);
-      return `${amounts[rowKey(r)]} ${sym} into ${prettyProtocol(
-        r.protocol_slug,
-      )}${chain ? ` on ${chain}` : ""}`;
+    const legs = depositable.map((p) => {
+      const sym = p.asset_symbol ?? input?.asset_symbol ?? "tokens";
+      const chain = chainLabel(p.chain_name, p.chain_id, p.namespace);
+      const meta = p.pool_meta ? ` — ${p.pool_meta}` : "";
+      // Carry the exact poolId so the agent calls defi_deposit { pool_id, … }
+      // and the executor targets that precise pool (spec §6). The user never
+      // types this; it comes from their pick. EVM only — Sui/Solana venues
+      // (e.g. Scallop) execute through the Sui Intent Engine keyed by venue,
+      // not defi_deposit's pool_id round-trip, so the hint would only misroute.
+      // EVM pools carry a positive numeric chain_id; non-EVM rows are chainId 0
+      // (chain-agnostic signal — no namespace branch, per the CI guardrail).
+      const isEvm = typeof p.chain_id === "number" && p.chain_id > 0;
+      const poolHint = isEvm && p.pool_id ? ` (pool_id ${p.pool_id})` : "";
+      return `${amounts[p.rowKey]} ${sym} into ${prettyProtocol(
+        p.protocol_slug,
+      )}${meta}${chain ? ` on ${chain}` : ""}${poolHint}`;
     });
     onUserPrompt(
       legs.length === 1
@@ -658,27 +876,31 @@ const OpportunityListCard: React.FC<
             </View>
           ) : null}
           <Text className="text-[10px] text-gray-500">
-            {ranked.length} option{ranked.length === 1 ? "" : "s"}
+            {groups.length} option{groups.length === 1 ? "" : "s"}
           </Text>
         </View>
       </View>
 
       <View className="gap-1.5-">
-        {shown.map((row, idx) => {
-          const key = rowKey(row);
-          return (
-            <OpportunityRowItem
-              key={key}
-              row={row}
-              isTop={
-                safePage === 0 && idx === 0 && ranked.length > 1 && topHasScore
-              }
-              showTier={!uniformTier}
-              selected={selected.has(key)}
-              onToggle={() => toggleRow(key)}
-            />
-          );
-        })}
+        {shownGroups.map((group, idx) => (
+          <GroupCard
+            key={group.key}
+            group={group}
+            isTop={
+              safePage === 0 &&
+              idx === 0 &&
+              group.key === topGroupKey &&
+              groups.length > 1 &&
+              topHasScore
+            }
+            showTier={!uniformTier}
+            expanded={expanded.has(group.key)}
+            onToggleExpand={() => toggleExpand(group.key)}
+            isSelected={(key) => selected.has(key)}
+            onTogglePool={toggleRow}
+            onManualPool={openManual}
+          />
+        ))}
       </View>
 
       {pageCount > 1 ? (
@@ -699,7 +921,7 @@ const OpportunityListCard: React.FC<
         </View>
       ) : null}
 
-      {selectedRows.length > 0 ? (
+      {selectedPools.length > 0 ? (
         <View className="mt-3 rounded-2xl border border-light-matte-black/10 bg-white px-3.5 py-3">
           <View className="flex-row items-center gap-1.5 mb-2">
             <Coins size={13} color={BRAND_RED} />
@@ -707,9 +929,10 @@ const OpportunityListCard: React.FC<
               Amount to deposit
             </Text>
           </View>
-          {selectedRows.map((r) => {
-            const key = rowKey(r);
-            const sym = r.asset_symbol ?? input?.asset_symbol ?? "—";
+          {selectedPools.map((p) => {
+            const key = p.rowKey;
+            const sym = p.asset_symbol ?? input?.asset_symbol ?? "—";
+            const label = p.pool_meta || prettyProtocol(p.protocol_slug);
             return (
               <View key={key} className="flex-row items-center gap-3 py-1.5">
                 <View className="w-14 items-center rounded-xl border border-light-primary-red/20 bg-light-primary-red/10 px-1.5 py-2.5">
@@ -734,7 +957,7 @@ const OpportunityListCard: React.FC<
                   className="w-[72px] text-right text-[11px] font-semibold text-light-primary-red"
                   numberOfLines={1}
                 >
-                  {prettyProtocol(r.protocol_slug)}
+                  {label}
                 </Text>
               </View>
             );

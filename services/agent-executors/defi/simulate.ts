@@ -13,7 +13,11 @@ import {
   classifyDefiError,
   DefiError,
 } from "@/services/defi/errors/defiErrors";
-import { getDefiAdapter, listDefiAdapters } from "@/services/defi/registry";
+import {
+  getDefiAdapterForTarget,
+  listDefiAdapters,
+} from "@/services/defi/registry";
+import type { DepositTarget } from "@/services/defi/types";
 import { resolveChainClients } from "../chainRouter";
 import {
   ExecutorError,
@@ -46,11 +50,26 @@ export const simulateDeposit: MobileToolExecutor = (input, context) =>
       const assetSymbol = requireString(input, "asset_symbol");
       const amountRaw = requireBigInt(input, "amount_raw");
       const assetContract = input.asset_contract as string | undefined;
+      const poolId =
+        typeof input.pool_id === "string" && input.pool_id
+          ? input.pool_id
+          : undefined;
+
+      // Re-fetch the authoritative depositTarget by poolId (spec §6) so the
+      // dry-run builds against the EXACT pool the user picked — the same
+      // server-authoritative path the real deposit uses.
+      const opportunity = poolId
+        ? await strategiesApi.getPool(poolId).catch(() => null)
+        : null;
+      const depositTarget: DepositTarget | undefined =
+        opportunity?.depositTarget ?? undefined;
 
       if (__DEV__) {
         console.warn("[defi/simulate] ENTER", {
           chainId,
           protocolSlug,
+          poolId,
+          targetKind: depositTarget?.kind ?? "none (slug route)",
           assetSymbol,
           assetContract,
           amountRaw: amountRaw.toString(),
@@ -59,7 +78,7 @@ export const simulateDeposit: MobileToolExecutor = (input, context) =>
         });
       }
 
-      const adapter = getDefiAdapter(protocolSlug);
+      const adapter = getDefiAdapterForTarget(protocolSlug, depositTarget);
       if (!adapter) {
         if (__DEV__) {
           console.warn("[defi/simulate] protocol_not_found", {
@@ -93,6 +112,7 @@ export const simulateDeposit: MobileToolExecutor = (input, context) =>
           chain: chainConfig,
           asset: { symbol: assetSymbol, contract: assetContract, decimals },
           amount: amountRaw,
+          target: depositTarget,
         });
       } catch (buildErr) {
         if (__DEV__) {
@@ -171,9 +191,11 @@ export const simulateDeposit: MobileToolExecutor = (input, context) =>
         const expected =
           typeof input.expected_apy === "number" ? input.expected_apy : null;
         if (expected !== null) {
-          const cached = await strategiesApi
-            .getOpportunity(protocolSlug)
-            .catch((err) => {
+          // Prefer the exact pool row (per-pool APY, spec §8) already fetched
+          // by poolId; else fall back to the protocol-slug row.
+          const cached =
+            opportunity ??
+            (await strategiesApi.getOpportunity(protocolSlug).catch((err) => {
               if (__DEV__) {
                 console.warn("[defi/simulate] getOpportunity rejected", {
                   protocolSlug,
@@ -181,7 +203,7 @@ export const simulateDeposit: MobileToolExecutor = (input, context) =>
                 });
               }
               return null;
-            });
+            }));
           if (cached) {
             const apy = parseFloat(cached.apy);
             if (Number.isFinite(apy) && apy > 0) {

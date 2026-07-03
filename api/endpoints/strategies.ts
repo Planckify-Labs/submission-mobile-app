@@ -79,6 +79,18 @@ export const strategiesApi = {
       .json<TOpportunity>();
   },
 
+  /**
+   * Fetch a single opportunity by DeFiLlama poolId — the authoritative
+   * `depositTarget` source the deposit executor re-fetches before signing
+   * (pool-level deposits spec §6). Keyed by poolId so it pins the exact
+   * sibling pool, unlike `getOpportunity(slug)` which keys by protocolSlug.
+   */
+  getPool: async (poolId: string) => {
+    return api
+      .get(`strategies/pools/${encodeURIComponent(poolId)}`)
+      .json<TOpportunity>();
+  },
+
   getProtocols: async (tier?: RiskTier) => {
     const qs = tier ? `?tier=${encodeURIComponent(tier)}` : "";
     return api.get(`strategies/protocols${qs}`).json<TProtocolOption[]>();
@@ -94,6 +106,8 @@ export const strategiesApi = {
     namespace: string;
     assetSymbol: string;
     assetContract?: string;
+    /** DeFiLlama poolId the deposit targeted — pins the exact pool (spec §4.2). */
+    poolId?: string;
     amountAtDeposit: string;
     amountAtDepositUsd: number;
     openTxHash?: string;
