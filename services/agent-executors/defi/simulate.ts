@@ -89,6 +89,23 @@ export const simulateDeposit: MobileToolExecutor = (input, context) =>
         throw new DefiError("protocol_not_found", protocolSlug);
       }
 
+      // EVM-only dry-run path. A non-EVM venue (Sui/Solana) builds + signs
+      // through its OWN executor — the Sui Intent Engine's
+      // `defi_intent_preview` — so we must not hand its adapter an EVM chain
+      // config (that throws a raw "requires sui namespace"). Return a clear,
+      // non-crashing signal the agent uses to switch to the intent flow.
+      if (adapter.namespace !== "eip155") {
+        return {
+          status: "success",
+          data: {
+            protocol_slug: protocolSlug,
+            pool_id: poolId ?? null,
+            simulated: false,
+            note: `Non-EVM venue (${adapter.namespace}) — no EVM gas estimate. Deposit executes via the Sui Intent Engine: call defi_intent_preview with action "supply", the venue, asset, amount, and this pool_id.`,
+          },
+        };
+      }
+
       const blockchain = context.blockchains.find((b) => b.chainId === chainId);
       if (!blockchain) {
         if (__DEV__) {

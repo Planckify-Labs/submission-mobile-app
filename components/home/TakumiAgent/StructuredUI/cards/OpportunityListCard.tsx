@@ -870,15 +870,14 @@ const OpportunityListCard: React.FC<
       const sym = p.asset_symbol ?? input?.asset_symbol ?? "tokens";
       const chain = chainLabel(p.chain_name, p.chain_id, p.namespace);
       const meta = p.pool_meta ? ` — ${p.pool_meta}` : "";
-      // Carry the exact poolId so the agent calls defi_deposit { pool_id, … }
-      // and the executor targets that precise pool (spec §6). The user never
-      // types this; it comes from their pick. EVM only — Sui/Solana venues
-      // (e.g. Scallop) execute through the Sui Intent Engine keyed by venue,
-      // not defi_deposit's pool_id round-trip, so the hint would only misroute.
-      // EVM pools carry a positive numeric chain_id; non-EVM rows are chainId 0
-      // (chain-agnostic signal — no namespace branch, per the CI guardrail).
-      const isEvm = typeof p.chain_id === "number" && p.chain_id > 0;
-      const poolHint = isEvm && p.pool_id ? ` (pool_id ${p.pool_id})` : "";
+      // Carry the exact poolId so the agent pins the precise pool (spec §6):
+      // EVM routes it into `defi_deposit { pool_id }`, Sui into
+      // `defi_intent_preview { poolId }` (pool-level Sui deposits, Phase 3) — a
+      // multi-vault Sui venue (Ember) is otherwise ambiguous from the venue name
+      // alone. Both paths now consume a pool_id, so include it whenever the pick
+      // carries one; the agent routes by the row's chain/namespace, not by this
+      // hint (no namespace branch here, per the CI guardrail).
+      const poolHint = p.pool_id ? ` (pool_id ${p.pool_id})` : "";
       return `${amounts[p.rowKey]} ${sym} into ${prettyProtocol(
         p.protocol_slug,
       )}${meta}${chain ? ` on ${chain}` : ""}${poolHint}`;

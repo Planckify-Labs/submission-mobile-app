@@ -44,12 +44,19 @@ export const IntentSchema = z.discriminatedUnion("action", [
     venue: z.string().min(1),
     asset: z.string().min(1), // symbol, e.g. "USDC" — resolved to coinType by the compiler
     amount: Amount,
+    // Optional exact DeFiLlama poolId the user picked (pool-level deposits §6).
+    // An OPAQUE UUID — NEVER an address (§8). When present the executor
+    // re-fetches the authoritative `depositTarget` server-side and the compiler
+    // routes to the matching family adapter by `target.kind` (so a multi-vault
+    // venue like Ember lands on the EXACT pool, not a canonical market).
+    poolId: z.string().min(1).optional(),
   }),
   z.object({
     action: z.literal("withdraw"),
     venue: z.string().min(1),
     asset: z.string().min(1),
     amount: Amount.optional(), // omit = withdraw all
+    poolId: z.string().min(1).optional(), // see supply.poolId
   }),
   z.object({
     action: z.literal("swap"),
@@ -76,6 +83,10 @@ export const IntentSchema = z.discriminatedUnion("action", [
     toAsset: z.string().min(1), // swapped to AND supplied, e.g. "USDC"
     amount: Amount, // exact-in of fromAsset
     maxSlippageBps: z.number().int().min(1).max(5000).default(50),
+    // Optional exact DeFiLlama poolId for the SUPPLY leg (pool-level §6/§7): the
+    // zap deposits the swapped coin into this EXACT pool (required for multi-vault
+    // venues like Ember). Opaque UUID, never an address (§8) — see supply.poolId.
+    poolId: z.string().min(1).optional(),
   }),
 ]);
 

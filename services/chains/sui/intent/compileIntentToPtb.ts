@@ -23,6 +23,7 @@ import type { TToken } from "@/api/types/token";
 import type { SuiChainConfig } from "@/constants/configs/chainConfig";
 import { DefiError } from "@/services/defi/errors/defiErrors";
 import {
+  getDefiAdapterForKind,
   listDefiAdaptersForChain,
   pickVenueAdapter,
 } from "@/services/defi/registry";
@@ -43,6 +44,8 @@ const SUI_NATIVE_DECIMALS = 9;
 export interface CompileDeps {
   getSwapRoute: typeof getSuiSwapRoute;
   listAdaptersForChain: typeof listDefiAdaptersForChain;
+  /** Registry lookup by `DepositTarget.kind` — the pool-level family dispatch. */
+  getAdapterForKind: typeof getDefiAdapterForKind;
   /** The DEX swap leg appended into the zap's shared tx — §4.7. */
   appendSwapInto: typeof appendDeepbookSwap;
 }
@@ -50,6 +53,7 @@ export interface CompileDeps {
 const DEFAULT_DEPS: CompileDeps = {
   getSwapRoute: getSuiSwapRoute,
   listAdaptersForChain: listDefiAdaptersForChain,
+  getAdapterForKind: getDefiAdapterForKind,
   appendSwapInto: appendDeepbookSwap,
 };
 
@@ -173,10 +177,14 @@ async function compileSwapAndSupply(
   ctx: CompileContext,
   deps: CompileDeps,
 ): Promise<CompiledIntent> {
-  // Resolve the venue generically (network-gated). Mainnet-only because the
-  // lending adapters are mainnet-gated; on testnet nothing resolves and the
-  // agent offers a plain swap instead.
-  const adapter = resolveLendingVenue(ctx, deps, intent.venue);
+  // Pool-level dispatch (§7), same as compileSupplyWithdraw: when the executor
+  // resolved an exact pool target, route the zap to that pool's family adapter
+  // (so a specific Ember/NAVI pool lands on its adapter, not a canonical
+  // market). Fall back to by-name venue resolution when there's no target.
+  const target = ctx.depositTarget;
+  const adapter =
+    (target ? deps.getAdapterForKind(target.kind) : null) ??
+    resolveLendingVenue(ctx, deps, intent.venue);
   if (!adapter.buildZapSupply) {
     // The resolved venue can't do a single-PTB zap-in. Presence-check, never
     // a name check — a venue without this capability just isn't zappable.
@@ -194,6 +202,7 @@ async function compileSwapAndSupply(
     wallet: ctx.wallet,
     chain: ctx.chain as SuiChainConfig,
     supplyAssetSymbol: intent.toAsset,
+    target,
     appendSwap: (tx) =>
       deps.appendSwapInto(tx, {
         wallet: ctx.wallet,
@@ -232,7 +241,15 @@ async function compileSupplyWithdraw(
   ctx: CompileContext,
   deps: CompileDeps,
 ): Promise<CompiledIntent> {
-  const adapter = resolveLendingVenue(ctx, deps, intent.venue);
+  // Pool-level dispatch (§7): when the executor resolved an exact pool target,
+  // route to the standard-family adapter by `target.kind` (so an Ember/NAVI
+  // pool lands on its family adapter, not a canonical market). Fall back to the
+  // by-name venue resolution when there's no target — the plain-language path.
+  // Mirrors `getDefiAdapterForTarget`; never a namespace branch.
+  const target = ctx.depositTarget;
+  const adapter =
+    (target ? deps.getAdapterForKind(target.kind) : null) ??
+    resolveLendingVenue(ctx, deps, intent.venue);
 
   const asset = resolveToken(ctx.tokens, intent.asset);
   const assetArg = {
@@ -250,6 +267,7 @@ async function compileSupplyWithdraw(
       chain: ctx.chain as SuiChainConfig,
       asset: assetArg,
       amount: inputAmountRaw,
+      target,
     });
   } else {
     const amount =
@@ -262,6 +280,7 @@ async function compileSupplyWithdraw(
       chain: ctx.chain as SuiChainConfig,
       asset: assetArg,
       amount,
+      target,
     });
   }
 

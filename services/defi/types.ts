@@ -28,6 +28,33 @@ export type DepositTarget =
   | { kind: "compound-v3"; comet: Address; asset: Address }
   | { kind: "curve-lp"; pool: Address; asset: Address; index: number }
   | { kind: "scallop-market"; market: string; coinType: string }
+  // Ember Vaults (Sui, Bluefin-incubated) — the closest thing to an ERC-4626
+  // vault on Sui: `ember_vaults::gateway::deposit_asset_v2<T,R>` where T is the
+  // deposited coin (`coinType`) and R is the share/receipt coin (`shareType`).
+  // `vault` is the immutable shared `Vault<T,R>` object id; the mutable package
+  // + shared `ProtocolConfig` are fetched by the adapter's config (not pinned in
+  // the target). One `EmberSuiAdapter` covers every Ember vault the resolver
+  // returns — the Sui-family analog of the generic `Erc4626Adapter`.
+  | { kind: "ember-vault"; vault: string; coinType: string; shareType: string }
+  // NAVI (Sui lending). Unlike Ember/Scallop there is NO receipt coin: the
+  // supply is tracked in NAVI's shared `Storage` against the user, keyed by a
+  // numeric `assetId` (+ the per-coin `Pool<T>` object). Withdraw is by amount,
+  // not by redeeming a share coin — so its position/withdraw model differs.
+  | { kind: "navi-pool"; pool: string; assetId: number; coinType: string }
+  // Suilend (Sui lending) — `lending_market::deposit_liquidity_and_mint_ctokens
+  // <P,T>` → `Coin<reserve::CToken<P,T>>`. `lendingMarket` = shared
+  // LendingMarket<P>; `marketType` = the P phantom (`<pkg>::suilend::MAIN_POOL`)
+  // — the adapter derives the moveCall package from it; `reserveArrayIndex` = the
+  // reserve's slot in LendingMarket.reserves[] (u64 arg); `coinType` (T) ==
+  // underlyingTokens[0]. Deposit + zap are in-app; withdraw is on-site for now
+  // (Suilend's redeem needs a Pyth pull-oracle push — deferred).
+  | {
+      kind: "suilend-market";
+      lendingMarket: string;
+      marketType: string;
+      reserveArrayIndex: number;
+      coinType: string;
+    }
   | { kind: "solana-reserve"; program: string; reserve: string; mint: string };
 
 export type DepositTargetKind = DepositTarget["kind"];
@@ -70,6 +97,24 @@ export interface DefiPosition {
   openTxHash?: string;
 }
 
+/**
+ * Optional per-read context for `readPosition` (pool-level deposits §7). EVM
+ * adapters resolve their deployment from their own address-book and ignore this;
+ * Sui adapters have NO fixed per-asset deployment — they need the resolved pool
+ * target to know WHICH reserve/vault to read, and `readPosition(walletAddress)`
+ * alone can't carry that. The dispatcher (services/defi/positions/reader.ts)
+ * re-resolves the target from the position row's `pool_id` and passes it here.
+ * Additive/optional, so existing adapters are unaffected (space-docking).
+ */
+export interface PositionReadContext {
+  /** Server-resolved deposit target for this position's exact pool. */
+  target?: DepositTarget;
+  /** Underlying asset contract / Sui coinType carried on the position row. */
+  assetContract?: string;
+  assetSymbol?: string;
+  assetDecimals?: number;
+}
+
 export interface BuildDepositArgs {
   wallet: TWallet;
   chain: ChainConfig;
@@ -110,6 +155,14 @@ export interface ZapSupplyArgs {
   /** Symbol of the asset to swap INTO and then supply (e.g. "USDC"). */
   supplyAssetSymbol: string;
   /**
+   * Server-resolved pool target for the exact pool the user picked (§7). Lets
+   * the zap deposit into a SPECIFIC pool (e.g. one Ember vault) instead of the
+   * venue's canonical market — required by multi-vault venues (Ember), optional
+   * for single-market ones (Scallop). Same opaque target the plain-supply path
+   * threads; the venue reads its concrete ids from here, never from the LLM.
+   */
+  target?: DepositTarget;
+  /**
    * Appends the swap leg to the shared `Transaction` and returns its output
    * coin + leftovers. Injected so the DEX SDK stays in the swap layer — the
    * adapter owns only the supply (lending) leg (space-docking).
@@ -145,8 +198,15 @@ export interface DefiProtocolAdapter {
   buildDeposit(args: BuildDepositArgs): Promise<UnsignedCall>;
   buildWithdraw(args: BuildWithdrawArgs): Promise<UnsignedCall>;
 
-  /** Pure read — no signer required. */
-  readPosition(walletAddress: string): Promise<DefiPosition | null>;
+  /**
+   * Pure read — no signer required. `ctx` (optional) carries the resolved pool
+   * target for adapters without a fixed per-asset deployment (Sui); EVM adapters
+   * ignore it and resolve from their own address-book.
+   */
+  readPosition(
+    walletAddress: string,
+    ctx?: PositionReadContext,
+  ): Promise<DefiPosition | null>;
 
   // ── Optional capabilities (presence-checked, never namespace-checked) ──
   /** Rewards claim where the protocol has a separate accrual primitive. */

@@ -31,7 +31,10 @@ import {
   type TransactionObjectArgument,
 } from "@mysten/sui/transactions";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
-import type { SuiChainConfig } from "@/constants/configs/chainConfig";
+import {
+  getSuiMainnetChain,
+  type SuiChainConfig,
+} from "@/constants/configs/chainConfig";
 import { SuiSwapError } from "@/services/swap/sui/types";
 import { classifySuiMoveError, DefiError } from "../errors/defiErrors";
 import type {
@@ -39,11 +42,13 @@ import type {
   BuildWithdrawArgs,
   DefiPosition,
   DefiProtocolAdapter,
+  PositionReadContext,
   UnsignedCall,
   ZapSupplyArgs,
   ZapSupplyResult,
 } from "../types";
 import { getScallopCore, resolveScallopCoin } from "./scallop.config";
+import { leBytesToBigInt } from "./sui/coins";
 
 const SLUG = "scallop-sui";
 const NETWORK = "mainnet" as const;
@@ -346,12 +351,88 @@ export const ScallopSuiAdapter: DefiProtocolAdapter = {
     }
   },
 
-  async readPosition(): Promise<DefiPosition | null> {
-    // First cut: omit Scallop from defi_list_positions. A correct position
-    // value needs the market-coin↔underlying exchange rate (an extra on-chain
-    // read); showing the raw market-coin balance as an underlying amount would
-    // mislead, so we return null until that read lands (it's best-effort/
-    // omittable per spec §14.5).
-    return null;
+  async readPosition(
+    walletAddress: string,
+    ctx?: PositionReadContext,
+  ): Promise<DefiPosition | null> {
+    // Underlying coinType from the resolved scallop-market target, else the
+    // position row's asset hint (single-market venue → symbol resolves it).
+    const coinType =
+      ctx?.target?.kind === "scallop-market"
+        ? ctx.target.coinType
+        : (ctx?.assetContract ??
+          resolveScallopCoin(ctx?.assetSymbol ?? "")?.coinType);
+    if (!coinType) return null;
+    try {
+      const core = await getScallopCore();
+      const market =
+        ctx?.target?.kind === "scallop-market"
+          ? ctx.target.market
+          : core.market;
+      const client = suiClientFor(getSuiMainnetChain());
+
+      // Gather the wallet's market coins for this reserve (same match as the
+      // withdraw path — MarketCoin wrapper + underlying's module::STRUCT tail).
+      const tail = moduleStructTail(coinType);
+      const { data } = await client.getAllCoins({ owner: walletAddress });
+      const marketCoins = (data ?? []).filter(
+        (c) =>
+          c.coinType.includes("::reserve::MarketCoin<") &&
+          c.coinType.includes(`::${tail}>`),
+      );
+      if (marketCoins.length === 0) return null;
+
+      // Value = dry-run Scallop's OWN redeem and read the output coin's value —
+      // uses the protocol's exchange-rate math (no reserve field-order guessing).
+      const tx = new Transaction();
+      tx.setSender(walletAddress);
+      const objs = marketCoins.map((c) => tx.object(c.coinObjectId));
+      const primary = objs[0];
+      if (objs.length > 1) tx.mergeCoins(primary, objs.slice(1));
+      const [underlying] = tx.moveCall({
+        target: `${core.protocolPkg}::${REDEEM_TARGET}`,
+        typeArguments: [coinType],
+        arguments: [
+          tx.object(core.version),
+          tx.object(market),
+          primary,
+          tx.object(SUI_CLOCK_OBJECT_ID),
+        ],
+      });
+      tx.moveCall({
+        target: "0x2::coin::value",
+        typeArguments: [coinType],
+        arguments: [underlying],
+      });
+      tx.transferObjects([underlying], tx.pure.address(walletAddress));
+
+      const res = await client.devInspectTransactionBlock({
+        transactionBlock: tx,
+        sender: walletAddress,
+      });
+      if (res.error) return null;
+      // The lone u64 return is `coin::value` (redeem returns an object, which
+      // devInspect doesn't surface as a decodable value).
+      let amount = 0n;
+      for (const r of res.results ?? []) {
+        const rv = r.returnValues?.[0];
+        if (rv && rv[1] === "u64") amount = leBytesToBigInt(rv[0]);
+      }
+      if (amount <= 0n) return null;
+      return {
+        protocolSlug: SLUG,
+        namespace: "sui",
+        chainId: NETWORK,
+        assetSymbol: ctx?.assetSymbol ?? "",
+        amountAtDeposit: amount,
+        amountAtDepositUsd: 0,
+        currentAmount: amount,
+        currentAmountUsd: 0,
+        pnlUsd: 0,
+      };
+    } catch (err) {
+      devWarn("readPosition", err);
+      return null;
+    }
   },
 };

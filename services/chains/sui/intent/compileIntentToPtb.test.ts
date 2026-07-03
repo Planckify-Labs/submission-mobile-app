@@ -43,6 +43,7 @@ function deps(over: Partial<CompileDeps>): CompileDeps {
       toCoinType: p.toCoinType ?? "",
     }),
     listAdaptersForChain: () => [],
+    getAdapterForKind: () => null,
     appendSwapInto: async () => null,
     ...over,
   };
@@ -236,5 +237,58 @@ describe("compileIntentToPtb — supply", () => {
     );
     expect(compiled.inputCoinType).toBe(USDC_COIN_TYPE);
     expect(compiled.inputAmountRaw).toBe(100_000_000n);
+  });
+});
+
+describe("compileIntentToPtb — pool-level target routing (§7)", () => {
+  it("routes by target.kind and threads the target into buildDeposit", async () => {
+    let received: unknown;
+    const ember = {
+      slug: "ember-sui",
+      namespace: "sui",
+      kind: "yield_vault",
+      chainId: "mainnet",
+      displayName: "Ember",
+      targetKinds: ["ember-vault"],
+      buildDeposit: async (a: { target?: unknown }): Promise<UnsignedCall> => {
+        received = a.target;
+        return { kind: "sui-ptb", transactionBlockBase64: "EMBER=" };
+      },
+      buildWithdraw: async (): Promise<UnsignedCall> => ({
+        kind: "sui-ptb",
+        transactionBlockBase64: "X=",
+      }),
+      readPosition: async () => null,
+    } as unknown as DefiProtocolAdapter;
+
+    const target = {
+      kind: "ember-vault" as const,
+      vault: "0xvault",
+      coinType: USDC_COIN_TYPE,
+      shareType: "0xr::e::E",
+    };
+    const ctx: CompileContext = { ...ctxOn("mainnet"), depositTarget: target };
+
+    // `listAdaptersForChain` returns [] — so if the compiler fell back to
+    // by-name venue resolution it would throw `unsupported_chain`. Success
+    // proves the adapter came from the `kind` dispatch (space-docking §7).
+    const compiled = await compileIntentToPtb(
+      {
+        action: "supply",
+        venue: "ember",
+        asset: "USDC",
+        amount: { human: "100" },
+        poolId: "some-defillama-uuid",
+      } as Intent,
+      ctx,
+      {
+        ...deps({}),
+        listAdaptersForChain: () => [],
+        getAdapterForKind: (kind) => (kind === "ember-vault" ? ember : null),
+      },
+    );
+
+    expect(compiled.ptbBase64).toBe("EMBER=");
+    expect(received).toEqual(target);
   });
 });

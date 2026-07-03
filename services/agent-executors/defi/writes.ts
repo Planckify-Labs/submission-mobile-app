@@ -345,6 +345,24 @@ export const deposit: MobileToolExecutor = (input, context) =>
         throw new DefiError("protocol_not_found", protocolSlug);
       }
 
+      // EVM-only deposit executor. Sui/Solana venues deposit through their own
+      // path (the Sui Intent Engine's defi_intent_preview/execute), so fail
+      // closed with a curated reason instead of handing a non-EVM adapter an EVM
+      // chain config (which throws a raw "requires sui namespace"). The agent's
+      // recovery is to route the Sui pool through defi_intent_preview.
+      if (adapter.namespace !== "eip155") {
+        if (__DEV__) {
+          console.warn("[defi/deposit] non-EVM venue routed to EVM executor", {
+            protocolSlug,
+            namespace: adapter.namespace,
+          });
+        }
+        throw new DefiError(
+          "unsupported_chain",
+          `${protocolSlug}: non-EVM venue — deposit via the Sui Intent Engine (defi_intent_preview)`,
+        );
+      }
+
       const blockchain = context.blockchains.find((b) => b.chainId === chainId);
       if (!blockchain) {
         if (__DEV__) {

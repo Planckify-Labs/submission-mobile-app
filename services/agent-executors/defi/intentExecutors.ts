@@ -23,6 +23,7 @@ import {
   parseIntent,
 } from "@/services/chains/sui/intent/intentSchema";
 import { intentStore } from "@/services/chains/sui/intent/intentStore";
+import type { CompileContext } from "@/services/chains/sui/intent/intentTypes";
 import { simulateSuiTransaction } from "@/services/chains/sui/simulation";
 import { DefiError } from "@/services/defi/errors/defiErrors";
 import { SuiSwapError } from "@/services/swap/sui/types";
@@ -154,7 +155,30 @@ export const defiIntentPreview: MobileToolExecutor = (input, context) =>
 
     const chain = getActiveSuiChain();
     const tokens = await loadSuiTokens(context, chain);
-    const ctx = { wallet: context.wallet, chain, tokens };
+    const ctx: CompileContext = { wallet: context.wallet, chain, tokens };
+
+    // Pool-level deposits (§6/§8): when the agent pinned an exact pool via an
+    // opaque `poolId`, re-fetch the AUTHORITATIVE depositTarget server-side and
+    // hand it to the compiler, which routes to the family adapter by
+    // `target.kind`. The LLM only ever supplies the poolId — never an address.
+    // No poolId (or no resolved target) → the plain-language venue path,
+    // unchanged. A multi-vault venue (Ember/NAVI) with no target fails closed in
+    // its adapter with a curated "pool target required" error.
+    const poolId =
+      intent.action === "supply" ||
+      intent.action === "withdraw" ||
+      intent.action === "swap_and_supply"
+        ? intent.poolId
+        : undefined;
+    if (poolId) {
+      // Dynamic import keeps `@/api/endpoints/strategies` (which transitively
+      // pulls React Native) out of this module's static graph — same pattern as
+      // `scallop.config`/`ember.config`, so the node/vitest harness can load the
+      // executor without an RN parse.
+      const { strategiesApi } = await import("@/api/endpoints/strategies");
+      const opp = await strategiesApi.getPool(poolId).catch(() => null);
+      if (opp?.depositTarget) ctx.depositTarget = opp.depositTarget;
+    }
 
     let compiled: Awaited<ReturnType<typeof compileIntentToPtb>>;
     try {
@@ -363,6 +387,42 @@ export const defiIntentExecute: MobileToolExecutor = (input, context) =>
       fromAddress: context.wallet.address,
       toAddress: context.wallet.address,
     });
+
+    // Record a StrategyPosition for a SUPPLY so it shows in "Your positions" and
+    // carries the poolId + venue the withdraw path re-resolves its target from
+    // (pool-level deposits §4.2/§6). Sui rows are chainId 0 (non-EVM, keyed by
+    // namespace), mirroring the OpportunityCache. Best-effort: the deposit
+    // already landed on-chain, so a failed record must NEVER fail the tool.
+    // Dynamic import keeps `@/api/endpoints/strategies` (which pulls React
+    // Native) out of this module's static graph (mirrors the preview fetch).
+    if (entry.intent.action === "supply") {
+      try {
+        const { strategiesApi } = await import("@/api/endpoints/strategies");
+        await strategiesApi.createPosition({
+          protocolSlug: entry.intent.venue,
+          chainId: 0,
+          namespace: "sui",
+          assetSymbol: entry.intent.asset,
+          ...(entry.inputCoinType
+            ? { assetContract: entry.inputCoinType }
+            : {}),
+          ...(entry.intent.poolId ? { poolId: entry.intent.poolId } : {}),
+          amountAtDeposit: entry.inputAmountRaw?.toString() ?? "0",
+          // USD snapshot is best-effort/cosmetic; the raw amount above is the
+          // source of truth. Left 0 to avoid an extra rate lookup on the Sui
+          // execute path (positions read live where possible).
+          amountAtDepositUsd: 0,
+          openTxHash: digest,
+        });
+      } catch (err) {
+        if (typeof __DEV__ !== "undefined" && __DEV__) {
+          console.warn(
+            "[intentExecutors] createPosition failed (best-effort):",
+            err,
+          );
+        }
+      }
+    }
 
     // base58 digest in data.digest — never the hex-typed tx_hash (§6.4).
     return {

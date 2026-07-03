@@ -258,6 +258,9 @@ export const listPositions: MobileToolExecutor = (_input, context) =>
               walletAddress,
               assetSymbol: row.asset_symbol,
               assetContract: row.asset_contract ?? undefined,
+              // Lets pool-level (Sui) adapters re-resolve their on-chain target
+              // and return a LIVE balance instead of the frozen DB snapshot.
+              poolId: row.pool_id ?? undefined,
             });
             if (live) {
               return {

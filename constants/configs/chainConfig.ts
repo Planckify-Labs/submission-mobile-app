@@ -82,6 +82,23 @@ export function assertSuiChain(chain: ChainConfig): SuiChainConfig {
 }
 
 /**
+ * The static Sui mainnet chain config (rpcUrl + network) — the single source of
+ * truth for the mainnet fullnode endpoint. Used by mainnet-only Sui services
+ * that need an RPC client outside a wallet flow (e.g. `readPosition` dry-runs),
+ * so the endpoint isn't duplicated per call-site.
+ */
+export function getSuiMainnetChain(): SuiChainConfig {
+  const sui = supportedChains.find(
+    (c): c is SuiChainConfig =>
+      c.namespace === "sui" && c.network === "mainnet",
+  );
+  if (!sui) {
+    throw new Error("getSuiMainnetChain: no Sui mainnet chain configured");
+  }
+  return sui;
+}
+
+/**
  * Static frontend defaults — used as the initial `activeChain` before
  * the backend `blockchains` feed resolves, and as a fallback for any
  * UI that needs a sensible list before the query settles. Solana rows

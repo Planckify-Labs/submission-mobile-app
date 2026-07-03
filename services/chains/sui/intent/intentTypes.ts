@@ -12,6 +12,7 @@ import type { TToken } from "@/api/types/token";
 import type { SuiChainConfig } from "@/constants/configs/chainConfig";
 import type { TWallet } from "@/constants/types/walletTypes";
 import type { SuiDecodedCommand } from "@/services/chains/sui/payloads";
+import type { DepositTarget } from "@/services/defi/types";
 
 export interface CompileContext {
   /** Paying wallet (intent.wallet discipline, SI-1). */
@@ -20,6 +21,15 @@ export interface CompileContext {
   chain: SuiChainConfig;
   /** Token registry rows, for symbol → coinType resolution (§3). */
   tokens: TToken[];
+  /**
+   * Server-resolved, on-chain-validated deposit target for the EXACT pool the
+   * user picked (pool-level deposits §6). Present only when the intent carried
+   * a `poolId`; the executor re-fetches it server-side (the LLM never handles an
+   * address, §8). When set, the compiler routes the adapter by `target.kind`
+   * and pins the concrete vault/market — so a multi-vault venue (Ember) lands on
+   * the right pool instead of a canonical market.
+   */
+  depositTarget?: DepositTarget;
 }
 
 export interface CompiledIntent {

@@ -36,6 +36,7 @@ import {
   EigenLayerEthereumAdapter,
   EigenLayerHoleskyAdapter,
 } from "./adapters/eigenlayer";
+import { EmberSuiAdapter } from "./adapters/emberSui";
 import { Erc4626Adapter } from "./adapters/erc4626";
 import { EthenaEthereumAdapter } from "./adapters/ethena";
 import { GmxV2ArbitrumAdapter } from "./adapters/gmxV2";
@@ -49,8 +50,13 @@ import {
   MorphoSteakhouseUsdcEthAdapter,
   MorphoVaultAdapter,
 } from "./adapters/morpho";
+import { NaviSuiAdapter } from "./adapters/naviSui";
 import { ScallopSuiAdapter } from "./adapters/scallopSui";
 import { SolanaJitoAdapter } from "./adapters/solanaJito";
+// SuilendSuiAdapter is implemented but NOT registered — Suilend's deposit AND
+// withdraw both assert a fresh reserve price (abort code 1), needing a Pyth
+// pull-oracle push in-tx (deferred). Registering it would badge Suilend
+// "in-app" then intermittently fail. Wire the Pyth push, then register it.
 import {
   YearnV3EthereumAdapter,
   YearnV3UsdcEthereumAdapter,
@@ -106,6 +112,14 @@ export function bootDefi(): void {
   // testnet via the registry's network gate (spec §4.6).
   if (FEATURE_DEFI_SUI_ADAPTERS) {
     registerDefiAdapter(ScallopSuiAdapter);
+    // Ember (Bluefin) — generic Sui vault family, routed by
+    // `DepositTarget.kind === "ember-vault"` (pool-level deposits §7). One
+    // adapter covers every Ember vault the backend resolver returns.
+    registerDefiAdapter(EmberSuiAdapter);
+    // NAVI — Sui money market, routed by `DepositTarget.kind === "navi-pool"`.
+    registerDefiAdapter(NaviSuiAdapter);
+    // Suilend NOT registered — deposit + withdraw are Pyth-gated (see import
+    // note). Adapter is ready; wire the Pyth push then register here.
   }
 
   // ── Testnet adapters (QA-only) ──────────────────────────────────

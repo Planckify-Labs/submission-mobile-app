@@ -25,7 +25,7 @@ import {
 } from "viem/chains";
 import { AaveV3Deployments, readAaveV3Position } from "../adapters/aaveV3";
 import { getDefiAdapter } from "../registry";
-import type { DefiPosition } from "../types";
+import type { DefiPosition, PositionReadContext } from "../types";
 
 export interface PositionReadInput {
   protocolSlug: string;
@@ -35,6 +35,12 @@ export interface PositionReadInput {
   assetSymbol?: string;
   assetDecimals?: number;
   chainId?: number | string;
+  /**
+   * DeFiLlama pool id from the position row. For pool-level adapters (Sui) it's
+   * re-resolved to the on-chain `depositTarget` so the adapter knows which
+   * reserve/vault to read — the LLM/UI still only ever sees the opaque id (§8).
+   */
+  poolId?: string;
 }
 
 /**
@@ -78,8 +84,29 @@ export async function readPosition(
     });
   }
 
+  // Build the optional read context. For pool-level adapters (those declaring
+  // `targetKinds` — Sui reserves/vaults with no fixed per-asset deployment),
+  // re-resolve the authoritative on-chain target from the row's `pool_id` so the
+  // adapter knows exactly which reserve/vault to read. Presence-checked on the
+  // adapter (never a namespace branch); best-effort so a target-fetch failure
+  // degrades to the DB snapshot instead of dropping the position.
+  const ctx: PositionReadContext = {
+    assetContract: input.assetContract,
+    assetSymbol: input.assetSymbol,
+    assetDecimals: input.assetDecimals,
+  };
+  if (input.poolId && adapter.targetKinds?.length) {
+    try {
+      const { strategiesApi } = await import("@/api/endpoints/strategies");
+      const opp = await strategiesApi.getPool(input.poolId).catch(() => null);
+      if (opp?.depositTarget) ctx.target = opp.depositTarget;
+    } catch {
+      // best-effort — adapter falls back to null / DB snapshot
+    }
+  }
+
   // Default — let the adapter handle it.
-  return adapter.readPosition(input.walletAddress);
+  return adapter.readPosition(input.walletAddress, ctx);
 }
 
 function aaveDeploymentKeyForSlug(
