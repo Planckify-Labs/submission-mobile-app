@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useRef, useState } from "react";
 import {
   BackHandler,
   Dimensions,
@@ -44,20 +45,31 @@ export default function Home() {
     scrollToIndex(1);
   }, [scrollToIndex]);
 
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener(
-      "hardwareBackPress",
-      () => {
-        if (currentIndex === 1) {
-          scrollToIndex(0);
-          return true;
-        }
-        return false;
-      },
-    );
+  // Register the hardware-back handler only while Home is the focused
+  // screen. If we used a plain useEffect, the handler would stay live
+  // even after the agent pushes a route on top of Home — and because
+  // BackHandler fires globally in LIFO order (before React Navigation's
+  // pop handler), the first back press on that pushed screen would be
+  // swallowed here (currentIndex still === 1 → scrollToIndex(0) + return
+  // true), so it took two presses to actually leave the screen and the
+  // second press jumped straight to Home. useFocusEffect tears the
+  // handler down on blur, so pushed screens get a normal back button.
+  useFocusEffect(
+    useCallback(() => {
+      const backHandler = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          if (currentIndex === 1) {
+            scrollToIndex(0);
+            return true;
+          }
+          return false;
+        },
+      );
 
-    return () => backHandler.remove();
-  }, [currentIndex, scrollToIndex]);
+      return () => backHandler.remove();
+    }, [currentIndex, scrollToIndex]),
+  );
 
   const { bottom } = useSafeAreaInsets();
   const bottomOffset = Platform.OS === "ios" ? 0 : bottom > 0 ? bottom : 0;
