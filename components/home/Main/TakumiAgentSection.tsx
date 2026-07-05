@@ -257,7 +257,9 @@ function SpotlightCard({
         </Text>
         <View className="flex-row items-center gap-1 bg-white/20 rounded-full px-2.5 py-1">
           <ArrowUp size={11} color="#ffffff" strokeWidth={3} />
-          <Text className="text-white text-[10px] font-bold">~0.1 - 7% APY</Text>
+          <Text className="text-white text-[10px] font-bold">
+            ~0.1 - 7% APY
+          </Text>
         </View>
       </View>
 

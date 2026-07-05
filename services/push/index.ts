@@ -36,7 +36,7 @@ import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import { HTTPError } from "ky";
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { api } from "@/constants/configs/ky";
 import { usePaymentIntentInvalidator } from "@/hooks/usePaymentIntentInvalidator";
 
@@ -68,39 +68,28 @@ export async function registerAndroidPayoutChannel(): Promise<void> {
   }
 }
 
-/**
- * Idempotent guard: we only attempt permission + token registration
- * once per app session. The Expo notifications API is itself idempotent,
- * but re-POSTing the token on every screen mount would spam the
- * backend and the logs.
- */
-let didRegisterThisSession = false;
+// Tracks the last attempted wallet list so the foreground-retry hook can
+// re-use it without the call site needing to pass it again.
+const retryState = {
+  failed: false,
+  wallets: [] as string[],
+};
 
 /**
  * Request push permission, obtain an Expo push token, and POST it to
- * the backend. Idempotent — safe to call on every app mount.
- *
- * Returns the Expo push token on success, `null` on any failure path
- * (permissions denied, simulator, backend unreachable, endpoint not
- * implemented). Callers should not treat the return value as a gate —
- * this function logs its own failures and the app must keep working.
+ * the backend. Idempotent — safe to call whenever the wallet list changes.
+ * Returns true on success, false on any unrecoverable failure (so callers
+ * can decide whether to retry). Fails-closed on every branch so the app
+ * always keeps working without push.
  */
-export async function registerForPushNotifications(): Promise<string | null> {
-  if (didRegisterThisSession) return null;
-  didRegisterThisSession = true;
-
-  // Register the channel first — FCM drops messages referencing a
-  // missing channel, so this must happen before the first server push.
+export async function registerForPushNotifications(
+  wallets: string[],
+): Promise<boolean> {
   await registerAndroidPayoutChannel();
 
-  // Push tokens only work in builds that have the native module linked
-  // (dev-client or standalone). Bail cleanly on Expo Go — simulators
-  // will naturally throw at `getExpoPushTokenAsync` below and fall
-  // into the catch. One log line on a dev box is fine; we don't need
-  // to hard-detect "this is a simulator".
   if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
     console.log("[push] skipping registration in Expo Go");
-    return null;
+    return true; // not a failure — expected environment
   }
 
   try {
@@ -111,74 +100,90 @@ export async function registerForPushNotifications(): Promise<string | null> {
       status = requested.status;
     }
     if (status !== "granted") {
-      console.log("[push] permission not granted:", status);
-      return null;
+      console.log("[push] permission not granted — not retrying");
+      retryState.failed = false; // permission denied is not a transient failure
+      return true;
     }
 
-    // `getExpoPushTokenAsync` pairs the device with Expo's push relay
-    // for dev / preview builds. Production EAS builds with APNs/FCM
-    // certs in place still work — Expo forwards to the native service.
     const tokenRes = await Notifications.getExpoPushTokenAsync();
     const token = tokenRes.data;
     if (!token) {
       console.warn("[push] getExpoPushTokenAsync returned empty");
-      return null;
+      return false;
     }
 
-    // Dev-only: print the token in a copy-friendly block so it's easy
-    // to grab from the Metro console for `pnpm pushNotif:test` runs.
-    // Stripped in production builds — never log the token in prod.
     if (__DEV__) {
       console.log(
         `\n========== EXPO PUSH TOKEN (copy below) ==========\n${token}\n==================================================\n`,
       );
     }
 
-    await postPushToken(token);
-    return token;
+    const ok = await postPushToken(token, wallets);
+    retryState.failed = !ok;
+    retryState.wallets = wallets;
+    return ok;
   } catch (err) {
     console.warn("[push] registerForPushNotifications threw:", err);
-    return null;
+    retryState.failed = true;
+    retryState.wallets = wallets;
+    return false;
   }
 }
 
 /**
- * POST the Expo push token to the backend. Graceful-degradation: a 404
- * (endpoint not deployed yet) or network failure logs and returns.
- * Matches §6.3's "register once per device; server dedupes by token".
+ * Mount once at the app root. When the app comes back to the foreground
+ * and the last registration attempt failed (e.g. was offline), retries
+ * automatically — no user action required.
  */
-async function postPushToken(token: string): Promise<void> {
-  try {
-    await api
-      .post("users/me/push-token", {
-        json: {
-          token,
-          platform: Platform.OS,
-          // Client reports its own delivery channel name so the server
-          // can route `channelId` in the FCM payload without hard-
-          // coding the enum.
-          androidChannelId:
-            Platform.OS === "android" ? ANDROID_PAYOUT_CHANNEL_ID : undefined,
-        },
-      })
-      .json();
-    console.log("[push] token registered with backend");
-  } catch (err) {
-    // `ky` throws `HTTPError` on non-2xx; our ky wrapper also throws
-    // `ApiHttpError` with a `.response.status`. Treat 404 as "backend
-    // not ready" so QA and the user don't see a crash.
-    const status =
-      err instanceof HTTPError
-        ? err.response.status
-        : (err as { response?: { status?: number } })?.response?.status;
-    if (status === 404) {
-      console.log(
-        "[push] backend /users/me/push-token not deployed yet — skipping",
-      );
-      return;
+export function usePushRegistrationRetry(): void {
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active" && retryState.failed && retryState.wallets.length > 0) {
+        console.log("[push] retrying registration on foreground");
+        void registerForPushNotifications(retryState.wallets);
+      }
+    });
+    return () => sub.remove();
+  }, []);
+}
+
+const POST_RETRY_DELAYS_MS = [0, 1000, 3000]; // immediate, 1 s, 3 s
+
+// Returns true on success (including 404 = not-yet-deployed), false on
+// exhausted retries so the caller can schedule a foreground retry.
+async function postPushToken(token: string, wallets: string[]): Promise<boolean> {
+  for (let attempt = 0; attempt < POST_RETRY_DELAYS_MS.length; attempt++) {
+    const delay = POST_RETRY_DELAYS_MS[attempt] ?? 0;
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+
+    try {
+      await api
+        .post("users/me/push-token", {
+          json: { token, platform: Platform.OS, wallets },
+        })
+        .json();
+      console.log("[push] token registered with backend");
+      return true;
+    } catch (err) {
+      const status =
+        err instanceof HTTPError
+          ? err.response.status
+          : (err as { response?: { status?: number } })?.response?.status;
+
+      if (status === 404) {
+        console.log("[push] backend /users/me/push-token not deployed yet — skipping");
+        return true;
+      }
+
+      const isLast = attempt === POST_RETRY_DELAYS_MS.length - 1;
+      if (isLast) {
+        console.warn(`[push] registration failed after ${POST_RETRY_DELAYS_MS.length} attempts:`, err);
+        return false;
+      }
+      console.warn(`[push] registration attempt ${attempt + 1} failed, retrying:`, err);
     }
-    console.warn("[push] failed to register token with backend:", err);
   }
+  return false;
 }
 
 /** Shape of the `data` payload we expect from server-sent PAID_OUT pushes. */

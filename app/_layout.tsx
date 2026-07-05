@@ -21,6 +21,8 @@ import { ChainSwitchingOverlay } from "@/components/common/ChainSwitchingOverlay
 import { PerformanceProvider } from "@/components/providers/PerformanceProvider";
 import LockScreen from "@/components/security/LockScreen";
 import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
+// Ordering (spec §6.2): polyfill import → bootWalletKits() → any screen/provider.
+import { useWallet } from "@/hooks/useWallet";
 import {
   mmkvPersister,
   shouldPersistQuery,
@@ -30,9 +32,9 @@ import { bootGasAbstraction } from "@/services/gasAbstraction/boot";
 import {
   registerForPushNotifications,
   usePushNotificationHandler,
+  usePushRegistrationRetry,
 } from "@/services/push";
 import { installQRMatrixCache } from "@/services/qrMatrixCache";
-// Ordering (spec §6.2): polyfill import → bootWalletKits() → any screen/provider.
 import { bootWalletKits } from "@/services/walletKit/boot";
 import { hasStoredWallets } from "@/services/walletService";
 import { refreshSettlementRailConfig } from "@/services/x402/refreshSettlementRailConfig";
@@ -129,21 +131,21 @@ function AppShell() {
   const queryClient = useQueryClient();
   const [locked, setLocked] = useState<boolean>(hasStoredWallets());
   const [didUnlockThisSession, setDidUnlockThisSession] = useState(false);
+  const { wallets } = useWallet();
 
-  // Task 32 — install the global push receive + tap handlers so a
-  // server-sent PAID_OUT push invalidates the polling intent query
-  // (foreground) and deep-links to the receipt (tap / cold-start).
-  // Must live inside the QueryClient provider — the hook reads the
-  // client via `useQueryClient()`.
   usePushNotificationHandler();
+  usePushRegistrationRetry();
 
-  // Fire-and-forget permission + token registration on mount. The
-  // function is idempotent (gated by `didRegisterThisSession`) and
-  // fails-closed on every branch (denied permission, simulator,
-  // backend 404), so the app never blocks on it.
+  // Re-register whenever the wallet list changes so new wallets are
+  // subscribed immediately. walletKey is a stable string derived from
+  // the address list — the effect only fires when addresses actually change.
+  const walletKey = wallets.map((w) => w.address).join(",");
   useEffect(() => {
-    void registerForPushNotifications();
-  }, []);
+    const addresses = wallets.map((w) => w.address);
+    if (addresses.length === 0) return;
+    void registerForPushNotifications(addresses);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletKey]);
 
   // Two-phase unlock — lift the gate first (so all `useAppLocked()`
   // consumers fire their gated effects + the React re-render cascade

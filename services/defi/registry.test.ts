@@ -22,7 +22,11 @@ function fakeAdapter(
   targetKinds?: DepositTargetKind[],
   externalSlugs?: string[],
 ): DefiProtocolAdapter {
-  const stub = async () => ({ kind: "evm-call" as const, to: "0x0" as const, data: "0x" as const });
+  const stub = async () => ({
+    kind: "evm-call" as const,
+    to: "0x0" as const,
+    data: "0x" as const,
+  });
   return {
     slug,
     namespace: "eip155",
@@ -41,7 +45,9 @@ describe("registry kind-based routing", () => {
   beforeEach(() => {
     registerDefiAdapter(fakeAdapter("erc4626", ["erc4626"]));
     registerDefiAdapter(fakeAdapter("aave-v3-base", ["aave-v3"]));
-    registerDefiAdapter(fakeAdapter("morpho-steakhouse", undefined, ["morpho-blue"]));
+    registerDefiAdapter(
+      fakeAdapter("morpho-steakhouse", undefined, ["morpho-blue"]),
+    );
   });
 
   it("routes a kind to the adapter declaring it in targetKinds", () => {

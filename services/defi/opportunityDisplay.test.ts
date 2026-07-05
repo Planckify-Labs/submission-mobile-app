@@ -71,9 +71,33 @@ describe("groupOpportunities", () => {
 
   it("keeps different (protocol, asset, chain) triples in separate groups", () => {
     const rows: RawOpportunity[] = [
-      { protocol_slug: "aave-v3", asset_symbol: "USDC", chain_name: "Base", pool_id: "1", in_app: true, apy: 4, score: 90 },
-      { protocol_slug: "aave-v3", asset_symbol: "USDC", chain_name: "Arbitrum", pool_id: "2", in_app: true, apy: 5, score: 88 },
-      { protocol_slug: "aave-v3", asset_symbol: "DAI", chain_name: "Base", pool_id: "3", in_app: true, apy: 3, score: 85 },
+      {
+        protocol_slug: "aave-v3",
+        asset_symbol: "USDC",
+        chain_name: "Base",
+        pool_id: "1",
+        in_app: true,
+        apy: 4,
+        score: 90,
+      },
+      {
+        protocol_slug: "aave-v3",
+        asset_symbol: "USDC",
+        chain_name: "Arbitrum",
+        pool_id: "2",
+        in_app: true,
+        apy: 5,
+        score: 88,
+      },
+      {
+        protocol_slug: "aave-v3",
+        asset_symbol: "DAI",
+        chain_name: "Base",
+        pool_id: "3",
+        in_app: true,
+        apy: 3,
+        score: 85,
+      },
     ];
     const groups = groupOpportunities(rows);
     expect(groups).toHaveLength(3);
@@ -81,8 +105,24 @@ describe("groupOpportunities", () => {
 
   it("ranks groups safest-first (bestScore desc), then bestApy", () => {
     const rows: RawOpportunity[] = [
-      { protocol_slug: "risky", asset_symbol: "USDC", chain_name: "Eth", pool_id: "r", in_app: true, apy: 20, score: 40 },
-      { protocol_slug: "safe", asset_symbol: "USDC", chain_name: "Eth", pool_id: "s", in_app: true, apy: 4, score: 95 },
+      {
+        protocol_slug: "risky",
+        asset_symbol: "USDC",
+        chain_name: "Eth",
+        pool_id: "r",
+        in_app: true,
+        apy: 20,
+        score: 40,
+      },
+      {
+        protocol_slug: "safe",
+        asset_symbol: "USDC",
+        chain_name: "Eth",
+        pool_id: "s",
+        in_app: true,
+        apy: 4,
+        score: 95,
+      },
     ];
     const groups = groupOpportunities(rows);
     expect(groups.map((g) => g.protocolSlug)).toEqual(["safe", "risky"]);
