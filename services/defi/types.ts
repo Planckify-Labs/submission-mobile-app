@@ -55,6 +55,13 @@ export type DepositTarget =
       reserveArrayIndex: number;
       coinType: string;
     }
+  // Sui liquid staking (Haedal / Volo / SpringSui / Aftermath). The user
+  // supplies `Coin<SUI>` and receives a liquid-staking receipt coin; the deposit
+  // is ORACLE-FREE (no Pyth), unlike Suilend. `venue` selects the stake shape +
+  // pinned shared objects in `adapters/sui/lst.config.ts`; `lstType` is the
+  // receipt coin (for validation/display). One `SuiLstAdapter` serves all
+  // venues, routed by `kind === "sui-lst"`.
+  | { kind: "sui-lst"; venue: string; lstType: string }
   | { kind: "solana-reserve"; program: string; reserve: string; mint: string };
 
 export type DepositTargetKind = DepositTarget["kind"];
@@ -251,6 +258,20 @@ export interface DefiProtocolAdapter {
     assetSymbol: string,
     ownerAddress: string,
   ): Promise<{ apy?: string; inputCoinType?: string }>;
+  /**
+   * True when this target's preview dry-run can't be trusted — a KNOWN simulator
+   * false-positive (a version-gated Sui pool whose `assert_version` aborts in
+   * dry-run but succeeds in real execution, verified). The intent executor uses
+   * this to SCOPE its dry-run-revert exemption to that exact case (an
+   * `assert_version` abort on such a target is downgraded from block to
+   * non-block; any other abort still blocks). MUST verify the precondition the
+   * on-chain gate checks (e.g. read the pool's `version` and confirm it matches
+   * the pinned package) so it returns true ONLY when real execution would pass —
+   * i.e. this replaces the broken simulation with a reliable on-chain read, it
+   * does not blindly ignore the revert. Fail-safe: return false when it can't
+   * verify. Optional (presence-checked); absent ⇒ the dry-run is authoritative.
+   */
+  isDryRunUnreliable?(target?: DepositTarget): Promise<boolean>;
 }
 
 /**

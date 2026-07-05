@@ -49,7 +49,11 @@ vi.mock("@mysten/sui/jsonRpc", () => ({
 
 import { intentStore } from "@/services/chains/sui/intent/intentStore";
 import type { ExecutorContext } from "../types";
-import { defiIntentExecute, defiIntentPreview } from "./intentExecutors";
+import {
+  defiIntentExecute,
+  defiIntentPreview,
+  isVersionGateDryRunArtifact,
+} from "./intentExecutors";
 
 const SUI = "0x2::sui::SUI";
 
@@ -286,5 +290,44 @@ describe("defiIntentExecute", () => {
     expect(r.tx_hash).toBeUndefined();
     // A previewed PTB signs at most once.
     expect(intentStore.get(id)).toBeNull();
+  });
+});
+
+// The version-gate dry-run bypass MUST stay tightly scoped: it only downgrades a
+// KNOWN false-positive (an `assert_version` abort on a `simulationUnreliable`
+// venue). Every other revert — and any missing flag — must still block.
+describe("isVersionGateDryRunArtifact (scoped bypass)", () => {
+  const assertVersionAbort = {
+    status:
+      'MoveAbort(MoveLocation { module: ..., function_name: Some("assert_version") }, 1)',
+  };
+
+  it("bypasses ONLY an assert_version revert on a flagged venue", () => {
+    expect(isVersionGateDryRunArtifact(true, assertVersionAbort)).toBe(true);
+  });
+
+  it("does NOT bypass when the venue isn't flagged (fail-safe)", () => {
+    expect(isVersionGateDryRunArtifact(false, assertVersionAbort)).toBe(false);
+    expect(isVersionGateDryRunArtifact(undefined, assertVersionAbort)).toBe(
+      false,
+    );
+  });
+
+  it("does NOT bypass a different revert on a flagged venue", () => {
+    expect(
+      isVersionGateDryRunArtifact(true, {
+        status: "MoveAbort(... EInsufficientBalance ..., 3)",
+      }),
+    ).toBe(false);
+    expect(
+      isVersionGateDryRunArtifact(true, { status: "InsufficientGas" }),
+    ).toBe(false);
+  });
+
+  it("does NOT bypass a successful or missing dry-run", () => {
+    expect(isVersionGateDryRunArtifact(true, { status: "success" })).toBe(
+      false,
+    );
+    expect(isVersionGateDryRunArtifact(true, null)).toBe(false);
   });
 });

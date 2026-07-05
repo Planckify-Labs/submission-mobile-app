@@ -26,6 +26,9 @@ export interface IntentStoreEntry {
   inputCoinType?: string;
   /** Resolved raw input amount — for activity-feed recording at execute. */
   inputAmountRaw?: bigint;
+  /** Carries the compiler's `simulationUnreliable` so the execute re-guard can
+   *  apply the same scoped version-gate dry-run bypass the preview did. */
+  simulationUnreliable?: boolean;
   /** Epoch ms when this entry is no longer valid. */
   expiresAt: number;
 }
@@ -37,6 +40,7 @@ export interface PutIntentArgs {
   summary: string;
   inputCoinType?: string;
   inputAmountRaw?: bigint;
+  simulationUnreliable?: boolean;
 }
 
 /** 5 minutes — long enough to confirm, short enough that pool state can't drift far. */
@@ -63,6 +67,7 @@ class IntentStoreImpl {
       summary: args.summary,
       inputCoinType: args.inputCoinType,
       inputAmountRaw: args.inputAmountRaw,
+      simulationUnreliable: args.simulationUnreliable,
       expiresAt: now + INTENT_TTL_MS,
     });
     return id;

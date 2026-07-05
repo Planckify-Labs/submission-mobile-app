@@ -53,6 +53,7 @@ import {
 import { NaviSuiAdapter } from "./adapters/naviSui";
 import { ScallopSuiAdapter } from "./adapters/scallopSui";
 import { SolanaJitoAdapter } from "./adapters/solanaJito";
+import { SuiLstAdapter } from "./adapters/suiLst";
 // SuilendSuiAdapter is implemented but NOT registered — Suilend's deposit AND
 // withdraw both assert a fresh reserve price (abort code 1), needing a Pyth
 // pull-oracle push in-tx (deferred). Registering it would badge Suilend
@@ -118,6 +119,11 @@ export function bootDefi(): void {
     registerDefiAdapter(EmberSuiAdapter);
     // NAVI — Sui money market, routed by `DepositTarget.kind === "navi-pool"`.
     registerDefiAdapter(NaviSuiAdapter);
+    // Liquid staking (Haedal / Volo / SpringSui / Aftermath) — ONE adapter for
+    // every LST venue, routed by `DepositTarget.kind === "sui-lst"`. Deposits are
+    // oracle-free (no Pyth), so they badge "Deposit in-app". The LST opportunity
+    // rows are synthesized server-side (they are not in DeFiLlama's Sui pools).
+    registerDefiAdapter(SuiLstAdapter);
     // Suilend NOT registered — deposit + withdraw are Pyth-gated (see import
     // note). Adapter is ready; wire the Pyth push then register here.
   }

@@ -233,6 +233,7 @@ async function compileSwapAndSupply(
     inputCoinType: from.coinType,
     inputAmountRaw: amountRaw,
     outputCoinType: result.toCoinType,
+    simulationUnreliable: (await adapter.isDryRunUnreliable?.(target)) ?? false,
   };
 }
 
@@ -308,5 +309,6 @@ async function compileSupplyWithdraw(
     apy: meta.apy,
     inputCoinType: meta.inputCoinType ?? asset.coinType,
     inputAmountRaw,
+    simulationUnreliable: (await adapter.isDryRunUnreliable?.(target)) ?? false,
   };
 }

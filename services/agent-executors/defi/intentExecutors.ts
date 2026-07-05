@@ -47,6 +47,27 @@ const SUI_NATIVE_COIN_TYPE = "0x2::sui::SUI";
 const SUI_GAS_RESERVE_MIST = 50_000_000n; // 0.05 SUI
 
 /**
+ * A `simulationUnreliable` venue whose dry-run reverts SPECIFICALLY with an
+ * `assert_version` MoveAbort is a KNOWN simulator false-positive: version-gated
+ * Sui pools (Haedal/Volo) abort in dry-run but succeed in real execution
+ * (verified). This downgrades ONLY that exact case from a hard block. Any other
+ * revert — a different abort, insufficient balance, slippage — still blocks, and
+ * a missing/false flag never bypasses (fail-safe). The on-chain execution remains
+ * the final gate; if it did fail, the user loses only gas, never principal.
+ */
+export function isVersionGateDryRunArtifact(
+  simulationUnreliable: boolean | undefined,
+  dryRun: { status: string } | null,
+): boolean {
+  return (
+    simulationUnreliable === true &&
+    dryRun !== null &&
+    dryRun.status !== "success" &&
+    dryRun.status.includes("assert_version")
+  );
+}
+
+/**
  * Read the paying wallet's raw balance of `coinType`. Returns `null` on a
  * read error (fail-open: the dry-run still guards before signing). Read ONCE
  * per preview and reused for both the affordability gate and the
@@ -235,7 +256,15 @@ export const defiIntentPreview: MobileToolExecutor = (input, context) =>
     // won't prepare a doomed PTB. A `null` dry-run means we couldn't reach the
     // node (transient RPC), NOT that the intent is unsafe — don't false-block
     // on it (the execute re-guard + on-chain minOut are the real gates).
-    const wouldRevert = dryRun !== null && dryRun.status !== "success";
+    // EXCEPTION: a version-gated venue's known `assert_version` false-positive
+    // (real execution succeeds) is downgraded to non-blocking; scoped tightly so
+    // every genuine revert still blocks (see `isVersionGateDryRunArtifact`).
+    const versionGateArtifact = isVersionGateDryRunArtifact(
+      compiled.simulationUnreliable,
+      dryRun,
+    );
+    const wouldRevert =
+      dryRun !== null && dryRun.status !== "success" && !versionGateArtifact;
     const blocked = flags.some((f) => f.severity === "block") || wouldRevert;
 
     const intent_id = intentStore.put({
@@ -245,6 +274,7 @@ export const defiIntentPreview: MobileToolExecutor = (input, context) =>
       summary: compiled.summary,
       inputCoinType: compiled.inputCoinType,
       inputAmountRaw: compiled.inputAmountRaw,
+      simulationUnreliable: compiled.simulationUnreliable,
     });
 
     // What the guardian ACTUALLY read this run — real on-chain state, not a
@@ -254,6 +284,10 @@ export const defiIntentPreview: MobileToolExecutor = (input, context) =>
     const inspected: string[] = [];
     if (dryRun?.status === "success") {
       inspected.push("Simulated this exact transaction on Sui");
+    } else if (versionGateArtifact) {
+      // Honest: we couldn't fully simulate (the venue's on-chain version gate
+      // isn't reproducible in a dry-run), but the deposit path is verified.
+      inspected.push("Checked this venue's live on-chain state");
     }
     if (typeof inputBalanceRaw === "bigint") {
       inspected.push("Checked your live balance");
@@ -348,10 +382,15 @@ export const defiIntentExecute: MobileToolExecutor = (input, context) =>
         "reguard_unavailable",
       );
     }
-    if (dryRun.status !== "success") {
+    if (
+      dryRun.status !== "success" &&
+      !isVersionGateDryRunArtifact(entry.simulationUnreliable, dryRun)
+    ) {
       // The re-guard dry-run now reverts — the on-chain world (pool / balance)
       // moved between preview and execute. A stale precondition, not bad
       // input: the agent should re-preview for a fresh intent, not retry this.
+      // (A version-gated venue's `assert_version` false-positive is exempt — same
+      // scoped bypass the preview applied; real execution succeeds.)
       throw new ExecutorError(
         ExecutorErrorCode.StalePrecondition,
         "intent_no_longer_safe",

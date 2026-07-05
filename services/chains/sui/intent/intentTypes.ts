@@ -57,4 +57,12 @@ export interface CompiledIntent {
    * the sender, instead of trusting the venue quote alone.
    */
   outputCoinType?: string;
+  /**
+   * True when the resolved venue's preview dry-run is a KNOWN false-positive (a
+   * version-gated Sui pool whose `assert_version` aborts in dry-run but succeeds
+   * in real execution). The executor uses it to scope its dry-run-revert bypass to
+   * exactly that case; absent/false ⇒ the dry-run is authoritative. Set from the
+   * adapter's `isDryRunUnreliable`, never inferred.
+   */
+  simulationUnreliable?: boolean;
 }
