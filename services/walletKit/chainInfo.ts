@@ -101,6 +101,7 @@ const CHAIN_BADGE_LABELS: Record<Namespace, string> = {
   eip155: "EVM",
   solana: "SOL",
   sui: "SUI",
+  stellar: "XLM",
 };
 export function chainBadgeLabel(namespace: Namespace | undefined): string {
   if (!namespace) return "—";

@@ -19,6 +19,7 @@ import NetworkRadioButtons from "@/components/asset-explorer/NetworkRadioButtons
 import NetworkSelectorModal from "@/components/asset-explorer/NetworkSelectorModal";
 import UserAssetList from "@/components/asset-explorer/UserAssetList";
 import WalletInfo from "@/components/asset-explorer/WalletInfo";
+import TrustAssetConfirmModal from "@/components/wallet/TrustAssetConfirmModal";
 import { SAMPLE_ASSETS } from "@/constants/dummyData/assets";
 import type { TCryptoAsset } from "@/constants/types/assetTypes";
 import { useBlockchains } from "@/hooks/queries/useBlockchains";
@@ -78,6 +79,11 @@ export default function AssetExplorer() {
     addMultipleAssets,
     isAssetAdded,
     refetchBalances,
+    requestTrust,
+    pendingTrustAsset,
+    confirmTrust,
+    cancelTrust,
+    establishingAssetId,
   } = useUserAssetsWithBalances();
 
   const queryClient = useQueryClient();
@@ -262,6 +268,8 @@ export default function AssetExplorer() {
                 }}
                 onNavigateToExplore={() => setActiveTab("explore-assets")}
                 removeAsset={removeAsset}
+                onTrustPress={requestTrust}
+                establishingAssetId={establishingAssetId}
               />
             ) : (
               <AvailableAssetList
@@ -304,6 +312,17 @@ export default function AssetExplorer() {
           }
           closeWalletSelector();
         }}
+      />
+
+      <TrustAssetConfirmModal
+        visible={pendingTrustAsset !== null}
+        asset={pendingTrustAsset}
+        isSubmitting={
+          pendingTrustAsset !== null &&
+          establishingAssetId === pendingTrustAsset.id
+        }
+        onCancel={cancelTrust}
+        onConfirm={confirmTrust}
       />
     </>
   );

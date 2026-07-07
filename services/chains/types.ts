@@ -1,7 +1,7 @@
 import type { TWallet } from "@/constants/types/walletTypes";
 import type { ApprovalIntent } from "@/services/bridge/approval";
 
-export type Namespace = "eip155" | "solana" | "sui";
+export type Namespace = "eip155" | "solana" | "sui" | "stellar";
 
 export interface Origin {
   url: string;

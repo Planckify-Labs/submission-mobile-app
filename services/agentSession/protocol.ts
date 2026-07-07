@@ -38,7 +38,7 @@ export interface WalletContext {
    * before the server protocol bumps) is type-safe — the field is
    * forward-compatible per AGENT_PROTOCOL §13.
    */
-  namespace?: "eip155" | "solana" | "sui";
+  namespace?: "eip155" | "solana" | "sui" | "stellar";
   /**
    * Numeric chain id for EVM chains. For non-EVM chains this is `0` —
    * the server only reads it to surface in the system prompt and to

@@ -17,6 +17,7 @@
 import { createEvmWalletKit } from "./evm/EvmWalletKit";
 import { walletKitRegistry } from "./registry";
 import { createSolanaWalletKit } from "./solana/SolanaWalletKit";
+import { createStellarWalletKit } from "./stellar/StellarWalletKit";
 import { createSuiWalletKit } from "./sui/SuiWalletKit";
 
 let booted = false;
@@ -29,6 +30,8 @@ export function bootWalletKits(): void {
   // Sui registers third — order is stable for the namespace picker
   // (Task 21 / spec §3.3).
   walletKitRegistry.register(createSuiWalletKit());
+  // Stellar registers fourth (docs/stellar-chain-support-spec.md §3.3, §8.4).
+  walletKitRegistry.register(createStellarWalletKit());
   booted = true;
 }
 

@@ -3,6 +3,7 @@ import {
   createKeyPairFromPrivateKeyBytes,
   getAddressFromPublicKey,
 } from "@solana/kit";
+import { Keypair as StellarKeypair } from "@stellar/stellar-base";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import type {
   TWallet,
@@ -17,6 +18,15 @@ import {
   DEFAULT_SOLANA_PATH,
   mnemonicToSolanaPrivateKey,
 } from "@/services/chains/solana/derivation";
+import {
+  DEFAULT_STELLAR_PATH,
+  mnemonicToStellarPrivateKey,
+} from "@/services/chains/stellar/derivation";
+import {
+  decodeStellarSecretSeed,
+  isValidStellarAddress as isValidStellarAddressStrkey,
+  isValidStellarSecretSeed,
+} from "@/services/chains/stellar/strkey";
 import {
   decodeSuiPrivateKey,
   encodeSuiPrivateKey,
@@ -453,6 +463,125 @@ export async function createSuiWalletFromPrivateKey(
   }
 }
 
+/**
+ * Validate a canonical Stellar address (StrKey `G…`, ed25519 public
+ * key, checksum-verified). Never throws.
+ *
+ * Spec reference: `docs/stellar-chain-support-spec.md` §1.2, §9.
+ */
+export function isValidStellarAddress(address: string): boolean {
+  return isValidStellarAddressStrkey(address);
+}
+
+/**
+ * Validate a Stellar secret key export (StrKey `S…` secret seed,
+ * checksum-verified). Never throws.
+ */
+export function isValidStellarSecretKey(secretKey: string): boolean {
+  return isValidStellarSecretSeed(secretKey);
+}
+
+/**
+ * Create a Stellar `TWallet` from a BIP-39 mnemonic via SLIP-0010
+ * ed25519 derivation at the default SEP-0005 "primary key" path
+ * (`m/44'/148'/0'`).
+ *
+ * Spec reference: `docs/stellar-chain-support-spec.md` §1.2, §3.2, §6.
+ *
+ * Returns `null` if `isValidMnemonic` rejects the input or if
+ * derivation throws. Stores the secret as canonical StrKey `S…` on
+ * `TWallet.privateKey` so the dwell site (`getStellarSignerForWallet`)
+ * can re-decode without re-running BIP-39.
+ *
+ * Security: never logs mnemonic or key bytes. Failures emit a bounded
+ * `__DEV__` breadcrumb only.
+ */
+export async function createStellarWalletFromMnemonic(
+  mnemonic: string,
+  name?: string,
+): Promise<TWallet | null> {
+  if (!isValidMnemonic(mnemonic)) {
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.warn(
+        "[createStellarWalletFromMnemonic] isValidMnemonic rejected input (word count / wordlist)",
+      );
+    }
+    return null;
+  }
+  try {
+    const seed = mnemonicToStellarPrivateKey(mnemonic);
+    const kp = StellarKeypair.fromRawEd25519Seed(Buffer.from(seed));
+    const address = kp.publicKey();
+    const secret = kp.secret();
+    return {
+      account: { address },
+      address,
+      privateKey: secret,
+      seedPhrase: mnemonic,
+      name: name || "Stellar Wallet",
+      balance: "0",
+      source: "Created",
+      type: "SeedPhrase",
+      namespace: "stellar",
+      stellar: {
+        stellarAddress: address,
+        derivationPath: DEFAULT_STELLAR_PATH,
+        scheme: "ed25519",
+      },
+    };
+  } catch (err) {
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.warn(
+        "[createStellarWalletFromMnemonic] derivation threw:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    return null;
+  }
+}
+
+/**
+ * Create a Stellar `TWallet` from an exported StrKey `S…` secret seed.
+ *
+ * Spec reference: `docs/stellar-chain-support-spec.md` §1.2.
+ *
+ * Returns `null` on any decoding failure so the UI can render a clean
+ * error state without a try/catch.
+ */
+export async function createStellarWalletFromPrivateKey(
+  privateKey: string,
+  name?: string,
+): Promise<TWallet | null> {
+  try {
+    const seed = decodeStellarSecretSeed(privateKey);
+    const kp = StellarKeypair.fromRawEd25519Seed(seed);
+    const address = kp.publicKey();
+    return {
+      account: { address },
+      address,
+      privateKey: kp.secret(),
+      name: name || "Stellar Wallet",
+      balance: "0",
+      source: "Imported",
+      type: "PrivateKey",
+      namespace: "stellar",
+      stellar: {
+        stellarAddress: address,
+        derivationPath: undefined,
+        scheme: "ed25519",
+      },
+    };
+  } catch (err) {
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.warn(
+        "[createStellarWalletFromPrivateKey] decode/derivation threw:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    return null;
+  }
+}
+
 export async function createWalletFromParams(
   params: TWalletCreationParams,
 ): Promise<TWallet | null> {
@@ -478,6 +607,14 @@ export async function createWalletFromParams(
 
   if (params.source === "SuiSeedPhrase" && params.seedPhrase) {
     return createSuiWalletFromMnemonic(params.seedPhrase, params.name);
+  }
+
+  if (params.source === "StellarPrivateKey" && params.privateKey) {
+    return createStellarWalletFromPrivateKey(params.privateKey, params.name);
+  }
+
+  if (params.source === "StellarSeedPhrase" && params.seedPhrase) {
+    return createStellarWalletFromMnemonic(params.seedPhrase, params.name);
   }
 
   if (params.source === "social" && params.account) {

@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { walletKitRegistry } from "../../../services/walletKit/registry.ts";
 import type { WalletKitAdapter } from "../../../services/walletKit/types.ts";
 import {
+  buildAddWalletParams,
   computeValidationState,
   normalizePrivateKeyInput,
 } from "./ImportPrivateKeySheet.helpers.ts";
@@ -230,6 +231,47 @@ describe("computeValidationState", () => {
     it("correct key on correct chain returns 'valid' for both sides", () => {
       assert.equal(computeValidationState(EVM_KEY, "eip155"), "valid");
       assert.equal(computeValidationState(SOL_B58, "solana"), "valid");
+    });
+  });
+});
+
+// ── buildAddWalletParams ────────────────────────────────────────────────
+//
+// Regression guard: this previously only special-cased `"solana"` and
+// fell back to `"PrivateKey"` (the EVM source) for every other
+// namespace, so importing a Sui or Stellar private key silently built
+// an EVM params object and mis-routed the wallet.
+
+describe("buildAddWalletParams", () => {
+  it("maps eip155 to the historic 'PrivateKey' source", () => {
+    assert.deepEqual(buildAddWalletParams("eip155", "0xkey", "My EVM"), {
+      source: "PrivateKey",
+      privateKey: "0xkey",
+      name: "My EVM",
+    });
+  });
+
+  it("maps solana to 'SolanaPrivateKey'", () => {
+    assert.deepEqual(buildAddWalletParams("solana", "b58key", undefined), {
+      source: "SolanaPrivateKey",
+      privateKey: "b58key",
+      name: undefined,
+    });
+  });
+
+  it("maps sui to 'SuiPrivateKey' (not the EVM fallback)", () => {
+    assert.deepEqual(buildAddWalletParams("sui", "suiprivkey1abc", "My Sui"), {
+      source: "SuiPrivateKey",
+      privateKey: "suiprivkey1abc",
+      name: "My Sui",
+    });
+  });
+
+  it("maps stellar to 'StellarPrivateKey' (not the EVM fallback)", () => {
+    assert.deepEqual(buildAddWalletParams("stellar", "SABC123", "My Stellar"), {
+      source: "StellarPrivateKey",
+      privateKey: "SABC123",
+      name: "My Stellar",
     });
   });
 });

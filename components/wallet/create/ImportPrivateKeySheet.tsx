@@ -52,6 +52,7 @@ import { useWallet } from "@/hooks/useWallet";
 import type { Namespace } from "@/services/chains/types";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import {
+  buildAddWalletParams,
   computeValidationState,
   normalizePrivateKeyInput,
 } from "./ImportPrivateKeySheet.helpers";
@@ -83,6 +84,7 @@ const PLACEHOLDER: Record<Namespace, string> = {
   eip155: "0x... (64 hex chars)",
   solana: "Base58 (88 chars, Phantom export format)",
   sui: "Sui private key",
+  stellar: "Stellar secret key (S...)",
 };
 
 const INVALID_COPY: Record<Namespace, string> = {
@@ -90,26 +92,8 @@ const INVALID_COPY: Record<Namespace, string> = {
   solana:
     "This doesn't look like a Solana private key — expected 64-byte base58.",
   sui: "This doesn't look like a Sui private key.",
+  stellar: "This doesn't look like a Stellar secret key.",
 };
-
-/**
- * Map `{ namespace, privateKey }` to the `TWalletCreationParams` shape
- * accepted by `useWallet.addWallet`. EVM uses the historic
- * `"PrivateKey"` discriminant; Solana uses `"SolanaPrivateKey"` added
- * by Task 09.
- */
-function buildAddWalletParams(
-  namespace: Namespace,
-  privateKey: string,
-  name: string | undefined,
-): {
-  source: "PrivateKey" | "SolanaPrivateKey";
-  privateKey: string;
-  name?: string;
-} {
-  const source = namespace === "solana" ? "SolanaPrivateKey" : "PrivateKey";
-  return { source, privateKey, name };
-}
 
 function ImportPrivateKeySheet({
   visible,
@@ -419,11 +403,12 @@ function Step2Body({
   validationState,
   inputRef,
 }: Step2Props) {
+  const chainDisplayName =
+    walletKitRegistry.get(namespace).displayName ?? namespace;
   return (
     <View>
       <Text className="text-light-matte-black/70 text-sm mb-4">
-        Paste the private key for your{" "}
-        {namespace === "solana" ? "Solana" : "Ethereum"} wallet. Nothing leaves
+        Paste the private key for your {chainDisplayName} wallet. Nothing leaves
         your device until you confirm in the next step.
       </Text>
       <TextInput
@@ -466,11 +451,12 @@ type Step3Props = {
 };
 
 function Step3Body({ namespace, name, onChangeName, submitError }: Step3Props) {
+  const chainDisplayName =
+    walletKitRegistry.get(namespace).displayName ?? namespace;
   return (
     <View>
       <Text className="text-light-matte-black/70 text-sm mb-4">
-        Give your {namespace === "solana" ? "Solana" : "Ethereum"} wallet a
-        name. You can change this later.
+        Give your {chainDisplayName} wallet a name. You can change this later.
       </Text>
       <TextInput
         value={name}

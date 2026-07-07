@@ -35,6 +35,7 @@ import {
   SIMULATE_EXECUTORS,
   SOLANA_EXECUTORS,
   SOLANA_TAKUMI_PAY_EXECUTORS,
+  STELLAR_EXECUTORS,
   SUI_EXECUTORS,
   WRITE_EXECUTORS,
   X402_EXECUTORS,
@@ -49,6 +50,7 @@ const WALLET_EXECUTORS = composeAgentExecutors("wallet", {
   ...SOLANA_EXECUTORS,
   ...SOLANA_TAKUMI_PAY_EXECUTORS,
   ...SUI_EXECUTORS,
+  ...STELLAR_EXECUTORS,
   ...X402_EXECUTORS,
 });
 
@@ -130,6 +132,13 @@ export const EXPECTED_MOBILE_TOOLS: ReadonlyArray<string> = [
   "send_sui",
   "get_wallet_sui_coins",
   "send_sui_coin",
+  // stellar native (docs/stellar-chain-support-spec.md §7.2)
+  "get_wallet_xlm_balance",
+  "get_xlm_balance",
+  "send_xlm",
+  "get_wallet_stellar_assets",
+  "send_stellar_asset",
+  "establish_stellar_trustline",
   // defi (spec §11 — full canonical set)
   "defi_list_opportunities",
   "defi_list_positions",

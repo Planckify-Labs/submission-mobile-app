@@ -14,6 +14,7 @@ const NAMESPACE_LABEL: Record<Namespace, string> = {
   eip155: "EVM",
   solana: "Solana",
   sui: "Sui",
+  stellar: "Stellar",
 };
 
 type WalletSwitcherModalProps = {

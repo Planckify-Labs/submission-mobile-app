@@ -18,6 +18,37 @@ const SUI_NETWORK_TO_VCHAINID: Record<string, number> = {
   devnet: 3,
 };
 
+// Stellar CAIP-2 references (per CAIP-28,
+// namespaces.chainagnostic.org/stellar/caip2) are `pubnet` / `testnet` —
+// NOT `mainnet`. This is the one namespace where the CAIP-2 wire
+// reference diverges from this app's internal `ChainConfig.network`
+// value (`"mainnet"` | `"testnet"`); see {@link stellarNetworkToCaipReference}
+// / {@link caipReferenceToStellarNetwork} for that translation. The
+// virtual-chainId map below keys on the CAIP-2 reference string (mirroring
+// the Sui map above, which keys on Sui's CAIP ref — for Sui the internal
+// and CAIP names happen to be identical, so no separate translation was
+// needed there).
+const STELLAR_NETWORK_TO_VCHAINID: Record<string, number> = {
+  pubnet: 1,
+  testnet: 2,
+};
+
+/** Internal `ChainConfig.network` → CAIP-2 reference (`"mainnet"` → `"pubnet"`). */
+export function stellarNetworkToCaipReference(
+  network: "mainnet" | "testnet",
+): "pubnet" | "testnet" {
+  return network === "mainnet" ? "pubnet" : "testnet";
+}
+
+/** CAIP-2 reference → internal `ChainConfig.network`. `null` if unrecognised. */
+export function caipReferenceToStellarNetwork(
+  ref: string,
+): "mainnet" | "testnet" | null {
+  if (ref === "pubnet") return "mainnet";
+  if (ref === "testnet") return "testnet";
+  return null;
+}
+
 export function caip2ToNamespace(
   caip2: string,
 ): { namespace: Namespace; chainId: number } | null {
@@ -28,6 +59,7 @@ export function caip2ToNamespace(
     eip155: "eip155",
     solana: "solana",
     sui: "sui",
+    stellar: "stellar",
   };
 
   const namespace = mapping[ns];
@@ -35,6 +67,12 @@ export function caip2ToNamespace(
 
   if (namespace === "sui") {
     const vChain = SUI_NETWORK_TO_VCHAINID[ref];
+    if (vChain === undefined) return null;
+    return { namespace, chainId: vChain };
+  }
+
+  if (namespace === "stellar") {
+    const vChain = STELLAR_NETWORK_TO_VCHAINID[ref];
     if (vChain === undefined) return null;
     return { namespace, chainId: vChain };
   }
@@ -53,6 +91,7 @@ export function namespaceToCaip2(
     eip155: "eip155",
     solana: "solana",
     sui: "sui",
+    stellar: "stellar",
   };
 
   if (namespace === "sui") {
@@ -60,6 +99,13 @@ export function namespaceToCaip2(
       (k) => SUI_NETWORK_TO_VCHAINID[k] === chainId,
     );
     return `sui:${ref ?? "mainnet"}`;
+  }
+
+  if (namespace === "stellar") {
+    const ref = Object.keys(STELLAR_NETWORK_TO_VCHAINID).find(
+      (k) => STELLAR_NETWORK_TO_VCHAINID[k] === chainId,
+    );
+    return `stellar:${ref ?? "pubnet"}`;
   }
 
   return `${nsMapping[namespace]}:${chainId}`;

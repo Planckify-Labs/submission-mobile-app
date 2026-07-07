@@ -46,6 +46,7 @@
     "@solana/web3.js": "1.98.4",
     "@solana/webcrypto-ed25519-polyfill": "2.0.0",
     "@stardazed/streams-text-encoding": "^1.0.2",
+    "@stellar/stellar-base": "^15.0.0",
     "@tanstack/react-query": "^5.95.2",
     "@tanstack/react-query-persist-client": "^5.95.2",
     "@ungap/structured-clone": "^1.3.0",

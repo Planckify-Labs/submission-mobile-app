@@ -22,7 +22,15 @@ export const DEFAULT_SOLANA_PATH = "m/44'/501'/0'/0'";
 const HARDENED_OFFSET = 0x80000000;
 const MASTER_KEY = new TextEncoder().encode("ed25519 seed");
 
-function derivePathSlip10Ed25519(
+/**
+ * Exported so other ed25519-hardened-derivation chains (Stellar's
+ * `m/44'/148'/0'`, per SEP-0005 — see
+ * `services/chains/stellar/derivation.ts`) can reuse this walker instead
+ * of adding a second SLIP-0010 implementation or a new dependency. The
+ * function is a generic path walker parameterized only by `path`; it has
+ * no Solana-specific behavior.
+ */
+export function derivePathSlip10Ed25519(
   seed: Uint8Array,
   path: string,
 ): { key: Uint8Array; chainCode: Uint8Array } {

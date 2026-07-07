@@ -1,20 +1,36 @@
 import {
   ChevronRight,
+  ShieldCheck,
   Trash2,
   TrendingDown,
   TrendingUp,
 } from "lucide-react-native";
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { TCryptoAsset } from "@/constants/types/assetTypes";
 import OptimizedImage from "../common/OptimizedImage";
 
 type UserAssetItemProps = {
   item: TCryptoAsset;
   removeAsset: (id: string) => void;
+  /**
+   * Called when the user taps "Trust" — only rendered when
+   * `item.needsTrust` is true (Stellar trustlines, spec §4.1/§8.3;
+   * `undefined` on every other namespace). Confirmation + reserve-cost
+   * disclosure happens in the caller (`useUserAssetsWithBalances`), not
+   * here — this card stays a thin button.
+   */
+  onTrustPress?: (item: TCryptoAsset) => void;
+  /** `true` while THIS item's trust transaction is in flight. */
+  isTrusting?: boolean;
 };
 
-const UserAssetItem = ({ item, removeAsset }: UserAssetItemProps) => {
+const UserAssetItem = ({
+  item,
+  removeAsset,
+  onTrustPress,
+  isTrusting,
+}: UserAssetItemProps) => {
   const isPositiveChange = item.change.startsWith("+");
 
   return (
@@ -83,6 +99,29 @@ const UserAssetItem = ({ item, removeAsset }: UserAssetItemProps) => {
             </View>
           </View>
         </View>
+
+        {/* Trust button — only rendered when this asset has a
+            receiver-side opt-in precondition (Stellar trustlines) that
+            hasn't been satisfied yet. */}
+        {item.needsTrust && onTrustPress ? (
+          <Pressable
+            hitSlop={10}
+            disabled={isTrusting}
+            onPress={() => onTrustPress(item)}
+            className="flex-row items-center bg-light-primary-red/10 px-3 h-10 rounded-xl mr-2 active:bg-light-primary-red/20"
+          >
+            {isTrusting ? (
+              <ActivityIndicator size="small" color="#c71c4b" />
+            ) : (
+              <>
+                <ShieldCheck size={16} color="#c71c4b" />
+                <Text className="text-light-primary-red text-xs font-semibold ml-1">
+                  Trust
+                </Text>
+              </>
+            )}
+          </Pressable>
+        ) : null}
 
         {/* Delete button */}
         <Pressable

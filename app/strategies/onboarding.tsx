@@ -296,8 +296,14 @@ export default function StrategiesOnboarding() {
   };
 
   const submit = async () => {
+    // DeFi strategies don't support Stellar yet (spec: Soroban/SAC is
+    // future work) — fall back to EVM rather than widen the payload
+    // type, same as the pre-existing undefined-wallet fallback below.
+    const walletNamespace = activeWallet?.namespace;
     const namespace: TCreateStrategyPayload["namespace"] =
-      activeWallet?.namespace ?? "eip155";
+      walletNamespace === "solana" || walletNamespace === "sui"
+        ? walletNamespace
+        : "eip155";
 
     const payload: TCreateStrategyPayload = {
       namespace,

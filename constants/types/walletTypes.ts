@@ -40,6 +40,15 @@ export interface TSuiFields {
   scheme: "ed25519";
 }
 
+export interface TStellarFields {
+  /** StrKey `G…` — the account's public key AND its ledger address (no separate hashing step). */
+  stellarAddress: string;
+  /** SEP-0005 derivation path. Absent ⇒ default `m/44'/148'/0'`. */
+  derivationPath?: string;
+  /** Signing scheme; only `ed25519` — Stellar has no other account-signer scheme in v1. */
+  scheme: "ed25519";
+}
+
 export interface TWallet {
   name: string;
   address: string;
@@ -54,6 +63,9 @@ export interface TWallet {
    * For Solana rows: base58-encoded 32-byte seed.
    * For Sui rows: bech32 `suiprivkey1…` form so the dwell site re-decodes
    *   without re-running BIP-39. `address` mirrors `sui.suiAddress`.
+   * For Stellar rows: StrKey `S…` secret-seed form so the dwell site
+   *   re-decodes without re-running BIP-39. `address` mirrors
+   *   `stellar.stellarAddress`.
    */
   privateKey?: string;
   seedPhrase?: string;
@@ -66,6 +78,7 @@ export interface TWallet {
   smart7702?: TSmart7702Fields;
   solana?: TSolanaFields;
   sui?: TSuiFields;
+  stellar?: TStellarFields;
 }
 
 export interface TWalletCreationParams {
@@ -76,7 +89,9 @@ export interface TWalletCreationParams {
     | "SolanaSeedPhrase"
     | "SolanaPrivateKey"
     | "SuiSeedPhrase"
-    | "SuiPrivateKey";
+    | "SuiPrivateKey"
+    | "StellarSeedPhrase"
+    | "StellarPrivateKey";
   privateKey?: string;
   seedPhrase?: string;
   name?: string;

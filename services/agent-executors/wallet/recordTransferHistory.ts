@@ -22,13 +22,13 @@ import type {
 
 export type RecordTransferArgs = {
   blockchains: TBlockchain[];
-  /** "solana" | "sui" | EVM chain_id picker. */
-  namespace: "solana" | "sui" | "eip155";
+  /** "solana" | "sui" | "stellar" | EVM chain_id picker. */
+  namespace: "solana" | "sui" | "stellar" | "eip155";
   /**
    * For EVM: the numeric chain id.
-   * For Solana / Sui: the chain slug (e.g. `solana-devnet`) — when
-   * omitted the helper falls back to the first blockchain in the list
-   * for that namespace.
+   * For Solana / Sui / Stellar: the chain slug (e.g. `solana-devnet`,
+   * `stellar-testnet`) — when omitted the helper falls back to the
+   * first blockchain in the list for that namespace.
    */
   chainId?: number;
   chainSlug?: string | null;
@@ -49,8 +49,8 @@ function findBlockchain(args: RecordTransferArgs): TBlockchain | undefined {
   if (namespace === "eip155") {
     return blockchains.find((b) => b.isEVM && b.chainId === chainId);
   }
-  // Solana / Sui — prefer chainSlug match, fall back to first matching
-  // non-EVM row by namespace prefix.
+  // Solana / Sui / Stellar — prefer chainSlug match, fall back to
+  // first matching non-EVM row by namespace prefix.
   if (chainSlug) {
     const exact = blockchains.find((b) => b.chainSlug === chainSlug);
     if (exact) return exact;

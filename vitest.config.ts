@@ -33,6 +33,21 @@ export default defineConfig({
       "services/defi/opportunityDisplay.test.ts",
       "services/defi/registry.test.ts",
       "services/defi/errors/defiErrors.test.ts",
+      // Stellar chain support (docs/stellar-chain-support-spec.md)
+      "services/chains/stellar/amount.test.ts",
+      "services/chains/stellar/derivation.test.ts",
+      "services/chains/stellar/strkey.test.ts",
+      "services/chains/stellar/errorCodes.test.ts",
+      "services/chains/stellar/accountState.test.ts",
+      "services/chains/stellar/trustlineService.test.ts",
+      "services/chains/stellar/transferService.test.ts",
+      "services/chains/stellar/assetTransferService.test.ts",
+      "services/chains/stellar/base64.test.ts",
+      "services/chains/stellar/horizonClient.test.ts",
+      // StellarWalletKit.test.ts runs under node:test (not vitest) —
+      // it transitively imports walletService.ts, which needs the EVM
+      // resolver's expo-secure-store/mmkv stubs. Mirrors
+      // SuiWalletKit.test.ts's setup.
     ],
   },
 });

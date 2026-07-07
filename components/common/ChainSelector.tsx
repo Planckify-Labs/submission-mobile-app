@@ -40,6 +40,7 @@ type ChainRowItem = {
   evmChainId?: number;
   solanaCluster?: "mainnet-beta" | "devnet";
   suiNetwork?: "mainnet" | "testnet" | "devnet";
+  stellarNetwork?: "mainnet" | "testnet";
   config: ChainConfig;
 };
 
@@ -54,6 +55,39 @@ function sectionTitleForNamespace(ns: Namespace): string {
     return kit.displayName ?? capitalize(ns);
   } catch {
     return capitalize(ns);
+  }
+}
+
+/**
+ * App-bar "active network" label. Exhaustive switch (not a nested
+ * ternary chain) so a future 5th namespace fails loud at compile time
+ * instead of silently falling into a hard-coded catch-all label — the
+ * bug that showed "Sui Mainnet" for an active Stellar wallet (the old
+ * final branch always rendered `Sui ${...}` for anything that wasn't
+ * eip155/solana).
+ */
+function formatActiveLabel(chain: ChainConfig): string {
+  switch (chain.namespace) {
+    case "eip155":
+      return chain.chain.name;
+    case "solana":
+      return `Solana ${chain.cluster === "devnet" ? "Devnet" : "Mainnet"}`;
+    case "sui":
+      return `Sui ${
+        chain.network === "mainnet"
+          ? "Mainnet"
+          : chain.network === "testnet"
+            ? "Testnet"
+            : "Devnet"
+      }`;
+    case "stellar":
+      return `Stellar ${chain.network === "mainnet" ? "Mainnet" : "Testnet"}`;
+    default: {
+      const _exhaustive: never = chain;
+      throw new Error(
+        `ChainSelector: unhandled chain namespace ${JSON.stringify(_exhaustive)}`,
+      );
+    }
   }
 }
 
@@ -136,39 +170,67 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
           blockchain.tokens?.[0];
         const config = buildChainConfigFromBlockchain(blockchain);
         let row: ChainRowItem;
-        if (config.namespace === "eip155") {
-          row = {
-            key: `eip155:${blockchain.chainId ?? "unknown"}`,
-            namespace: "eip155",
-            label: blockchain.name,
-            symbol: token?.symbol ?? "",
-            iconUrl: token?.logoUrl ?? undefined,
-            isTestnet: Boolean(config.isTestnet),
-            evmChainId: blockchain.chainId ?? undefined,
-            config,
-          };
-        } else if (config.namespace === "solana") {
-          row = {
-            key: `solana:${config.cluster}`,
-            namespace: "solana",
-            label: blockchain.name,
-            symbol: token?.symbol ?? "",
-            iconUrl: token?.logoUrl ?? config.iconUrl,
-            isTestnet: Boolean(config.isTestnet),
-            solanaCluster: config.cluster,
-            config,
-          };
-        } else {
-          row = {
-            key: `sui:${config.network}`,
-            namespace: "sui",
-            label: blockchain.name,
-            symbol: token?.symbol ?? "SUI",
-            iconUrl: token?.logoUrl ?? config.iconUrl,
-            isTestnet: Boolean(config.isTestnet),
-            suiNetwork: config.network,
-            config,
-          };
+        // Exhaustive switch (not if/else-if/else) so a future 5th
+        // namespace fails loud at compile time instead of silently
+        // falling into whatever the last `else` branch happened to be —
+        // exactly the bug that mis-filed Stellar rows under "sui" here
+        // (the old `else` hard-coded `namespace: "sui"` for anything
+        // that wasn't eip155/solana).
+        switch (config.namespace) {
+          case "eip155":
+            row = {
+              key: `eip155:${blockchain.chainId ?? "unknown"}`,
+              namespace: "eip155",
+              label: blockchain.name,
+              symbol: token?.symbol ?? "",
+              iconUrl: token?.logoUrl ?? undefined,
+              isTestnet: Boolean(config.isTestnet),
+              evmChainId: blockchain.chainId ?? undefined,
+              config,
+            };
+            break;
+          case "solana":
+            row = {
+              key: `solana:${config.cluster}`,
+              namespace: "solana",
+              label: blockchain.name,
+              symbol: token?.symbol ?? "",
+              iconUrl: token?.logoUrl ?? config.iconUrl,
+              isTestnet: Boolean(config.isTestnet),
+              solanaCluster: config.cluster,
+              config,
+            };
+            break;
+          case "sui":
+            row = {
+              key: `sui:${config.network}`,
+              namespace: "sui",
+              label: blockchain.name,
+              symbol: token?.symbol ?? "SUI",
+              iconUrl: token?.logoUrl ?? config.iconUrl,
+              isTestnet: Boolean(config.isTestnet),
+              suiNetwork: config.network,
+              config,
+            };
+            break;
+          case "stellar":
+            row = {
+              key: `stellar:${config.network}`,
+              namespace: "stellar",
+              label: blockchain.name,
+              symbol: token?.symbol ?? "XLM",
+              iconUrl: token?.logoUrl ?? config.iconUrl,
+              isTestnet: Boolean(config.isTestnet),
+              stellarNetwork: config.network,
+              config,
+            };
+            break;
+          default: {
+            const _exhaustive: never = config;
+            throw new Error(
+              `ChainSelector: unhandled chain namespace ${JSON.stringify(_exhaustive)}`,
+            );
+          }
         }
         const bucket = groups.get(row.namespace);
         if (bucket) bucket.push(row);
@@ -237,6 +299,9 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
       if (row.namespace === "sui" && activeChain.namespace === "sui") {
         return activeChain.network === row.suiNetwork;
       }
+      if (row.namespace === "stellar" && activeChain.namespace === "stellar") {
+        return activeChain.network === row.stellarNetwork;
+      }
       return false;
     },
     [activeChain],
@@ -296,18 +361,7 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
     [isRowActive, handleChainSelect, switchingRowKey],
   );
 
-  const activeLabel =
-    activeChain.namespace === "eip155"
-      ? activeChain.chain.name
-      : activeChain.namespace === "solana"
-        ? `Solana ${activeChain.cluster === "devnet" ? "Devnet" : "Mainnet"}`
-        : `Sui ${
-            activeChain.network === "mainnet"
-              ? "Mainnet"
-              : activeChain.network === "testnet"
-                ? "Testnet"
-                : "Devnet"
-          }`;
+  const activeLabel = formatActiveLabel(activeChain);
 
   return (
     <>

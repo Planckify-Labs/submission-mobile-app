@@ -34,6 +34,10 @@ const EXPECTED_SOLANA_ADDRESS = "HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk";
 // `services/chains/sui/derivation.test.ts`.
 const EXPECTED_SUI_ADDRESS =
   "0x5e93a736d04fbb25737aa40bee40171ef79f65fae833749e3c089fe7cc2161f1";
+// SLIP-0010 golden vector at path m/44'/148'/0' for the BIP-39 zero
+// mnemonic. Must match `services/chains/stellar/derivation.test.ts`.
+const EXPECTED_STELLAR_ADDRESS =
+  "GB3JDWCQJCWMJ3IILWIGDTQJJC5567PGVEVXSCVPEQOTDN64VJBDQBYX";
 
 describe("deriveWalletsFromMnemonic (golden vector)", () => {
   before(() => {
@@ -138,6 +142,50 @@ describe("deriveWalletsFromMnemonic (golden vector)", () => {
     assert.deepEqual(
       wallets.map((w) => w.namespace),
       ["eip155", "solana", "sui"],
+    );
+  });
+
+  it("returns four wallets for ['eip155','solana','sui','stellar'] sharing the same seedPhrase", async () => {
+    const wallets = await deriveWalletsFromMnemonic(TEST_MNEMONIC, [
+      "eip155",
+      "solana",
+      "sui",
+      "stellar",
+    ]);
+    assert.equal(wallets.length, 4);
+    assert.equal(wallets[0].namespace, "eip155");
+    assert.equal(wallets[1].namespace, "solana");
+    assert.equal(wallets[2].namespace, "sui");
+    assert.equal(wallets[3].namespace, "stellar");
+    for (const w of wallets) {
+      assert.equal(w.seedPhrase, TEST_MNEMONIC);
+    }
+  });
+
+  it("Stellar address matches the Task 03 golden vector", async () => {
+    const wallets = await deriveWalletsFromMnemonic(TEST_MNEMONIC, [
+      "eip155",
+      "solana",
+      "sui",
+      "stellar",
+    ]);
+    const stellarWallet = wallets.find((w) => w.namespace === "stellar");
+    assert.ok(stellarWallet, "expected a stellar wallet in the derived bundle");
+    assert.equal(stellarWallet.address, EXPECTED_STELLAR_ADDRESS);
+  });
+
+  it("partial-success: unknown namespace is skipped and all four known kits still derive", async () => {
+    const wallets = await deriveWalletsFromMnemonic(TEST_MNEMONIC, [
+      "eip155",
+      "solana",
+      "sui",
+      "stellar",
+      "unknown" as never,
+    ]);
+    assert.equal(wallets.length, 4);
+    assert.deepEqual(
+      wallets.map((w) => w.namespace),
+      ["eip155", "solana", "sui", "stellar"],
     );
   });
 });

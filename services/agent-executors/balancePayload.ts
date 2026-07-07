@@ -9,7 +9,7 @@
  * never reads the raw amount — it reasons over `balance_display`.
  */
 
-export type Namespace = "evm" | "solana" | "sui";
+export type Namespace = "evm" | "solana" | "sui" | "stellar";
 
 export type BalanceTokenRow = {
   symbol: string;

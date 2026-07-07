@@ -6,6 +6,7 @@ import { createEvmAdapter } from "@/services/chains/evm/EvmAdapter";
 import { ChainAdapterRegistry } from "@/services/chains/registry";
 import { createSolanaAdapter } from "@/services/chains/solana/SolanaAdapter";
 import { installSolanaSigner } from "@/services/chains/solana/signer";
+import { createStellarAdapter } from "@/services/chains/stellar/StellarAdapter";
 import type { SuiNetwork } from "@/services/chains/sui/payloads";
 import { createSuiAdapter } from "@/services/chains/sui/SuiAdapter";
 import { installSuiSigner } from "@/services/chains/sui/signer";
@@ -176,6 +177,16 @@ export function bootBridge(opts: BootOpts) {
       }
       booted = false;
     }
+  }
+
+  // Stellar dApp bridge — SCAFFOLD ONLY (docs/stellar-chain-support-spec.md
+  // §5, §11). Disabled: there is no ratified Stellar injected-provider
+  // standard to implement against yet (Freighter's window.freighterApi
+  // shape vs "Stellar Wallets Kit" — needs its own research spike).
+  // Flipping this on is future work, not part of this milestone.
+  const FEATURE_STELLAR_DAPP_BRIDGE = false;
+  if (FEATURE_STELLAR_DAPP_BRIDGE) {
+    ChainAdapterRegistry.register(createStellarAdapter());
   }
 
   void PermissionStore.hydrate();

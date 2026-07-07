@@ -4,6 +4,7 @@ export { READ_EXECUTORS } from "./reads";
 export { SIMULATE_EXECUTORS } from "./simulate";
 export { SOLANA_EXECUTORS } from "./solana";
 export { SOLANA_TAKUMI_PAY_EXECUTORS } from "./solanaTakumiPay";
+export { STELLAR_EXECUTORS } from "./stellar";
 export { SUI_EXECUTORS } from "./sui";
 export { WRITE_EXECUTORS } from "./writes";
 export { X402_EXECUTORS } from "./x402";

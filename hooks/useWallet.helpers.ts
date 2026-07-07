@@ -23,15 +23,16 @@ import type { Namespace } from "@/services/chains/types";
  * the same chain-config key.
  */
 type BlockchainWithMaybeNamespace = TBlockchain & {
-  namespace?: "eip155" | "solana" | "sui";
+  namespace?: "eip155" | "solana" | "sui" | "stellar";
   chainSlug?: string | null;
 };
 
 export function resolveNamespace(
   b: BlockchainWithMaybeNamespace,
-): "eip155" | "solana" | "sui" {
+): "eip155" | "solana" | "sui" | "stellar" {
   if (b.namespace === "sui") return "sui";
   if (b.namespace === "solana") return "solana";
+  if (b.namespace === "stellar") return "stellar";
   if (b.namespace === "eip155") return "eip155";
 
   // Authoritative slug check (preferred path; backend exposes `chainSlug`
@@ -39,6 +40,7 @@ export function resolveNamespace(
   if (typeof b.chainSlug === "string") {
     if (b.chainSlug.startsWith("sui-")) return "sui";
     if (b.chainSlug.startsWith("solana-")) return "solana";
+    if (b.chainSlug.startsWith("stellar-")) return "stellar";
   }
 
   // Heuristic fallback for backends that don't yet emit `chainSlug` —
@@ -48,6 +50,9 @@ export function resolveNamespace(
   const rpc = (b.rpcUrl ?? "").toLowerCase();
   if (b.isEVM === false) {
     if (name.startsWith("sui") || rpc.includes("sui.io")) return "sui";
+    if (name.startsWith("stellar") || rpc.includes("stellar.org")) {
+      return "stellar";
+    }
     return "solana";
   }
   return "eip155";
@@ -178,6 +183,9 @@ export function chainCacheKey(chain: ChainConfig): string {
   if (chain.namespace === "solana") {
     return `solana:${chain.cluster}`;
   }
+  if (chain.namespace === "stellar") {
+    return `stellar:${chain.network}`;
+  }
   return `sui:${chain.network}`;
 }
 
@@ -218,6 +226,24 @@ export function buildChainConfigFromBlockchain(
       namespace: "sui",
       network,
       rpcUrl: b.rpcUrl,
+      iconUrl:
+        (b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0])?.logoUrl ??
+        undefined,
+      isTestnet: b.isTestnet ?? false,
+      smartContracts: b.smartContracts,
+    };
+  }
+
+  if (namespace === "stellar") {
+    // Stellar has no dedicated `horizonUrl` column on the `Blockchain`
+    // model (spec §3.8) — the generic `rpcUrl` string column carries the
+    // Horizon endpoint for Stellar rows, same pattern Solana/Sui already
+    // established for their respective RPC URLs.
+    const network: "mainnet" | "testnet" = b.isTestnet ? "testnet" : "mainnet";
+    return {
+      namespace: "stellar",
+      network,
+      horizonUrl: b.rpcUrl,
       iconUrl:
         (b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0])?.logoUrl ??
         undefined,

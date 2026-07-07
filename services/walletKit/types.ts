@@ -314,6 +314,38 @@ export interface SignAndExecuteSuiPtbArgs {
   ptbBase64: string;
 }
 
+/** Arguments for `WalletKitAdapter.checkAssetReceivable` (spec §4.1/§8.2). */
+export interface CheckAssetReceivableArgs {
+  chain: ChainConfig;
+  /** Recipient address being checked. */
+  to: string;
+  /** Same identifier shape `sendTokenTransfer` takes (e.g. Stellar's compound `CODE:ISSUER`). */
+  contractAddress: string;
+}
+
+/**
+ * Result of `checkAssetReceivable`. `reason` is populated only when
+ * `ok === false` and is always ready-to-render, curated copy.
+ */
+export interface CheckAssetReceivableResult {
+  ok: boolean;
+  reason?: string;
+}
+
+/** Arguments for `WalletKitAdapter.establishTrustline` (spec §4.1/§8.3). */
+export interface EstablishTrustlineArgs {
+  wallet: TWallet;
+  chain: ChainConfig;
+  contractAddress: string;
+}
+
+export interface EstablishTrustlineResult {
+  /** `true` when the wallet already trusted the asset — no transaction was submitted. */
+  alreadyTrusted: boolean;
+  /** Transaction hash, present only when a new trustline was actually submitted. */
+  hash?: string;
+}
+
 /**
  * Arguments for `WalletKitAdapter.sendAnchorInstruction` — broadcasts a
  * Solana transaction containing Anchor program instructions. Used by the
@@ -901,6 +933,43 @@ export interface WalletKitAdapter {
    * `undefined`. Consumers presence-check. Returns the base58 digest.
    */
   signAndExecuteSuiPtb?(args: SignAndExecuteSuiPtbArgs): Promise<string>;
+
+  /**
+   * Pre-flight check: can `to` receive the non-native asset identified
+   * by `contractAddress` right now? Chains with a receiver-side opt-in
+   * precondition (Stellar trustlines, spec §4.1/§8.2) implement this;
+   * chains without one (EVM/Solana/Sui — any valid address can receive
+   * any token) leave it `undefined`. Consumers (e.g. `app/send.tsx`)
+   * presence-check rather than branching on namespace — this is the
+   * space-docking discipline (`feedback_space_docking` memory) in
+   * action. `reason` is always curated, user-facing copy — never raw
+   * error text (CLAUDE.md user-facing-errors rule).
+   */
+  checkAssetReceivable?(
+    args: CheckAssetReceivableArgs,
+  ): Promise<CheckAssetReceivableResult>;
+
+  /**
+   * Returns whether `address` already trusts/holds the non-native
+   * asset identified by `contractAddress`. Stellar-only (trustlines,
+   * spec §4.1/§8.3); other kits leave it `undefined`. Distinct from
+   * `getTokenBalance`, which returns `0n` both when a trustline is
+   * absent AND when it's present with a zero balance — this method is
+   * the only way to tell those two cases apart.
+   */
+  hasTrustline?(args: CheckAssetReceivableArgs): Promise<boolean>;
+
+  /**
+   * Self-service opt-in: establishes a trustline for the CALLER'S OWN
+   * wallet so it can receive a non-native asset for the first time
+   * (spec §4.1/§8.3 — "this will lock 0.5 XLM as a minimum balance").
+   * Stellar-only; other kits leave it `undefined`. Cannot establish a
+   * trustline on behalf of another account — that requires a different
+   * wallet's signature.
+   */
+  establishTrustline?(
+    args: EstablishTrustlineArgs,
+  ): Promise<EstablishTrustlineResult>;
 
   // ── Optional capability flags ───────────────────────────────────────
   /** Whether this kit supports non-native token transfers. */

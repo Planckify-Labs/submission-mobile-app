@@ -20,7 +20,7 @@ set -euo pipefail
 
 SEARCH_ROOTS=(components hooks app)
 
-PATTERN='namespace === "(eip155|solana|sui)"|namespace === '"'"'(eip155|solana|sui)'"'"''
+PATTERN='namespace === "(eip155|solana|sui|stellar)"|namespace === '"'"'(eip155|solana|sui|stellar)'"'"''
 
 # File-level allowlist. Paths are relative to the repo root. Each entry
 # has a comment explaining *why* namespace branching is correct there —

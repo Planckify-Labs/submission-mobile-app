@@ -14,6 +14,15 @@ export type TCryptoAsset = {
   decimals?: number;
   networkSpecific?: boolean;
   supportedNetworks?: string[];
+  /**
+   * `true` when this asset has a receiver-side opt-in precondition
+   * (Stellar trustlines) that hasn't been satisfied yet. Populated via
+   * `WalletKitAdapter.hasTrustline` (optional capability, presence-checked
+   * — `undefined`/`false` on every other namespace) in
+   * `useUserAssetsWithBalances`. Drives the "Trust" button on the asset
+   * card in `UserAssetItem`.
+   */
+  needsTrust?: boolean;
 };
 
 export type TExtendedCryptoAsset = TCryptoAsset & {

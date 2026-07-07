@@ -12,12 +12,18 @@ type TUserAssetListProps = {
   };
   onNavigateToExplore: () => void;
   removeAsset: (id: string) => void;
+  /** See `UserAssetItem`'s `onTrustPress` — omitted entirely when no asset needs it. */
+  onTrustPress?: (item: TCryptoAsset) => void;
+  /** Asset id whose trust transaction is currently in flight, if any. */
+  establishingAssetId?: string | null;
 };
 
 const UserAssetList = ({
   data,
   onNavigateToExplore,
   removeAsset,
+  onTrustPress,
+  establishingAssetId,
 }: TUserAssetListProps) => {
   const { userAssets, filteredUserAssets, searchQuery } = data;
 
@@ -70,7 +76,13 @@ const UserAssetList = ({
   return (
     <View>
       {filteredUserAssets.map((item) => (
-        <UserAssetItem key={item.id} item={item} removeAsset={removeAsset} />
+        <UserAssetItem
+          key={item.id}
+          item={item}
+          removeAsset={removeAsset}
+          onTrustPress={onTrustPress}
+          isTrusting={establishingAssetId === item.id}
+        />
       ))}
     </View>
   );

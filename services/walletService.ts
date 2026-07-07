@@ -53,6 +53,7 @@ import {
   createSignerFromKeyPair,
   type KeyPairSigner,
 } from "@solana/kit";
+import { Keypair as StellarKeypair } from "@stellar/stellar-base";
 import {
   type HDAccount,
   mnemonicToAccount,
@@ -63,6 +64,11 @@ import { TWallet } from "@/constants/types/walletTypes";
 import { storage } from "@/lib/storage/mmkv";
 import { parseSolanaPrivateKey } from "@/services/chains/solana/codec";
 import { mnemonicToSolanaPrivateKey } from "@/services/chains/solana/derivation";
+import {
+  DEFAULT_STELLAR_PATH,
+  mnemonicToStellarPrivateKey,
+} from "@/services/chains/stellar/derivation";
+import { decodeStellarSecretSeed } from "@/services/chains/stellar/strkey";
 import { decodeSuiPrivateKey as decodeSuiBech32 } from "@/services/chains/sui/codec";
 import {
   DEFAULT_SUI_PATH,
@@ -74,6 +80,7 @@ import {
   walletSecureGet,
   walletSecureSet,
 } from "./security/walletSecureStore";
+import { breadcrumb as stellarBreadcrumb } from "./telemetry/stellar";
 import { breadcrumb } from "./telemetry/sui";
 
 // TWV-2026-002 — fail loud if the CSPRNG polyfill is missing at the point
@@ -573,6 +580,133 @@ export async function getSuiSignerForWallet(
   }
 }
 
+// Review gate — TWV-2026-090 (ed25519 Stellar signer dwell site).
+// Design note: docs/stellar-chain-support-spec.md §6.
+//
+// This function is the SINGLE blessed JS-heap dwell site for Stellar
+// private-key material, analogous to getSuiSignerForWallet for Sui.
+// Invariants:
+//   - The 32-byte ed25519 seed is reconstructed only here, fed straight
+//     into Keypair.fromRawEd25519Seed(seed) from @stellar/stellar-base.
+//   - Cache by address in stellarSignerCache; clearAccountCache wipes
+//     all four caches (EVM, Solana, Sui, Stellar) on lock/logout/removal.
+//   - The local seed/intermediate Uint8Array/Buffer binding never
+//     escapes function scope — no closure capture, no return of bytes.
+//   - Never log the seed or the StrKey `S…` secret. `__DEV__`
+//     breadcrumbs limited to fixed strings ("derivation failed").
+//   - Signing must go through Transaction.sign(keypair) /
+//     Keypair.sign(data) — never construct the
+//     network-passphrase-hash-then-sign sequence by hand (spec §1.4).
+//   - No Secp256k1 / Secp256r1 fallback in v1; rows whose
+//     `stellar.scheme !== "ed25519"` are rejected.
+// Any PR that:
+//   - adds a new Keypair.fromRawEd25519Seed call outside here,
+//   - returns the raw seed bytes from a public helper,
+//   - extends stellarSignerCache dwell,
+// MUST cite TWV-2026-090.
+
+const stellarSignerCache: Record<
+  string,
+  InstanceType<typeof StellarKeypair>
+> = {};
+
+export async function getStellarSignerForWallet(
+  wallet: TWallet,
+): Promise<InstanceType<typeof StellarKeypair> | null> {
+  if (wallet.namespace !== "stellar") return null;
+  const cached = stellarSignerCache[wallet.address];
+  if (cached) {
+    // Defense in depth — re-verify the cached keypair still derives to
+    // the wallet's address, same guard as getSuiSignerForWallet.
+    const cachedAddr = cached.publicKey();
+    if (cachedAddr === wallet.address) {
+      return cached;
+    }
+    if (__DEV__) {
+      console.error(
+        `[TWV-2026-090] Purged stale Stellar signer cache: wallet.address=${wallet.address}, cached derives to=${cachedAddr}`,
+      );
+    }
+    delete stellarSignerCache[wallet.address];
+  }
+
+  // v1 rejects non-ed25519 schemes loudly. Future Secp variants need a
+  // new gate (spec §6).
+  if (wallet.stellar && wallet.stellar.scheme !== "ed25519") {
+    if (__DEV__) console.error("[TWV-2026-090] unsupported Stellar scheme");
+    stellarBreadcrumb({
+      category: "stellar.getSignerForWallet",
+      message: "derivation failed: unsupported scheme",
+      level: "error",
+      data: { reason: "unsupported-scheme" },
+    });
+    return null;
+  }
+
+  try {
+    // Strict preference order:
+    //   1. wallet.privateKey — canonical StrKey `S…` secret-seed form.
+    //      Both seed-phrase and private-key Stellar wallets store this
+    //      so the dwell site doesn't re-run BIP-39 on every call.
+    //   2. wallet.seedPhrase — defensive fallback for hypothetical
+    //      future shared-mnemonic rows whose privateKey is empty.
+    let kp: InstanceType<typeof StellarKeypair> | null = null;
+    if (wallet.privateKey) {
+      try {
+        const seed = decodeStellarSecretSeed(wallet.privateKey);
+        kp = StellarKeypair.fromRawEd25519Seed(seed);
+      } catch (_e) {
+        if (__DEV__)
+          console.error("[TWV-2026-090] Stellar privateKey parse failed");
+        stellarBreadcrumb({
+          category: "stellar.getSignerForWallet",
+          message: "derivation failed: privateKey parse",
+          level: "error",
+          data: { reason: "privateKey-parse" },
+        });
+        return null;
+      }
+    } else if (wallet.seedPhrase) {
+      const path = wallet.stellar?.derivationPath ?? DEFAULT_STELLAR_PATH;
+      const seed = mnemonicToStellarPrivateKey(wallet.seedPhrase, path);
+      kp = StellarKeypair.fromRawEd25519Seed(Buffer.from(seed));
+    }
+    if (!kp) return null;
+
+    // Defensive — TWV-2026-090. Verify the derived keypair's address
+    // matches the wallet row's stored address before we cache and
+    // return it, mirroring the Sui dwell site's mismatch guard.
+    const kpAddress = kp.publicKey();
+    if (kpAddress !== wallet.address) {
+      if (__DEV__) {
+        console.error(
+          `[TWV-2026-090] Stellar wallet/key mismatch: wallet.address=${wallet.address}, derived=${kpAddress}`,
+        );
+      }
+      stellarBreadcrumb({
+        category: "stellar.getSignerForWallet",
+        message: "derivation failed: address mismatch",
+        level: "error",
+        data: { reason: "address-mismatch" },
+      });
+      return null;
+    }
+
+    stellarSignerCache[wallet.address] = kp;
+    return kp;
+  } catch (_e) {
+    if (__DEV__)
+      console.error("[TWV-2026-090] Stellar signer reconstruction failed");
+    stellarBreadcrumb({
+      category: "stellar.getSignerForWallet",
+      message: "derivation failed: reconstruction",
+      level: "error",
+      data: { reason: "reconstruction" },
+    });
+    return null;
+  }
+}
+
 export function clearAccountCache(): void {
   Object.keys(accountCache).forEach((key) => {
     delete accountCache[key];
@@ -582,6 +716,9 @@ export function clearAccountCache(): void {
   });
   Object.keys(suiSignerCache).forEach((key) => {
     delete suiSignerCache[key];
+  });
+  Object.keys(stellarSignerCache).forEach((key) => {
+    delete stellarSignerCache[key];
   });
 }
 

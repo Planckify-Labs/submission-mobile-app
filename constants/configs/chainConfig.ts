@@ -32,11 +32,27 @@ export type ChainConfig =
       iconUrl?: string;
       isTestnet?: boolean;
       smartContracts?: TSmartContract[];
+    }
+  | {
+      namespace: "stellar";
+      network: "mainnet" | "testnet";
+      /** Horizon REST endpoint — the v1 read/submission path (spec §3.6). */
+      horizonUrl: string;
+      /**
+       * Soroban RPC endpoint — unused in v1 (classic operations only, §0).
+       * Reserved so the shape doesn't need a second migration once SAC/
+       * Soroban support lands (§13).
+       */
+      rpcUrl?: string;
+      iconUrl?: string;
+      isTestnet?: boolean;
+      smartContracts?: TSmartContract[];
     };
 
 export type EvmChainConfig = Extract<ChainConfig, { namespace: "eip155" }>;
 export type SolanaChainConfig = Extract<ChainConfig, { namespace: "solana" }>;
 export type SuiChainConfig = Extract<ChainConfig, { namespace: "sui" }>;
+export type StellarChainConfig = Extract<ChainConfig, { namespace: "stellar" }>;
 
 /**
  * Narrowing helper used as a stopgap while tasks 04–16 relocate
@@ -99,6 +115,38 @@ export function getSuiMainnetChain(): SuiChainConfig {
 }
 
 /**
+ * Mirror of {@link assertSuiChain} for Stellar. Throws if `chain.namespace`
+ * is not `"stellar"` so callers that haven't migrated still fail loud.
+ */
+export function assertStellarChain(chain: ChainConfig): StellarChainConfig {
+  if (chain.namespace !== "stellar") {
+    throw new Error(
+      `assertStellarChain: expected Stellar chain, got namespace=${chain.namespace}`,
+    );
+  }
+  return chain;
+}
+
+/**
+ * The static Stellar mainnet chain config (horizonUrl + network) — the
+ * single source of truth for the public Horizon endpoint. Mirrors
+ * {@link getSuiMainnetChain} for services that need a Horizon client
+ * outside a wallet flow.
+ */
+export function getStellarMainnetChain(): StellarChainConfig {
+  const stellar = supportedChains.find(
+    (c): c is StellarChainConfig =>
+      c.namespace === "stellar" && c.network === "mainnet",
+  );
+  if (!stellar) {
+    throw new Error(
+      "getStellarMainnetChain: no Stellar mainnet chain configured",
+    );
+  }
+  return stellar;
+}
+
+/**
  * Static frontend defaults — used as the initial `activeChain` before
  * the backend `blockchains` feed resolves, and as a fallback for any
  * UI that needs a sensible list before the query settles. Solana rows
@@ -145,6 +193,16 @@ export const supportedChains: ChainConfig[] = [
     network: "mainnet",
     rpcUrl: "https://fullnode.mainnet.sui.io:443",
     iconUrl: "https://sui.io/favicon.ico",
+    isTestnet: false,
+  },
+  // Stellar mainnet (pubnet) — public Horizon is the v1 endpoint, no
+  // per-provider API key needed for reads (spec §3.6). Testnet arrives
+  // via the backend `/blockchains` feed.
+  {
+    namespace: "stellar",
+    network: "mainnet",
+    horizonUrl: "https://horizon.stellar.org",
+    iconUrl: "https://stellar.org/favicon.ico",
     isTestnet: false,
   },
 ];

@@ -1,6 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import { router, useLocalSearchParams } from "expo-router";
 import {
+  AlertTriangle,
   ArrowLeft,
   BookUser,
   ChevronDown,
@@ -174,6 +175,31 @@ export default function SendScreen() {
         suiRows[0];
       return match ?? null;
     }
+    if (activeChain.namespace === "stellar") {
+      // Mirror the Sui matcher: filter the non-EVM rows down to Stellar
+      // by `chainSlug` (preferred) or name heuristic, then pick the
+      // testnet/mainnet row matching `activeChain.network`. This branch
+      // was missing entirely, which is why the token picker showed "No
+      // tokens available" for any Stellar chain (activeBackendChain
+      // fell through to the final `return null`, so `tokenList` always
+      // resolved to `[]`) — and, downstream, why the native XLM row's
+      // logoUrl was never found, showing the letter-avatar fallback.
+      const wantsTestnet = activeChain.network !== "mainnet";
+      const stellarRows = blockchains.filter(
+        (b: (typeof blockchains)[number] & { chainSlug?: string | null }) => {
+          if (b.isEVM !== false) return false;
+          if (typeof b.chainSlug === "string")
+            return b.chainSlug.startsWith("stellar-");
+          const name = (b.name ?? "").toLowerCase();
+          const rpc = (b.rpcUrl ?? "").toLowerCase();
+          return name.startsWith("stellar") || rpc.includes("stellar.org");
+        },
+      );
+      const match =
+        stellarRows.find((b) => (wantsTestnet ? b.isTestnet : !b.isTestnet)) ??
+        stellarRows[0];
+      return match ?? null;
+    }
     return null;
   }, [blockchains, activeChain]);
   const { data: rawTokenList } = useTokens({
@@ -209,6 +235,14 @@ export default function SendScreen() {
   );
   const [tokenModalVisible, setTokenModalVisible] = useState(false);
   const [recipientPickerVisible, setRecipientPickerVisible] = useState(false);
+  // Pre-flight "can this address receive this asset" warning (spec
+  // §4.1/§8.2 — Stellar trustlines). `kit.checkAssetReceivable` is an
+  // optional capability; chains without a receiver-side opt-in step
+  // (EVM/Solana/Sui) never populate this, so the banner below never
+  // renders for them.
+  const [assetReceivableWarning, setAssetReceivableWarning] = useState<
+    string | null
+  >(null);
 
   const { contacts: addressBookContacts } = useAddressBook();
 
@@ -433,6 +467,52 @@ export default function SendScreen() {
     balanceAmountText,
   ]);
 
+  // Pre-flight receivability check — only runs when the kit exposes
+  // `checkAssetReceivable` (Stellar today) and the recipient + a
+  // non-native token are both set. Presence-checked, no namespace
+  // branch: chains without a receiver-side opt-in step simply never
+  // populate `assetReceivableWarning`.
+  useEffect(() => {
+    if (!kit.checkAssetReceivable) {
+      setAssetReceivableWarning(null);
+      return;
+    }
+    if (
+      !selectedToken ||
+      selectedToken.isNativeCurrency !== false ||
+      !selectedToken.contractAddress
+    ) {
+      setAssetReceivableWarning(null);
+      return;
+    }
+    if (!recipient || !kit.validateAddress(recipient)) {
+      setAssetReceivableWarning(null);
+      return;
+    }
+
+    let cancelled = false;
+    kit
+      .checkAssetReceivable({
+        chain: activeChain,
+        to: recipient,
+        contractAddress: selectedToken.contractAddress,
+      })
+      .then((result) => {
+        if (cancelled) return;
+        setAssetReceivableWarning(result.ok ? null : (result.reason ?? null));
+      })
+      .catch(() => {
+        // Best-effort — never block the send flow on a check failure
+        // (e.g. a transient Horizon blip). The actual send still
+        // surfaces a typed error if the precondition truly isn't met.
+        if (!cancelled) setAssetReceivableWarning(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [kit, activeChain, recipient, selectedToken]);
+
   const handlePasteAddress = async () => {
     const text = await Clipboard.getStringAsync();
     if (text) setRecipient(text);
@@ -506,6 +586,11 @@ export default function SendScreen() {
       }
     }
 
+    if (assetReceivableWarning) {
+      Alert.alert("Can't send yet", assetReceivableWarning);
+      return false;
+    }
+
     return true;
   }, [
     kit,
@@ -515,6 +600,7 @@ export default function SendScreen() {
     activeChain,
     selectedToken?.isNativeCurrency,
     nativeSymbol,
+    assetReceivableWarning,
   ]);
 
   const handleSend = useCallback(async () => {
@@ -891,6 +977,21 @@ export default function SendScreen() {
                   </View>
                 )}
               </View>
+
+              {assetReceivableWarning && (
+                <View className="bg-light-primary-red/10 p-4 rounded-xl mb-4">
+                  <View className="flex-row items-start">
+                    <AlertTriangle
+                      size={18}
+                      color="#c71c4b"
+                      className="mr-2 mt-0.5"
+                    />
+                    <Text className="text-light-matte-black/80 text-sm flex-1">
+                      {assetReceivableWarning}
+                    </Text>
+                  </View>
+                </View>
+              )}
 
               <View className="bg-light-primary-red/10 p-4 rounded-xl mb-6">
                 <View className="flex-row items-start">

@@ -13,6 +13,12 @@
  *     `validatePrivateKey`. Deliberately no `"unknown"` state: the sheet
  *     only enters step 2 after a chain pick, so `namespace === null` is
  *     just a defensive fall-through that maps to `"empty"`.
+ *   - `buildAddWalletParams(namespace, privateKey, name)` — maps a
+ *     namespace to the correct `TWalletCreationParams.source` discriminant.
+ *     Previously this only special-cased `"solana"` and fell back to
+ *     `"PrivateKey"` (the EVM source) for everything else, so importing a
+ *     Sui or Stellar private key built an EVM params object and silently
+ *     mis-routed the wallet.
  *
  * Rules (non-negotiable, spec §14.6):
  *   - No cross-chain derivation: an EVM hex key must not pass as Solana.
@@ -73,4 +79,36 @@ export function computeValidationState(
   // so passing `normalized` (already-stripped) still works. We don't
   // re-add the prefix here because that would silently re-encode.
   return kit.validatePrivateKey(normalized) ? "valid" : "invalid";
+}
+
+export type PrivateKeySource =
+  | "PrivateKey"
+  | "SolanaPrivateKey"
+  | "SuiPrivateKey"
+  | "StellarPrivateKey";
+
+const PRIVATE_KEY_SOURCE_BY_NAMESPACE: Record<Namespace, PrivateKeySource> = {
+  eip155: "PrivateKey",
+  solana: "SolanaPrivateKey",
+  sui: "SuiPrivateKey",
+  stellar: "StellarPrivateKey",
+};
+
+/**
+ * Map `{ namespace, privateKey }` to the `TWalletCreationParams` shape
+ * accepted by `useWallet.addWallet`. EVM uses the historic `"PrivateKey"`
+ * discriminant; every other namespace uses its own
+ * `"<Namespace>PrivateKey"` discriminant — see this file's header comment
+ * for the bug this fixes.
+ */
+export function buildAddWalletParams(
+  namespace: Namespace,
+  privateKey: string,
+  name: string | undefined,
+): { source: PrivateKeySource; privateKey: string; name?: string } {
+  return {
+    source: PRIVATE_KEY_SOURCE_BY_NAMESPACE[namespace],
+    privateKey,
+    name,
+  };
 }
