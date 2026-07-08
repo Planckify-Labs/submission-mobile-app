@@ -329,5 +329,49 @@ export function redactParams(method: string, params: unknown): unknown {
     // accidentally leaks.
     return params;
   }
+  // Stellar — `method` here is `req.method`, the `EXTERNAL_SERVICE_TYPES`
+  // name (§4.1), which is what `ChainRequest.method` carries for the
+  // stellar namespace. Unlike EVM/Solana/Sui, the Freighter wire
+  // protocol's params are a single flat object (the injected listener
+  // forwards the request's own fields verbatim, §5.3), never an array —
+  // so these branches read `params` directly rather than unwrapping
+  // `paramsArr[0]`. Structural information only, never the raw XDR or
+  // signature (spec §11.5.2).
+  if (method === "SUBMIT_TRANSACTION") {
+    const { transactionXdr, networkPassphrase } = (params ?? {}) as {
+      transactionXdr?: string;
+      networkPassphrase?: string;
+    };
+    return {
+      xdrLength: typeof transactionXdr === "string" ? transactionXdr.length : 0,
+      networkPassphrase,
+    };
+  }
+  if (
+    method === "REQUEST_ACCESS" ||
+    method === "REQUEST_PUBLIC_KEY" ||
+    method === "REQUEST_CONNECTION_STATUS" ||
+    method === "REQUEST_NETWORK_DETAILS" ||
+    method === "REQUEST_ALLOWED_STATUS" ||
+    method === "SET_ALLOWED_STATUS"
+  ) {
+    // No secrets in these — pass through intact (parity with
+    // standard:connect above).
+    return params;
+  }
+  if (method === "SUBMIT_BLOB") {
+    const { blob } = (params ?? {}) as { blob?: string };
+    const m = typeof blob === "string" ? blob : "";
+    return {
+      messageLength: m.length,
+      // Same 16-char preview cap as the Solana/Sui branches above.
+      messagePreview: m.length > 16 ? `${m.slice(0, 16)}…` : m,
+    };
+  }
+  if (method === "SUBMIT_AUTH_ENTRY" || method === "SUBMIT_TOKEN") {
+    // Always declined server-side (§4.1) — nothing sensitive to redact,
+    // but keep structural-only for consistency.
+    return { note: "not supported" };
+  }
   return params;
 }

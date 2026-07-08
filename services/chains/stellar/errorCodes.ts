@@ -108,3 +108,89 @@ export class StellarSequenceNumberRaceError extends Error {
     );
   }
 }
+
+// ── dApp-bridge error codes (docs/stellar-dapp-bridge-spec.md §1.1, §4.1) ──
+//
+// Two distinct code spaces, both defined here, mirroring the split
+// `services/chains/sui/errorCodes.ts` already established:
+//   1. `STELLAR_ERROR_CODES` — the JSON-RPC-ish internal codes
+//      `StellarAdapter.handleRequest` / `executeApproval` emit on
+//      `ChainResult`/thrown `Error`, same code space as
+//      EVM/Solana/Sui adapters (4001 user-reject, 4100 unauthorized, …).
+//   2. `SEP0043_ERROR_CODES` — the 4-code wire taxonomy SEP-0043 defines
+//      (§1.1) and Freighter's own `FreighterApiError.code` uses. The
+//      injected script's outermost `.catch` (§1.5/§5.3) maps an internal
+//      code to one of these via `toSep0043Code` before posting the
+//      `FREIGHTER_EXTERNAL_MSG_RESPONSE` — dApps never see the internal
+//      code space directly.
+
+export const STELLAR_ERROR_CODES = {
+  /** User pressed Reject in an approval sheet. */
+  USER_REJECT: 4001,
+  /** No grant / no active Stellar wallet / cross-namespace trust rejection. */
+  UNAUTHORIZED: 4100,
+  /** Active wallet deleted mid-flight. */
+  DISCONNECTED: 4900,
+  /** Unsupported feature (SUBMIT_AUTH_ENTRY / SUBMIT_TOKEN §0 non-goals). */
+  UNSUPPORTED: 4200,
+  /** Another approval from this origin already pending. */
+  RESOURCE_UNAVAILABLE: -32002,
+  /** Invalid params — malformed XDR, address mismatch, bad accountToSign. */
+  INVALID_PARAMS: -32602,
+  /** Internal failure — signer missing, decoder explosion. */
+  INTERNAL: -32603,
+  /** Horizon / external-service failure (submit, preflight RPC). */
+  EXTERNAL_SERVICE: -32001,
+  /** Generic adapter error fallback. */
+  GENERIC: -32000,
+} as const;
+
+export type StellarErrorCode =
+  (typeof STELLAR_ERROR_CODES)[keyof typeof STELLAR_ERROR_CODES];
+
+const VALID_STELLAR_CODES: ReadonlySet<number> = new Set<number>(
+  Object.values(STELLAR_ERROR_CODES),
+);
+
+/** Assert a code is part of the contract. Throws if it is not. */
+export function assertStellarErrorCode(code: number): void {
+  if (!VALID_STELLAR_CODES.has(code)) {
+    throw new Error(
+      `Stellar adapter emitted non-contract error code ${code} — see services/chains/stellar/errorCodes.ts`,
+    );
+  }
+}
+
+/** SEP-0043 §1.1's `Error.code` taxonomy — the wire-level shape dApps see. */
+export const SEP0043_ERROR_CODES = {
+  INTERNAL: -1,
+  EXTERNAL_SERVICE: -2,
+  INVALID_REQUEST: -3,
+  USER_REJECTED: -4,
+} as const;
+
+export type Sep0043ErrorCode =
+  (typeof SEP0043_ERROR_CODES)[keyof typeof SEP0043_ERROR_CODES];
+
+/**
+ * Maps an internal `STELLAR_ERROR_CODES` value (or any other adapter
+ * error code) onto the SEP-0043 4-code wire taxonomy. Used by the
+ * injected script's response builder (§5.3/§5.4) — never by the adapter
+ * itself, which stays in the internal code space per the project-wide
+ * `ChainResult` contract.
+ */
+export function toSep0043Code(internalCode: number): Sep0043ErrorCode {
+  switch (internalCode) {
+    case STELLAR_ERROR_CODES.USER_REJECT:
+      return SEP0043_ERROR_CODES.USER_REJECTED;
+    case STELLAR_ERROR_CODES.UNAUTHORIZED:
+    case STELLAR_ERROR_CODES.UNSUPPORTED:
+    case STELLAR_ERROR_CODES.INVALID_PARAMS:
+    case STELLAR_ERROR_CODES.RESOURCE_UNAVAILABLE:
+      return SEP0043_ERROR_CODES.INVALID_REQUEST;
+    case STELLAR_ERROR_CODES.EXTERNAL_SERVICE:
+      return SEP0043_ERROR_CODES.EXTERNAL_SERVICE;
+    default:
+      return SEP0043_ERROR_CODES.INTERNAL;
+  }
+}

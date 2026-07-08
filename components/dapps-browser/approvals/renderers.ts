@@ -12,6 +12,8 @@ import { SolanaSignMessageSheet } from "./SolanaSignMessageSheet";
 import { SolanaSwitchClusterSheet } from "./SolanaSwitchClusterSheet";
 import { SolanaTransactionSheet } from "./SolanaTransactionSheet";
 import { SolanaWatchTokenSheet } from "./SolanaWatchTokenSheet";
+import { StellarSignMessageSheet } from "./StellarSignMessageSheet";
+import { StellarTransactionSheet } from "./StellarTransactionSheet";
 import { SuiSignInSheet } from "./SuiSignInSheet";
 import { SuiSignPersonalMessageSheet } from "./SuiSignPersonalMessageSheet";
 import { SuiSwitchNetworkSheet } from "./SuiSwitchNetworkSheet";
@@ -106,5 +108,13 @@ export const evmRenderers: ApprovalRenderer[] = [
   {
     canHandle: (i) => i.namespace === "sui" && i.kind === "switchNetwork",
     Component: SuiSwitchNetworkSheet as ApprovalRenderer["Component"],
+  },
+  {
+    canHandle: (i) => i.namespace === "stellar" && i.kind === "signTransaction",
+    Component: StellarTransactionSheet as ApprovalRenderer["Component"],
+  },
+  {
+    canHandle: (i) => i.namespace === "stellar" && i.kind === "signMessage",
+    Component: StellarSignMessageSheet as ApprovalRenderer["Component"],
   },
 ];

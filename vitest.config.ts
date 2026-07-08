@@ -48,6 +48,15 @@ export default defineConfig({
       // it transitively imports walletService.ts, which needs the EVM
       // resolver's expo-secure-store/mmkv stubs. Mirrors
       // SuiWalletKit.test.ts's setup.
+      // Stellar dApp bridge (docs/stellar-dapp-bridge-spec.md) — these
+      // files have no RN-only transitive imports, so they run under
+      // vitest directly (StellarAdapter.ts/signer.ts/injectedScript.ts
+      // themselves are covered by grep-style node:test files instead,
+      // same split as the Sui dApp-bridge tests).
+      "services/chains/stellar/payloads.test.ts",
+      "services/chains/stellar/xdrDecode.test.ts",
+      "services/chains/stellar/agentContext.test.ts",
+      "services/bridge/inspectors/StellarPreflightInspector.test.ts",
     ],
   },
 });

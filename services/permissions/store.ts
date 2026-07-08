@@ -50,6 +50,7 @@ export function namespaceForChainKey(chainId: ChainKey): Namespace {
   if (typeof chainId === "number") return "eip155";
   if (chainId.startsWith("solana")) return "solana";
   if (chainId.startsWith("sui")) return "sui";
+  if (chainId.startsWith("stellar")) return "stellar";
   return "eip155";
 }
 

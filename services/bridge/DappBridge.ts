@@ -364,6 +364,19 @@ export class DappBridge {
    * exactly what makes each provider emit its disconnect/accounts-changed
    * event. Each helper is guarded with `&&` so a page that never had that
    * namespace's provider installed is a no-op.
+   *
+   * Stellar has no equivalent push here (`docs/stellar-dapp-bridge-spec.md`
+   * §4.4/§1.2) — Freighter's real wire protocol defines no wallet→dApp
+   * message type at all, so there is no "emit an accounts-changed event"
+   * call to make. A dApp only learns about a revoked grant on its next
+   * `getAddress()`/`isConnected()` round trip, which is exactly the
+   * limitation real Freighter has too (revoking from the extension's own
+   * popup doesn't live-update an already-open dApp tab either). The best
+   * available fix for TakumiPay's in-app disconnect action — which real
+   * Freighter has no analogue for, since it has no popup UI reachable from
+   * inside the WebView — is to reload the page so the dApp re-runs its
+   * connection check from scratch, same as a user manually refreshing
+   * after revoking a real extension's access.
    */
   private pushDisconnectForNamespace(namespace: Namespace): void {
     const wv = this.opts.getWebView();
@@ -380,6 +393,8 @@ export class DappBridge {
       wv.injectJavaScript(
         `try{window._updateSuiWallet&&window._updateSuiWallet({accounts:[]});}catch(e){}\ntrue;`,
       );
+    } else if (namespace === "stellar") {
+      wv.reload();
     }
   }
 

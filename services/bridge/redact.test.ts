@@ -389,6 +389,67 @@ describe("redactParams — Sui methods (§11.5.3)", () => {
   });
 });
 
+describe("redactParams — Stellar methods (docs/stellar-dapp-bridge-spec.md §11.5.2)", () => {
+  it("SUBMIT_TRANSACTION strips the XDR, keeps only length + passphrase", () => {
+    const fakeXdr = "A".repeat(900);
+    const out = redactParams("SUBMIT_TRANSACTION", {
+      transactionXdr: fakeXdr,
+      networkPassphrase: "Public Global Stellar Network ; September 2015",
+      accountToSign: "GADDRESS",
+    }) as { xdrLength: number; networkPassphrase: string };
+    assert.equal(out.xdrLength, 900);
+    assert.equal(
+      out.networkPassphrase,
+      "Public Global Stellar Network ; September 2015",
+    );
+    assert.ok(!JSON.stringify(out).includes(fakeXdr));
+    assert.ok(!("transactionXdr" in out));
+    assert.ok(!("accountToSign" in out));
+  });
+
+  it("SUBMIT_TRANSACTION handles a missing transactionXdr without throwing", () => {
+    const out = redactParams("SUBMIT_TRANSACTION", {}) as { xdrLength: number };
+    assert.equal(out.xdrLength, 0);
+  });
+
+  it("SUBMIT_BLOB drops the message body, keeps length + 16-char preview", () => {
+    const longMessage = "the secret message body that should never leak";
+    const out = redactParams("SUBMIT_BLOB", { blob: longMessage }) as {
+      messageLength: number;
+      messagePreview: string;
+    };
+    assert.equal(out.messageLength, longMessage.length);
+    assert.ok(out.messagePreview.length <= 17, "16-char cap + ellipsis");
+    assert.ok(!JSON.stringify(out).includes(longMessage));
+  });
+
+  for (const method of [
+    "REQUEST_ACCESS",
+    "REQUEST_PUBLIC_KEY",
+    "REQUEST_CONNECTION_STATUS",
+    "REQUEST_NETWORK_DETAILS",
+    "REQUEST_ALLOWED_STATUS",
+    "SET_ALLOWED_STATUS",
+  ]) {
+    it(`${method} has no secrets — passes through intact`, () => {
+      const out = redactParams(method, { foo: "bar" });
+      assert.deepEqual(out, { foo: "bar" });
+    });
+  }
+
+  it("SUBMIT_AUTH_ENTRY is always declined server-side — structural-only stub", () => {
+    const out = redactParams("SUBMIT_AUTH_ENTRY", {
+      entryXdr: "SECRET_ENTRY_XDR",
+    });
+    assert.deepEqual(out, { note: "not supported" });
+  });
+
+  it("SUBMIT_TOKEN is always declined server-side — structural-only stub", () => {
+    const out = redactParams("SUBMIT_TOKEN", { contractId: "C123" });
+    assert.deepEqual(out, { note: "not supported" });
+  });
+});
+
 describe("scrubLoggerPayload — structural", () => {
   it("walks arrays and nested objects", () => {
     const m =

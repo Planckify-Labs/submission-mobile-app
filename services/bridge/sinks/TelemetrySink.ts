@@ -7,13 +7,16 @@
  *
  * Spec reference: `docs/sui-dapp-bridge-spec.md` §15 (task 15) — extend
  * `bridgeEventBus` consumers with `chain=sui` tags + per-method timers,
- * mirroring Solana telemetry.
+ * mirroring Solana telemetry. `docs/stellar-dapp-bridge-spec.md` §13
+ * (task 13) extends the same tagging to `chain=stellar` — a sink change
+ * only, no adapter-side plumbing.
  *
  * Tagging rules:
  *   - `chain` follows the bridge `Namespace`: `eip155` → `evm`,
- *     `solana` → `solana`, `sui` → `sui`. dApp-side Sui CAIP-2
- *     references (`sui:mainnet` etc.) are NOT collapsed; a future
- *     extension can split per-network when needed.
+ *     `solana` → `solana`, `sui` → `sui`, `stellar` → `stellar`.
+ *     dApp-side Sui/Stellar CAIP-2 references (`sui:mainnet`,
+ *     `stellar:mainnet`, etc.) are NOT collapsed; a future extension can
+ *     split per-network when needed.
  *   - `method` carries the wire method verbatim — so `sui:signTransaction`
  *     and `sui:signAndExecuteTransaction` are distinguishable in the
  *     timer histogram.
@@ -34,6 +37,7 @@ const namespaceToChainTag: Record<string, string> = {
   eip155: "evm",
   solana: "solana",
   sui: "sui",
+  stellar: "stellar",
 };
 
 const SUI_LEGACY_METHODS: ReadonlySet<string> = new Set([

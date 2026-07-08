@@ -6,7 +6,9 @@ import { createEvmAdapter } from "@/services/chains/evm/EvmAdapter";
 import { ChainAdapterRegistry } from "@/services/chains/registry";
 import { createSolanaAdapter } from "@/services/chains/solana/SolanaAdapter";
 import { installSolanaSigner } from "@/services/chains/solana/signer";
+import { getHorizonClient } from "@/services/chains/stellar/horizonClient";
 import { createStellarAdapter } from "@/services/chains/stellar/StellarAdapter";
+import { installStellarSigner } from "@/services/chains/stellar/signer";
 import type { SuiNetwork } from "@/services/chains/sui/payloads";
 import { createSuiAdapter } from "@/services/chains/sui/SuiAdapter";
 import { installSuiSigner } from "@/services/chains/sui/signer";
@@ -21,6 +23,8 @@ import { HttpsInspector } from "./inspectors/HttpsInspector";
 import { SolanaProgramDecoderInspector } from "./inspectors/SolanaProgramDecoderInspector";
 import { SolanaSimulationInspector } from "./inspectors/SolanaSimulationInspector";
 import { SolanaSiwsInspector } from "./inspectors/SolanaSiwsInspector";
+import { StellarPreflightInspector } from "./inspectors/StellarPreflightInspector";
+import { StellarXdrDecoderInspector } from "./inspectors/StellarXdrDecoderInspector";
 import { SuiPtbDecoderInspector } from "./inspectors/SuiPtbDecoderInspector";
 import { SuiSimulationInspector } from "./inspectors/SuiSimulationInspector";
 import { SuiSiwsInspector } from "./inspectors/SuiSiwsInspector";
@@ -64,6 +68,8 @@ export function bootBridge(opts: BootOpts) {
   InspectorRegistry.register(SuiPtbDecoderInspector);
   InspectorRegistry.register(SuiSimulationInspector);
   InspectorRegistry.register(SuiSiwsInspector);
+  InspectorRegistry.register(StellarXdrDecoderInspector);
+  InspectorRegistry.register(StellarPreflightInspector);
 
   bridgeEventBus.subscribe(ConsoleSink);
   bridgeEventBus.subscribe(TelemetrySink);
@@ -179,14 +185,48 @@ export function bootBridge(opts: BootOpts) {
     }
   }
 
-  // Stellar dApp bridge — SCAFFOLD ONLY (docs/stellar-chain-support-spec.md
-  // §5, §11). Disabled: there is no ratified Stellar injected-provider
-  // standard to implement against yet (Freighter's window.freighterApi
-  // shape vs "Stellar Wallets Kit" — needs its own research spike).
-  // Flipping this on is future work, not part of this milestone.
-  const FEATURE_STELLAR_DAPP_BRIDGE = false;
+  // Stellar dApp bridge — real implementation
+  // (docs/stellar-dapp-bridge-spec.md). SEP-0043 via Freighter's
+  // concrete `postMessage` transport (§1). Boot-order precondition, same
+  // shape as Solana/Sui: the Stellar kit must be registered in
+  // `walletKitRegistry` before `installStellarSigner` lands a signer.
+  // `stellar-chain-support-spec.md` task 09 already registers it
+  // unconditionally, so this guard is defensive (Fast Refresh,
+  // boot-order regressions) rather than an expected steady-state branch
+  // — same posture the Solana/Sui blocks already have for their own
+  // already-registered kits.
+  //
+  // `installStellarSigner`'s deps needs less than Solana's/Sui's
+  // `install*Signer` calls: `getHorizonClient` is only reached down the
+  // `submit === true` branch (§1.8), and it's the same per-chain client
+  // `stellar-chain-support-spec.md` already built
+  // (`services/chains/stellar/horizonClient.ts`) — no new RPC plumbing,
+  // no client resolved at all on the (default, more common) sign-only
+  // path.
+  //
+  // Flipped ON for task 16's manual live-dApp smoke test (§15, roll-out
+  // step 10). Flip back to `false` if the smoke test surfaces a
+  // blocking issue; leave it `true` once §16's dApp-quirks doc is
+  // written and task 17 (ship) is ready.
+  const FEATURE_STELLAR_DAPP_BRIDGE = true;
   if (FEATURE_STELLAR_DAPP_BRIDGE) {
     ChainAdapterRegistry.register(createStellarAdapter());
+    if (walletKitRegistry.has("stellar")) {
+      installStellarSigner({
+        getWalletByAddress: (addr) =>
+          opts.getContext().wallets.find((w) => w.address === addr),
+        getHorizonClient,
+      });
+    } else {
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.warn(
+          "[bridge] Stellar kit not registered in walletKitRegistry; " +
+            "Stellar dApp signing disabled until next bootBridge. " +
+            "Did `bootWalletKits()` run before `bootBridge()` and include Stellar?",
+        );
+      }
+      booted = false;
+    }
   }
 
   void PermissionStore.hydrate();

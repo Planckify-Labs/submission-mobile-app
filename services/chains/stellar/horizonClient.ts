@@ -9,8 +9,14 @@
  */
 
 import { Networks, type Transaction } from "@stellar/stellar-base";
-import type { ChainConfig } from "@/constants/configs/chainConfig";
-import { assertStellarChain } from "@/constants/configs/chainConfig";
+import type {
+  ChainConfig,
+  StellarChainConfig,
+} from "@/constants/configs/chainConfig";
+import {
+  assertStellarChain,
+  getStellarMainnetChain,
+} from "@/constants/configs/chainConfig";
 import { bytesToBase64 } from "./base64";
 
 /**
@@ -28,6 +34,35 @@ export function transactionToBase64Xdr(tx: Transaction): string {
     toXDR(format: "raw"): Uint8Array;
   };
   return bytesToBase64(envelope.toXDR("raw"));
+}
+
+/**
+ * Resolves a `StellarChainConfig` from a raw network passphrase string —
+ * the reverse direction of `getHorizonClient`'s own `networkPassphrase`
+ * getter. Used by the dApp-bridge's submit path
+ * (`docs/stellar-dapp-bridge-spec.md` §1.8) and `StellarPreflightInspector`
+ * (§8.2), both of which only have a `networkPassphrase` string on the
+ * approval payload, not a full `ChainConfig`.
+ *
+ * Mainnet comes from the app's static `supportedChains` entry
+ * (`getStellarMainnetChain`); testnet has no static entry (it only
+ * arrives via the backend `/blockchains` feed) so this falls back to the
+ * well-known public testnet Horizon endpoint — same "hardcode a public
+ * per-network endpoint for the bridge signer" posture
+ * `installSolanaSigner`'s `getRpcForCluster` closure already uses.
+ */
+export function resolveStellarChainConfigForPassphrase(
+  networkPassphrase: string,
+): StellarChainConfig {
+  if (networkPassphrase === Networks.TESTNET) {
+    return {
+      namespace: "stellar",
+      network: "testnet",
+      horizonUrl: "https://horizon-testnet.stellar.org",
+      isTestnet: true,
+    };
+  }
+  return getStellarMainnetChain();
 }
 
 /** A single row of `HorizonAccount.balances`. */

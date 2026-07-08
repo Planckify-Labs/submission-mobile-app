@@ -36,6 +36,11 @@ describe("namespaceForChainKey", () => {
     assert.equal(namespaceForChainKey("sui:devnet"), "sui");
   });
 
+  it("maps stellar chain keys to stellar (docs/stellar-dapp-bridge-spec.md §9)", () => {
+    assert.equal(namespaceForChainKey("stellar:mainnet"), "stellar");
+    assert.equal(namespaceForChainKey("stellar:testnet"), "stellar");
+  });
+
   it("falls back to eip155 for unrecognised string keys", () => {
     assert.equal(namespaceForChainKey("0x1"), "eip155");
     assert.equal(namespaceForChainKey(""), "eip155");

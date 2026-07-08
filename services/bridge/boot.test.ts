@@ -97,6 +97,60 @@ describe("bootBridge — Sui flag + register-adjacent invariants", () => {
   });
 });
 
+describe("bootBridge — Stellar flag + register-adjacent invariants (docs/stellar-dapp-bridge-spec.md §10)", () => {
+  it("declares FEATURE_STELLAR_DAPP_BRIDGE as a boolean literal", () => {
+    assert.match(
+      src,
+      /const\s+FEATURE_STELLAR_DAPP_BRIDGE\s*=\s*(?:true|false)\s*;/,
+    );
+  });
+
+  it("Stellar adapter registration sits behind the flag", () => {
+    assert.match(
+      src,
+      /if\s*\(FEATURE_STELLAR_DAPP_BRIDGE\)[\s\S]*?ChainAdapterRegistry\.register\(\s*createStellarAdapter\(\)\s*\)/,
+    );
+  });
+
+  it("installStellarSigner is called from inside the guarded block", () => {
+    assert.match(
+      src,
+      /if\s*\(FEATURE_STELLAR_DAPP_BRIDGE\)[\s\S]*?installStellarSigner\(/,
+    );
+  });
+
+  it('installStellarSigner sits behind walletKitRegistry.has("stellar") guard', () => {
+    assert.match(
+      src,
+      /walletKitRegistry\.has\(\s*"stellar"\s*\)[\s\S]*?installStellarSigner/,
+    );
+  });
+
+  it("Stellar inspectors are registered (XDR decoder, preflight)", () => {
+    for (const name of [
+      "StellarXdrDecoderInspector",
+      "StellarPreflightInspector",
+    ]) {
+      assert.match(
+        src,
+        new RegExp(`InspectorRegistry\\.register\\(${name}\\)`),
+        `${name} is not registered in bootBridge`,
+      );
+    }
+  });
+
+  it("imports the Stellar adapter/signer symbols (matches one-line-flip property)", () => {
+    assert.match(
+      src,
+      /import\s*\{\s*createStellarAdapter\s*\}\s*from\s*"@\/services\/chains\/stellar\/StellarAdapter"/,
+    );
+    assert.match(
+      src,
+      /import\s*\{\s*installStellarSigner\s*\}\s*from\s*"@\/services\/chains\/stellar\/signer"/,
+    );
+  });
+});
+
 describe("ChainAdapterRegistry — empty-state default", () => {
   // When nothing has booted (cleared registry), `get("sui")` returns null.
   // After bootBridge runs with the flag ON the registry contains the Sui
@@ -105,5 +159,10 @@ describe("ChainAdapterRegistry — empty-state default", () => {
   it("returns null for sui on a freshly-cleared registry", () => {
     ChainAdapterRegistry.clear();
     assert.equal(ChainAdapterRegistry.get("sui"), null);
+  });
+
+  it("returns null for stellar on a freshly-cleared registry", () => {
+    ChainAdapterRegistry.clear();
+    assert.equal(ChainAdapterRegistry.get("stellar"), null);
   });
 });

@@ -8,12 +8,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assertStellarErrorCode,
+  SEP0043_ERROR_CODES,
+  STELLAR_ERROR_CODES,
   StellarAccountNotFoundError,
   StellarDestinationUnfundedError,
   StellarInsufficientCreateAmountError,
   StellarInsufficientReserveError,
   StellarNoTrustlineError,
   StellarSequenceNumberRaceError,
+  toSep0043Code,
 } from "./errorCodes.ts";
 
 describe("typed Stellar errors", () => {
@@ -56,5 +60,51 @@ describe("typed Stellar errors", () => {
   it("StellarSequenceNumberRaceError has a stable name", () => {
     const err = new StellarSequenceNumberRaceError();
     expect(err.name).toBe("StellarSequenceNumberRaceError");
+  });
+});
+
+describe("dApp-bridge error codes (docs/stellar-dapp-bridge-spec.md §1.1)", () => {
+  it("assertStellarErrorCode accepts every declared code", () => {
+    for (const code of Object.values(STELLAR_ERROR_CODES)) {
+      expect(() => assertStellarErrorCode(code)).not.toThrow();
+    }
+  });
+
+  it("assertStellarErrorCode rejects an undeclared code", () => {
+    expect(() => assertStellarErrorCode(-1)).toThrow();
+  });
+
+  it("toSep0043Code maps user-reject to -4 (SEP-0043 §1.1)", () => {
+    expect(toSep0043Code(STELLAR_ERROR_CODES.USER_REJECT)).toBe(
+      SEP0043_ERROR_CODES.USER_REJECTED,
+    );
+  });
+
+  it("toSep0043Code maps unauthorized/invalid-params/unsupported to -3", () => {
+    expect(toSep0043Code(STELLAR_ERROR_CODES.UNAUTHORIZED)).toBe(
+      SEP0043_ERROR_CODES.INVALID_REQUEST,
+    );
+    expect(toSep0043Code(STELLAR_ERROR_CODES.INVALID_PARAMS)).toBe(
+      SEP0043_ERROR_CODES.INVALID_REQUEST,
+    );
+    expect(toSep0043Code(STELLAR_ERROR_CODES.UNSUPPORTED)).toBe(
+      SEP0043_ERROR_CODES.INVALID_REQUEST,
+    );
+  });
+
+  it("toSep0043Code maps external-service failures to -2", () => {
+    expect(toSep0043Code(STELLAR_ERROR_CODES.EXTERNAL_SERVICE)).toBe(
+      SEP0043_ERROR_CODES.EXTERNAL_SERVICE,
+    );
+  });
+
+  it("toSep0043Code defaults unknown codes to -1 (internal)", () => {
+    expect(toSep0043Code(STELLAR_ERROR_CODES.INTERNAL)).toBe(
+      SEP0043_ERROR_CODES.INTERNAL,
+    );
+    expect(toSep0043Code(STELLAR_ERROR_CODES.GENERIC)).toBe(
+      SEP0043_ERROR_CODES.INTERNAL,
+    );
+    expect(toSep0043Code(999999)).toBe(SEP0043_ERROR_CODES.INTERNAL);
   });
 });

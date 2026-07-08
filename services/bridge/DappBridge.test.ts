@@ -112,6 +112,13 @@ describe("DappBridge — UI-initiated disconnect (revokeConnection)", () => {
     assert.match(src, /_updateSolanaWallet\(\{accounts:\[\]\}\)/);
     assert.match(src, /_updateSuiWallet\(\{accounts:\[\]\}\)/);
   });
+
+  it("reloads the page for stellar — Freighter's protocol has no wallet→dApp push event (docs/stellar-dapp-bridge-spec.md §4.4)", () => {
+    assert.match(
+      src,
+      /namespace === "stellar"\s*\)\s*\{\s*\n\s*wv\.reload\(\);/,
+    );
+  });
 });
 
 describe("DappBridge — TWV-2026-007 hard-reject eth_sign", () => {
