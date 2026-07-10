@@ -14,6 +14,8 @@ import { useSmartContractByChain } from "@/hooks/queries/useSmartContracts";
 import { useTokens } from "@/hooks/queries/useTokens";
 import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { useWallet } from "@/hooks/useWallet";
+import { toChainTag } from "@/services/analytics/chainTag";
+import { track } from "@/services/analytics/posthog";
 
 const DEPOSIT_STATE_KEY = ["deposit", "state"] as const;
 const DEFAULT_CURRENCY = "IDR";
@@ -468,6 +470,11 @@ export function useDepositState() {
           currency: DEFAULT_CURRENCY,
         });
 
+        track("deposit_completed", {
+          chain: toChainTag(rawActiveChain.namespace),
+          amount: Number(amount),
+        });
+
         // Step 6: Done -- navigate back
         updateState({
           isLoading: true,
@@ -521,6 +528,7 @@ export function useDepositState() {
       updateState,
       isAuthenticated,
       state?.trustedSpenders,
+      rawActiveChain.namespace,
     ],
   );
 

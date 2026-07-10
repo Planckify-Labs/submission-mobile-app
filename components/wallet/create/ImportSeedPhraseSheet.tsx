@@ -62,6 +62,7 @@ import {
 import { BaseModal } from "@/components/common/BaseModal";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
+import { track } from "@/services/analytics/posthog";
 import type { Namespace } from "@/services/chains/types";
 import { useScreenshotGuard } from "@/services/security/screenshotGuard";
 import { defaultWalletNameFor } from "@/services/walletKit/bootstrap";
@@ -249,6 +250,10 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
           throw new Error("Failed to save wallets");
         }
         setCompleted(true);
+        track("wallet_imported", {
+          chains: toAdd.map((w) => w.namespace),
+          wallets_added: toAdd.length,
+        });
         onWalletsAdded(toAdd);
         // Close — success stays visible through BaseModal's slide-out and
         // `resetState` runs on `onClosed`.

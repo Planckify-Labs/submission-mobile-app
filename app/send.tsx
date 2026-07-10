@@ -47,6 +47,8 @@ import { useAddressBook } from "@/hooks/useAddressBook";
 import { usePreferredGasToken } from "@/hooks/usePreferredGasToken";
 import { useWallet } from "@/hooks/useWallet";
 import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
+import { toChainTag } from "@/services/analytics/chainTag";
+import { track } from "@/services/analytics/posthog";
 import { pollRelayerTaskHash } from "@/services/gasAbstraction/pollTaskStatus";
 import { resolveGasPayment } from "@/services/gasAbstraction/resolveGasPayment";
 import { classifySuiRecipient } from "@/utils/walletUtils";
@@ -689,6 +691,11 @@ export default function SendScreen() {
         selectedToken && selectedToken.isNativeCurrency === false
           ? (selectedToken.symbol ?? "")
           : nativeSymbol;
+      track("payment_sent", {
+        chain: toChainTag(activeChain.namespace),
+        token: symbol,
+        amount: Number(amount),
+      });
       router.replace({
         pathname: "/send-success",
         params: {

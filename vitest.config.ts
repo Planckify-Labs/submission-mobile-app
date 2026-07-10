@@ -4,6 +4,13 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      // Exact-specifier match, checked before the "@" prefix alias below —
+      // keeps posthog-react-native (RN/Flow syntax, unparseable by esbuild)
+      // out of pure-logic executor tests. See services/analytics/posthog.mock.ts.
+      "@/services/analytics/posthog": path.resolve(
+        __dirname,
+        "services/analytics/posthog.mock.ts",
+      ),
       "@": path.resolve(__dirname, "."),
     },
   },

@@ -20,7 +20,7 @@ import { useDepositPrefetch } from "@/hooks/deposit/useDepositPrefetch";
 
 interface HomeMainProps {
   /** Opens the Takumi Agent chat page (owned by the home pager). */
-  onOpenAgentChat?: () => void;
+  onOpenAgentChat?: (trigger: string) => void;
 }
 
 export default function HomeMain({ onOpenAgentChat }: HomeMainProps) {

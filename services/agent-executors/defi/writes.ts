@@ -22,6 +22,8 @@ import { exchangeRateApi } from "@/api/endpoints/exchange-rates";
 import { strategiesApi } from "@/api/endpoints/strategies";
 import type { TOpportunity, TUserStrategy } from "@/api/types/strategy";
 import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
+import { toChainTag } from "@/services/analytics/chainTag";
+import { track } from "@/services/analytics/posthog";
 import {
   classifyDefiError,
   DefiError,
@@ -631,6 +633,15 @@ export const deposit: MobileToolExecutor = (input, context) =>
           });
         }
       }
+
+      track("defi_deposit_completed", {
+        chain: toChainTag(adapter.namespace),
+        protocol_slug: protocolSlug,
+        chain_id: chainId,
+        asset_symbol: assetSymbol,
+        amount: parseFloat(formatUnits(amountRaw, decimals)),
+        amount_usd: amountAtDepositUsd,
+      });
 
       return {
         status: "success" as const,

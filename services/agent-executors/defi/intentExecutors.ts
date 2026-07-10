@@ -16,6 +16,7 @@
  */
 
 import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import { track } from "@/services/analytics/posthog";
 import { compileIntentToPtb } from "@/services/chains/sui/intent/compileIntentToPtb";
 import { runGuardian } from "@/services/chains/sui/intent/guardian/riskCheckRegistry";
 import {
@@ -461,6 +462,32 @@ export const defiIntentExecute: MobileToolExecutor = (input, context) =>
           );
         }
       }
+    }
+
+    if (entry.intent.action === "swap") {
+      track("swap_completed", {
+        chain: "sui",
+        from_asset: entry.intent.fromAsset,
+        to_asset: entry.intent.toAsset,
+        amount: Number(entry.intent.amount.human),
+      });
+    } else if (
+      entry.intent.action === "supply" ||
+      entry.intent.action === "swap_and_supply"
+    ) {
+      // "supply" deposits `asset`; "swap_and_supply" deposits the swapped
+      // `toAsset` — either way, the symbol that actually lands in the venue.
+      const assetSymbol =
+        entry.intent.action === "supply"
+          ? entry.intent.asset
+          : entry.intent.toAsset;
+      track("defi_deposit_completed", {
+        chain: "sui",
+        protocol_slug: entry.intent.venue,
+        chain_id: chain.network,
+        asset_symbol: assetSymbol,
+        amount: Number(entry.intent.amount.human),
+      });
     }
 
     // base58 digest in data.digest — never the hex-typed tx_hash (§6.4).

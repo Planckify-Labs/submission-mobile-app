@@ -23,6 +23,7 @@ import { useTokens } from "@/hooks/queries/useTokens";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { useWallet } from "@/hooks/useWallet";
 import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
+import { track } from "@/services/analytics/posthog";
 import type { Namespace } from "@/services/chains/types";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 
@@ -199,7 +200,10 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
     return out;
   }, [grouped, searchQuery]);
 
-  const openModal = useCallback(() => setModalVisible(true), []);
+  const openModal = useCallback(() => {
+    track("feature_opened", { feature: "chain_selector" });
+    setModalVisible(true);
+  }, []);
   const closeModal = useCallback(() => setModalVisible(false), []);
 
   useImperativeHandle(ref, () => ({ open: openModal }), [openModal]);

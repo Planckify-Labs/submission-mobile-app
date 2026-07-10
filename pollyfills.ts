@@ -132,6 +132,19 @@ try {
   require("bn.js");
 } catch {}
 
+// Same issue, different shape: @posthog/core's bundled CJS output does
+// `exports.hasOwnProperty = <helper>` (it exports a utility literally
+// named `hasOwnProperty`). Once `Object.prototype.hasOwnProperty` is
+// frozen below, that assignment throws "Cannot assign to read-only
+// property 'hasOwnProperty'" the first time anything imports
+// posthog-react-native. Pre-loading here lets the assignment land on
+// the (still-writable) exports object before the freeze; the module
+// cache then serves that same object to `services/analytics/posthog.ts`
+// later, freeze or no freeze.
+try {
+  require("posthog-react-native");
+} catch {}
+
 // TWV-2026-021 — freeze the global prototypes before any third-party
 // code runs. CVE-2019-10744 (lodash) and friends mutate
 // `Object.prototype` to swap addresses / chainIds mid-request; freezing

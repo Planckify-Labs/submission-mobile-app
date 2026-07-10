@@ -1,6 +1,12 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Image,
   Platform,
@@ -26,6 +32,7 @@ import {
   useExecuteRedemption,
   useRedemptionStatus,
 } from "@/hooks/queries/useRedeem";
+import { track } from "@/services/analytics/posthog";
 
 export default function PaymentScreen() {
   const [transactionStatus, setTransactionStatus] = useState("");
@@ -65,6 +72,8 @@ export default function PaymentScreen() {
 
   // Poll redemption status until terminal state
   const { data: redemptionStatus } = useRedemptionStatus(redemptionId);
+  // Guards against double-counting on a stray refetch after completion.
+  const trackedCompletionRef = useRef(false);
 
   useEffect(() => {
     if (!redemptionStatus) return;
@@ -79,6 +88,13 @@ export default function PaymentScreen() {
         redemptionId: redemptionStatus.id,
       });
       setSuccessModalVisible(true);
+      if (!trackedCompletionRef.current) {
+        trackedCompletionRef.current = true;
+        track("bill_payment_completed", {
+          product_category: variantData?.product?.categoryId,
+          points_spent: Number(redemptionStatus.pointsSpent),
+        });
+      }
     } else if (redemptionStatus.status === "REFUNDED") {
       setIsLoading(false);
       setTransactionStatus("");
@@ -98,7 +114,7 @@ export default function PaymentScreen() {
           : "Submitting your redemption...",
       );
     }
-  }, [redemptionStatus, variantData?.name]);
+  }, [redemptionStatus, variantData?.name, variantData?.product?.categoryId]);
 
   const executePayment = useCallback(async () => {
     if (!variantData?.id || !variantData.ProductPrice?.[0]?.id) {
