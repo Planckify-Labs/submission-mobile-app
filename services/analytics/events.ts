@@ -81,6 +81,16 @@ export type AnalyticsEventProps = {
   // finish. `stage` is where it broke: post_otp | drive_restore |
   // account_found_new_wallet.
   google_signin_setup_failed: { stage: string; reason?: string };
+  // Google Drive seed-backup management from the wallet screen (distinct from
+  // `google_signin_completed`'s drive_restore path, which is the login-time
+  // *restore*). `is_update` is true when this replaced an existing backup
+  // (passphrase change) rather than creating the first one.
+  wallet_backup_completed: { is_update: boolean };
+  wallet_backup_removed: Record<string, never>;
+  // `stage` is which action failed: create | update | remove. `reason` is a
+  // curated TBackupErrorCode from services/backup/errors.ts, never raw error
+  // text.
+  wallet_backup_failed: { stage: string; reason?: string };
 };
 
 export type AnalyticsEvent = keyof AnalyticsEventProps;

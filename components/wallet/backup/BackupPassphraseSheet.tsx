@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
+import { track } from "@/services/analytics/posthog";
 import { BACKUP_ERROR_COPY, BackupError } from "@/services/backup/errors";
 import {
   checkPassphrase,
@@ -121,8 +122,13 @@ export default function BackupPassphraseSheet({
       // Show the confirmation in-sheet; refresh the parent's "Backed up …" row
       // now, but let the user dismiss the success screen themselves.
       setDone(true);
+      track("wallet_backup_completed", { is_update: !!lastBackupAt });
       onBackedUp();
     } catch (err) {
+      track("wallet_backup_failed", {
+        stage: lastBackupAt ? "update" : "create",
+        reason: err instanceof BackupError ? err.code : "unknown",
+      });
       setError(
         err instanceof BackupError
           ? BACKUP_ERROR_COPY[err.code]
@@ -131,7 +137,15 @@ export default function BackupPassphraseSheet({
     } finally {
       setBusy(false);
     }
-  }, [seedPhrase, canSubmit, passphrase, walletAddress, email, onBackedUp]);
+  }, [
+    seedPhrase,
+    canSubmit,
+    passphrase,
+    walletAddress,
+    email,
+    lastBackupAt,
+    onBackedUp,
+  ]);
 
   return (
     <BaseModal

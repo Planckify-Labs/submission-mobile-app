@@ -7,6 +7,7 @@ import {
 import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
+import { track } from "@/services/analytics/posthog";
 import { BACKUP_ERROR_COPY, BackupError } from "@/services/backup/errors";
 import { removeBackup } from "@/services/backup/seedBackup";
 import { authenticateUser } from "@/utils/authUtils";
@@ -97,10 +98,15 @@ export default function BackupStatusSheet({
     setBusy(true);
     try {
       await removeBackup(walletAddress, ownerEmail);
+      track("wallet_backup_removed");
       onRemoved();
       onClose();
     } catch (err) {
       if (__DEV__) console.warn("remove backup failed", err);
+      track("wallet_backup_failed", {
+        stage: "remove",
+        reason: err instanceof BackupError ? err.code : "unknown",
+      });
       setError(
         err instanceof BackupError
           ? BACKUP_ERROR_COPY[err.code]
