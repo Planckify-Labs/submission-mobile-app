@@ -5,8 +5,14 @@ import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import Chip from "@/components/common/Chip";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { usePinnedWallets } from "@/hooks/usePinnedWallets";
+import { useWalletAccountGroups } from "@/hooks/useWalletAccountGroups";
 import type { Namespace } from "@/services/chains/types";
+import {
+  flattenWalletGroups,
+  type WalletGroupListItem,
+} from "@/utils/walletGrouping";
 import { truncateAddress, walletTypeLabel } from "@/utils/walletUtils";
+import WalletAccountGroupHeader from "./WalletAccountGroupHeader";
 
 type NamespaceFilter = "all" | Namespace;
 
@@ -48,9 +54,19 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
     return Array.from(set);
   }, [wallets]);
 
-  const filteredWallets = useMemo(() => {
+  const activeAddress = wallets[activeWalletIndex]?.address;
+  const { groups, isExpanded, toggleExpanded } = useWalletAccountGroups(
+    wallets,
+    activeAddress,
+    visible,
+  );
+
+  const listItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return wallets.filter((wallet) => {
+    // A chain tab or an active search narrows the list enough that
+    // collapsing would just hide matches, so force every group open.
+    const forceExpand = query.length > 0 || nsFilter !== "all";
+    const isVisible = (wallet: TWallet) => {
       if (nsFilter !== "all" && wallet.namespace !== nsFilter) return false;
       if (!query) return true;
       return (
@@ -58,8 +74,14 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
         wallet.address.toLowerCase().includes(query) ||
         walletTypeLabel(wallet).toLowerCase().includes(query)
       );
+    };
+    return flattenWalletGroups(groups, {
+      isVisible,
+      isExpanded,
+      forceExpand,
+      activeAddress,
     });
-  }, [wallets, searchQuery, nsFilter]);
+  }, [groups, searchQuery, nsFilter, isExpanded, activeAddress]);
 
   const resetFilters = useCallback(() => {
     setSearchQuery("");
@@ -148,8 +170,34 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
     ],
   );
 
+  const renderListItem = useCallback(
+    ({ item }: { item: WalletGroupListItem }) => {
+      if (item.type === "header") {
+        return (
+          <WalletAccountGroupHeader
+            group={item.group}
+            count={item.count}
+            expanded={item.expanded}
+            collapsible={item.collapsible}
+            containsActive={item.containsActive}
+            onToggle={() => toggleExpanded(item.group.id)}
+          />
+        );
+      }
+      return (
+        <View style={item.indented ? { paddingLeft: 12 } : undefined}>
+          {renderWalletItem({ item: item.wallet })}
+        </View>
+      );
+    },
+    [renderWalletItem, toggleExpanded],
+  );
+
   const keyExtractor = useCallback(
-    (item: TWallet, index: number) => item.address || `wallet-${index}`,
+    (item: WalletGroupListItem, index: number) =>
+      item.type === "header"
+        ? `header:${item.group.id}`
+        : item.wallet.address || `wallet-${index}`,
     [],
   );
 
@@ -210,10 +258,10 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
       ) : null}
 
       <FlatList
-        data={filteredWallets}
-        renderItem={renderWalletItem}
+        data={listItems}
+        renderItem={renderListItem}
         keyExtractor={keyExtractor}
-        extraData={searchQuery}
+        extraData={`${searchQuery}:${nsFilter}:${activeWalletIndex}`}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View className="items-center py-8">

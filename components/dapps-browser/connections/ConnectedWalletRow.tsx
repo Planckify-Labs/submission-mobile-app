@@ -2,24 +2,12 @@ import { Link2Off, Unlink } from "lucide-react-native";
 import React, { memo } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 import type { DappConnectionWallet } from "@/hooks/useDappConnections";
-import { truncateAddress } from "@/utils/walletUtils";
+import { truncateAddress, walletAvatarInitials } from "@/utils/walletUtils";
 
 // Brand palette (tailwind.config.js `light.*`) for the lucide icons, which
 // take a solid color string rather than a className.
 const BRAND_RED = "#c71c4b"; // light-primary-red
 const MATTE_MUTED = "rgba(32,34,44,0.4)"; // light-matte-black @ 40%
-
-/**
- * Wallet-name initials for the avatar — same rule as the wallet screen's
- * `WalletCompactCard`: first letters of the first two words, else the
- * first two characters, uppercased.
- */
-function walletInitials(name: string): string {
-  if (!name) return "W";
-  const words = name.trim().split(/\s+/);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  return name.substring(0, 2).toUpperCase();
-}
 
 /**
  * Trailing affordance for a wallet row:
@@ -66,7 +54,7 @@ const ConnectedWalletRow = memo<ConnectedWalletRowProps>(
                 : "text-light-matte-black/45"
             }`}
           >
-            {walletInitials(wallet.name)}
+            {walletAvatarInitials({ name: wallet.name })}
           </Text>
         </View>
 

@@ -3,8 +3,14 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import type { TWallet } from "@/constants/types/walletTypes";
+import { useWalletAccountGroups } from "@/hooks/useWalletAccountGroups";
 import { walletKitRegistry } from "@/services/walletKit/registry";
+import {
+  flattenWalletGroups,
+  type WalletGroupListItem,
+} from "@/utils/walletGrouping";
 import { truncateAddress } from "@/utils/walletUtils";
+import WalletAccountGroupHeader from "./WalletAccountGroupHeader";
 
 // Human-readable namespace label shown as a chip next to each wallet.
 // Prefers the registered kit's `displayName` so adding a new chain
@@ -54,17 +60,31 @@ const WalletSelectorModal = memo(function WalletSelectorModal({
 }: WalletSelectorModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredWallets = useMemo(() => {
+  const activeAddress = wallets[activeWalletIndex]?.address;
+  const { groups, isExpanded, toggleExpanded } = useWalletAccountGroups(
+    wallets,
+    activeAddress,
+    visible,
+  );
+
+  const listItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return wallets;
-    return wallets.filter((w) => {
+    const isVisible = (w: TWallet) => {
+      if (!q) return true;
       if ((w.name ?? "").toLowerCase().includes(q)) return true;
       if (w.address.toLowerCase().includes(q)) return true;
       if ((w.type ?? "").toLowerCase().includes(q)) return true;
       if (namespaceLabel(w.namespace).toLowerCase().includes(q)) return true;
       return false;
+    };
+    return flattenWalletGroups(groups, {
+      isVisible,
+      isExpanded,
+      // A search narrows the list, so keep every matching group open.
+      forceExpand: q.length > 0,
+      activeAddress,
     });
-  }, [wallets, searchQuery]);
+  }, [groups, searchQuery, isExpanded, activeAddress]);
 
   // Closing without picking a wallet declines the pending dApp connection.
   const handleClose = useCallback(() => {
@@ -172,7 +192,34 @@ const WalletSelectorModal = memo(function WalletSelectorModal({
     ],
   );
 
-  const keyExtractor = useCallback((item: TWallet) => item.address, []);
+  const renderListItem = useCallback(
+    ({ item }: { item: WalletGroupListItem }) => {
+      if (item.type === "header") {
+        return (
+          <WalletAccountGroupHeader
+            group={item.group}
+            count={item.count}
+            expanded={item.expanded}
+            collapsible={item.collapsible}
+            containsActive={item.containsActive}
+            onToggle={() => toggleExpanded(item.group.id)}
+          />
+        );
+      }
+      return (
+        <View style={item.indented ? { paddingLeft: 12 } : undefined}>
+          {renderWalletItem(item.wallet)}
+        </View>
+      );
+    },
+    [renderWalletItem, toggleExpanded],
+  );
+
+  const keyExtractor = useCallback(
+    (item: WalletGroupListItem) =>
+      item.type === "header" ? `header:${item.group.id}` : item.wallet.address,
+    [],
+  );
 
   return (
     <BaseModal
@@ -231,8 +278,8 @@ const WalletSelectorModal = memo(function WalletSelectorModal({
 
       <View className="flex-1">
         <FlatList
-          data={filteredWallets}
-          renderItem={({ item }) => renderWalletItem(item)}
+          data={listItems}
+          renderItem={renderListItem}
           keyExtractor={keyExtractor}
           extraData={`${searchQuery}:${activeWalletIndex}`}
           contentContainerStyle={{ paddingBottom: 16 }}

@@ -9,13 +9,19 @@ import {
   View,
 } from "react-native";
 import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
+import WalletAccountGroupHeader from "@/components/wallet/WalletAccountGroupHeader";
 import type { TWallet } from "@/constants/types/walletTypes";
 import {
   type DappConnectionWallet,
   useDappConnections,
 } from "@/hooks/useDappConnections";
+import { useWalletAccountGroups } from "@/hooks/useWalletAccountGroups";
 import { originHost } from "@/services/permissions/caip";
 import { chainBadgeLabel } from "@/services/walletKit/chainInfo";
+import {
+  groupWalletSections,
+  type WalletAccountGroup,
+} from "@/utils/walletGrouping";
 import ConnectedSitesList from "./ConnectedSitesList";
 import ConnectedWalletRow from "./ConnectedWalletRow";
 
@@ -124,6 +130,16 @@ export default function ConnectionManagerSheet({
   const host = currentOrigin ? originHost(currentOrigin) : null;
   const isDapp = !!currentOrigin;
 
+  // Group the "Other wallets" list by account so multiple Google logins
+  // (each deriving EVM + Solana + Sui) collapse under one email header.
+  // Default the currently-connected account open; the rest start collapsed.
+  const connectedAddress = connectedWallets[0]?.address;
+  const {
+    groups: accountGroups,
+    isExpanded,
+    toggleExpanded,
+  } = useWalletAccountGroups(wallets, connectedAddress, visible);
+
   // Tab state + sliding indicator. Two segments, index 0/1.
   const [activeTab, setActiveTab] = useState<ConnectionTab>("wallets");
   const indicator = useRef(new Animated.Value(0)).current;
@@ -205,6 +221,9 @@ export default function ConnectionManagerSheet({
                   pending={pending}
                   onDisconnectWallet={onDisconnectWallet}
                   onDisconnectSite={onDisconnectSite}
+                  accountGroups={accountGroups}
+                  isExpanded={isExpanded}
+                  toggleExpanded={toggleExpanded}
                 />
               ) : (
                 <HubWalletsBody hubWallets={hubWallets} />
@@ -337,6 +356,9 @@ function DappWalletsBody({
   pending,
   onDisconnectWallet,
   onDisconnectSite,
+  accountGroups,
+  isExpanded,
+  toggleExpanded,
 }: {
   host: string;
   origin: string;
@@ -345,7 +367,27 @@ function DappWalletsBody({
   pending: Set<string>;
   onDisconnectWallet: (origin: string, address: string) => void;
   onDisconnectSite: (origin: string, addresses: string[]) => void;
+  accountGroups: WalletAccountGroup[];
+  isExpanded: (accountId: string) => boolean;
+  toggleExpanded: (accountId: string) => void;
 }) {
+  // Look up the connection row for a grouped wallet by address.
+  const otherByAddress = useMemo(() => {
+    const m = new Map<string, DappConnectionWallet>();
+    for (const w of otherWallets) m.set(w.address.toLowerCase(), w);
+    return m;
+  }, [otherWallets]);
+
+  const otherSections = useMemo(
+    () =>
+      groupWalletSections(accountGroups, {
+        isVisible: (w) => otherByAddress.has(w.address.toLowerCase()),
+        isExpanded,
+        forceExpand: false,
+      }),
+    [accountGroups, otherByAddress, isExpanded],
+  );
+
   return (
     <>
       <SectionLabel>{`Connected to ${host}`}</SectionLabel>
@@ -391,19 +433,39 @@ function DappWalletsBody({
         </>
       )}
 
-      {otherWallets.length > 0 && (
+      {otherSections.length > 0 && (
         <>
           <SectionLabel>Other wallets</SectionLabel>
-          <View className="bg-light rounded-2xl px-4">
-            {otherWallets.map((w, i) => (
-              <ConnectedWalletRow
-                key={w.address}
-                wallet={w}
-                divider={i > 0}
-                action={{ type: "status", label: "Not connected" }}
-              />
-            ))}
-          </View>
+          {otherSections.map((section) => (
+            <View key={section.group.id} className="mb-2">
+              {section.showHeader && (
+                <WalletAccountGroupHeader
+                  group={section.group}
+                  count={section.wallets.length}
+                  expanded={section.expanded}
+                  collapsible={section.collapsible}
+                  containsActive={false}
+                  onToggle={() => toggleExpanded(section.group.id)}
+                />
+              )}
+              {section.expanded && (
+                <View className="bg-light rounded-2xl px-4">
+                  {section.wallets.map((w, i) => {
+                    const row = otherByAddress.get(w.address.toLowerCase());
+                    if (!row) return null;
+                    return (
+                      <ConnectedWalletRow
+                        key={w.address}
+                        wallet={row}
+                        divider={i > 0}
+                        action={{ type: "status", label: "Not connected" }}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          ))}
         </>
       )}
     </>

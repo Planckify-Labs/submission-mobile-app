@@ -3,7 +3,7 @@ import React, { memo, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Chip from "@/components/common/Chip";
 import type { TWallet } from "@/constants/types/walletTypes";
-import { walletTypeLabel } from "@/utils/walletUtils";
+import { walletAvatarInitials, walletTypeLabel } from "@/utils/walletUtils";
 import WalletRenameModal from "./WalletRenameModal";
 
 type WalletCompactCardProps = {
@@ -25,14 +25,8 @@ const WalletCompactCard = memo(function WalletCompactCard({
 }: WalletCompactCardProps) {
   const [showRenameModal, setShowRenameModal] = useState(false);
 
-  const initials = useMemo(() => {
-    if (!wallet.name) return "W";
-    const words = wallet.name.trim().split(/\s+/);
-    if (words.length >= 2) {
-      return (words[0][0] + words[1][0]).toUpperCase();
-    }
-    return wallet.name.substring(0, 2).toUpperCase();
-  }, [wallet.name]);
+  // Cheap pure derivation; the component is already memo()-wrapped.
+  const initials = walletAvatarInitials(wallet);
 
   const formattedAddress = useMemo(() => {
     if (!wallet.address) return "...";

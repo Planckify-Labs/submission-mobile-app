@@ -41,6 +41,7 @@ import {
   isValidSuiPrivateKey,
   parseSolanaPrivateKey,
   SUI_LEGACY_ADDRESS_UX_MESSAGE,
+  walletAvatarInitials,
 } from "@/utils/walletUtils";
 
 // Canonical Phantom-verified golden vector from
@@ -497,5 +498,46 @@ describe("classifySuiRecipient", () => {
     if (!verdict.ok) {
       assert.equal(verdict.kind, "invalid");
     }
+  });
+});
+
+describe("walletAvatarInitials", () => {
+  it("prefers the social account name over the local chain-suffixed label", () => {
+    assert.equal(
+      walletAvatarInitials({
+        name: "Satria · ETH",
+        socialAccount: { provider: "google", email: "", name: "Satria Ali" },
+      }),
+      "SA",
+    );
+  });
+
+  it("handles a first-name-only social account (no last name)", () => {
+    assert.equal(
+      walletAvatarInitials({
+        name: "Satria · SOL",
+        socialAccount: { provider: "google", email: "", name: "Satria" },
+      }),
+      "SA",
+    );
+  });
+
+  it("strips the chain suffix from the local label when no social name", () => {
+    // Non-social wallet, or a social wallet where Google returned no name.
+    assert.equal(walletAvatarInitials({ name: "Satria · ETH" }), "SA");
+    assert.equal(walletAvatarInitials({ name: "Main Wallet · ETH" }), "MW");
+  });
+
+  it("does not fold a chain tag into the initials", () => {
+    // Regression: the old logic produced "S·" from "Satria · ETH".
+    assert.notEqual(walletAvatarInitials({ name: "Satria · ETH" }), "S·");
+  });
+
+  it("uses two letters for a single-word local name", () => {
+    assert.equal(walletAvatarInitials({ name: "Trading" }), "TR");
+  });
+
+  it("falls back to 'W' when nothing is usable", () => {
+    assert.equal(walletAvatarInitials({ name: "" }), "W");
   });
 });
