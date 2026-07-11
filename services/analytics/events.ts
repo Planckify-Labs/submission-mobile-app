@@ -54,6 +54,33 @@ export type AnalyticsEventProps = {
   // volume.
   agent_session_started: Record<string, never>;
   agent_session_ended: { duration_seconds: number };
+  // Google sign-in funnel (app/login.tsx, components/auth/GoogleOtpSheet.tsx).
+  // `reason` values are the curated TGoogleAuthErrorCode codes from
+  // hooks/queries/useGoogleAuth.ts (e.g. "invalid_code", "rate_limited",
+  // "account_conflict") — never raw error text, per the user-facing-errors
+  // rule in CLAUDE.md, which applies here too.
+  google_signin_started: Record<string, never>;
+  // The native picker resolved and the server emailed a code — step 1 done.
+  google_signin_otp_requested: Record<string, never>;
+  // User dismissed the Google account picker. Tracked separately from
+  // `google_signin_failed` since it's a normal drop-off, not an error.
+  google_signin_cancelled: Record<string, never>;
+  google_signin_failed: { reason: string };
+  otp_verified: Record<string, never>;
+  // Fired for both a rejected code and a failed resend — either way the OTP
+  // step didn't complete; `reason` distinguishes the cause.
+  otp_verify_failed: { reason: string };
+  otp_resent: Record<string, never>;
+  // `path` is which of the five post-OTP outcomes landed the user on a
+  // wallet: existing_wallet (returning account, same device), drive_restore,
+  // new_account (brand-new, no backup), account_found_new_wallet (lost
+  // recovery, minted fresh), account_found_recovery_phrase (recovered via
+  // seed phrase).
+  google_signin_completed: { path: string };
+  // Auth succeeded (OTP verified) but the post-auth wallet setup didn't
+  // finish. `stage` is where it broke: post_otp | drive_restore |
+  // account_found_new_wallet.
+  google_signin_setup_failed: { stage: string; reason?: string };
 };
 
 export type AnalyticsEvent = keyof AnalyticsEventProps;

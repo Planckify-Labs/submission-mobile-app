@@ -24,6 +24,7 @@ import {
   useResendGoogleOtp,
   useVerifyGoogleOtp,
 } from "@/hooks/queries/useGoogleAuth";
+import { track } from "@/services/analytics/posthog";
 
 const CODE_LENGTH = 6;
 /** Seconds the user must wait before a resend is offered. */
@@ -108,6 +109,7 @@ export default function GoogleOtpSheet({
     (err: GoogleAuthError) => {
       setError(ERROR_COPY[err.code] ?? ERROR_COPY.unknown);
       setCode("");
+      track("otp_verify_failed", { reason: err.code });
       if (err.code === "session_expired") onExpired();
     },
     [onExpired],
@@ -120,7 +122,10 @@ export default function GoogleOtpSheet({
       verifyOtp.mutate(
         { challengeId: challenge.challengeId, code: value },
         {
-          onSuccess: onVerified,
+          onSuccess: (response) => {
+            track("otp_verified");
+            onVerified(response);
+          },
           onError: handleFailure,
         },
       );
@@ -147,6 +152,7 @@ export default function GoogleOtpSheet({
       { challengeId: challenge.challengeId },
       {
         onSuccess: (next) => {
+          track("otp_resent");
           setSecondsLeft(next.expiresInSeconds);
           setCooldown(RESEND_COOLDOWN_SECONDS);
           inputRef.current?.focus();

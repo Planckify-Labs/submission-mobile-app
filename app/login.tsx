@@ -31,6 +31,7 @@ import {
 } from "@/hooks/queries/useGoogleAuth";
 import { useLoadingSteps } from "@/hooks/useLoadingSteps";
 import { useWallet } from "@/hooks/useWallet";
+import { track } from "@/services/analytics/posthog";
 import { authenticateWallet } from "@/services/auth/authenticateWallet";
 import {
   getGoogleAccountForWallet,
@@ -51,6 +52,15 @@ import {
   restoreWalletsFromMnemonic,
 } from "@/services/walletKit/bootstrap";
 import { loadWalletsFromStorage } from "@/services/walletService";
+
+// The five post-OTP outcomes that end in a usable wallet — see
+// `google_signin_completed` in services/analytics/events.ts.
+type GoogleSignInPath =
+  | "existing_wallet"
+  | "drive_restore"
+  | "new_account"
+  | "account_found_new_wallet"
+  | "account_found_recovery_phrase";
 
 export default function Login() {
   const { height } = useWindowDimensions();
@@ -173,6 +183,9 @@ export default function Login() {
           name: googleAccount.name,
         });
         if (token) void registerGoogleWallet(token, primary.address);
+        track("google_signin_completed", {
+          path: "account_found_recovery_phrase",
+        });
       }
 
       setSeedSheetForGoogle(false);
@@ -197,14 +210,21 @@ export default function Login() {
    * No session exists yet — the challenge only opens the OTP sheet.
    */
   const handleGoogleSignIn = useCallback(() => {
+    track("google_signin_started");
     googleSignIn.mutate(undefined, {
       onSuccess: (challenge) => {
+        track("google_signin_otp_requested");
         emailMaskedRef.current = challenge.emailMasked;
         setGoogleChallenge(challenge);
       },
       onError: (error: GoogleAuthError) => {
         // A cancelled picker is a normal outcome, not a failure to report.
-        if (error.code === "cancelled" || error.code === "in_progress") return;
+        if (error.code === "in_progress") return;
+        if (error.code === "cancelled") {
+          track("google_signin_cancelled");
+          return;
+        }
+        track("google_signin_failed", { reason: error.code });
 
         Alert.alert(
           "Sign In Failed",
@@ -234,7 +254,7 @@ export default function Login() {
     async (
       accountWallets: TWallet[],
       account: TGoogleAuthResponse["user"] | null,
-      opts?: { activateExisting?: boolean },
+      opts: { path: GoogleSignInPath; activateExisting?: boolean },
     ) => {
       // The kit registry derives wallets EVM-first, so index 0 is the EVM row
       // — what the auth handshake and EVM-first surfaces (agent, send) default
@@ -265,7 +285,7 @@ export default function Login() {
       // active wallet so home opens on this Google account's wallet, not
       // whatever happened to be selected last. (Mint / restore paths already
       // activate via `addWallets`.)
-      if (opts?.activateExisting) {
+      if (opts.activateExisting) {
         const idx = liveWallets.findIndex(
           (w) => w.address.toLowerCase() === primary.address.toLowerCase(),
         );
@@ -279,6 +299,7 @@ export default function Login() {
       await authenticateWallet(primary, activeChain);
 
       completeSignInStep(3);
+      track("google_signin_completed", { path: opts.path });
       await signInDelay(300);
       router.replace("/");
     },
@@ -299,7 +320,13 @@ export default function Login() {
    * in with a different account mints a different one.
    */
   const mintGoogleWalletAndFinish = useCallback(
-    async (account: TGoogleAuthResponse["user"]) => {
+    async (
+      account: TGoogleAuthResponse["user"],
+      path: Extract<
+        GoogleSignInPath,
+        "new_account" | "account_found_new_wallet"
+      >,
+    ) => {
       const minted = tagWalletsAsGoogle(
         await bootstrapFirstLoginWallets(googleWalletPrefix(account)),
         account,
@@ -309,7 +336,7 @@ export default function Login() {
       }
       // Append — never replace the user's existing wallets.
       await addWallets(minted);
-      await finishSignIn(minted, account);
+      await finishSignIn(minted, account, { path });
     },
     [addWallets, finishSignIn],
   );
@@ -349,7 +376,10 @@ export default function Login() {
         );
         if (linked.length > 0) {
           // Returning account, same device — open its wallet, never mint.
-          await finishSignIn(linked, account, { activateExisting: true });
+          await finishSignIn(linked, account, {
+            path: "existing_wallet",
+            activateExisting: true,
+          });
           return;
         }
 
@@ -393,11 +423,15 @@ export default function Login() {
           stopSigningIn();
           setAccountFoundSheetVisible(true);
         } else {
-          await mintGoogleWalletAndFinish(account);
+          await mintGoogleWalletAndFinish(account, "new_account");
         }
       } catch (error) {
         if (__DEV__) console.warn("post-OTP wallet setup failed:", error);
         stopSigningIn();
+        track("google_signin_setup_failed", {
+          stage: "post_otp",
+          reason: error instanceof BackupError ? error.code : "unknown",
+        });
 
         // On a Drive read failure we do NOT fall through to minting: guessing
         // "no backup" would hand the user a new, empty wallet while their real
@@ -456,10 +490,11 @@ export default function Login() {
         // otherwise the wallet screen would show "Back up to Google Drive" and
         // offer to create one over the top of the backup we just restored.
         for (const w of restored) recordBackupTimestamp(w.address, createdAt);
-        await finishSignIn(restored, googleAccount);
+        await finishSignIn(restored, googleAccount, { path: "drive_restore" });
       } catch (error) {
         if (__DEV__) console.warn("restore from backup failed:", error);
         stopSigningIn();
+        track("google_signin_setup_failed", { stage: "drive_restore" });
         Alert.alert(
           "Restore Failed",
           "We couldn't rebuild your wallet from that backup. Please try your seed phrase.",
@@ -525,12 +560,15 @@ export default function Login() {
       completeSignInStep(0);
       await signInDelay(120);
       completeSignInStep(1);
-      await mintGoogleWalletAndFinish(account);
+      await mintGoogleWalletAndFinish(account, "account_found_new_wallet");
     } catch (error) {
       if (__DEV__) {
         console.warn("create-new after lost recovery failed:", error);
       }
       stopSigningIn();
+      track("google_signin_setup_failed", {
+        stage: "account_found_new_wallet",
+      });
       Alert.alert(
         "Sign In Failed",
         "We couldn't set up a new wallet. Please try again.",
