@@ -28,6 +28,8 @@ import {
 } from "react-native-safe-area-context";
 import { runWithChainSwitchingOverlay } from "@/components/common/ChainSwitchingOverlay";
 import { usePerformance } from "@/components/providers/PerformanceProvider";
+import BackupPassphraseSheet from "@/components/wallet/backup/BackupPassphraseSheet";
+import BackupStatusSheet from "@/components/wallet/backup/BackupStatusSheet";
 import WalletCompactCard from "@/components/wallet/WalletCompactCard";
 import WalletDetails from "@/components/wallet/WalletDetails";
 import WalletSwitcherModal from "@/components/wallet/WalletSwitcherModal";
@@ -36,6 +38,11 @@ import { useStrategiesPrefetch } from "@/hooks/strategies/useStrategiesPrefetch"
 import { usePinnedWallets } from "@/hooks/usePinnedWallets";
 import { useWallet, warmWalletSigner } from "@/hooks/useWallet";
 import { chainCacheKey } from "@/hooks/useWallet.helpers";
+import { getGoogleAccountForWallet } from "@/services/auth/googleAccountLink";
+import {
+  clearBackupTimestamp,
+  getLocalBackupTimestamp,
+} from "@/services/backup/seedBackup";
 
 const CARD_WIDTH = 160;
 
@@ -45,6 +52,10 @@ export default function Wallet() {
   const [refreshing, setRefreshing] = useState(false);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const [showSwitcherModal, setShowSwitcherModal] = useState(false);
+  const [backupSheetVisible, setBackupSheetVisible] = useState(false);
+  const [backupStatusSheetVisible, setBackupStatusSheetVisible] =
+    useState(false);
+  const [backupTick, setBackupTick] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const detailsOpacity = useRef(new Animated.Value(1)).current;
   const queryClient = useQueryClient();
@@ -65,6 +76,73 @@ export default function Wallet() {
   // first tap on the "DeFi Strategies" row below renders with cached
   // data instead of a cold spinner.
   useStrategiesPrefetch();
+
+  const linkedGoogleAccount = useMemo(
+    () =>
+      activeWallet?.address
+        ? getGoogleAccountForWallet(activeWallet.address)
+        : null,
+    [activeWallet?.address],
+  );
+
+  /**
+   * `backupTick` re-reads the local timestamp after a successful backup.
+   * The timestamp is only a hint — the user can delete the Drive data without
+   * the app hearing about it — so the row never claims the backup is *still*
+   * there, only that we last wrote one.
+   */
+  // A Drive backup covers the whole mnemonic, so every sibling wallet (same
+  // seed phrase — the EVM/Solana/Sui rows of one account) is backed up together.
+  // The mmkv hint is per-address, so read the most recent one across all
+  // siblings: whichever chain is active, and whether the status was written on
+  // create (active address only) or on restore (all addresses), the row still
+  // reads "Backed up".
+  const backupSiblings = useMemo(() => {
+    if (!activeWallet?.address) return [];
+    const seed = activeWallet.seedPhrase;
+    return seed ? wallets.filter((w) => w.seedPhrase === seed) : [activeWallet];
+  }, [activeWallet, wallets]);
+
+  const lastBackupAt = useMemo(() => {
+    void backupTick;
+    let latest: number | null = null;
+    for (const w of backupSiblings) {
+      const at = getLocalBackupTimestamp(w.address);
+      if (at !== null && (latest === null || at > latest)) latest = at;
+    }
+    return latest;
+  }, [backupSiblings, backupTick]);
+
+  const backupLabel = useMemo(() => {
+    if (!activeWallet?.address) return "Google Drive Backup";
+    if (!lastBackupAt) return "Back up to Google Drive";
+
+    const days = Math.floor((Date.now() - lastBackupAt) / 86_400_000);
+    if (days <= 0) return "Backed up today";
+    if (days === 1) return "Backed up yesterday";
+    return `Backed up ${days} days ago`;
+  }, [activeWallet?.address, lastBackupAt]);
+
+  // Only refresh the row's timestamp — the sheet shows its own success
+  // confirmation and closes itself, so we no longer yank it shut here.
+  const handleBackedUp = useCallback(() => {
+    setBackupTick((t) => t + 1);
+  }, []);
+
+  // Removal drops the single Drive file for the whole mnemonic, so clear the
+  // hint for every sibling address — not just the active one — or the row would
+  // still read "Backed up" after switching chains.
+  const handleBackupRemoved = useCallback(() => {
+    for (const w of backupSiblings) clearBackupTimestamp(w.address);
+    setBackupTick((t) => t + 1);
+  }, [backupSiblings]);
+
+  // Tapping the backup entry: once a backup exists, show its status + manage
+  // actions (change passphrase / remove); otherwise go straight to setup.
+  const handleBackupPress = useCallback(() => {
+    if (lastBackupAt) setBackupStatusSheetVisible(true);
+    else setBackupSheetVisible(true);
+  }, [lastBackupAt]);
 
   // §6.2: kit resolves from the active wallet's namespace. Any balance
   // fetch at this layer goes through `kit.getNativeBalance`; formatting
@@ -458,6 +536,8 @@ export default function Wallet() {
             showWalletInfo={showWalletInfo}
             setShowWalletInfo={setShowWalletInfo}
             animatedStyle={{ opacity: detailsOpacity }}
+            onBackup={handleBackupPress}
+            backupLabel={backupLabel}
           />
 
           <TouchableOpacity
@@ -573,6 +653,29 @@ export default function Wallet() {
             <ChevronRight size={18} color="#c71c4b" />
           </TouchableOpacity>
         </ScrollView>
+
+        <BackupPassphraseSheet
+          visible={backupSheetVisible}
+          onClose={() => setBackupSheetVisible(false)}
+          onBackedUp={handleBackedUp}
+          seedPhrase={activeWallet?.seedPhrase}
+          walletAddress={activeWallet?.address ?? ""}
+          email={linkedGoogleAccount?.email}
+          lastBackupAt={lastBackupAt}
+        />
+
+        <BackupStatusSheet
+          visible={backupStatusSheetVisible}
+          onClose={() => setBackupStatusSheetVisible(false)}
+          lastBackupAt={lastBackupAt}
+          walletAddress={activeWallet?.address ?? ""}
+          ownerEmail={linkedGoogleAccount?.email}
+          onChangePassphrase={() => {
+            setBackupStatusSheetVisible(false);
+            setBackupSheetVisible(true);
+          }}
+          onRemoved={handleBackupRemoved}
+        />
 
         <WalletSwitcherModal
           visible={showSwitcherModal}

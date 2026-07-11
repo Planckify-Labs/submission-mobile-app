@@ -3,6 +3,7 @@ import React, { memo, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Chip from "@/components/common/Chip";
 import type { TWallet } from "@/constants/types/walletTypes";
+import { walletTypeLabel } from "@/utils/walletUtils";
 import WalletRenameModal from "./WalletRenameModal";
 
 type WalletCompactCardProps = {
@@ -104,7 +105,7 @@ const WalletCompactCard = memo(function WalletCompactCard({
         </Text>
 
         <Chip
-          label={wallet.type}
+          label={walletTypeLabel(wallet)}
           size="small"
           style={{
             backgroundColor: isActive

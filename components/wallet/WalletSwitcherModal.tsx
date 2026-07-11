@@ -6,7 +6,7 @@ import Chip from "@/components/common/Chip";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { usePinnedWallets } from "@/hooks/usePinnedWallets";
 import type { Namespace } from "@/services/chains/types";
-import { truncateAddress } from "@/utils/walletUtils";
+import { truncateAddress, walletTypeLabel } from "@/utils/walletUtils";
 
 type NamespaceFilter = "all" | Namespace;
 
@@ -56,7 +56,7 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
       return (
         wallet.name.toLowerCase().includes(query) ||
         wallet.address.toLowerCase().includes(query) ||
-        wallet.type.toLowerCase().includes(query)
+        walletTypeLabel(wallet).toLowerCase().includes(query)
       );
     });
   }, [wallets, searchQuery, nsFilter]);
@@ -101,7 +101,7 @@ const WalletSwitcherModal = memo(function WalletSwitcherModal({
               <Text className="text-light-matte-black/60 text-sm mr-2">
                 {truncateAddress({ address: item.address, preset: "medium" })}
               </Text>
-              <Chip label={item.type} size="small" />
+              <Chip label={walletTypeLabel(item)} size="small" />
             </View>
           </View>
 

@@ -40,7 +40,7 @@ import { walletKitRegistry } from "./registry";
  * place to tweak the Sui label if product copy ever diverges from the
  * other chains.
  */
-export function defaultWalletNameFor(ns: Namespace): string {
+export function walletNameFor(prefix: string, ns: Namespace): string {
   const label =
     ns === "eip155"
       ? "ETH"
@@ -49,11 +49,43 @@ export function defaultWalletNameFor(ns: Namespace): string {
         : ns === "sui"
           ? "SUI"
           : (ns as string).toUpperCase();
-  return `Main Wallet · ${label}`;
+  return `${prefix} · ${label}`;
 }
 
-export async function bootstrapFirstLoginWallets(): Promise<TWallet[]> {
+export function defaultWalletNameFor(ns: Namespace): string {
+  return walletNameFor("Main Wallet", ns);
+}
+
+/**
+ * `namePrefix` names the minted wallets ("<prefix> · ETH"). Defaults to
+ * "Main Wallet"; the Google sign-in path passes the account's name so a device
+ * with several Google accounts' wallets stays legible.
+ */
+export async function bootstrapFirstLoginWallets(
+  namePrefix = "Main Wallet",
+): Promise<TWallet[]> {
   const mnemonic = generateWalletMnemonic(128);
   const namespaces = walletKitRegistry.getAll().map((k) => k.namespace);
-  return deriveWalletsFromMnemonic(mnemonic, namespaces, defaultWalletNameFor);
+  return deriveWalletsFromMnemonic(mnemonic, namespaces, (ns) =>
+    walletNameFor(namePrefix, ns),
+  );
+}
+
+/**
+ * Re-derives the same wallet set from a mnemonic the user already owns —
+ * recovered from an encrypted Drive backup, or typed in from their written-down
+ * seed phrase.
+ *
+ * Identical to {@link bootstrapFirstLoginWallets} except that the entropy comes
+ * from the caller rather than the CSPRNG, so a restore on a new device
+ * reproduces the *same* addresses on every registered chain.
+ */
+export async function restoreWalletsFromMnemonic(
+  mnemonic: string,
+  namePrefix = "Main Wallet",
+): Promise<TWallet[]> {
+  const namespaces = walletKitRegistry.getAll().map((k) => k.namespace);
+  return deriveWalletsFromMnemonic(mnemonic, namespaces, (ns) =>
+    walletNameFor(namePrefix, ns),
+  );
 }

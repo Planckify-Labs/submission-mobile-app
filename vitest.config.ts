@@ -11,6 +11,13 @@ export default defineConfig({
         __dirname,
         "services/analytics/posthog.mock.ts",
       ),
+      // `react-native-quick-crypto` is a Nitro native module and cannot load
+      // outside the app runtime. The Node twin is real Argon2id + AES-GCM, so
+      // the envelope tests still exercise genuine crypto.
+      "@/services/backup/primitives": path.resolve(
+        __dirname,
+        "services/backup/primitives.node.ts",
+      ),
       "@": path.resolve(__dirname, "."),
     },
   },
@@ -40,6 +47,10 @@ export default defineConfig({
       "services/defi/opportunityDisplay.test.ts",
       "services/defi/registry.test.ts",
       "services/defi/errors/defiErrors.test.ts",
+      // Encrypted seed backup (docs/encrypted-seed-backup-spec.md)
+      "services/backup/seedBackupCrypto.test.ts",
+      "services/backup/bytes.test.ts",
+      "services/backup/passphrasePolicy.test.ts",
     ],
   },
 });

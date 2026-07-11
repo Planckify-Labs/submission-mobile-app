@@ -20,6 +20,7 @@ import { __resetWalletKitBootForTests, bootWalletKits } from "./boot.ts";
 import {
   bootstrapFirstLoginWallets,
   defaultWalletNameFor,
+  walletNameFor,
 } from "./bootstrap.ts";
 import { walletKitRegistry } from "./registry.ts";
 
@@ -34,6 +35,14 @@ describe("defaultWalletNameFor", () => {
 
   it("falls back to an uppercase namespace tag for unknown namespaces", () => {
     assert.equal(defaultWalletNameFor("sui"), "Main Wallet · SUI");
+  });
+});
+
+describe("walletNameFor", () => {
+  it("applies a custom prefix (Google sign-in names by account)", () => {
+    assert.equal(walletNameFor("Arinda", "eip155"), "Arinda · ETH");
+    assert.equal(walletNameFor("Arinda", "solana"), "Arinda · SOL");
+    assert.equal(walletNameFor("Arinda", "sui"), "Arinda · SUI");
   });
 });
 

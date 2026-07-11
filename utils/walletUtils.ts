@@ -27,6 +27,20 @@ import {
 } from "@/services/chains/sui/derivation";
 import { InvalidSuiAddressLegacyError } from "@/services/chains/sui/errorCodes";
 
+/**
+ * Chip label for a wallet's provenance. A wallet tied to a social login
+ * (currently only Google) shows the provider name; every other wallet shows its
+ * key type ("SeedPhrase" / "PrivateKey"). Keyed off `socialAccount` rather than
+ * `type` so these wallets keep `type: "SeedPhrase"` and their seed-reveal UI.
+ */
+export function walletTypeLabel(
+  wallet: Pick<TWallet, "type" | "socialAccount">,
+): string {
+  const provider = wallet.socialAccount?.provider;
+  if (provider) return provider.charAt(0).toUpperCase() + provider.slice(1);
+  return wallet.type;
+}
+
 export function isValidPrivateKey(privateKey: string): boolean {
   const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
   return privateKeyRegex.test(privateKey);

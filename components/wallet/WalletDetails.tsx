@@ -1,5 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Coins, KeyRound, Shield, Sparkles } from "lucide-react-native";
+import {
+  ChevronRight,
+  CloudUpload,
+  Coins,
+  KeyRound,
+  Shield,
+  Sparkles,
+} from "lucide-react-native";
 import React, { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -37,6 +44,11 @@ type TWalletDetails = {
   showWalletInfo: boolean;
   setShowWalletInfo: (show: boolean) => void;
   animatedStyle?: object;
+  /** Opens the Google Drive backup sheet. Backup lives here, next to the seed
+   * phrase, rather than as a separate settings row. */
+  onBackup?: () => void;
+  /** Live backup status, e.g. "Back up to Google Drive" / "Backed up today". */
+  backupLabel?: string;
 };
 
 export default function WalletDetails({
@@ -44,6 +56,8 @@ export default function WalletDetails({
   showWalletInfo,
   setShowWalletInfo,
   animatedStyle,
+  onBackup,
+  backupLabel,
 }: TWalletDetails) {
   const { deferredTask } = usePerformance();
 
@@ -289,6 +303,34 @@ export default function WalletDetails({
             onCopy={copyToClipboard}
           />
         </Suspense>
+
+        {/* Backup sits right by the seed phrase — same recovery concern. Only
+            for wallets that actually have a mnemonic to encrypt. */}
+        {wallet.seedPhrase && onBackup ? (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={onBackup}
+            accessibilityRole="button"
+            accessibilityLabel="Google Drive Backup"
+            accessibilityHint="Encrypt your seed phrase and store it in your own Google Drive"
+            className="flex-row items-center mt-2 justify-between bg-light-main-container/50 rounded-2xl p-4 mb-4"
+          >
+            <View className="flex-row items-center flex-1 mr-3">
+              <View className="w-9 h-9 rounded-xl bg-light-primary-red/10 items-center justify-center mr-3">
+                <CloudUpload size={16} color="#c71c4b" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-light-matte-black font-semibold text-sm">
+                  {backupLabel ?? "Back up to Google Drive"}
+                </Text>
+                <Text className="text-light-matte-black/50 text-xs mt-0.5">
+                  Encrypt your seed phrase to your own Drive
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={16} color="#c71c4b" />
+          </TouchableOpacity>
+        ) : null}
 
         {upgradeError ? (
           <View className="bg-light-primary-red/10 p-3 rounded-2xl mb-4">

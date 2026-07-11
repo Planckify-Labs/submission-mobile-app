@@ -116,6 +116,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@biomejs/biome": "^2.1.2",
+    "@noble/hashes": "1.8.0",
     "@types/qrcode": "^1.5.5",
     "@types/react": "~19.1.16",
     "baseline-browser-mapping": "^2.10.23",

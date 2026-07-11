@@ -285,6 +285,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.1.2
         version: 2.2.4
+      '@noble/hashes':
+        specifier: 1.8.0
+        version: 1.8.0
       '@types/qrcode':
         specifier: ^1.5.5
         version: 1.5.5
