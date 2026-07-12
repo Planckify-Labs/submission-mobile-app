@@ -12,6 +12,7 @@ export interface TToken {
   updatedAt: string;
   isNativeCurrency: boolean;
   peggedCurrency?: string | null;
+  isPaymentEnabled?: boolean;
 }
 
 export type TokenListResponse = TToken[];
@@ -26,4 +27,5 @@ export interface TTokenSearchParams {
   take?: number;
   cursor?: string;
   isNativeCurrency?: boolean;
+  isPaymentEnabled?: boolean;
 }

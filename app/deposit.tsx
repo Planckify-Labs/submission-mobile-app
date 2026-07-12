@@ -53,21 +53,26 @@ function DepositContent({ bottomOffset }: DepositContentProps) {
   //     `hasContract: false` which triggers `DepositUnsupportedChainModal`
   //     below (same modal the EVM-without-contract case shows).
   const isEvm = activeChain.namespace === "eip155";
+  const isStellar = activeChain.namespace === "stellar";
   const nativeCurrencySymbol = isEvm
     ? activeChain.chain.nativeCurrency.symbol
-    : "";
+    : isStellar
+      ? "XLM"
+      : "";
   const chainDisplayName =
     activeChain.namespace === "eip155"
       ? activeChain.chain.name
       : activeChain.namespace === "solana"
         ? `Solana ${activeChain.cluster === "devnet" ? "Devnet" : "Mainnet"}`
-        : `Sui ${
-            activeChain.network === "mainnet"
-              ? "Mainnet"
-              : activeChain.network === "testnet"
-                ? "Testnet"
-                : "Devnet"
-          }`;
+        : activeChain.namespace === "stellar"
+          ? `Stellar ${activeChain.network === "testnet" ? "Testnet" : "Mainnet"}`
+          : `Sui ${
+              activeChain.network === "mainnet"
+                ? "Mainnet"
+                : activeChain.network === "testnet"
+                  ? "Testnet"
+                  : "Devnet"
+            }`;
   const {
     selectedToken,
     amount,
@@ -103,21 +108,25 @@ function DepositContent({ bottomOffset }: DepositContentProps) {
 
   // Show the unsupported chain modal once when the user is authenticated
   // and the active chain has no contract, but only after fetching is done.
+  // Deposits are available on EVM (smart-contract path) and Stellar
+  // (Soroban `deposit_points` path). Any other namespace has no deposit path.
+  const supportsDeposit = isEvm || isStellar;
   useEffect(() => {
-    // Non-EVM active chain → deposit path is structurally unsupported
-    // (smart-contract deposits are EVM-only this spec). Fire the
-    // modal immediately without requiring auth, since there's no
-    // contract lookup to wait on.
-    if (!isEvm) {
+    // Chains with no deposit path → structurally unsupported. Fire the modal
+    // immediately without requiring auth, since there's no contract lookup to
+    // wait on.
+    if (!supportsDeposit) {
       setUnsupportedChainModalVisible(true);
       return;
     }
+    // Supported chain: show the modal only when the user is authenticated but
+    // the chain has no deposit contract available.
     if (isAuthenticated && !isContractFetching && !hasContract) {
       setUnsupportedChainModalVisible(true);
     } else {
       setUnsupportedChainModalVisible(false);
     }
-  }, [isEvm, isAuthenticated, isContractFetching, hasContract]);
+  }, [supportsDeposit, isAuthenticated, isContractFetching, hasContract]);
 
   const handleSelectWallet = useCallback(
     (index: number) => {

@@ -11,9 +11,12 @@ import {
   useSubmitPointDeposit,
 } from "@/hooks/queries/usePoints";
 import { useSmartContractByChain } from "@/hooks/queries/useSmartContracts";
+import { usePaymentContract } from "@/hooks/queries/usePaymentContract";
 import { useTokens } from "@/hooks/queries/useTokens";
 import useRQGlobalState from "@/hooks/useRQGlobalState";
 import { useWallet } from "@/hooks/useWallet";
+import { authApi } from "@/api/endpoints/auth";
+import { executePointDepositStellar } from "@/services/nanopay/pathPointDepositStellar";
 import { toChainTag } from "@/services/analytics/chainTag";
 import { track } from "@/services/analytics/posthog";
 
@@ -61,28 +64,56 @@ export function useDepositState() {
     activeChain: rawActiveChain,
     getClientForActiveWallet,
     getPublicClientForActiveChain,
+    getKitForWallet,
   } = useWallet();
 
-  // Deposit flow is EVM-only (smart-contract path). On non-EVM chains
-  // we return a "no contract available" state so DepositContent shows
-  // the existing `DepositUnsupportedChainModal` instead of crashing.
-  // `chainId` below is null for non-EVM, which short-circuits every
-  // downstream query (useSmartContractByChain, balances, etc.) via
-  // React Query's `enabled` flag.
+  // Deposit flow supports the EVM smart-contract path and the Stellar
+  // Soroban `deposit_points` path. `isEvm` drives the viem approve+deposit
+  // flow; `isStellar` drives the Soroban path (no approval — the SAC transfer
+  // is authorized inline by the tx envelope). Any other namespace has no
+  // deposit path, so downstream queries stay disabled and DepositContent shows
+  // `DepositUnsupportedChainModal`.
+  //
+  // `activeChainId` is the EVM numeric chainId (0 for non-EVM), which
+  // short-circuits the EVM-only queries (useSmartContractByChain, viem
+  // balances) via React Query's `enabled` flag.
   const isEvm = rawActiveChain.namespace === "eip155";
+  const isStellar = rawActiveChain.namespace === "stellar";
   const activeChainId = isEvm ? rawActiveChain.chain.id : 0;
 
   const { isAuthenticated } = useIsAuthenticated();
   const { data: blockchains } = useBlockchains();
 
-  const activeBackendChain = useMemo(
-    () => blockchains?.find((b) => b.chainId === activeChainId) || null,
-    [blockchains, activeChainId],
-  );
+  const activeBackendChain = useMemo(() => {
+    if (!blockchains) return null;
+    if (isEvm) {
+      return blockchains.find((b) => b.chainId === activeChainId) || null;
+    }
+    if (isStellar) {
+      // Non-EVM rows have no numeric chainId; match the active Stellar network
+      // to its backend row by chainSlug (`stellar-testnet` / `stellar-mainnet`)
+      // + testnet flag.
+      const wantTestnet = rawActiveChain.network !== "mainnet";
+      return (
+        blockchains.find(
+          (b) =>
+            !b.isEVM &&
+            (b.chainSlug?.toLowerCase().startsWith("stellar") ?? false) &&
+            b.isTestnet === wantTestnet,
+        ) || null
+      );
+    }
+    return null;
+  }, [blockchains, activeChainId, isEvm, isStellar, rawActiveChain]);
 
   const { data: rawStablecoinTokens } = useTokens({
     isStablecoin: true,
     isActive: true,
+    // Point deposits settle onchain the same way merchant payments do
+    // (Phase 1 onchain-settlement rail) — only offer tokens ops has
+    // explicitly enabled for that rail, mirroring `usePaymentTokens`
+    // (the same gate `pay-merchant.tsx` uses).
+    isPaymentEnabled: true,
     blockchainId: activeBackendChain?.id,
   });
 
@@ -112,9 +143,30 @@ export function useDepositState() {
     currency: DEFAULT_CURRENCY,
   });
 
-  const { data: smartContract, isFetching: isContractFetching } =
+  const { data: smartContract, isFetching: isEvmContractFetching } =
     useSmartContractByChain(activeChainId);
   const contractAddress = smartContract?.address as `0x${string}` | undefined;
+
+  // Stellar resolves its `takumi_pay` contract by backend blockchainId (no
+  // numeric chainId). `usePaymentContract` is the same resolver the merchant
+  // -payment screen uses.
+  const { data: stellarContract, isFetching: isStellarContractFetching } =
+    usePaymentContract({
+      blockchainId: isStellar ? activeBackendChain?.id : undefined,
+    });
+  const stellarContractAddress = isStellar
+    ? (stellarContract?.address as string | undefined)
+    : undefined;
+
+  // Unified deposit target: EVM `0x…` or Stellar `C…`. Drives `hasContract`,
+  // input validation, and the Stellar deposit path. The EVM viem calls keep
+  // using the narrowly-typed `contractAddress` directly.
+  const depositContractAddress: string | undefined = isStellar
+    ? stellarContractAddress
+    : contractAddress;
+  const isContractFetching = isStellar
+    ? isStellarContractFetching
+    : isEvmContractFetching;
 
   const { depositPoints, waitForTransaction } = useTakumiWalletContract({
     contractAddress: contractAddress ?? "0x0",
@@ -188,10 +240,26 @@ export function useDepositState() {
     data: nativeBalance = BigInt(0),
     isFetching: isFetchingNativeBalance,
   } = useQuery({
-    queryKey: ["nativeBalance", activeWallet.address, activeChainId],
+    queryKey: [
+      "nativeBalance",
+      activeWallet.address,
+      activeChainId,
+      rawActiveChain.namespace,
+    ],
     queryFn: async () => {
+      if (!activeWallet.address) return BigInt(0);
+      // Non-EVM chains read balances through the kit adapter, not viem.
+      if (isStellar) {
+        const kit = getKitForWallet(activeWallet);
+        return (
+          (await kit.getNativeBalance?.(
+            activeWallet.address,
+            rawActiveChain,
+          )) ?? BigInt(0)
+        );
+      }
       const publicClient = getPublicClientForActiveChain();
-      if (!publicClient || !activeWallet.address) return BigInt(0);
+      if (!publicClient) return BigInt(0);
       return publicClient.getBalance({
         address: activeWallet.address as `0x${string}`,
       });
@@ -207,11 +275,23 @@ export function useDepositState() {
         activeWallet.address,
         selectedToken?.contractAddress,
         activeChainId,
+        rawActiveChain.namespace,
       ],
       queryFn: async () => {
+        if (!activeWallet.address || !selectedToken) return BigInt(0);
+        if (isStellar) {
+          if (!selectedToken.contractAddress) return BigInt(0);
+          const kit = getKitForWallet(activeWallet);
+          return (
+            (await kit.getTokenBalance?.(
+              activeWallet.address,
+              rawActiveChain,
+              selectedToken.contractAddress,
+            )) ?? BigInt(0)
+          );
+        }
         const publicClient = getPublicClientForActiveChain();
-        if (!publicClient || !activeWallet.address || !selectedToken)
-          return BigInt(0);
+        if (!publicClient) return BigInt(0);
         return publicClient.readContract({
           address: selectedToken.contractAddress as `0x${string}`,
           abi: erc20Abi,
@@ -223,9 +303,11 @@ export function useDepositState() {
       refetchInterval: 30_000,
     });
 
+  // Native decimals: EVM = 18, Stellar (XLM) = 7 stroops (spec §3.8).
   const nativeBalanceFormatted = useMemo(
-    () => parseFloat(formatUnits(nativeBalance, 18)).toFixed(6),
-    [nativeBalance],
+    () =>
+      parseFloat(formatUnits(nativeBalance, isStellar ? 7 : 18)).toFixed(6),
+    [nativeBalance, isStellar],
   );
 
   const tokenBalanceFormatted = useMemo(() => {
@@ -255,7 +337,7 @@ export function useDepositState() {
       updateState({ error: "Please select a token" });
       return false;
     }
-    if (!contractAddress) {
+    if (!depositContractAddress) {
       updateState({ error: "No contract found for this chain" });
       return false;
     }
@@ -267,7 +349,7 @@ export function useDepositState() {
   }, [
     amount,
     selectedToken,
-    contractAddress,
+    depositContractAddress,
     tokenAmountNeeded,
     pointPrice,
     updateState,
@@ -278,6 +360,9 @@ export function useDepositState() {
     needsApproval: boolean;
   }> => {
     if (!validateInputs()) return { ok: false, needsApproval: false };
+    // Stellar: no ERC-20-style allowance. The Soroban SAC transfer is
+    // authorized inline by the deposit tx envelope, so go straight to confirm.
+    if (isStellar) return { ok: true, needsApproval: false };
     if (!selectedToken || !tokenAmountNeeded || !contractAddress) {
       return { ok: false, needsApproval: false };
     }
@@ -320,6 +405,7 @@ export function useDepositState() {
     }
   }, [
     validateInputs,
+    isStellar,
     selectedToken,
     tokenAmountNeeded,
     contractAddress,
@@ -339,7 +425,7 @@ export function useDepositState() {
       }
 
       // Warn if no contract found for this chain
-      if (!contractAddress) {
+      if (!depositContractAddress) {
         updateState({
           error:
             "Point deposits are not available on this network. Please switch to a supported chain.",
@@ -350,12 +436,98 @@ export function useDepositState() {
       if (!validateInputs()) return;
       if (!selectedToken || !tokenAmountNeeded || !activeBackendChain) return;
 
+      // ── Stellar path: Soroban `deposit_points` (no ERC-20 approval) ──
+      // The SAC transfer is authorized inline by the deposit tx envelope, so
+      // there is no allowance/approve step. The orchestrator builds, signs,
+      // submits, and confirms the invocation via the kit.
+      if (isStellar) {
+        const refId = `pt_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+        try {
+          // Register the depositing G-address against the account so the
+          // backend's ownership check accepts it as the payer (idempotent).
+          updateState({
+            isLoading: true,
+            transactionStatus: "Preparing wallet...",
+            error: undefined,
+          });
+          await authApi.linkWalletAddress(activeWallet.address);
+
+          updateState({
+            isLoading: true,
+            transactionStatus: "Depositing to contract...",
+          });
+          const kit = getKitForWallet(activeWallet);
+          const { txHash } = await executePointDepositStellar({
+            wallet: activeWallet,
+            walletKit: kit,
+            chain: rawActiveChain,
+            contractId: depositContractAddress,
+            token: selectedToken.contractAddress!,
+            refId,
+            amount: tokenAmountNeeded.raw,
+          });
+
+          updateState({
+            isLoading: true,
+            transactionStatus: "Submitting for verification...",
+          });
+          await submitDeposit.mutateAsync({
+            refId,
+            txHash,
+            tokenId: selectedToken.id,
+            blockchainId: activeBackendChain.id,
+            contractAddress: depositContractAddress,
+            walletAddress: activeWallet.address,
+            tokenAmount: tokenAmountNeeded.raw.toString(),
+            expectedPoints: amount,
+            currency: DEFAULT_CURRENCY,
+          });
+
+          track("deposit_completed", {
+            chain: toChainTag(rawActiveChain.namespace),
+            amount: Number(amount),
+          });
+
+          updateState({
+            isLoading: true,
+            transactionStatus: "Points are being credited...",
+          });
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          router.back();
+        } catch (error: any) {
+          console.error("Stellar deposit error:", error);
+          let errorMessage = "Deposit failed. Please try again.";
+          try {
+            const body = await error?.response?.json?.();
+            const msg: string = body?.message ?? "";
+            if (msg.toLowerCase().includes("no pegged currency")) {
+              errorMessage = `${selectedToken?.symbol ?? "This token"} is not supported for point deposits. Please select a different token.`;
+            }
+          } catch {
+            // swallow — generic message already set
+          }
+          updateState({
+            isLoading: false,
+            transactionStatus: "",
+            error: errorMessage,
+          });
+        } finally {
+          updateState({ isLoading: false, transactionStatus: "" });
+        }
+        return;
+      }
+
       const walletClient = getClientForActiveWallet();
       const publicClient = getPublicClientForActiveChain();
       // Both accessors now return `null` on non-EVM chains (§7.5).
-      // Deposit flows are EVM-only today; Task 14 will move this path
-      // behind the kit adapter.
-      if (!walletClient || !walletClient.account || !publicClient) {
+      // The EVM viem approve+deposit flow below requires the `0x…`
+      // `contractAddress`; the Stellar path returned above.
+      if (
+        !walletClient ||
+        !walletClient.account ||
+        !publicClient ||
+        !contractAddress
+      ) {
         updateState({ error: "Wallet not connected" });
         return;
       }
@@ -513,8 +685,10 @@ export function useDepositState() {
     },
     [
       validateInputs,
+      isStellar,
       selectedToken,
       contractAddress,
+      depositContractAddress,
       tokenAmountNeeded,
       activeBackendChain,
       activeWallet,
@@ -524,11 +698,12 @@ export function useDepositState() {
       waitForTransaction,
       getClientForActiveWallet,
       getPublicClientForActiveChain,
+      getKitForWallet,
       amount,
       updateState,
       isAuthenticated,
       state?.trustedSpenders,
-      rawActiveChain.namespace,
+      rawActiveChain,
     ],
   );
 
@@ -547,9 +722,9 @@ export function useDepositState() {
     pointPrice,
     tokenAmountNeeded,
     isAuthenticated,
-    hasContract: !!contractAddress,
+    hasContract: !!depositContractAddress,
     isContractFetching,
-    contractAddress,
+    contractAddress: depositContractAddress,
     smartContract,
     // Balances
     nativeBalance,

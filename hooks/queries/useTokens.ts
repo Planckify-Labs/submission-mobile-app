@@ -25,6 +25,11 @@ const filterTokens = (tokens: TToken[], options?: TTokenSearchParams) => {
       token.isNativeCurrency !== options.isNativeCurrency
     )
       return false;
+    if (
+      options.isPaymentEnabled !== undefined &&
+      token.isPaymentEnabled !== options.isPaymentEnabled
+    )
+      return false;
     return true;
   });
 };
@@ -62,7 +67,8 @@ export const useTokens = (options?: TTokenSearchParams) => {
     options?.blockchainId ||
     options?.isNativeCurrency !== undefined ||
     options?.isStablecoin !== undefined ||
-    options?.isActive !== undefined
+    options?.isActive !== undefined ||
+    options?.isPaymentEnabled !== undefined
   );
 
   return useQuery<TToken[]>({
