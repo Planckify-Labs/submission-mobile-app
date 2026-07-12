@@ -22,6 +22,11 @@ import type {
   Signer,
   TransactionInstruction,
 } from "@solana/web3.js";
+// `import type` only — erased at compile time, so this pulls no
+// `@stellar/stellar-base` runtime code into the shared adapter surface (same
+// posture as the `@solana/web3.js` type imports above). Used solely by the
+// optional Stellar `sendSorobanTransaction` docking method's arg shape.
+import type { xdr } from "@stellar/stellar-base";
 import type { TBlockchain } from "@/api/types/blockchain";
 import type { ChainConfig } from "@/constants/configs/chainConfig";
 import type { TWallet } from "@/constants/types/walletTypes";
@@ -362,6 +367,23 @@ export interface SendAnchorInstructionArgs {
   addressLookupTables?: AddressLookupTableAccount[];
   durableNonce?: { nonceAccount: PublicKey; nonceAuthority: Signer };
   feePayer?: { publicKey: PublicKey; mode: "user" | "sponsored" };
+}
+
+/**
+ * Arguments for `WalletKitAdapter.sendSorobanTransaction` — invokes a Soroban
+ * contract method (simulate → assemble → sign → submit → poll) with the
+ * wallet's signer as both source account and authorizer. Used by the onchain
+ * settlement rail (`pathOnchainSettlementStellar.ts`) to call
+ * `process_merchant_payment` on the `takumi_pay` contract. Stellar-only; other
+ * kits leave the method `undefined`. Consumers presence-check per
+ * chain-extension discipline. `args` is the pre-encoded, ordered ScVal list.
+ */
+export interface SendSorobanTransactionArgs {
+  wallet: TWallet;
+  chain: ChainConfig;
+  contractId: string;
+  method: string;
+  args: xdr.ScVal[];
 }
 
 /**
@@ -923,6 +945,16 @@ export interface WalletKitAdapter {
    * `undefined`. Consumers presence-check per chain-extension discipline.
    */
   sendAnchorInstruction?(args: SendAnchorInstructionArgs): Promise<string>;
+
+  /**
+   * Invokes a Soroban contract method (simulate → assemble → sign → submit →
+   * poll) and returns the confirmed transaction hash. Used by the onchain
+   * settlement rail (`pathOnchainSettlementStellar.ts`) to call
+   * `process_merchant_payment` on the `takumi_pay` contract. Stellar-only;
+   * other kits leave this `undefined`. Consumers presence-check per
+   * chain-extension discipline.
+   */
+  sendSorobanTransaction?(args: SendSorobanTransactionArgs): Promise<string>;
 
   /**
    * Signs and executes a pre-built PTB (base64 BCS — the `sui-ptb`

@@ -235,15 +235,33 @@ export function buildChainConfigFromBlockchain(
   }
 
   if (namespace === "stellar") {
-    // Stellar has no dedicated `horizonUrl` column on the `Blockchain`
-    // model (spec §3.8) — the generic `rpcUrl` string column carries the
-    // Horizon endpoint for Stellar rows, same pattern Solana/Sui already
-    // established for their respective RPC URLs.
+    // The backend's generic `rpcUrl` column now carries the **Soroban RPC**
+    // endpoint for Stellar rows — the endpoint the API itself calls for
+    // `takumi_pay` contract reads — NOT the Horizon endpoint this app's
+    // classic wallet kit (balances / transfers / trustlines, spec §0/§3.6)
+    // needs. (It used to hold Horizon; the API repurposed the column when it
+    // dropped its dedicated Soroban field.) Horizon needs no per-provider key
+    // and has canonical public endpoints per network, so we derive it here
+    // rather than trusting the feed — same "hardcode a public per-network
+    // Horizon endpoint" posture `resolveStellarChainConfigForPassphrase` and
+    // the static `supportedChains` mainnet entry already use.
     const network: "mainnet" | "testnet" = b.isTestnet ? "testnet" : "mainnet";
+    const horizonUrl =
+      network === "testnet"
+        ? "https://horizon-testnet.stellar.org"
+        : "https://horizon.stellar.org";
+    // Populate the reserved Soroban slot only when the feed actually gives a
+    // Soroban endpoint. `stellar-mainnet` still serves a Horizon URL in
+    // `rpcUrl` (no Soroban mainnet deployment yet) — don't mislabel that as
+    // Soroban; leave it undefined until a real Soroban mainnet URL lands.
+    const sorobanRpcUrl = b.rpcUrl.toLowerCase().includes("soroban")
+      ? b.rpcUrl
+      : undefined;
     return {
       namespace: "stellar",
       network,
-      horizonUrl: b.rpcUrl,
+      horizonUrl,
+      rpcUrl: sorobanRpcUrl,
       iconUrl:
         (b.tokens?.find((t) => t.isNativeCurrency) ?? b.tokens?.[0])?.logoUrl ??
         undefined,

@@ -146,6 +146,25 @@ export interface QuoteCommitmentSvm {
   expiresAt: string;
 }
 
+/**
+ * Stellar counterpart of {@link QuoteCommitmentSvm} — the backend-signed
+ * `takumi_pay` `MerchantQuote` fields the wallet re-encodes byte-exact and
+ * submits to `process_merchant_payment`. Numeric fields are decimal strings
+ * (bigint over JSON). `token` is the token's SAC contract id (`C…`), not the
+ * classic `"{CODE}:{ISSUER}"` compound.
+ */
+export interface QuoteCommitmentStellar {
+  refId: string;
+  merchantId: string;
+  token: string;
+  amount: string;
+  platformFeeAmount: string;
+  fiatAmountMinor: string;
+  fiatCurrency: string;
+  exchangeRateId: string;
+  expiresAt: string;
+}
+
 export interface PaymentIntentResponse {
   id: string;
   status: PaymentIntentStatus;
@@ -181,6 +200,14 @@ export interface PaymentIntentResponse {
   quoteSignatureSvm?: string;
   programId?: string;
   backendSignerPubkey?: string;
+  /** Stellar `takumi_pay` settlement — mirrors the SVM quote fields above. */
+  quoteCommitmentStellar?: QuoteCommitmentStellar;
+  /** Base64 Ed25519 signature (64 bytes) over the `QuoteMessage`. */
+  quoteSignatureStellar?: string;
+  /** Hex raw Ed25519 pubkey of the backend Stellar quote signer. */
+  backendSignerPubkeyStellar?: string;
+  /** `takumi_pay` Soroban contract id (`C…`) for this chain. */
+  takumiPayContractId?: string;
   /** Source token's blockchain ULID — used to fetch the payment contract. */
   blockchainId?: string;
 }

@@ -120,6 +120,7 @@ import {
   postOnchainSubmit,
 } from "@/services/nanopay/pathOnchainSettlement";
 import { executeOnchainSettlementSvm } from "@/services/nanopay/pathOnchainSettlementSvm";
+import { executeOnchainSettlementStellar } from "@/services/nanopay/pathOnchainSettlementStellar";
 import {
   formatChainLabel,
   getEvmChainId,
@@ -1071,6 +1072,39 @@ function OnchainCard({
           walletKit: kit,
           chain: intentChainConfig,
           contractAddress,
+        });
+
+        setPhase("submitting");
+        await postOnchainSubmit({
+          intentId,
+          txHash: result.txHash,
+          blockchainId: intent.blockchainId!,
+          poster: defaultOnchainSubmitPoster,
+        }).catch(() => null);
+      } else if (typeof kit.sendSorobanTransaction === "function") {
+        // Prefer the intent's `takumiPayContractId` — the contract id the
+        // backend signature is bound to — so the wallet submits to exactly the
+        // contract the quote was signed for (a mismatch would trap on-chain);
+        // fall back to the resolved SmartContract row.
+        const contractId =
+          intent.takumiPayContractId ?? paymentContract?.address;
+        if (!contractId) {
+          setError(
+            makeLocalError(
+              "unknown",
+              "No payment contract found for this chain",
+            ),
+          );
+          setPhase("error");
+          return;
+        }
+
+        const result = await executeOnchainSettlementStellar({
+          intent,
+          wallet: selectedWallet,
+          walletKit: kit,
+          chain: intentChainConfig,
+          contractId,
         });
 
         setPhase("submitting");

@@ -39,6 +39,7 @@ import { base, mainnet } from "viem/chains";
 import type {
   EvmChainConfig,
   SolanaChainConfig,
+  StellarChainConfig,
 } from "../../constants/configs/chainConfig.ts";
 import type {
   SendUserOpResult,
@@ -90,6 +91,14 @@ const SOL_CHAIN: SolanaChainConfig = {
   rpcUrl: "https://api.devnet.solana.com",
 };
 
+/** Stellar testnet stub — Horizon for classic ops, Soroban RPC for contracts. */
+const STELLAR_CHAIN: StellarChainConfig = {
+  namespace: "stellar",
+  network: "testnet",
+  horizonUrl: "https://horizon-testnet.stellar.org",
+  rpcUrl: "https://soroban-testnet.stellar.org",
+};
+
 /**
  * Build a `PaymentIntentResponse` skeleton with optional `channel` +
  * `gasless` fields the selector reads off the duck-typed view. We
@@ -100,10 +109,12 @@ function makeIntent(overrides: {
   id?: string;
   channelKind?: "merchant" | "x402";
   requiresDeposit?: boolean;
+  path?: "takumipay";
 }): PaymentIntentResponse {
   const base = {
     id: overrides.id ?? "intent_test_1",
     status: "pending",
+    path: overrides.path,
     nanopayUsdcAmountMicros: "1500000",
     nanopayUsdcSourceChainId: 5042002,
     nanopayUsdcTreasuryAddress: "0x2222222222222222222222222222222222222222",
@@ -281,6 +292,48 @@ describe("selectPayPath", () => {
         err instanceof NoSuitablePayPathError &&
         err.name === "NoSuitablePayPathError" &&
         err.intentId === "intent_test_1",
+    );
+  });
+
+  it("returns 'takumipay' for a Solana adapter exposing sendAnchorInstruction", () => {
+    const kit = makeKitStub({
+      namespace: "solana",
+      sendAnchorInstruction: async () => "sol_settlement_sig",
+    });
+    const path = selectPayPath({
+      intent: makeIntent({ path: "takumipay" }),
+      walletKit: kit,
+      chainConfig: SOL_CHAIN,
+    });
+    assert.equal(path, "takumipay");
+  });
+
+  it("returns 'takumipay' for a Stellar adapter exposing sendSorobanTransaction", () => {
+    // Presence-of-method dispatch: the selector never inspects
+    // `chainConfig.namespace` to reach this branch — the Soroban capability
+    // alone routes it (space-docking).
+    const kit = makeKitStub({
+      namespace: "stellar",
+      sendSorobanTransaction: async () => "stellar_settlement_hash",
+    });
+    const path = selectPayPath({
+      intent: makeIntent({ path: "takumipay" }),
+      walletKit: kit,
+      chainConfig: STELLAR_CHAIN,
+    });
+    assert.equal(path, "takumipay");
+  });
+
+  it("throws NoSuitablePayPathError for a takumipay intent when the wallet has no settlement capability", () => {
+    const kit = makeKitStub({ namespace: "stellar" });
+    assert.throws(
+      () =>
+        selectPayPath({
+          intent: makeIntent({ path: "takumipay" }),
+          walletKit: kit,
+          chainConfig: STELLAR_CHAIN,
+        }),
+      (err: unknown) => err instanceof NoSuitablePayPathError,
     );
   });
 

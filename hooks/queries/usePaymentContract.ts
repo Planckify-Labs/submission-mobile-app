@@ -17,8 +17,12 @@ export function usePaymentContract(options: UsePaymentContractOptions) {
     queryKey: ["payment-contract", blockchainId ?? chainId ?? "none"],
     queryFn: async () => {
       if (blockchainId) {
+        // A chain can also carry gateway/protocol SmartContract rows
+        // (Circle Gateway, Aave, etc.) alongside takumi_pay — filter to
+        // "payment" so this can't resolve to the wrong contract.
         const results = await smartContractApi.searchSmartContracts({
           blockchainId,
+          type: "payment",
           isActive: true,
         });
         return results[0] ?? null;

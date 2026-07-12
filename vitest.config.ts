@@ -25,6 +25,8 @@ export default defineConfig({
     include: [
       "services/agent-executors/sui.test.ts",
       "services/chains/solana/takumiPay/pda.test.ts",
+      "services/chains/stellar/takumiPay/encoding.test.ts",
+      "services/chains/stellar/takumiPay/depositPoints.test.ts",
       "services/chains/sui/codec.test.ts",
       "services/chains/sui/coinTransferService.test.ts",
       "services/chains/sui/derivation.test.ts",

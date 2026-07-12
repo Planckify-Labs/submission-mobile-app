@@ -200,15 +200,16 @@ export function selectPayPath(args: SelectPayPathArgs): PayPath {
   if (isTakumipaySettlement(intent)) {
     if (
       typeof walletKit.sendContractTransaction !== "function" &&
-      typeof walletKit.sendAnchorInstruction !== "function"
+      typeof walletKit.sendAnchorInstruction !== "function" &&
+      typeof walletKit.sendSorobanTransaction !== "function"
     ) {
       throw new NoSuitablePayPathError({
         intentId: intent.id,
         walletNamespace: walletKit.namespace,
         chainNamespace: chainConfig.namespace,
         message:
-          `selectPayPath: intent ${intent.id} requires takumipay settlement ` +
-          `but wallet supports neither sendContractTransaction nor sendAnchorInstruction.`,
+          `selectPayPath: intent ${intent.id} requires takumipay settlement but wallet ` +
+          `supports none of sendContractTransaction / sendAnchorInstruction / sendSorobanTransaction.`,
       });
     }
     return "takumipay";

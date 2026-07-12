@@ -17,6 +17,9 @@ export interface TBlockchain {
 export interface TSmartContract {
   id: string;
   name: string;
+  /** Contract category, e.g. "payment" (takumi_pay), "gateway", "protocol". */
+  type: string;
+  version: number;
   blockchain: TBlockchain;
   blockchainId: string;
   address: string;
@@ -49,6 +52,7 @@ export const smartContractApi = {
 
   searchSmartContracts: async (params: {
     name?: string;
+    type?: string;
     blockchainId?: string;
     chainId?: number;
     isActive?: boolean;
@@ -56,6 +60,7 @@ export const smartContractApi = {
   }) => {
     const searchParams = new URLSearchParams();
     if (params.name) searchParams.set("name", params.name);
+    if (params.type) searchParams.set("type", params.type);
     if (params.blockchainId)
       searchParams.set("blockchainId", params.blockchainId);
     if (params.chainId != null)

@@ -47,6 +47,8 @@ import {
   getHorizonClient,
   isHorizonNotFound,
 } from "../../chains/stellar/horizonClient";
+import { invokeSorobanContract } from "../../chains/stellar/sorobanInvoke";
+import { getSorobanRpcClient } from "../../chains/stellar/sorobanRpcClient";
 import {
   buildAndSendStellarNativeTransfer,
   getStellarNativeBalance,
@@ -69,6 +71,7 @@ import type {
   EstablishTrustlineResult,
   EstimateMaxTransferableArgs,
   NativeTransferArgs,
+  SendSorobanTransactionArgs,
   TokenTransferArgs,
   TruncateAddressOptions,
   WalletKitAdapter,
@@ -370,6 +373,75 @@ export function createStellarWalletKit(): WalletKitAdapter {
           payload: {
             errorName: err instanceof Error ? err.name : typeof err,
             network: chain.network,
+          },
+        });
+        throw err;
+      }
+    },
+
+    // ── Soroban contract invocation (onchain settlement rail) ────────
+    // The only Soroban-touching method on this kit — v1 classic ops
+    // (transfers/trustlines) stay Horizon-only. Docks the generic
+    // `invokeSorobanContract` flow behind the `WalletKitAdapter` so the
+    // pay-merchant screen dispatches on capability, never namespace. Signing
+    // stays inside `getStellarSignerForWallet` (TWV-2026-090).
+    async sendSorobanTransaction({
+      wallet,
+      chain,
+      contractId,
+      method,
+      args,
+    }: SendSorobanTransactionArgs): Promise<string> {
+      assertStellar(chain);
+      breadcrumb({
+        category: "stellar.sendSorobanTransaction",
+        message: "start",
+        level: "info",
+        data: { network: chain.network, method },
+      });
+      const signer: Keypair | null = await getStellarSignerForWallet(wallet);
+      if (!signer) {
+        breadcrumb({
+          category: "stellar.sendSorobanTransaction",
+          message: "failure: no signer",
+          level: "error",
+          data: { network: chain.network, method },
+        });
+        throw new Error("No Stellar signer for wallet");
+      }
+      try {
+        const hash = await invokeSorobanContract({
+          rpc: getSorobanRpcClient(chain),
+          horizon: getHorizonClient(chain),
+          signer,
+          contractId,
+          method,
+          args,
+        });
+        breadcrumb({
+          category: "stellar.sendSorobanTransaction",
+          message: "success",
+          level: "info",
+          data: { network: chain.network, method },
+        });
+        return hash;
+      } catch (err) {
+        breadcrumb({
+          category: "stellar.sendSorobanTransaction",
+          message: "failure",
+          level: "error",
+          data: {
+            network: chain.network,
+            method,
+            errorName: err instanceof Error ? err.name : typeof err,
+          },
+        });
+        captureException(err, {
+          name: "stellar.sendSorobanTransaction",
+          payload: {
+            errorName: err instanceof Error ? err.name : typeof err,
+            network: chain.network,
+            method,
           },
         });
         throw err;

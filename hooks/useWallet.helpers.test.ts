@@ -61,6 +61,28 @@ function makeSolanaBlockchain(
   };
 }
 
+function makeStellarBlockchain(
+  overrides: Partial<TBlockchain> = {},
+): TBlockchain {
+  return {
+    id: "bc_xlm_1",
+    name: "Stellar Testnet",
+    chainId: null,
+    chainSlug: "stellar-testnet",
+    // Post-refactor the backend serves the **Soroban RPC** endpoint here,
+    // not Horizon — the whole reason this branch derives Horizon canonically.
+    rpcUrl: "https://soroban-testnet.stellar.org",
+    blockExplorer: "https://stellar.expert/explorer/testnet",
+    isEVM: false,
+    isActive: true,
+    isTestnet: true,
+    createdAt: "2024-01-01T00:00:00Z",
+    updatedAt: "2024-01-01T00:00:00Z",
+    tokens: [],
+    ...overrides,
+  };
+}
+
 describe("buildChainConfigFromBlockchain — EVM branch", () => {
   it("produces an eip155 ChainConfig for an EVM row", () => {
     const b = makeEvmBlockchain({
@@ -138,6 +160,44 @@ describe("buildChainConfigFromBlockchain — Solana branch (§7.5)", () => {
       makeEvmBlockchain({ isEVM: true }),
     );
     assert.equal(cc.namespace, "eip155");
+  });
+});
+
+describe("buildChainConfigFromBlockchain — Stellar branch", () => {
+  // Regression guard for the API refactor that repurposed the Stellar
+  // `rpcUrl` column from Horizon → Soroban RPC. The classic wallet kit
+  // needs Horizon, so this branch must derive it canonically per-network
+  // instead of echoing the feed's `rpcUrl`.
+  it("derives the canonical testnet Horizon URL, not the feed's rpcUrl", () => {
+    const cc = buildChainConfigFromBlockchain(makeStellarBlockchain());
+    assert.equal(cc.namespace, "stellar");
+    if (cc.namespace !== "stellar") throw new Error("narrowing guard");
+    assert.equal(cc.network, "testnet");
+    assert.equal(cc.horizonUrl, "https://horizon-testnet.stellar.org");
+    // The Soroban endpoint the feed supplied lands in the reserved slot.
+    assert.equal(cc.rpcUrl, "https://soroban-testnet.stellar.org");
+    assert.equal(cc.isTestnet, true);
+  });
+
+  it("derives the canonical mainnet Horizon URL and leaves the Soroban slot empty", () => {
+    // stellar-mainnet still serves a Horizon URL in `rpcUrl` (no Soroban
+    // mainnet deployment yet) — it must NOT be mislabeled as Soroban.
+    const cc = buildChainConfigFromBlockchain(
+      makeStellarBlockchain({
+        id: "bc_xlm_main",
+        name: "Stellar",
+        chainSlug: "stellar-mainnet",
+        rpcUrl: "https://horizon.stellar.org",
+        blockExplorer: "https://stellar.expert/explorer/public",
+        isTestnet: false,
+      }),
+    );
+    assert.equal(cc.namespace, "stellar");
+    if (cc.namespace !== "stellar") throw new Error("narrowing guard");
+    assert.equal(cc.network, "mainnet");
+    assert.equal(cc.horizonUrl, "https://horizon.stellar.org");
+    assert.equal(cc.rpcUrl, undefined);
+    assert.equal(cc.isTestnet, false);
   });
 });
 
