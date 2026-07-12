@@ -6,6 +6,7 @@ import Chip from "@/components/common/Chip";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import { chainCacheKey } from "@/hooks/useWallet.helpers";
+import { walletTypeLabel } from "@/utils/walletUtils";
 import WalletRenameModal from "./WalletRenameModal";
 
 type WalletCardProps = {
@@ -105,7 +106,7 @@ const WalletCard = memo(function WalletCard({
                 {formattedAddress}
               </Text>
               <Chip
-                label={wallet.type}
+                label={walletTypeLabel(wallet)}
                 size="small"
                 style={{ marginLeft: 4 }}
               />

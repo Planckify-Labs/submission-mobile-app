@@ -30,6 +30,7 @@ import { useQRPrefetch } from "@/hooks/useQRPrefetch";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { storage } from "@/lib/storage/mmkv";
+import { track } from "@/services/analytics/posthog";
 import {
   getNativeSymbol,
   matchesBlockchainRow,
@@ -204,7 +205,10 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
   const [modalVisible, setModalVisible] = useState(false);
   const router = useRouter();
 
-  const openModal = useCallback(() => setModalVisible(true), []);
+  const openModal = useCallback(() => {
+    track("feature_opened", { feature: "receive_modal" });
+    setModalVisible(true);
+  }, []);
   const closeModal = useCallback(() => setModalVisible(false), []);
 
   return (
@@ -242,7 +246,10 @@ const BalanceSection = forwardRef<BalanceSectionRef>((props, ref) => {
             <View className="flex-row items-center justify-between mb-1">
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={() => setTokenPickerVisible(true)}
+                onPress={() => {
+                  track("feature_opened", { feature: "display_token_picker" });
+                  setTokenPickerVisible(true);
+                }}
                 className="flex-row items-center"
               >
                 <Text className="text-light-matte-black font-medium text-sm mr-1">

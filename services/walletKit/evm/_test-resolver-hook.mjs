@@ -34,6 +34,20 @@ const STUB_SOURCES = {
       delete: () => {},
     };
   `,
+  // posthog-react-native (+ expo-application/expo-device peers) ships
+  // RN/Flow syntax that Node's plain strip-types loader can't parse.
+  // Stub at our own module boundary, same as the mmkv-storage stub above —
+  // mirrored on the vitest side by services/analytics/posthog.mock.ts.
+  "analytics-posthog": `
+    export const posthog = {
+      identify: () => {},
+      capture: () => {},
+      screen: async () => {},
+      optIn: async () => {},
+      optOut: async () => {},
+    };
+    export function track() {}
+  `,
   // In-memory AsyncStorage stub for the permissions store test
   // (services/permissions/store.ts persists grants through it).
   "async-storage": `
@@ -136,6 +150,14 @@ export async function resolve(specifier, context, nextResolve) {
     return {
       shortCircuit: true,
       url: stubUrl(STUB_SOURCES["mmkv-storage"]),
+      format: "module",
+    };
+  }
+  // Stub the analytics client (`@/services/analytics/posthog`).
+  if (specifier === "@/services/analytics/posthog") {
+    return {
+      shortCircuit: true,
+      url: stubUrl(STUB_SOURCES["analytics-posthog"]),
       format: "module",
     };
   }

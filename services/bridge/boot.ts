@@ -30,6 +30,7 @@ import { SuiSimulationInspector } from "./inspectors/SuiSimulationInspector";
 import { SuiSiwsInspector } from "./inspectors/SuiSiwsInspector";
 import { pendingIntentsStore } from "./pendingIntents";
 import { registerRenderer } from "./renderers";
+import { AnalyticsSink } from "./sinks/AnalyticsSink";
 import { ConsoleSink } from "./sinks/ConsoleSink";
 import { TelemetrySink } from "./sinks/TelemetrySink";
 
@@ -73,6 +74,7 @@ export function bootBridge(opts: BootOpts) {
 
   bridgeEventBus.subscribe(ConsoleSink);
   bridgeEventBus.subscribe(TelemetrySink);
+  bridgeEventBus.subscribe(AnalyticsSink);
 
   for (const r of evmRenderers) registerRenderer(r);
 

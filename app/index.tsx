@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   BackHandler,
   Dimensions,
@@ -16,6 +16,7 @@ import {
 import HomeMain from "@/components/home/Main/HomeMain";
 import ScanToPayChatModeFloatingButtons from "@/components/home/Main/ScanToPayChatModeFloatingButtons";
 import AgentMode from "@/components/home/TakumiAgent/AgentMode";
+import { track } from "@/services/analytics/posthog";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -40,10 +41,33 @@ export default function Home() {
   // in flight and contributed to the "app freeze after unlock" bug.
   // Mount on actual navigation instead. The first tap to switch into
   // chat mode will pay a small lag; every subsequent tap is instant.
-  const handleChatModePress = useCallback(() => {
-    setHasVisitedAgentMode(true);
-    scrollToIndex(1);
-  }, [scrollToIndex]);
+  const handleChatModePress = useCallback(
+    (trigger: string) => {
+      track("feature_opened", { feature: "agent_mode", trigger });
+      setHasVisitedAgentMode(true);
+      scrollToIndex(1);
+    },
+    [scrollToIndex],
+  );
+
+  // Session start/end is driven by `currentIndex` itself, not by the tap
+  // handlers above — that way every path back to Home (hardware back,
+  // a future close button, whatever) ends the session, without having to
+  // instrument each one individually. Guard on `!== null` so mounting on
+  // Home (currentIndex already 0) never fires a spurious "ended" event.
+  const agentSessionStartRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (currentIndex === 1) {
+      agentSessionStartRef.current = Date.now();
+      track("agent_session_started");
+    } else if (agentSessionStartRef.current !== null) {
+      const duration_seconds = Math.round(
+        (Date.now() - agentSessionStartRef.current) / 1000,
+      );
+      track("agent_session_ended", { duration_seconds });
+      agentSessionStartRef.current = null;
+    }
+  }, [currentIndex]);
 
   // Register the hardware-back handler only while Home is the focused
   // screen. If we used a plain useEffect, the handler would stay live
@@ -96,7 +120,7 @@ export default function Home() {
 
         {currentIndex === 0 && (
           <ScanToPayChatModeFloatingButtons
-            onChatModePress={handleChatModePress}
+            onChatModePress={() => handleChatModePress("floating_button")}
           />
         )}
       </SafeAreaView>

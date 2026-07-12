@@ -37,6 +37,46 @@ import {
 } from "@/services/chains/sui/derivation";
 import { InvalidSuiAddressLegacyError } from "@/services/chains/sui/errorCodes";
 
+/**
+ * Chip label for a wallet's provenance. A wallet tied to a social login
+ * (currently only Google) shows the provider name; every other wallet shows its
+ * key type ("SeedPhrase" / "PrivateKey"). Keyed off `socialAccount` rather than
+ * `type` so these wallets keep `type: "SeedPhrase"` and their seed-reveal UI.
+ */
+export function walletTypeLabel(
+  wallet: Pick<TWallet, "type" | "socialAccount">,
+): string {
+  const provider = wallet.socialAccount?.provider;
+  if (provider) return provider.charAt(0).toUpperCase() + provider.slice(1);
+  return wallet.type;
+}
+
+/**
+ * Initials for the wallet avatar chip. Social-login wallets prefer the
+ * provider account name (e.g. the Google display name) so the avatar
+ * reflects the person, not the wallet's local `"Satria · ETH"` label —
+ * which would otherwise produce a nonsense `"S·"`.
+ *
+ * Handles a first-name-only account ("Satria" → "SA") as well as a full
+ * "First Last" name ("Satria Ali" → "SA"). Falls back to the wallet's
+ * local name for non-social wallets, and to "W" when nothing is usable.
+ */
+export function walletAvatarInitials(
+  wallet: Pick<TWallet, "name" | "socialAccount">,
+): string {
+  const raw = wallet.socialAccount?.name?.trim() || wallet.name?.trim() || "";
+  // The local label carries an auto-appended chain suffix ("Satria · ETH");
+  // strip a trailing "· <token>" so the tag isn't folded into the initials.
+  // A social account name has no separator, so this is a no-op there.
+  const source = raw.replace(/\s*[·•|]\s*\S+\s*$/u, "").trim() || raw;
+  if (!source) return "W";
+  const words = source.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return words[0].slice(0, 2).toUpperCase();
+}
+
 export function isValidPrivateKey(privateKey: string): boolean {
   const privateKeyRegex = /^(0x)?[0-9a-fA-F]{64}$/;
   return privateKeyRegex.test(privateKey);

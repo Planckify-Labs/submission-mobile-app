@@ -64,6 +64,7 @@ import {
   type ToolPendingPayload,
   type WalletContext,
 } from "@/services/agentSession";
+import { track } from "@/services/analytics/posthog";
 import { pendingTxStore } from "@/services/pendingTxStore";
 import {
   getPermissionGrantStore,
@@ -1113,6 +1114,8 @@ export default function AgentMode() {
           console.warn("[AgentMode] stale approval reject threw", err);
         }
       }
+
+      track("agent_message_sent");
 
       // Close any prior session first — a new turn opens its own stream.
       activeSessionRef.current?.stop();

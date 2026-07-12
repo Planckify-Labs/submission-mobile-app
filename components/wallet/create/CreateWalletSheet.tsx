@@ -37,6 +37,7 @@ import { BaseModal } from "@/components/common/BaseModal";
 import SeedPhraseGrid from "@/components/common/SeedPhraseGrid";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
+import { track } from "@/services/analytics/posthog";
 import type { Namespace } from "@/services/chains/types";
 import { useScreenshotGuard } from "@/services/security/screenshotGuard";
 import { defaultWalletNameFor } from "@/services/walletKit/bootstrap";
@@ -268,6 +269,10 @@ const CreateWalletSheet: React.FC<Props> = memo(function CreateWalletSheet({
         throw new Error("Failed to save wallets");
       }
       setCompleted(true);
+      track("wallet_created", {
+        chains: derived.map((w) => w.namespace),
+        wallets_added: derived.length,
+      });
       onWalletAdded(derived);
       // Close — the success state stays visible through BaseModal's
       // slide-out, and `resetState` runs on `onClosed`.
@@ -434,7 +439,7 @@ const CreateWalletSheet: React.FC<Props> = memo(function CreateWalletSheet({
       </Text>
       <Text className="text-light-matte-black/70 mb-4">
         Your phrase can create a wallet on each chain below. Uncheck any you
-        don&apos;t want on this device — you can always add them later.
+        don&apos;t want on this device. You can always add them later.
       </Text>
       <NamespacePicker
         mode="multi"

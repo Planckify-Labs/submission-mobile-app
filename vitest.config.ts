@@ -4,6 +4,20 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      // Exact-specifier match, checked before the "@" prefix alias below —
+      // keeps posthog-react-native (RN/Flow syntax, unparseable by esbuild)
+      // out of pure-logic executor tests. See services/analytics/posthog.mock.ts.
+      "@/services/analytics/posthog": path.resolve(
+        __dirname,
+        "services/analytics/posthog.mock.ts",
+      ),
+      // `react-native-quick-crypto` is a Nitro native module and cannot load
+      // outside the app runtime. The Node twin is real Argon2id + AES-GCM, so
+      // the envelope tests still exercise genuine crypto.
+      "@/services/backup/primitives": path.resolve(
+        __dirname,
+        "services/backup/primitives.node.ts",
+      ),
       "@": path.resolve(__dirname, "."),
     },
   },
@@ -57,6 +71,10 @@ export default defineConfig({
       "services/chains/stellar/xdrDecode.test.ts",
       "services/chains/stellar/agentContext.test.ts",
       "services/bridge/inspectors/StellarPreflightInspector.test.ts",
+      // Encrypted seed backup (docs/encrypted-seed-backup-spec.md)
+      "services/backup/seedBackupCrypto.test.ts",
+      "services/backup/bytes.test.ts",
+      "services/backup/passphrasePolicy.test.ts",
     ],
   },
 });

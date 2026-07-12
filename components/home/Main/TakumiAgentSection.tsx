@@ -52,9 +52,10 @@ export interface TakumiAgentSectionProps {
    * Opens the Takumi Agent chat page. Called after a voice transcript is
    * ready (the transcript is handed off separately via `useAgentPrefill`),
    * when a capability / spotlight / quick-prompt card hands off a prompt,
-   * and when the user taps the ask bar to type.
+   * and when the user taps the ask bar to type. `trigger` identifies which
+   * of those entry points fired, for analytics breakdown.
    */
-  onOpenAgentChat?: () => void;
+  onOpenAgentChat?: (trigger: string) => void;
   /**
    * Asks the parent scroll container to bring this section into focus.
    * Fired on mic press-in so the wave bar has room to breathe.
@@ -392,7 +393,7 @@ const TakumiAgentSection = forwardRef<
       const transcript = await voice.stopAndTranscribe();
       if (transcript) {
         setPrefill(transcript);
-        onOpenAgentChat?.();
+        onOpenAgentChat?.("mic");
       }
     })();
   }, [voice, setPrefill, onOpenAgentChat]);
@@ -400,11 +401,12 @@ const TakumiAgentSection = forwardRef<
   // Capability / spotlight / quick-prompt cards are one-tap actions:
   // hand the ready-made prompt to the agent chat with `autoSend` so it
   // fires straight into a new turn (unlike the mic, which prefills the
-  // transcript for review), then open the chat page.
+  // transcript for review), then open the chat page. `source` identifies
+  // which card type fired, for analytics breakdown.
   const handleSubmitPrompt = useCallback(
-    (prompt: string) => {
+    (prompt: string, source: string) => {
       setPrefill(prompt, { autoSend: true });
-      onOpenAgentChat?.();
+      onOpenAgentChat?.(source);
     },
     [setPrefill, onOpenAgentChat],
   );
@@ -557,14 +559,18 @@ const TakumiAgentSection = forwardRef<
             >
               <SpotlightCard
                 width={heroWidth}
-                onPress={() => handleSubmitPrompt(SPOTLIGHT_PROMPT)}
+                onPress={() =>
+                  handleSubmitPrompt(SPOTLIGHT_PROMPT, "spotlight")
+                }
               />
               {CAPABILITIES.map((item) => (
                 <CapabilityCard
                   key={item.id}
                   item={item}
                   width={capWidth}
-                  onPress={() => handleSubmitPrompt(item.prompt)}
+                  onPress={() =>
+                    handleSubmitPrompt(item.prompt, "capability_card")
+                  }
                 />
               ))}
             </ScrollView>
@@ -591,7 +597,9 @@ const TakumiAgentSection = forwardRef<
                   <TouchableOpacity
                     key={chip.id}
                     activeOpacity={0.8}
-                    onPress={() => handleSubmitPrompt(chip.prompt)}
+                    onPress={() =>
+                      handleSubmitPrompt(chip.prompt, "quick_prompt_chip")
+                    }
                     className="flex-row items-center gap-1.5 bg-light-main-container grow border border-light-matte-black/5 rounded-full px-3 py-2"
                   >
                     <Icon size={14} color="#c71c4b" strokeWidth={2.4} />
@@ -610,7 +618,9 @@ const TakumiAgentSection = forwardRef<
               ) : (
                 <TouchableOpacity
                   activeOpacity={0.7}
-                  onPress={onOpenAgentChat ?? onAsk}
+                  onPress={() =>
+                    onOpenAgentChat ? onOpenAgentChat("ask_bar") : onAsk?.()
+                  }
                   className="flex-1"
                   disabled={voice.status === "transcribing"}
                 >

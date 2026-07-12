@@ -62,6 +62,11 @@ import {
 import { BaseModal } from "@/components/common/BaseModal";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
+import { track } from "@/services/analytics/posthog";
+import {
+  type GoogleWalletOwner,
+  tagWalletsAsGoogle,
+} from "@/services/auth/googleWallets";
 import type { Namespace } from "@/services/chains/types";
 import { useScreenshotGuard } from "@/services/security/screenshotGuard";
 import { defaultWalletNameFor } from "@/services/walletKit/bootstrap";
@@ -81,6 +86,13 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onWalletsAdded: (wallets: TWallet[]) => void;
+  /**
+   * When set (the "Account found" recovery flow after a Google sign-in), the
+   * imported wallets are tagged as belonging to this Google account — same
+   * "Google" badge and account link as a freshly-minted one. Left undefined for
+   * the ordinary import-a-wallet flow.
+   */
+  tagSocial?: GoogleWalletOwner | null;
 };
 
 type Step = 1 | 2 | 3;
@@ -113,7 +125,12 @@ function displayNameFor(ns: Namespace): string {
 }
 
 const ImportSeedPhraseSheet: React.FC<Props> = memo(
-  function ImportSeedPhraseSheet({ visible, onClose, onWalletsAdded }: Props) {
+  function ImportSeedPhraseSheet({
+    visible,
+    onClose,
+    onWalletsAdded,
+    tagSocial,
+  }: Props) {
     // Screenshot guard — the paste textarea displays the mnemonic in
     // plaintext; engage the refcounted guard while the sheet is open so
     // recording / screenshotting during the flow is blocked.
@@ -244,12 +261,21 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
           setAllDuplicates(true);
           return;
         }
-        const ok = await addWallets(toAdd);
+        // "Account found" recovery: badge the restored wallets as the Google
+        // account's own, so they read as a Google wallet just like a minted one.
+        const finalToAdd = tagSocial
+          ? tagWalletsAsGoogle(toAdd, tagSocial)
+          : toAdd;
+        const ok = await addWallets(finalToAdd);
         if (!ok) {
           throw new Error("Failed to save wallets");
         }
         setCompleted(true);
-        onWalletsAdded(toAdd);
+        track("wallet_imported", {
+          chains: finalToAdd.map((w) => w.namespace),
+          wallets_added: finalToAdd.length,
+        });
+        onWalletsAdded(finalToAdd);
         // Close — success stays visible through BaseModal's slide-out and
         // `resetState` runs on `onClosed`.
         onClose();
@@ -269,6 +295,7 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
       onClose,
       isSaving,
       completed,
+      tagSocial,
     ]);
 
     // `useWallet` returns a fresh `wallets` reference on every bundle
@@ -300,7 +327,7 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
         </Text>
         <Text className="text-light-matte-black/70 mb-4">
           Paste or type your 12 or 24 word BIP-39 seed phrase. Your phrase stays
-          on this device — we never send it anywhere.
+          on this device. We never send it anywhere.
         </Text>
 
         <TextInput
@@ -350,7 +377,7 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
         </Text>
         <Text className="text-light-matte-black/70 mb-4">
           Your phrase can create a wallet on each chain below. Uncheck any you
-          don&apos;t want on this device — you can always add them later.
+          don&apos;t want on this device. You can always add them later.
         </Text>
         <NamespacePicker
           mode="multi"

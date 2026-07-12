@@ -22,6 +22,11 @@
  *      reason). Remove on the resolved path.
  */
 
+// "@/" alias (not this file's usual relative-with-extension style) so both
+// the node:test resolver hook and vitest.config.ts can stub this exact
+// specifier — posthog-react-native ships RN/Flow syntax that can't load
+// outside a Metro/RN transform. See services/analytics/posthog.mock.ts.
+import { track } from "@/services/analytics/posthog";
 import { pendingTxStore } from "../pendingTxStore.ts";
 import type { ConnectedWallet } from "../resolveUxTreatment.ts";
 import type { AgentSession } from "./agentSession.ts";
@@ -356,6 +361,16 @@ async function runNonInteractive(
         })
         .catch(() => {});
     }
+  }
+
+  // Agent actually DOING something (a write tool) is the value signal —
+  // reads (balance checks, activity lookups) are deliberately not tracked.
+  // Both outcomes fire so failure rate is visible, not just successes.
+  if (payload.meta.capability === "write") {
+    track("agent_tool_completed", {
+      tool_name: payload.name,
+      state: result.status,
+    });
   }
 
   // Mirror the tool result into the message parts so MessageContent

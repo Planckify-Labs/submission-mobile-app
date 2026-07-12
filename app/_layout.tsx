@@ -7,7 +7,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { router, SplashScreen, Stack } from "expo-router";
+import { router, SplashScreen, Stack, usePathname } from "expo-router";
+import { PostHogProvider } from "posthog-react-native";
 import {
   createContext,
   useCallback,
@@ -21,12 +22,19 @@ import { ChainSwitchingOverlay } from "@/components/common/ChainSwitchingOverlay
 import { PerformanceProvider } from "@/components/providers/PerformanceProvider";
 import LockScreen from "@/components/security/LockScreen";
 import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
+import { useAppSessionTracking } from "@/hooks/useAppSessionTracking";
 // Ordering (spec §6.2): polyfill import → bootWalletKits() → any screen/provider.
 import { useWallet } from "@/hooks/useWallet";
 import {
   mmkvPersister,
   shouldPersistQuery,
 } from "@/lib/storage/queryPersister";
+import {
+  identifyDevice,
+  syncWalletProperties,
+} from "@/services/analytics/identity";
+import { posthog } from "@/services/analytics/posthog";
+import { resolveScreenName } from "@/services/analytics/screenNames";
 import { bootDefi } from "@/services/defi/bootstrap";
 import { bootGasAbstraction } from "@/services/gasAbstraction/boot";
 import {
@@ -132,9 +140,20 @@ function AppShell() {
   const [locked, setLocked] = useState<boolean>(hasStoredWallets());
   const [didUnlockThisSession, setDidUnlockThisSession] = useState(false);
   const { wallets } = useWallet();
+  const pathname = usePathname();
 
   usePushNotificationHandler();
   usePushRegistrationRetry();
+  useAppSessionTracking(locked);
+
+  useEffect(() => {
+    void identifyDevice();
+  }, []);
+
+  useEffect(() => {
+    const name = resolveScreenName(pathname);
+    if (name) void posthog.screen(name);
+  }, [pathname]);
 
   // Re-register whenever the wallet list changes so new wallets are
   // subscribed immediately. walletKey is a stable string derived from
@@ -144,6 +163,7 @@ function AppShell() {
     const addresses = wallets.map((w) => w.address);
     if (addresses.length === 0) return;
     void registerForPushNotifications(addresses);
+    syncWalletProperties(wallets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletKey]);
 
@@ -218,9 +238,14 @@ export default function RootLayout() {
       }}
     >
       <PerformanceProvider>
-        <SafeAreaProvider>
-          <AppShell />
-        </SafeAreaProvider>
+        <PostHogProvider
+          client={posthog}
+          autocapture={{ captureScreens: false, captureTouches: false }}
+        >
+          <SafeAreaProvider>
+            <AppShell />
+          </SafeAreaProvider>
+        </PostHogProvider>
       </PerformanceProvider>
     </PersistQueryClientProvider>
   );

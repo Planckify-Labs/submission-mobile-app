@@ -91,6 +91,7 @@ import {
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { useWallet } from "@/hooks/useWallet";
 import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
+import { track } from "@/services/analytics/posthog";
 import {
   classifyPaymentError,
   type PaymentErrorCode,
@@ -341,6 +342,10 @@ function IntentFlow({
 
   const [phase, setPhase] = useState<LocalPhase>("idle");
   const [error, setError] = useState<LocalError | null>(null);
+  // Guards against double-counting: `intent` gets a fresh object reference
+  // on any refetch (e.g. useSubmitOnchain's invalidateQueries), even after
+  // status has already settled to "paid"/"paid_out".
+  const trackedSettledRef = useRef(false);
 
   const intent = intentQ.data;
 
@@ -351,6 +356,17 @@ function IntentFlow({
     if (intent.status === "paid" || intent.status === "paid_out") {
       setPhase("settled");
       setError(null);
+      if (!trackedSettledRef.current) {
+        trackedSettledRef.current = true;
+        track("merchant_payment_completed", {
+          // Nanopay/x402/takumipay settlement is EVM/USDC-only today —
+          // see intent.nanopayUsdcSourceChainId / contractAddress typing.
+          chain: "evm",
+          rail: intent.path,
+          amount_minor:
+            intent.tokenAmountMinor ?? intent.nanopayUsdcAmountMicros,
+        });
+      }
       return;
     }
     if (intent.status === "failed") {
