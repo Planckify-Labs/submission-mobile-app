@@ -8,6 +8,7 @@ const NAMESPACE_TO_CHAIN_TAG: Record<Namespace, string> = {
   eip155: "evm",
   solana: "solana",
   sui: "sui",
+  stellar: "stellar",
 };
 
 export function toChainTag(namespace: Namespace): string {
