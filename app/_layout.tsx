@@ -38,6 +38,7 @@ import { posthog } from "@/services/analytics/posthog";
 import { resolveScreenName } from "@/services/analytics/screenNames";
 import { bootDefi } from "@/services/defi/bootstrap";
 import { bootGasAbstraction } from "@/services/gasAbstraction/boot";
+import { initNotificationHandlers } from "@/services/notifications/handlers";
 import {
   registerForPushNotifications,
   usePushNotificationHandler,
@@ -64,6 +65,13 @@ void refreshSettlementRailConfig();
 // skip the Reed-Solomon compute on repeat opens. Must run before any
 // component imports `react-native-qrcode-styled`.
 installQRMatrixCache();
+
+// Without this, expo-notifications' default handler suppresses any
+// notification (local or push) while the app is foregrounded — the OS
+// channel only takes over display when the app is backgrounded/killed.
+// Must run before any push can arrive, so it's called at module scope
+// rather than inside an effect.
+initNotificationHandlers();
 
 SplashScreen.preventAutoHideAsync();
 

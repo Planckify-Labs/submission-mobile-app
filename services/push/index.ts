@@ -31,13 +31,16 @@
  * needs — the intent carries its own chain discriminator.
  */
 
+import { useQueryClient } from "@tanstack/react-query";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import { HTTPError } from "ky";
 import { useEffect } from "react";
 import { AppState, Platform } from "react-native";
-import { api } from "@/constants/configs/ky";
+import { optionalAuthApi } from "@/constants/configs/ky";
+import { pointsQueryKeys } from "@/constants/queryKeys/pointsQueryKeys";
+import { redeemQueryKeys } from "@/constants/queryKeys/redeemQueryKeys";
 import { usePaymentIntentInvalidator } from "@/hooks/usePaymentIntentInvalidator";
 
 /**
@@ -47,6 +50,8 @@ import { usePaymentIntentInvalidator } from "@/hooks/usePaymentIntentInvalidator
  * so the server's FCM payload with `channelId: "payouts"` lands.
  */
 const ANDROID_PAYOUT_CHANNEL_ID = "payouts";
+const ANDROID_POINTS_CHANNEL_ID = "points";
+const ANDROID_STRATEGIES_CHANNEL_ID = "strategies";
 
 /**
  * Register the Android notification channel for payout receipts. No-op
@@ -68,6 +73,46 @@ export async function registerAndroidPayoutChannel(): Promise<void> {
   }
 }
 
+/**
+ * Register the Android notification channel for point deposits and
+ * redemptions. No-op on iOS.
+ */
+export async function registerAndroidPointsChannel(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  try {
+    await Notifications.setNotificationChannelAsync(ANDROID_POINTS_CHANNEL_ID, {
+      name: "Points & redemptions",
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#c71c4b",
+      description:
+        "Notifications when a point deposit is confirmed or a redemption is ready.",
+    });
+  } catch (err) {
+    console.warn("[push] failed to register Android points channel:", err);
+  }
+}
+
+/**
+ * Register the Android notification channel for auto-compound nudges
+ * (`AutoCompoundWatcherProcessor` sends `channelId: "strategies"`). No-op
+ * on iOS.
+ */
+export async function registerAndroidStrategiesChannel(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  try {
+    await Notifications.setNotificationChannelAsync(ANDROID_STRATEGIES_CHANNEL_ID, {
+      name: "Strategies & yield",
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#c71c4b",
+      description: "Reminders to compound rewards on your active positions.",
+    });
+  } catch (err) {
+    console.warn("[push] failed to register Android strategies channel:", err);
+  }
+}
+
 // Tracks the last attempted wallet list so the foreground-retry hook can
 // re-use it without the call site needing to pass it again.
 const retryState = {
@@ -86,6 +131,8 @@ export async function registerForPushNotifications(
   wallets: string[],
 ): Promise<boolean> {
   await registerAndroidPayoutChannel();
+  await registerAndroidPointsChannel();
+  await registerAndroidStrategiesChannel();
 
   if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
     console.log("[push] skipping registration in Expo Go");
@@ -157,11 +204,11 @@ async function postPushToken(token: string, wallets: string[]): Promise<boolean>
     if (delay > 0) await new Promise((r) => setTimeout(r, delay));
 
     try {
-      await api
-        .post("users/me/push-token", {
-          json: { token, platform: Platform.OS, wallets },
-        })
-        .json();
+      // Controller responds 204 No Content — don't call `.json()`, it
+      // would try (and fail) to parse an empty body.
+      await optionalAuthApi.post("users/me/push-token", {
+        json: { token, platform: Platform.OS, wallets },
+      });
       console.log("[push] token registered with backend");
       return true;
     } catch (err) {
@@ -220,6 +267,31 @@ function readPayoutData(
   };
 }
 
+/** Shape of the `data` payload for point-deposit / redemption pushes. */
+interface PointsPushData {
+  type: "point_deposit" | "redemption";
+  pointTransactionId?: string;
+  redemptionId?: string;
+}
+
+function readPointsPushData(
+  notification: Notifications.Notification,
+): PointsPushData | null {
+  const raw = notification.request.content.data;
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
+  if (data.type !== "point_deposit" && data.type !== "redemption") return null;
+  return {
+    type: data.type,
+    pointTransactionId:
+      typeof data.pointTransactionId === "string"
+        ? data.pointTransactionId
+        : undefined,
+    redemptionId:
+      typeof data.redemptionId === "string" ? data.redemptionId : undefined,
+  };
+}
+
 /**
  * Install foreground receive + tap handlers. Must be mounted once at
  * the top of the component tree (app/_layout.tsx) — listeners are
@@ -227,6 +299,7 @@ function readPayoutData(
  */
 export function usePushNotificationHandler(): void {
   const invalidateIntent = usePaymentIntentInvalidator();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     // Foreground receive — the OS banner still shows (per
@@ -236,9 +309,20 @@ export function usePushNotificationHandler(): void {
     // without waiting for the 3 s poll interval.
     const receiveSub = Notifications.addNotificationReceivedListener(
       (notification) => {
-        const data = readPayoutData(notification);
-        if (!data?.intentId) return;
-        invalidateIntent(data.intentId);
+        const payoutData = readPayoutData(notification);
+        if (payoutData?.intentId) {
+          invalidateIntent(payoutData.intentId);
+          return;
+        }
+
+        const pointsData = readPointsPushData(notification);
+        if (!pointsData) return;
+        // Broad prefix — cheaper and safer than reconstructing every
+        // param-shaped key variant (balance/history/depositStatus) by hand.
+        queryClient.invalidateQueries({ queryKey: pointsQueryKeys.all });
+        if (pointsData.type === "redemption") {
+          queryClient.invalidateQueries({ queryKey: redeemQueryKeys.all });
+        }
       },
     );
 
@@ -250,7 +334,34 @@ export function usePushNotificationHandler(): void {
     const responseSub = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = readPayoutData(response.notification);
-        if (!data?.intentId) return;
+        if (!data?.intentId) {
+          const pointsData = readPointsPushData(response.notification);
+          if (!pointsData) return;
+
+          if (pointsData.type === "redemption" && pointsData.redemptionId) {
+            try {
+              router.push({
+                pathname: "/activity-detail" as never,
+                params: { redemptionId: pointsData.redemptionId },
+              });
+            } catch (err) {
+              console.warn(
+                "[push] activity-detail route not available:",
+                err,
+              );
+            }
+            return;
+          }
+
+          // Point deposits have no dedicated detail screen yet — land on
+          // the wallet screen, which shows the updated points balance.
+          try {
+            router.push("/wallet" as never);
+          } catch (err) {
+            console.warn("[push] wallet route not available:", err);
+          }
+          return;
+        }
         try {
           router.push({
             pathname: "/pay-merchant/receipt" as never,
@@ -280,5 +391,5 @@ export function usePushNotificationHandler(): void {
       receiveSub.remove();
       responseSub.remove();
     };
-  }, [invalidateIntent]);
+  }, [invalidateIntent, queryClient]);
 }
