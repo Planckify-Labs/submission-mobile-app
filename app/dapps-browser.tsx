@@ -362,9 +362,9 @@ export default function DappsBrowser() {
   });
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-white" edges={[]}>
       <StatusBar barStyle="dark-content" backgroundColor="#f5f6f9" />
-      <View className="flex-1">
+      <View className="flex-1 bg-light-main-container">
         <BrowserAddressBar
           addressBarText={addressBarText}
           onChangeText={setAddressBarText}
@@ -376,72 +376,74 @@ export default function DappsBrowser() {
         {showHub ? (
           <DAppsHub onNavigateToDapp={navigateToUrl} />
         ) : (
-          <WebView
-            ref={webViewRef}
-            source={{ uri: browserState.url }}
-            onMessage={handleMessage}
-            // UA suffix so dApps that fall back to user-agent sniffing (or
-            // want to branch on "in-app wallet browser") can detect us by
-            // matching /TakumiPay/.
-            applicationNameForUserAgent="TakumiPay/1.0"
-            // Inject BEFORE the page's own scripts run. `injectedJavaScript`
-            // fires after load, which is too late for EIP-6963 — dApps have
-            // already dispatched `eip6963:requestProvider` during startup
-            // and decided nobody answered. Running pre-load guarantees our
-            // `window.ethereum` and 6963 listener are in place when the
-            // dApp's bundle wakes up.
-            injectedJavaScriptBeforeContentLoaded={injectedJavaScript}
-            // TWV-2026-013 — never install the EIP-1193 provider into
-            // cross-origin iframes. CVE-2020-6506-class universal-XSS
-            // makes any sub-frame an attacker-controlled JS context;
-            // restricting injection to the top frame keeps the provider
-            // out of their reach.
-            injectedJavaScriptForMainFrameOnly={true}
-            // Also replay on every DOM load — SPAs with client-side routing
-            // don't re-inject the pre-content script between route changes,
-            // and our provider script is idempotent (guarded by
-            // `window.__takumi_evm_installed`).
-            injectedJavaScript={injectedJavaScript}
-            onLoadStart={() =>
-              setBrowserState((p) => ({ ...p, loading: true }))
-            }
-            onLoadEnd={() => {
-              setBrowserState((p) => ({ ...p, loading: false }));
-              // Active re-injection of the full provider + announce +
-              // diagnostic bundle. `injectedJavaScriptBeforeContentLoaded`
-              // is racy on Android (evaluateJavascript inside
-              // onPageStarted); this guarantees every page load gets a
-              // deterministic injection from the RN side. The provider
-              // script's `__takumi_evm_installed` guard makes it safe to
-              // re-run against an already-installed page.
-              webViewRef.current?.injectJavaScript(
-                `${injectedJavaScript}\ntrue;`,
-              );
-            }}
-            onNavigationStateChange={handleNavigate}
-            javaScriptEnabled
-            domStorageEnabled
-            startInLoadingState
-            scalesPageToFit
-            allowsInlineMediaPlayback
-            // TWV-2026-064 — video stays inline; dApps cannot take over
-            // the full screen to paint a fake signer prompt. The JS
-            // fullscreen API is also neutralised (see injection above).
-            allowsFullscreenVideo={false}
-            mediaPlaybackRequiresUserAction={false}
-            allowsBackForwardNavigationGestures
-            // TWV-2026-013 — only https. http and file schemes are
-            // banned wholesale; mixed content is never loaded.
-            originWhitelist={["https://*"]}
-            mixedContentMode="never"
-            sharedCookiesEnabled={false}
-            thirdPartyCookiesEnabled={false}
-            androidLayerType="hardware"
-            setSupportMultipleWindows={false}
-            cacheEnabled
-            cacheMode="LOAD_DEFAULT"
-            className="flex-1"
-          />
+          <View className="flex-1 mx-2 mb-2- rounded-3xl overflow-hidden border-4 border-light-matte-black bg-light-main-container">
+            <WebView
+              ref={webViewRef}
+              source={{ uri: browserState.url }}
+              onMessage={handleMessage}
+              // UA suffix so dApps that fall back to user-agent sniffing (or
+              // want to branch on "in-app wallet browser") can detect us by
+              // matching /TakumiPay/.
+              applicationNameForUserAgent="TakumiPay/1.0"
+              // Inject BEFORE the page's own scripts run. `injectedJavaScript`
+              // fires after load, which is too late for EIP-6963 — dApps have
+              // already dispatched `eip6963:requestProvider` during startup
+              // and decided nobody answered. Running pre-load guarantees our
+              // `window.ethereum` and 6963 listener are in place when the
+              // dApp's bundle wakes up.
+              injectedJavaScriptBeforeContentLoaded={injectedJavaScript}
+              // TWV-2026-013 — never install the EIP-1193 provider into
+              // cross-origin iframes. CVE-2020-6506-class universal-XSS
+              // makes any sub-frame an attacker-controlled JS context;
+              // restricting injection to the top frame keeps the provider
+              // out of their reach.
+              injectedJavaScriptForMainFrameOnly={true}
+              // Also replay on every DOM load — SPAs with client-side routing
+              // don't re-inject the pre-content script between route changes,
+              // and our provider script is idempotent (guarded by
+              // `window.__takumi_evm_installed`).
+              injectedJavaScript={injectedJavaScript}
+              onLoadStart={() =>
+                setBrowserState((p) => ({ ...p, loading: true }))
+              }
+              onLoadEnd={() => {
+                setBrowserState((p) => ({ ...p, loading: false }));
+                // Active re-injection of the full provider + announce +
+                // diagnostic bundle. `injectedJavaScriptBeforeContentLoaded`
+                // is racy on Android (evaluateJavascript inside
+                // onPageStarted); this guarantees every page load gets a
+                // deterministic injection from the RN side. The provider
+                // script's `__takumi_evm_installed` guard makes it safe to
+                // re-run against an already-installed page.
+                webViewRef.current?.injectJavaScript(
+                  `${injectedJavaScript}\ntrue;`,
+                );
+              }}
+              onNavigationStateChange={handleNavigate}
+              javaScriptEnabled
+              domStorageEnabled
+              startInLoadingState
+              scalesPageToFit
+              allowsInlineMediaPlayback
+              // TWV-2026-064 — video stays inline; dApps cannot take over
+              // the full screen to paint a fake signer prompt. The JS
+              // fullscreen API is also neutralised (see injection above).
+              allowsFullscreenVideo={false}
+              mediaPlaybackRequiresUserAction={false}
+              allowsBackForwardNavigationGestures
+              // TWV-2026-013 — only https. http and file schemes are
+              // banned wholesale; mixed content is never loaded.
+              originWhitelist={["https://*"]}
+              mixedContentMode="never"
+              sharedCookiesEnabled={false}
+              thirdPartyCookiesEnabled={false}
+              androidLayerType="hardware"
+              setSupportMultipleWindows={false}
+              cacheEnabled
+              cacheMode="LOAD_DEFAULT"
+              className="flex-1"
+            />
+          </View>
         )}
         {!showHub && (
           <BrowserNavigationControls

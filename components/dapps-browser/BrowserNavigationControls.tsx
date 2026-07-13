@@ -7,6 +7,7 @@ import {
 } from "lucide-react-native";
 import React, { memo, useCallback } from "react";
 import { TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, ICON_SIZES } from "../../constants/dapps-browser";
 import { TBrowserNavigationControlsProps } from "../../types/dapps-browser";
 import { getButtonStyle, getIconColor } from "../../utils/dappsBrowserUtils";
@@ -20,6 +21,8 @@ const BrowserNavigationControls = memo<TBrowserNavigationControlsProps>(
     onRefresh,
     onHome,
   }: TBrowserNavigationControlsProps) {
+    const { bottom } = useSafeAreaInsets();
+
     const handleGoBack = useCallback(() => {
       if (browserState.canGoBack) {
         onGoBack();
@@ -33,7 +36,10 @@ const BrowserNavigationControls = memo<TBrowserNavigationControlsProps>(
     }, [browserState.canGoForward, onGoForward]);
 
     return (
-      <View className="flex-row gap-3 px-4 py-2 bg-light-main-container items-center justify-center">
+      <View
+        className="flex-row gap-3 px-4 pt-2 bg-light-main-container items-center justify-center"
+        style={{ paddingBottom: bottom > 0 ? bottom : 8 }}
+      >
         <TouchableOpacity
           onPress={handleGoBack}
           disabled={!browserState.canGoBack}

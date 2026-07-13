@@ -2,6 +2,7 @@ import { Image } from "expo-image";
 import { Shield } from "lucide-react-native";
 import React, { memo } from "react";
 import { TextInput, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, ICON_SIZES } from "../../constants/dapps-browser";
 import { TBrowserAddressBarProps } from "../../types/dapps-browser";
 
@@ -14,9 +15,14 @@ const BrowserAddressBar = memo<TBrowserAddressBarProps>(
     isWalletConnected = true,
     onPressWallet,
   }) {
+    const { top } = useSafeAreaInsets();
+
     return (
-      <View className="flex-row gap-3 px-4 py-2 bg-light-main-container items-center">
-        <View className="flex-1 bg-light rounded-2xl flex-row items-center px-4 py-1">
+      <View
+        className="flex-row gap-3 px-4 pb-2 bg-light-main-container items-center"
+        style={{ paddingTop: (top > 0 ? top : 0) }}
+      >
+        <View className="flex-1 bg-light rounded-full flex-row items-center px-4 py-1">
           <Shield
             size={ICON_SIZES.SMALL + 2}
             color={COLORS.GRAY_400}
