@@ -9,6 +9,7 @@ import React, {
 import { Keyboard, StatusBar, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
+import DappLoadingOverlay from "@/components/dapps-browser/DappLoadingOverlay";
 
 // TWV-2026-015 — generate a per-session nonce from the OS CSPRNG via
 // the polyfill installed in `pollyfills.ts`. 16 random bytes → 32 hex
@@ -19,6 +20,18 @@ function generateSessionNonce(): string {
   return Array.from(buf)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+// Bare hostname for the branded loading overlay ("https://jup.ag/" →
+// "jup.ag"). Best-effort: falls back to undefined so the loader just
+// omits the label rather than showing a half-parsed URL.
+function hostFromUrl(url: string): string | undefined {
+  if (!url) return undefined;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return undefined;
+  }
 }
 
 // Known third-party log spam that some dApps ship (Datadog RUM double-
@@ -422,7 +435,6 @@ export default function DappsBrowser() {
               onNavigationStateChange={handleNavigate}
               javaScriptEnabled
               domStorageEnabled
-              startInLoadingState
               scalesPageToFit
               allowsInlineMediaPlayback
               // TWV-2026-064 — video stays inline; dApps cannot take over
@@ -443,6 +455,9 @@ export default function DappsBrowser() {
               cacheMode="LOAD_DEFAULT"
               className="flex-1"
             />
+            {browserState.loading && (
+              <DappLoadingOverlay host={hostFromUrl(browserState.url)} />
+            )}
           </View>
         )}
         {!showHub && (
