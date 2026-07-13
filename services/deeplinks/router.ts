@@ -3,6 +3,7 @@
  */
 
 import { router } from "expo-router";
+import { VERIFIED_HOST } from "../security/deeplinkGate";
 import { type EIP681Intent, parseEIP681 } from "./eip681";
 
 export type DeepLinkResult =
@@ -45,6 +46,27 @@ export function classifyURI(uri: string): DeepLinkResult {
   // Raw Ethereum address
   if (uri.startsWith("0x") && uri.length === 42) {
     return { type: "send", to: uri };
+  }
+
+  // Bare https/http link to a third-party site. Android's generic
+  // VIEW/BROWSABLE intent-filter (no host, not autoVerify'd — see
+  // app.config.ts) puts TakumiPay in the system "Open with" chooser
+  // alongside every other wallet for ANY link, not just our own
+  // domain. Route it straight into the sandboxed dApp browser, same
+  // as if the user had typed it into the browser's own address bar.
+  //
+  // `takumipay.xyz` itself is excluded here — that's our own verified
+  // App Link host and is already routed by expo-router's file-based
+  // linking config, not this dispatcher.
+  if (uri.startsWith("https://") || uri.startsWith("http://")) {
+    try {
+      const parsed = new URL(uri);
+      if (parsed.hostname.toLowerCase() !== VERIFIED_HOST) {
+        return { type: "dapp", url: uri };
+      }
+    } catch {
+      // fall through to unknown
+    }
   }
 
   return { type: "unknown", raw: uri };

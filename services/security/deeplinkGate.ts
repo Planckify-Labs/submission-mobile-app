@@ -5,7 +5,7 @@
 // custom-scheme deeplinks for these targets fall through to a
 // preview screen with an explicit warning, never auto-execute.
 
-const VERIFIED_HOST = "takumipay.xyz";
+export const VERIFIED_HOST = "takumipay.xyz";
 
 const SENSITIVE_PATHS = new Set<string>([
   "/send",

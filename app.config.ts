@@ -116,6 +116,21 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         data: [{ scheme: "https", host: "takumipay.xyz", pathPrefix: "/" }],
         category: ["BROWSABLE", "DEFAULT"],
       },
+      // Generic, non-verified catch-all — no `host`, no `autoVerify`.
+      // This is what actually puts TakumiPay in Android's "Open with"
+      // chooser alongside MetaMask/Bitget Wallet for ANY http(s) link,
+      // not just our own domain (MetaMask/Trust Wallet/Bitget all
+      // register the same broad, hostless filter for this reason).
+      // Because it isn't `autoVerify`'d, Android can never silently
+      // auto-open TakumiPay for a link the user didn't ask it to — the
+      // disambiguation dialog always appears; the user picks. Handled
+      // by `useExternalDappLinking()` in `app/_layout.tsx`, which routes
+      // whatever the user picked us for into the sandboxed dApp browser.
+      {
+        action: "VIEW",
+        data: [{ scheme: "https" }, { scheme: "http" }],
+        category: ["BROWSABLE", "DEFAULT"],
+      },
     ],
   },
   web: {
