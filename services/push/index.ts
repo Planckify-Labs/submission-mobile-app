@@ -41,6 +41,7 @@ import { AppState, Platform } from "react-native";
 import { optionalAuthApi } from "@/constants/configs/ky";
 import { pointsQueryKeys } from "@/constants/queryKeys/pointsQueryKeys";
 import { redeemQueryKeys } from "@/constants/queryKeys/redeemQueryKeys";
+import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
 import { usePaymentIntentInvalidator } from "@/hooks/usePaymentIntentInvalidator";
 
 /**
@@ -52,6 +53,7 @@ import { usePaymentIntentInvalidator } from "@/hooks/usePaymentIntentInvalidator
 const ANDROID_PAYOUT_CHANNEL_ID = "payouts";
 const ANDROID_POINTS_CHANNEL_ID = "points";
 const ANDROID_STRATEGIES_CHANNEL_ID = "strategies";
+const ANDROID_TRANSFERS_CHANNEL_ID = "transfers";
 
 /**
  * Register the Android notification channel for payout receipts. No-op
@@ -101,15 +103,43 @@ export async function registerAndroidPointsChannel(): Promise<void> {
 export async function registerAndroidStrategiesChannel(): Promise<void> {
   if (Platform.OS !== "android") return;
   try {
-    await Notifications.setNotificationChannelAsync(ANDROID_STRATEGIES_CHANNEL_ID, {
-      name: "Strategies & yield",
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#c71c4b",
-      description: "Reminders to compound rewards on your active positions.",
-    });
+    await Notifications.setNotificationChannelAsync(
+      ANDROID_STRATEGIES_CHANNEL_ID,
+      {
+        name: "Strategies & yield",
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#c71c4b",
+        description: "Reminders to compound rewards on your active positions.",
+      },
+    );
   } catch (err) {
     console.warn("[push] failed to register Android strategies channel:", err);
+  }
+}
+
+/**
+ * Register the Android notification channel for incoming transfers
+ * (`TransactionsService.create` sends `channelId: "transfers"` when a
+ * TRANSFER-type transaction names this device's wallet as recipient).
+ * No-op on iOS.
+ */
+export async function registerAndroidTransfersChannel(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  try {
+    await Notifications.setNotificationChannelAsync(
+      ANDROID_TRANSFERS_CHANNEL_ID,
+      {
+        name: "Transfers",
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#c71c4b",
+        description:
+          "Notifications when you receive a transfer from another wallet.",
+      },
+    );
+  } catch (err) {
+    console.warn("[push] failed to register Android transfers channel:", err);
   }
 }
 
@@ -133,6 +163,7 @@ export async function registerForPushNotifications(
   await registerAndroidPayoutChannel();
   await registerAndroidPointsChannel();
   await registerAndroidStrategiesChannel();
+  await registerAndroidTransfersChannel();
 
   if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
     console.log("[push] skipping registration in Expo Go");
@@ -185,7 +216,11 @@ export async function registerForPushNotifications(
 export function usePushRegistrationRetry(): void {
   useEffect(() => {
     const sub = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active" && retryState.failed && retryState.wallets.length > 0) {
+      if (
+        nextState === "active" &&
+        retryState.failed &&
+        retryState.wallets.length > 0
+      ) {
         console.log("[push] retrying registration on foreground");
         void registerForPushNotifications(retryState.wallets);
       }
@@ -198,7 +233,10 @@ const POST_RETRY_DELAYS_MS = [0, 1000, 3000]; // immediate, 1 s, 3 s
 
 // Returns true on success (including 404 = not-yet-deployed), false on
 // exhausted retries so the caller can schedule a foreground retry.
-async function postPushToken(token: string, wallets: string[]): Promise<boolean> {
+async function postPushToken(
+  token: string,
+  wallets: string[],
+): Promise<boolean> {
   for (let attempt = 0; attempt < POST_RETRY_DELAYS_MS.length; attempt++) {
     const delay = POST_RETRY_DELAYS_MS[attempt] ?? 0;
     if (delay > 0) await new Promise((r) => setTimeout(r, delay));
@@ -218,16 +256,24 @@ async function postPushToken(token: string, wallets: string[]): Promise<boolean>
           : (err as { response?: { status?: number } })?.response?.status;
 
       if (status === 404) {
-        console.log("[push] backend /users/me/push-token not deployed yet — skipping");
+        console.log(
+          "[push] backend /users/me/push-token not deployed yet — skipping",
+        );
         return true;
       }
 
       const isLast = attempt === POST_RETRY_DELAYS_MS.length - 1;
       if (isLast) {
-        console.warn(`[push] registration failed after ${POST_RETRY_DELAYS_MS.length} attempts:`, err);
+        console.warn(
+          `[push] registration failed after ${POST_RETRY_DELAYS_MS.length} attempts:`,
+          err,
+        );
         return false;
       }
-      console.warn(`[push] registration attempt ${attempt + 1} failed, retrying:`, err);
+      console.warn(
+        `[push] registration attempt ${attempt + 1} failed, retrying:`,
+        err,
+      );
     }
   }
   return false;
@@ -292,6 +338,24 @@ function readPointsPushData(
   };
 }
 
+/** Shape of the `data` payload for incoming-transfer pushes. */
+interface TransferPushData {
+  transactionId?: string;
+}
+
+function readTransferPushData(
+  notification: Notifications.Notification,
+): TransferPushData | null {
+  const raw = notification.request.content.data;
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
+  if (data.type !== "transfer") return null;
+  return {
+    transactionId:
+      typeof data.transactionId === "string" ? data.transactionId : undefined,
+  };
+}
+
 /**
  * Install foreground receive + tap handlers. Must be mounted once at
  * the top of the component tree (app/_layout.tsx) — listeners are
@@ -316,12 +380,21 @@ export function usePushNotificationHandler(): void {
         }
 
         const pointsData = readPointsPushData(notification);
-        if (!pointsData) return;
-        // Broad prefix — cheaper and safer than reconstructing every
-        // param-shaped key variant (balance/history/depositStatus) by hand.
-        queryClient.invalidateQueries({ queryKey: pointsQueryKeys.all });
-        if (pointsData.type === "redemption") {
-          queryClient.invalidateQueries({ queryKey: redeemQueryKeys.all });
+        if (pointsData) {
+          // Broad prefix — cheaper and safer than reconstructing every
+          // param-shaped key variant (balance/history/depositStatus) by hand.
+          queryClient.invalidateQueries({ queryKey: pointsQueryKeys.all });
+          if (pointsData.type === "redemption") {
+            queryClient.invalidateQueries({ queryKey: redeemQueryKeys.all });
+          }
+          return;
+        }
+
+        const transferData = readTransferPushData(notification);
+        if (transferData) {
+          queryClient.invalidateQueries({
+            queryKey: transactionsQueryKeys.all,
+          });
         }
       },
     );
@@ -336,29 +409,42 @@ export function usePushNotificationHandler(): void {
         const data = readPayoutData(response.notification);
         if (!data?.intentId) {
           const pointsData = readPointsPushData(response.notification);
-          if (!pointsData) return;
+          if (pointsData) {
+            if (pointsData.type === "redemption" && pointsData.redemptionId) {
+              try {
+                router.push({
+                  pathname: "/activity-detail" as never,
+                  params: { redemptionId: pointsData.redemptionId },
+                });
+              } catch (err) {
+                console.warn(
+                  "[push] activity-detail route not available:",
+                  err,
+                );
+              }
+              return;
+            }
 
-          if (pointsData.type === "redemption" && pointsData.redemptionId) {
+            // Point deposits have no dedicated detail screen yet — land
+            // on the wallet screen, which shows the updated balance.
             try {
-              router.push({
-                pathname: "/activity-detail" as never,
-                params: { redemptionId: pointsData.redemptionId },
-              });
+              router.push("/wallet" as never);
             } catch (err) {
-              console.warn(
-                "[push] activity-detail route not available:",
-                err,
-              );
+              console.warn("[push] wallet route not available:", err);
             }
             return;
           }
 
-          // Point deposits have no dedicated detail screen yet — land on
-          // the wallet screen, which shows the updated points balance.
-          try {
-            router.push("/wallet" as never);
-          } catch (err) {
-            console.warn("[push] wallet route not available:", err);
+          const transferData = readTransferPushData(response.notification);
+          if (transferData?.transactionId) {
+            try {
+              router.push({
+                pathname: "/activity-detail" as never,
+                params: { transferId: transferData.transactionId },
+              });
+            } catch (err) {
+              console.warn("[push] activity-detail route not available:", err);
+            }
           }
           return;
         }
