@@ -72,7 +72,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatUnits } from "viem";
+import type { TBlockchain } from "@/api/types/blockchain";
 import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
+import { useBlockchains } from "@/hooks/queries/useBlockchains";
 import { useWallet } from "@/hooks/useWallet";
 import type { PaymentIntentResponse } from "@/services/nanopay";
 import { useIntentStatus } from "@/services/nanopay";
@@ -150,20 +152,34 @@ const extractMerchantName = (
   );
 };
 
-const resolveChainName = (chainId: number): string => {
-  if (chainId === -101) return "Solana";
-  if (chainId === -102) return "Solana Devnet";
-  const names: Record<number, string> = {
-    1: "Ethereum",
-    137: "Polygon",
-    42161: "Arbitrum",
-    8453: "Base",
-    84532: "Base Sepolia",
-    11155111: "Ethereum Sepolia",
-    4202: "Lisk",
-    5042002: "Arc Testnet",
-  };
-  return names[chainId] ?? `Chain ${chainId}`;
+/**
+ * Resolves a network's display name purely from the `/blockchains` API
+ * response (`useBlockchains`) — never a hardcoded local table. A prior
+ * version of this file kept a `chainId → name` map by hand; it went stale
+ * the moment a new chain shipped (SVM's `-101`/`-102` sentinels were
+ * added, then Stellar's `-201`/`-202` sentinels were forgotten, and
+ * receipts silently rendered `Chain -202`). Matching against the live
+ * list means a newly-seeded `Blockchain` row is correct here with zero
+ * mobile changes.
+ *
+ * Match priority: `blockchainId` (the DB row's own ULID, set on every
+ * intent response regardless of rail) first, then the numeric EVM
+ * `chainId` as a secondary match for older cached intents that predate
+ * the `blockchainId` field. Returns `undefined` (never a fabricated
+ * label) while the list is loading or genuinely has no match — callers
+ * render the row conditionally, consistent with how `Treasury` above is
+ * only shown when present.
+ */
+const resolveChainName = (
+  intent: PaymentIntentResponse,
+  blockchains: TBlockchain[] | undefined,
+): string | undefined => {
+  if (!blockchains) return undefined;
+  return (
+    blockchains.find((b) => b.id === intent.blockchainId)?.name ??
+    blockchains.find((b) => b.chainId === intent.nanopayUsdcSourceChainId)
+      ?.name
+  );
 };
 
 const extractFiatMinor = (intent: PaymentIntentResponse): number => {
@@ -448,6 +464,10 @@ function ReceiptRowCopyable({
 function DetailsSection({ intent }: { intent: PaymentIntentResponse }) {
   const [open, setOpen] = useState(false);
   const ChevronIcon = open ? ChevronUp : ChevronDown;
+  // Resolved live from `/blockchains` (see `resolveChainName`) — never a
+  // hardcoded map, so this stays correct automatically as new chains ship.
+  const { data: blockchains } = useBlockchains();
+  const chainName = resolveChainName(intent, blockchains);
   return (
     <View className="bg-light rounded-3xl p-4 mt-4 shadow-md-">
       <TouchableOpacity
@@ -465,10 +485,9 @@ function DetailsSection({ intent }: { intent: PaymentIntentResponse }) {
       {open ? (
         <View className="mt-3">
           <ReceiptRow label="Status" value={intent.status} />
-          <ReceiptRow
-            label="Network"
-            value={resolveChainName(intent.nanopayUsdcSourceChainId)}
-          />
+          {chainName ? (
+            <ReceiptRow label="Network" value={chainName} />
+          ) : null}
           {intent.nanopayUsdcTreasuryAddress ? (
             <ReceiptRow
               label="Treasury"
