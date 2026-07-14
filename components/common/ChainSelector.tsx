@@ -25,6 +25,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
 import { track } from "@/services/analytics/posthog";
 import type { Namespace } from "@/services/chains/types";
+import { getSupportedWalletKits } from "@/services/walletKit/chainSupport";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 
 export interface ChainSelectorRef {
@@ -157,19 +158,21 @@ const ChainSelectorBase = forwardRef<ChainSelectorRef>((_, ref) => {
   const isLoading = isLoadingBlockchains || isLoadingTokens;
 
   const grouped = useMemo<Map<Namespace, ChainRowItem[]>>(() => {
-    const order: Namespace[] = walletKitRegistry
-      .getAll()
-      .map((kit) => kit.namespace);
+    const order: Namespace[] = getSupportedWalletKits().map(
+      (kit) => kit.namespace,
+    );
+    const supported = new Set(order);
 
     const groups = new Map<Namespace, ChainRowItem[]>();
     for (const ns of order) groups.set(ns, []);
 
     if (blockchains && nativeTokens) {
       for (const blockchain of blockchains) {
+        const config = buildChainConfigFromBlockchain(blockchain);
+        if (!supported.has(config.namespace)) continue;
         const token =
           blockchain.tokens?.find((t) => t.isNativeCurrency) ??
           blockchain.tokens?.[0];
-        const config = buildChainConfigFromBlockchain(blockchain);
         let row: ChainRowItem;
         // Exhaustive switch (not if/else-if/else) so a future 5th
         // namespace fails loud at compile time instead of silently

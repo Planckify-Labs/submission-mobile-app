@@ -4,6 +4,7 @@ import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 import { BaseModal, ModalHeader } from "@/components/common/BaseModal";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWalletAccountGroups } from "@/hooks/useWalletAccountGroups";
+import { isNamespaceSupported } from "@/services/walletKit/chainSupport";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import {
   flattenWalletGroups,
@@ -70,6 +71,7 @@ const WalletSelectorModal = memo(function WalletSelectorModal({
   const listItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const isVisible = (w: TWallet) => {
+      if (!isNamespaceSupported(w.namespace)) return false;
       if (!q) return true;
       if ((w.name ?? "").toLowerCase().includes(q)) return true;
       if (w.address.toLowerCase().includes(q)) return true;

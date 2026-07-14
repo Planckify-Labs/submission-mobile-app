@@ -7,7 +7,7 @@ import { runWithChainSwitchingOverlay } from "@/components/common/ChainSwitching
 import { usePerformance } from "@/components/providers/PerformanceProvider";
 import {
   type ChainConfig,
-  supportedChains,
+  getStellarMainnetChain,
 } from "@/constants/configs/chainConfig";
 import { transactionsQueryKeys } from "@/constants/queryKeys/transactionsQueryKeys";
 import QKEY_Wallets from "@/constants/queryKeys/walletQueryKeys";
@@ -19,6 +19,10 @@ import { useAgentBusy } from "@/hooks/useAgentBusy";
 import { storage } from "@/lib/storage/mmkv";
 import type { Namespace } from "@/services/chains/types";
 import { formatChainLabel } from "@/services/walletKit/chainInfo";
+import {
+  getSupportedWalletKits,
+  isNamespaceSupported,
+} from "@/services/walletKit/chainSupport";
 import { deriveWalletsFromMnemonic } from "@/services/walletKit/deriveAll";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import type { WalletKitAdapter } from "@/services/walletKit/types";
@@ -136,11 +140,16 @@ export function useWallet() {
     refetchOnWindowFocus: false,
   });
 
-  const { data: activeChain = supportedChains[0] } = useQuery({
+  // Fresh-install fallback (no persisted `active_chain` yet) is Stellar
+  // mainnet — the only namespace `AddWalletSheet` / `bootstrapFirstLoginWallets`
+  // mint wallets on. Existing installs that already persisted a non-Stellar
+  // chain are migrated to Stellar by the one-time boot-sync effect below,
+  // once a Stellar wallet is confirmed to exist in the bundle.
+  const { data: activeChain = getStellarMainnetChain() } = useQuery({
     queryKey: [QKEY_Wallets.activeChain],
     queryFn: () => {
       const storedChain = storage.getString("active_chain");
-      if (!storedChain) return supportedChains[0];
+      if (!storedChain) return getStellarMainnetChain();
       // Rehydration safety (§10): any persisted shape that predates the
       // `ChainConfig` discriminated union is missing `namespace`. Stamp
       // "eip155" before returning so the new narrowing doesn't trip on
@@ -154,12 +163,12 @@ export function useWallet() {
       return parsed as ChainConfig;
     },
     // Same sync MMKV seed as `activeWalletIndex` — ensures the first
-    // render has the correct chain, not the `supportedChains[0]`
+    // render has the correct chain, not the `getStellarMainnetChain()`
     // fallback. Matters for `walletKey` resolution in consumers that
     // key on namespace (e.g. the Solana-aware balance pill).
     initialData: () => {
       const storedChain = storage.getString("active_chain");
-      if (!storedChain) return supportedChains[0];
+      if (!storedChain) return getStellarMainnetChain();
       const parsed = JSON.parse(storedChain) as Partial<ChainConfig> & {
         chain?: unknown;
       };
@@ -890,9 +899,11 @@ export function useWallet() {
           bySeed.set(seed, set);
         }
         if (bySeed.size === 0) return;
-        const registered = walletKitRegistry
-          .getAll()
-          .map((kit) => kit.namespace);
+        // Only backfill supported (Stellar) namespaces — pre-Stellar
+        // seed-only accounts get their missing Stellar row minted here;
+        // we no longer auto-derive new EVM/Solana/Sui rows for chains
+        // the app hides.
+        const registered = getSupportedWalletKits().map((kit) => kit.namespace);
         const derived: TWallet[] = [];
         for (const [seed, have] of bySeed) {
           const missing = registered.filter((ns) => !have.has(ns));
@@ -959,50 +970,54 @@ export function useWallet() {
   // back as a pure-parallel warm-all — but until then, warming here
   // was strictly harmful to unlock UX.
 
-  // Passive sync on first load / rehydrate only: if the persisted
-  // `activeWallet` and `activeChain` disagree when the app boots
-  // (e.g. storage written before we enforced the invariant), align
-  // them once. Explicit `setActiveWalletInternal` and chain mutations
-  // already sync inline — this effect intentionally does NOT re-fire
-  // after user interactions (the `didInitialSyncRef` gate ensures it
-  // only runs once, so wallet picks aren't fought by the effect).
+  // Passive sync on first load / rehydrate only, one-time boot migration
+  // to the app's supported namespace (Stellar). A persisted
+  // `activeWallet` / `activeChain` from before the app went Stellar-only
+  // would otherwise keep resurfacing a hidden EVM/Solana/Sui wallet as
+  // "active" forever — every screen reads `activeWallet`/`activeChain`,
+  // not the (now-filtered) wallet pickers, so pinning here is what
+  // actually makes the rest of the UI read as Stellar-only. Hidden
+  // namespaces stay registered and their `TWallet` rows stay in storage
+  // (recoverable via seed phrase); they just never become the active
+  // selection again.
+  //
+  // Retries on every `wallets` change until a supported wallet is found
+  // (covers the backfill effect above not having minted one yet on the
+  // very first pass). If the bundle never gets one — e.g. a lone
+  // private-key EVM import with no seed phrase to derive Stellar from —
+  // this intentionally no-ops forever rather than forcing the app into a
+  // walletless state; `app/wallet.tsx`'s empty-state gate on the
+  // (filtered) visible wallet count is what catches that edge case.
   const didInitialSyncRef = useRef(false);
   useEffect(() => {
     if (didInitialSyncRef.current) return;
     if (!activeAccount) return;
     if (!activeWallet?.namespace) return;
     if (isLoading) return;
-    if (!blockchains) return;
 
-    if (activeWallet.namespace === activeChain.namespace) {
+    if (
+      isNamespaceSupported(activeWallet.namespace) &&
+      isNamespaceSupported(activeChain.namespace)
+    ) {
       didInitialSyncRef.current = true;
       return;
     }
 
-    // Prefer syncing the wallet within the current account to the
-    // chain's namespace (common case: user was on EVM, restored on
-    // same account's EVM row). Fallback: flip chain when the account
-    // has no matching wallet for the persisted chain.
-    const target = activeAccount.wallets.find(
-      (w) => w.namespace === activeChain.namespace,
-    );
-    if (target) {
-      const idx = wallets.findIndex((w) => w.address === target.address);
-      if (idx >= 0 && idx !== activeWalletIndex) {
-        setActiveWalletMutation.mutate(idx);
-      }
-      didInitialSyncRef.current = true;
-      return;
-    }
+    // Prefer a supported wallet inside the current account (common case:
+    // same seed's Stellar row); fall back to any supported wallet in the
+    // bundle so an account with no Stellar pairing still gets moved to a
+    // usable one rather than getting stuck.
+    const target =
+      activeAccount.wallets.find((w) => isNamespaceSupported(w.namespace)) ??
+      wallets.find((w) => isNamespaceSupported(w.namespace));
+    if (!target) return;
 
-    const targetChainRow = blockchains.find((b) => {
-      const ns = resolveNamespace(b);
-      return ns === activeWallet.namespace;
-    });
-    if (targetChainRow) {
-      setActiveChainMutation.mutate(
-        buildChainConfigFromBlockchain(targetChainRow),
-      );
+    const idx = wallets.findIndex((w) => w.address === target.address);
+    if (idx >= 0 && idx !== activeWalletIndex) {
+      setActiveWalletMutation.mutate(idx);
+    }
+    if (!isNamespaceSupported(activeChain.namespace)) {
+      setActiveChainMutation.mutate(getStellarMainnetChain());
     }
     didInitialSyncRef.current = true;
   }, [
@@ -1011,7 +1026,6 @@ export function useWallet() {
     activeWallet?.namespace,
     wallets,
     activeWalletIndex,
-    blockchains,
     isLoading,
     setActiveWalletMutation,
     setActiveChainMutation,

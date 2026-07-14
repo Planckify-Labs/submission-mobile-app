@@ -25,6 +25,7 @@ import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import { chainCacheKey } from "@/hooks/useWallet.helpers";
 import { storage } from "@/lib/storage/mmkv";
+import { isNamespaceSupported } from "@/services/walletKit/chainSupport";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import { authenticateUser } from "@/utils/authUtils";
 import { copyToClipboard } from "@/utils/helperUtils";
@@ -71,15 +72,19 @@ export default function WalletDetails({
   );
 
   // Paired wallets = rows sharing the same seedPhrase as the active
-  // wallet. One account = N derived wallets (EVM + Solana today), so
-  // we show every paired address here. Fall back to just this wallet
-  // when seedPhrase is absent (imported private-key row).
+  // wallet, filtered to supported (Stellar) namespaces only — the
+  // account's hidden EVM/Solana/Sui rows stay in storage but never
+  // render here. Fall back to just this wallet when seedPhrase is
+  // absent (imported private-key row) or filtering empties the group.
   const pairedWallets = useMemo(() => {
     if (!wallet) return [] as TWallet[];
     const seed = wallet.seedPhrase;
-    if (typeof seed !== "string" || seed.length === 0) return [wallet];
-    const group = wallets.filter((w) => w.seedPhrase === seed);
-    return group.length > 0 ? group : [wallet];
+    const group =
+      typeof seed === "string" && seed.length > 0
+        ? wallets.filter((w) => w.seedPhrase === seed)
+        : [wallet];
+    const visible = group.filter((w) => isNamespaceSupported(w.namespace));
+    return visible.length > 0 ? visible : [wallet];
   }, [wallet, wallets]);
 
   const displayNameForNamespace = useCallback((ns: string | undefined) => {

@@ -99,6 +99,7 @@ import { ApprovalHost } from "@/services/bridge/ApprovalHost";
 import { bootBridge } from "@/services/bridge/boot";
 import { ChainAdapterRegistry } from "@/services/chains/registry";
 import type { AdapterContext } from "@/services/chains/types";
+import { isNamespaceSupported } from "@/services/walletKit/chainSupport";
 import { getAccountForWallet } from "@/services/walletService";
 
 interface TBrowserState {
@@ -112,6 +113,14 @@ interface TBrowserState {
 
 export default function DappsBrowser() {
   const { activeWallet, wallets, activeChain, changeActiveChain } = useWallet();
+  // Display-only view for the connection manager's "Wallets" tab — hides
+  // rows on namespaces the app no longer surfaces. The bridge context
+  // below keeps using the full `wallets` list since it resolves a
+  // specific dApp-named address, not a picker.
+  const visibleWallets = useMemo(
+    () => wallets.filter((w) => isNamespaceSupported(w.namespace)),
+    [wallets],
+  );
   // Optional initial URL — e.g. the DeFi card's "Manual" deep-link pushes
   // `router.push({ pathname: "/dapps-browser", params: { url } })` so the
   // user completes a deposit through the protocol's own UI (still on the
@@ -492,7 +501,7 @@ export default function DappsBrowser() {
         onClose={() => setShowConnections(false)}
         currentOrigin={currentOrigin}
         dappTitle={browserState.title}
-        wallets={wallets}
+        wallets={visibleWallets}
         onVisitSite={(origin) => {
           setShowConnections(false);
           navigateToUrl(origin);

@@ -50,6 +50,7 @@ import { BaseModal } from "@/components/common/BaseModal";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import type { Namespace } from "@/services/chains/types";
+import { isNamespaceSupported } from "@/services/walletKit/chainSupport";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import {
   buildAddWalletParams,
@@ -382,7 +383,10 @@ function Step1Body({ selected, onChange, inferredHint }: Step1Props) {
         mode="single"
         selected={selected}
         onChange={onChange}
-        filter={(k) => k.supportsPrivateKeyImport !== false}
+        filter={(k) =>
+          k.supportsPrivateKeyImport !== false &&
+          isNamespaceSupported(k.namespace)
+        }
       />
     </View>
   );

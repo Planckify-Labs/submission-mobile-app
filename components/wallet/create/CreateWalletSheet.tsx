@@ -41,8 +41,11 @@ import { track } from "@/services/analytics/posthog";
 import type { Namespace } from "@/services/chains/types";
 import { useScreenshotGuard } from "@/services/security/screenshotGuard";
 import { defaultWalletNameFor } from "@/services/walletKit/bootstrap";
+import {
+  getSupportedWalletKits,
+  isNamespaceSupported,
+} from "@/services/walletKit/chainSupport";
 import { deriveWalletsFromMnemonic } from "@/services/walletKit/deriveAll";
-import { walletKitRegistry } from "@/services/walletKit/registry";
 import { generateWalletMnemonic } from "@/services/walletService";
 import {
   computeStep,
@@ -124,7 +127,7 @@ function quizVerifyState(picks: QuizPicks, mnemonic: string[]): VerifyResult {
 }
 
 function allRegisteredNamespaces(): Namespace[] {
-  return walletKitRegistry.getAll().map((k) => k.namespace);
+  return getSupportedWalletKits().map((k) => k.namespace);
 }
 
 const CreateWalletSheet: React.FC<Props> = memo(function CreateWalletSheet({
@@ -445,6 +448,7 @@ const CreateWalletSheet: React.FC<Props> = memo(function CreateWalletSheet({
         mode="multi"
         selected={namespaces}
         onChange={setNamespaces}
+        filter={(k) => isNamespaceSupported(k.namespace)}
       />
       {namespaces.length === 0 ? (
         <Text className="text-light-primary-red mt-3 font-medium">

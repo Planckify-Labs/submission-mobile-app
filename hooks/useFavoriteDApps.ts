@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { dappApi } from "@/api/endpoints/dapps";
 import type { TAppearance, TDapp } from "@/api/types/dapp";
+import { isStellarDapp } from "@/constants/configs/stellarDapps";
 import { useIsAuthenticated } from "@/hooks/queries/useAuth";
 import { storage } from "@/lib/storage/mmkv";
 
@@ -120,7 +121,10 @@ export const useFavoriteDApps = () => {
   const [records, setRecords] = useState<TFavoriteRecord[]>(readStore);
   const { isAuthenticated } = useIsAuthenticated();
 
-  const favoriteDApps = activeOf(records);
+  // Display-only filter — a favorite recorded before the app went
+  // Stellar-only stays in MMKV (so re-enabling other chains later
+  // resurfaces it), it just doesn't render in the "Favorites" rail.
+  const favoriteDApps = activeOf(records).filter((r) => isStellarDapp(r.id));
 
   const isFavorite = useCallback(
     (dappId: string): boolean =>

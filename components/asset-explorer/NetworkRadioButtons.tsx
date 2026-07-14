@@ -16,6 +16,7 @@ import { usePinnedNetworks } from "@/hooks/usePinnedNetworks";
 import { useWallet } from "@/hooks/useWallet";
 import { resolveNamespace } from "@/hooks/useWallet.helpers";
 import { getEvmChainId } from "@/services/walletKit/chainInfo";
+import { filterSupportedBlockchains } from "@/services/walletKit/chainSupport";
 import OptimizedImage from "../common/OptimizedImage";
 import NetworkRadioButtonLoadingSkeletons from "./NetworkRadioButtonLoadingSkeletons";
 
@@ -31,26 +32,40 @@ const NetworkRadioButtons = () => {
   const { activeTab } = useActiveTab();
   const { openModal } = useNetworkModal();
 
+  const supportedBlockchainIds = React.useMemo(
+    () =>
+      new Set(filterSupportedBlockchains(blockchains ?? []).map((b) => b.id)),
+    [blockchains],
+  );
+
   const displayNetworks = React.useMemo(() => {
     if (pinnedNetworks.length > 0) {
-      return pinnedNetworks.map((network) => ({
-        id: network.id,
-        name: network.name,
-        symbol: network.symbol,
-        color: network.color,
-        isPinned: true,
-        blockchainId: network.blockchainId,
-        logoUrl: network.logoUrl,
-      }));
+      // Drop pins on hidden namespaces — legacy pins from before the app
+      // went Stellar-only shouldn't resurface an EVM/Solana/Sui chip.
+      return pinnedNetworks
+        .filter(
+          (network) =>
+            !!network.blockchainId &&
+            supportedBlockchainIds.has(network.blockchainId),
+        )
+        .map((network) => ({
+          id: network.id,
+          name: network.name,
+          symbol: network.symbol,
+          color: network.color,
+          isPinned: true,
+          blockchainId: network.blockchainId,
+          logoUrl: network.logoUrl,
+        }));
     }
 
     if (!blockchains) return [];
 
-    // Show every backend network regardless of namespace. EVM rows
+    // Only show networks on supported (Stellar) namespaces. EVM rows
     // use the numeric chainId as the row id (existing selection code
     // compares against that); non-EVM rows fall back to the backend
     // `blockchain.id` (a stable UUID) so they never dereference null.
-    return blockchains.map((blockchain) => {
+    return filterSupportedBlockchains(blockchains).map((blockchain) => {
       const nativeToken =
         blockchain.tokens?.find((t) => t.isNativeCurrency) ??
         blockchain.tokens?.[0];
@@ -68,7 +83,7 @@ const NetworkRadioButtons = () => {
         logoUrl: nativeToken?.logoUrl,
       };
     });
-  }, [blockchains, pinnedNetworks]);
+  }, [blockchains, pinnedNetworks, supportedBlockchainIds]);
 
   const getAccentColor = () => {
     return activeTab === "my-assets" ? "#c71c4b" : "#20222c";

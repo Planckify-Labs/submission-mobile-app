@@ -43,6 +43,7 @@ import {
   clearBackupTimestamp,
   getLocalBackupTimestamp,
 } from "@/services/backup/seedBackup";
+import { isNamespaceSupported } from "@/services/walletKit/chainSupport";
 
 const CARD_WIDTH = 160;
 
@@ -71,6 +72,16 @@ export default function Wallet() {
     renameAccount,
     getActiveWalletKit,
   } = useWallet();
+
+  // Display-only view of `wallets` — hides rows on namespaces the app no
+  // longer surfaces (still in storage, just not rendered). Index-based
+  // lookups (`handleWalletSwitch`, rename, …) keep resolving against the
+  // full `wallets` array via address, so nothing downstream needs to know
+  // about this filter.
+  const visibleWallets = useMemo(
+    () => wallets.filter((w) => isNamespaceSupported(w.namespace)),
+    [wallets],
+  );
 
   // Warm the strategies screen's queries while the user is here, so the
   // first tap on the "DeFi Strategies" row below renders with cached
@@ -326,19 +337,19 @@ export default function Wallet() {
   const displayedWallets = useMemo(() => {
     if (pinnedAddresses.length > 0) {
       return pinnedAddresses
-        .map((addr) => wallets.find((w) => w.address === addr))
+        .map((addr) => visibleWallets.find((w) => w.address === addr))
         .filter((w): w is TWallet => !!w)
         .slice(0, 3);
     }
-    if (wallets.length <= 3) return wallets;
-    const activeIdx = wallets.findIndex(
+    if (visibleWallets.length <= 3) return visibleWallets;
+    const activeIdx = visibleWallets.findIndex(
       (w) => w.address === activeWallet?.address,
     );
-    if (activeIdx < 0 || activeIdx < 3) return wallets.slice(0, 3);
-    const result = wallets.slice(0, 3);
-    result[0] = wallets[activeIdx];
+    if (activeIdx < 0 || activeIdx < 3) return visibleWallets.slice(0, 3);
+    const result = visibleWallets.slice(0, 3);
+    result[0] = visibleWallets[activeIdx];
     return result;
-  }, [wallets, activeWallet?.address, pinnedAddresses]);
+  }, [visibleWallets, activeWallet?.address, pinnedAddresses]);
 
   const getItemLayout = useCallback(
     (_: any, index: number) => ({
@@ -363,9 +374,11 @@ export default function Wallet() {
   }
 
   // Empty-state render (§14.4) — no auto-redirect. Users who have
-  // deleted every wallet land here and see an inline CTA that opens the
-  // same `AddWalletSheet` as the "+" button / WalletSwitcherModal.
-  if (wallets.length === 0) {
+  // deleted every wallet (or whose only wallets are on hidden
+  // namespaces — e.g. a lone private-key EVM import with no Stellar
+  // pairing) land here and see an inline CTA that opens the same
+  // `AddWalletSheet` as the "+" button / WalletSwitcherModal.
+  if (visibleWallets.length === 0) {
     return (
       <>
         <StatusBar barStyle="dark-content" />
@@ -465,8 +478,8 @@ export default function Wallet() {
               </TouchableOpacity>
             </View>
             <Text className="text-light-matte-black/50 text-sm">
-              You have {wallets.length}{" "}
-              {wallets.length === 1 ? "wallet" : "wallets"}
+              You have {visibleWallets.length}{" "}
+              {visibleWallets.length === 1 ? "wallet" : "wallets"}
             </Text>
           </View>
 

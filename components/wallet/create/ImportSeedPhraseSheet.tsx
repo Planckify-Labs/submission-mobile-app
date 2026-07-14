@@ -70,6 +70,10 @@ import {
 import type { Namespace } from "@/services/chains/types";
 import { useScreenshotGuard } from "@/services/security/screenshotGuard";
 import { defaultWalletNameFor } from "@/services/walletKit/bootstrap";
+import {
+  getSupportedWalletKits,
+  isNamespaceSupported,
+} from "@/services/walletKit/chainSupport";
 import { deriveWalletsFromMnemonic } from "@/services/walletKit/deriveAll";
 import { walletKitRegistry } from "@/services/walletKit/registry";
 import {
@@ -98,7 +102,7 @@ type Props = {
 type Step = 1 | 2 | 3;
 
 function allRegisteredNamespaces(): Namespace[] {
-  return walletKitRegistry.getAll().map((k) => k.namespace);
+  return getSupportedWalletKits().map((k) => k.namespace);
 }
 
 /**
@@ -383,6 +387,7 @@ const ImportSeedPhraseSheet: React.FC<Props> = memo(
           mode="multi"
           selected={namespaces}
           onChange={setNamespaces}
+          filter={(k) => isNamespaceSupported(k.namespace)}
         />
         {namespaces.length === 0 ? (
           <Text className="text-light-primary-red mt-3 font-medium">
