@@ -90,7 +90,10 @@ import {
 } from "@/hooks/queries/usePaymentTokens";
 import { useBlockchainsWithStorage } from "@/hooks/useBlockchainsWithStorage";
 import { useWallet } from "@/hooks/useWallet";
-import { buildChainConfigFromBlockchain } from "@/hooks/useWallet.helpers";
+import {
+  buildChainConfigFromBlockchain,
+  resolveNamespace,
+} from "@/hooks/useWallet.helpers";
 import { track } from "@/services/analytics/posthog";
 import {
   classifyPaymentError,
@@ -119,10 +122,12 @@ import {
   onchainSubmitEndpoint,
   postOnchainSubmit,
 } from "@/services/nanopay/pathOnchainSettlement";
-import { executeOnchainSettlementSvm } from "@/services/nanopay/pathOnchainSettlementSvm";
 import { executeOnchainSettlementStellar } from "@/services/nanopay/pathOnchainSettlementStellar";
+import { executeOnchainSettlementSvm } from "@/services/nanopay/pathOnchainSettlementSvm";
 import {
+  chainBadgeLabel,
   formatChainLabel,
+  getChainFamilyLabel,
   getEvmChainId,
   getNonceParams,
   matchesBlockchainRow,
@@ -1473,6 +1478,8 @@ function MintFallback({
   const [isWalletAuthed, setIsWalletAuthed] = useState<boolean | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSignStatementVisible, setIsSignStatementVisible] = useState(false);
+  const [isSignInPinVisible, setIsSignInPinVisible] = useState(false);
 
   useEffect(() => {
     if (!selectedWallet) {
@@ -1940,7 +1947,7 @@ function MintFallback({
                 : "bg-light-primary-red"
             }`}
             disabled={isSigningIn || !nonceData?.message}
-            onPress={handleSignIn}
+            onPress={() => setIsSignStatementVisible(true)}
           >
             {isSigningIn ? (
               <ActivityIndicator color="#fff" size="small" />
@@ -1949,14 +1956,75 @@ function MintFallback({
                 <Shield color="#ffffff" size={14} />
                 <Text className="text-white font-semibold text-sm">
                   Sign in with{" "}
-                  {selectedNamespace === "solana" ? "Solana" : "Ethereum"}{" "}
-                  wallet
+                  {getChainFamilyLabel(selectedNamespace ?? undefined)} wallet
                 </Text>
               </>
             )}
           </TouchableOpacity>
         </View>
       )}
+
+      <BaseModal
+        visible={isSignStatementVisible}
+        onClose={() => setIsSignStatementVisible(false)}
+        height="auto"
+        borderRadius={28}
+        contentClassName="px-6"
+      >
+        <ModalHeader title="Signing Statement" />
+        <View className="bg-white rounded-3xl p-6 shadow-sm mb-5">
+          <Text className="text-light-matte-black/70 mb-6 text-center">
+            You are about to sign the following message with{" "}
+            {selectedWallet?.name || "your wallet"}:
+          </Text>
+          <View className="bg-light-main-container p-4 rounded-xl mb-6">
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              className="max-h-96"
+            >
+              <Text className="text-light-matte-black font-medium">
+                {nonceData?.message || "Loading authentication message…"}
+              </Text>
+            </ScrollView>
+          </View>
+          <Text className="text-light-matte-black/70">
+            Signing this message proves ownership of your wallet address. This
+            is a secure operation that does not cost any gas fees.
+          </Text>
+        </View>
+        <View className="flex-row gap-4">
+          <Pressable
+            className="flex-1 bg-light-main-container py-4 rounded-xl items-center"
+            onPress={() => setIsSignStatementVisible(false)}
+          >
+            <Text className="text-light-matte-black font-bold">Cancel</Text>
+          </Pressable>
+          <Pressable
+            className={`flex-1 py-4 rounded-xl items-center ${
+              nonceData?.message
+                ? "bg-light-primary-red"
+                : "bg-light-primary-red/30"
+            }`}
+            disabled={!nonceData?.message}
+            onPress={() => {
+              setIsSignStatementVisible(false);
+              setIsSignInPinVisible(true);
+            }}
+          >
+            <Text className="text-white font-bold">Continue</Text>
+          </Pressable>
+        </View>
+      </BaseModal>
+
+      <PinConfirmationModal
+        visible={isSignInPinVisible}
+        onClose={() => setIsSignInPinVisible(false)}
+        onConfirm={() => {
+          setIsSignInPinVisible(false);
+          handleSignIn();
+        }}
+        title="Confirm Sign-In"
+      />
 
       <TouchableOpacity
         activeOpacity={0.7}
@@ -2134,7 +2202,8 @@ function MintFallback({
                     {b.name}
                   </Text>
                   <Text className="text-light-matte-black/60 text-xs">
-                    {nativeToken?.symbol ?? (b.isEVM ? "EVM" : "Solana")}
+                    {nativeToken?.symbol ??
+                      chainBadgeLabel(resolveNamespace(b))}
                   </Text>
                 </View>
                 {b.isTestnet ? (
