@@ -9,6 +9,7 @@ import { takumipayLogoBase64 } from "@/constants/takumipay";
 import type { TWallet } from "@/constants/types/walletTypes";
 import { useWallet } from "@/hooks/useWallet";
 import { prefetchQRMatrix } from "@/services/qrMatrixCache";
+import { isNamespaceSupported } from "@/services/walletKit/chainSupport";
 import { copyToClipboard } from "@/utils/helperUtils";
 import Chip from "../../common/Chip";
 
@@ -107,7 +108,9 @@ export default function RecievePaymentModal({
   const pairedWallets = useMemo<TWallet[]>(() => {
     const seed = activeWallet.seedPhrase;
     if (typeof seed !== "string" || seed.length === 0) return [activeWallet];
-    const group = wallets.filter((w) => w.seedPhrase === seed);
+    const group = wallets.filter(
+      (w) => w.seedPhrase === seed && isNamespaceSupported(w.namespace),
+    );
     return group.length > 0 ? group : [activeWallet];
   }, [activeWallet, wallets]);
 
