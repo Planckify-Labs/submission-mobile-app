@@ -40,6 +40,7 @@ import {
   formatChainLabel,
   getNativeSymbol,
 } from "@/services/walletKit/chainInfo";
+import { filterSupportedBlockchains } from "@/services/walletKit/chainSupport";
 import { copyToClipboard } from "@/utils/helperUtils";
 
 interface ConversationHistory {
@@ -91,7 +92,11 @@ export default function ConversationHistory({
   // `getNativeSymbol`, not from an `if (ns === "X")` branch here.
   const allChains = useMemo(() => {
     if (!blockchains || !nativeTokens) return [];
-    return blockchains.map((blockchain) => {
+    // Stellar-only lockdown (chainSupport.ts) — the agent-mode network
+    // switch modal is a chain picker like the others (ChainSelector,
+    // NetworkSelectorModal, NetworkRadioButtons) and must hide non-Stellar
+    // rows too. The original restriction commit missed this surface.
+    return filterSupportedBlockchains(blockchains).map((blockchain) => {
       const config = buildChainConfigFromBlockchain(blockchain);
       const nativeToken =
         blockchain.tokens?.find((t) => t.isNativeCurrency) ??

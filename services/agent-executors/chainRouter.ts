@@ -26,6 +26,7 @@
 import { type Account, type Chain, defineChain } from "viem";
 import type { TBlockchain } from "@/api/types/blockchain";
 import { findEvmChainById } from "@/constants/configs/chainConfig";
+import { isNamespaceSupported } from "@/services/walletKit/chainSupport";
 import { getPublicClient, getWalletClient } from "@/utils/clients";
 import {
   type ChainClients,
@@ -83,6 +84,19 @@ export function resolveChainDef(
   chainId: number,
   blockchains: TBlockchain[],
 ): Chain {
+  // Stellar-only lockdown (chainSupport.ts) — the agent must not be able
+  // to route around the app-wide EVM restriction just because a tool
+  // call carries a raw `chain_id`. Gate here, ahead of both the live
+  // lookup and the static `findEvmChainById` fallback below, since the
+  // static table is a full unfiltered chain list and would otherwise
+  // resolve any known EVM chain regardless of what's exposed in the UI.
+  if (!isNamespaceSupported("eip155")) {
+    throw new ExecutorError(
+      ExecutorErrorCode.UnsupportedChain,
+      "evm_not_supported",
+    );
+  }
+
   const cached = chainDefCache.get(chainId);
   if (cached) return cached;
 

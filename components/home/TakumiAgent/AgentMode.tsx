@@ -79,6 +79,7 @@ import {
   getEvmChainId,
   getNativeSymbol,
 } from "@/services/walletKit/chainInfo";
+import { filterSupportedBlockchains } from "@/services/walletKit/chainSupport";
 import * as walletService from "@/services/walletService";
 import AgentOnboarding from "./AgentModeOnboarding/AgentOnboarding";
 import ChatInput from "./ChatInput";
@@ -379,15 +380,25 @@ export default function AgentMode() {
     [activeWallet],
   );
 
+  // Stellar-only lockdown (chainSupport.ts) applies to the agent too —
+  // without this filter, tool executors that read `context.blockchains`
+  // directly (e.g. `get_supported_chains`) would still enumerate EVM /
+  // Solana / Sui rows even though every other picker in the app hides
+  // them.
+  const supportedBlockchains = useMemo(
+    () => filterSupportedBlockchains(blockchains),
+    [blockchains],
+  );
+
   const executorContext: ExecutorContext | null = useMemo(() => {
     if (!activeWallet?.address) return null;
     return {
       wallet: activeWallet,
       account: evmAccount,
-      blockchains,
+      blockchains: supportedBlockchains,
       activeChainId,
     };
-  }, [activeWallet, evmAccount, blockchains, activeChainId]);
+  }, [activeWallet, evmAccount, supportedBlockchains, activeChainId]);
 
   // Points / redemption auth hint for `wallet_context.points_authenticated`
   // (protocol v1.1 §13). Read locally from secure storage on every
